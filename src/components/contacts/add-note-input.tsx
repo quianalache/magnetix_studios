@@ -53,7 +53,7 @@ export function AddNoteInput({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border bg-card p-4">
+    <form onSubmit={handleSubmit} className="rounded-card border border-border bg-card shadow-card p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-medium">
           <Pencil className="h-4 w-4 text-muted-foreground" />

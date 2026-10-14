@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Check, ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { Check, ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SearchField } from "@/components/system/search-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -69,8 +70,8 @@ function QuickButton({
             variant="outline"
             size="sm"
             className={cn(
-              "h-9 shrink-0 gap-1 rounded-full px-3 text-sm",
-              active && "border-primary/40 bg-primary/5 text-primary",
+              "h-(--ds-control-md) shrink-0 gap-1 px-3 text-body-sm",
+              active && "border-primary bg-tint-violet text-link",
             )}
           />
         }
@@ -177,26 +178,13 @@ export function ContactsFilterBar({
 
   return (
     <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-      <div className="relative w-full lg:max-w-sm">
-        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search by name, email, phone, or company…"
-          className="h-9 rounded-full pl-9"
-          aria-label="Search contacts"
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => onSearch("")}
-            className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-            aria-label="Clear search"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
+      <SearchField
+        value={search}
+        onChange={onSearch}
+        placeholder="Search by name, email, phone, or company…"
+        aria-label="Search contacts"
+        className="lg:max-w-sm"
+      />
 
       <div className="-mx-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-1 pb-1 lg:pb-0">
         <QuickButton
@@ -257,7 +245,7 @@ export function ContactsFilterBar({
             )}
           </div>
           {tagRows.length > 1 && (
-            <p className="mt-2 border-t px-2 pt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 border-t px-2 pt-2 text-micro text-muted-foreground">
               Matching {rows.match === "any" ? "any" : "all"} selected tags — change in More filters.
             </p>
           )}
@@ -318,14 +306,14 @@ export function ContactsFilterBar({
             })}
           </div>
           <form onSubmit={applyCreatedRange} className="mt-2 space-y-2 border-t pt-2">
-            <p className="px-1 text-[11px] font-medium text-muted-foreground">Custom range (UTC days)</p>
+            <p className="px-1 text-micro font-medium text-muted-foreground">Custom range (UTC days)</p>
             <label className="flex items-center justify-between gap-2 px-1 text-xs">
               After
               <input
                 type="date"
                 value={after}
                 onChange={(e) => setAfter(e.target.value)}
-                className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs"
+                className="h-7 rounded-control border border-input bg-transparent px-1.5 text-xs"
               />
             </label>
             <label className="flex items-center justify-between gap-2 px-1 text-xs">
@@ -334,7 +322,7 @@ export function ContactsFilterBar({
                 type="date"
                 value={before}
                 onChange={(e) => setBefore(e.target.value)}
-                className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs"
+                className="h-7 rounded-control border border-input bg-transparent px-1.5 text-xs"
               />
             </label>
             <div className="flex justify-end">
@@ -382,7 +370,7 @@ export function ActiveFilterChips({
         <button
           type="button"
           onClick={() => onRowsChange({ ...rows, match: rows.match === "any" ? "all" : "any" })}
-          className="rounded-full border border-dashed px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+          className="rounded-full border border-dashed px-2 py-0.5 text-micro font-medium text-muted-foreground hover:text-foreground"
           title="Switch between matching all or any of these filters"
         >
           Match {rows.match === "any" ? "any" : "all"}

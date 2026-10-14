@@ -165,7 +165,7 @@ export function ContactInfoCard({
     composeName(contact.firstName, contact.lastName) !== (contact.name ?? "").trim();
 
   return (
-    <section className="rounded-xl border bg-card p-4" aria-label="Contact information">
+    <section className="rounded-card border border-border bg-card shadow-card p-4" aria-label="Contact information">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <UserRound className="h-4 w-4 text-muted-foreground" />
@@ -201,7 +201,7 @@ export function ContactInfoCard({
                 variant="outline"
                 className={
                   marketingStatus === "consented"
-                    ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                    ? "border-status-success-dot/40 text-status-success-fg"
                     : "border-muted-foreground/30 text-muted-foreground"
                 }
               >

@@ -177,7 +177,7 @@ export function ContactListsMenu({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{l.name}</span>
                 {l.description && (
-                  <span className="block truncate text-[11px] text-muted-foreground">{l.description}</span>
+                  <span className="block truncate text-micro text-muted-foreground">{l.description}</span>
                 )}
               </span>
             </DropdownMenuItem>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -25,6 +26,8 @@ const SOURCES: { value: ContactSource; label: string }[] = [
   { value: "ads", label: "Ads" },
   { value: "other", label: "Other" },
 ];
+/** Base UI Select can't hold "" as a value — "no source" maps through this. */
+const SOURCE_NONE = "__none";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -298,18 +301,22 @@ export function ContactForm({
 
       <div className="space-y-1.5">
         <Label htmlFor="c-source">Source</Label>
-        <select
-          id="c-source"
-          value={source}
-          onChange={(e) => setSource(e.target.value as ContactSource)}
-          className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+        <Select
+          value={source || SOURCE_NONE}
+          onValueChange={(value) => value != null && setSource((value === SOURCE_NONE ? "" : value) as ContactSource)}
+          items={Object.fromEntries(SOURCES.map((s) => [s.value || SOURCE_NONE, s.label]))}
         >
-          {SOURCES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="c-source" size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SOURCES.map((s) => (
+              <SelectItem key={s.value || SOURCE_NONE} value={s.value || SOURCE_NONE}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1.5">

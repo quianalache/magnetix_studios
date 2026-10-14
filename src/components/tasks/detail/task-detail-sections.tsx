@@ -75,7 +75,7 @@ export function DetailSection({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="hover:bg-muted/40 flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left"
+        className="hover:bg-tint-violet flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left"
       >
         <Icon className="text-muted-foreground h-4 w-4 shrink-0" />
         <span className="flex-1 text-sm font-semibold">{title}</span>
@@ -289,7 +289,7 @@ export function TimeTracker({
                     <span className="min-w-0 flex-1 truncate">
                       <span className="font-medium">{e.actorName}</span>
                       {e.actorKind === "client" && (
-                        <span className="ml-1 rounded-full bg-teal-500/10 px-1.5 text-[10px] text-teal-700 dark:text-teal-300">Client</span>
+                        <span className="ml-1 rounded-full bg-teal-500/10 px-1.5 text-overline text-tag-aqua-fg">Client</span>
                       )}
                       <span className="text-muted-foreground">
                         {" · "}
@@ -321,7 +321,7 @@ export function TimeTracker({
                 ))}
               </ul>
             )}
-            <p className="text-muted-foreground mt-2 text-[11px]">
+            <p className="text-muted-foreground mt-2 text-micro">
               You can correct your own entries; client-reported time is shown read-only.
             </p>
           </div>
@@ -353,7 +353,7 @@ export function TagsInput({
   return (
     <div className="border-input flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border px-2 py-1">
       {tags.map((t) => (
-        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 dark:text-violet-300">
+        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-tint-violet px-2 py-0.5 text-xs text-tag-violet-fg">
           {t}
           <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>
             <X className="h-3 w-3" />
@@ -431,7 +431,7 @@ export function SubtasksSection({
               {s.title}
             </button>
             {assigneeName(s) && (
-              <span className="bg-muted text-muted-foreground max-w-28 truncate rounded-full px-2 py-0.5 text-[11px]">{assigneeName(s)}</span>
+              <span className="bg-muted text-muted-foreground max-w-28 truncate rounded-full px-2 py-0.5 text-micro">{assigneeName(s)}</span>
             )}
             <input
               type="date"
@@ -621,7 +621,7 @@ export function AttachmentsSection({
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (optional)" className="h-9 w-40" aria-label="Link name" />
         <Button type="submit" variant="outline" size="sm" className="h-9" disabled={!url.trim()}>Add link</Button>
       </form>
-      <p className="text-muted-foreground mt-2 text-[11px]">
+      <p className="text-muted-foreground mt-2 text-micro">
         Link files from Drive, Dropbox or your site. File uploads arrive with the Assets library.
       </p>
     </DetailSection>
@@ -663,7 +663,7 @@ export function ConnectionsSection({
 
   const row = (t: { id: string; title: string; completed: boolean }, onRemove?: () => void) => (
     <li key={t.id} className="flex items-center gap-2 text-sm">
-      <span className={cn("h-2 w-2 shrink-0 rounded-full", t.completed ? "bg-emerald-500" : "bg-amber-400")} />
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", t.completed ? "bg-status-success-dot" : "bg-amber-400")} />
       <button type="button" onClick={() => onOpenTask(t.id)} className={cn("min-w-0 flex-1 truncate text-left hover:underline", t.completed && "text-muted-foreground line-through")}>
         {t.title}
       </button>

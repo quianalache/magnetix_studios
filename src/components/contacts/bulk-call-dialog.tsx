@@ -285,7 +285,7 @@ export function BulkCallDialog({
               placeholder="e.g. 30-Day Challenge — free trials"
               maxLength={120}
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               A code like <span className="font-mono">VC-2026-0001</span> is
               assigned automatically for the audit trail.
             </p>
@@ -428,7 +428,7 @@ export function BulkCallDialog({
               <span className="font-mono">{preview.matching}</span>
             </div>
             {excludeCampaignId && (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-micro text-muted-foreground">
                 Prior-campaign exclusion is applied when you launch (not shown
                 in this preview).
               </p>

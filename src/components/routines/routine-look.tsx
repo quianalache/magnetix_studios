@@ -82,7 +82,7 @@ export function RoutineIcon({
     <span
       aria-hidden
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-2xl border shadow-xs",
+        "flex shrink-0 items-center justify-center rounded-card border shadow-card",
         size === "sm" && "h-9 w-9 rounded-xl",
         size === "md" && "h-12 w-12",
         size === "lg" && "h-14 w-14",

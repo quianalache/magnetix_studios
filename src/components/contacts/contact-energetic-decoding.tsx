@@ -63,7 +63,7 @@ export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
   if (!loading && profiles.length === 0) return null;
 
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="rounded-card border border-border bg-card shadow-card p-4">
       <div className="mb-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Energetic Decoding
@@ -79,7 +79,7 @@ export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
               <span className="flex items-center gap-1.5">
                 <span className="truncate font-medium">{p.name}</span>
                 {p.relationshipLabel && (
-                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-overline font-medium text-muted-foreground">
                     {p.relationshipLabel}
                   </span>
                 )}

@@ -65,7 +65,7 @@ export function ProjectWorkspaceActivity({
       id: "created",
       at: createdAt,
       icon: FolderPlus,
-      tone: "bg-violet-500/10 text-violet-600 dark:text-violet-300",
+      tone: "bg-tag-violet-bg text-tag-violet-fg",
       title: byClient(project)
         ? `Project started by ${clientName} in the Client Portal`
         : "Project created",
@@ -85,7 +85,7 @@ export function ProjectWorkspaceActivity({
         id: `added-${s.id}`,
         at: toDate(s.createdAt),
         icon: ListPlus,
-        tone: "bg-teal-500/10 text-teal-600 dark:text-teal-300",
+        tone: "bg-tag-aqua-bg text-tag-aqua-fg",
         title: byClient(s)
           ? `${clientName} added a task`
           : "Task added",
@@ -98,7 +98,7 @@ export function ProjectWorkspaceActivity({
         id: `done-${s.id}`,
         at: toDate(s.updatedAt),
         icon: CheckCircle2,
-        tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+        tone: "bg-tag-green-bg text-tag-green-fg",
         title: "Task completed",
         detail: s.title,
       });
@@ -110,7 +110,7 @@ export function ProjectWorkspaceActivity({
 
   return (
     <div className="space-y-3">
-      <ol className="bg-card divide-y rounded-2xl border">
+      <ol className="divide-y divide-border-subtle rounded-card border border-border bg-card shadow-card">
         {events.map((e) => (
           <li key={e.id} className="flex items-start gap-3 px-4 py-3">
             <span

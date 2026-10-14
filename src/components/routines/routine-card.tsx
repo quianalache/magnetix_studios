@@ -57,7 +57,7 @@ export function RoutineDayDot({
       aria-label={`${formatYmd(day.date)}: ${state}`}
       className={cn(
         "relative flex shrink-0 items-center justify-center rounded-full font-semibold tabular-nums",
-        size === "sm" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs",
+        size === "sm" ? "h-6 w-6 text-overline" : "h-8 w-8 text-xs",
         !day.scheduled && !day.recorded && "text-muted-foreground/60",
         isToday && "ring-foreground/70 ring-2 ring-offset-1 ring-offset-transparent"
       )}
@@ -147,7 +147,7 @@ export function RoutineCard({
   return (
     <article
       className={cn(
-        "group relative flex min-w-0 flex-col gap-3 rounded-2xl border p-4 shadow-xs transition-shadow hover:shadow-md sm:p-5",
+        "group relative flex min-w-0 flex-col gap-3 rounded-card border p-4 shadow-card transition-shadow hover:shadow-md sm:p-5",
         paused && "opacity-75"
       )}
       style={routineTint(routine.color)}
@@ -160,7 +160,7 @@ export function RoutineCard({
           <h3 className="flex items-center gap-2 text-base leading-tight font-bold">
             <span className="truncate">{routine.name}</span>
             {paused && (
-              <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+              <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-overline font-semibold tracking-wide uppercase">
                 Paused
               </span>
             )}
@@ -235,7 +235,7 @@ export function RoutineCard({
           type="button"
           onClick={onOpen}
           aria-label={`Open ${routine.name}`}
-          className="bg-card hover:bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-xs transition-colors"
+          className="bg-card hover:bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-card transition-colors"
         >
           <ArrowRight className="h-4 w-4" />
         </button>

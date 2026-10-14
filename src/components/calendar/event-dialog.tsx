@@ -27,6 +27,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,6 +106,7 @@ export function EventDialog({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
 
   useEffect(() => {
     if (!open) return;
@@ -227,7 +229,7 @@ export function EventDialog({
 
   async function handleDelete() {
     if (!event) return;
-    if (!confirm(`Delete "${event.title}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete "${event.title}"?`, confirmLabel: "Delete", tone: "danger" }))) return;
     setDeleting(true);
     try {
       const res = await fetch(`/api/events/by-id/${event.id}`, {
@@ -395,7 +397,7 @@ export function EventDialog({
                 </Button>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-micro text-muted-foreground">
               Zoom, Google Meet, Whereby, or any video-call link. Booking-page
               events inherit this from the page; edit per-event if you need
               to switch rooms.
@@ -444,7 +446,7 @@ export function EventDialog({
                 eventStatusNow === "no_show";
               if (isBookingPageEvent && !isTerminal) {
                 return (
-                  <p className="max-w-[60%] text-[11px] text-muted-foreground">
+                  <p className="max-w-[60%] text-micro text-muted-foreground">
                     Use <strong>Cancel booking</strong> above so the visitor
                     is notified by email. Delete is hidden for active
                     bookings to avoid silent cancellations.
@@ -481,6 +483,7 @@ export function EventDialog({
           </div>
         </form>
       </SheetContent>
+      {confirmElement}
     </Sheet>
   );
 }
@@ -503,6 +506,7 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
   const isPast = startAt ? startAt.getTime() < Date.now() : false;
   const [busy, setBusy] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<EventStatus>(status);
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
 
   useEffect(() => {
     setLocalStatus(eventStatus(event));
@@ -536,7 +540,13 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
   ) {
     if (
       next === "cancelled" &&
-      !confirm("Cancel this booking? The visitor is notified by email.")
+      !(await confirmDialog({
+        title: "Cancel this booking?",
+        description: "The visitor is notified by email.",
+        confirmLabel: "Cancel booking",
+        cancelLabel: "Keep booking",
+        tone: "danger",
+      }))
     ) {
       return;
     }
@@ -602,19 +612,19 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
   return (
     <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-400">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-500/10 px-2 py-0.5 text-overline font-medium text-teal-700 dark:text-teal-400">
           <CalendarClock className="h-3 w-3" />
           From booking page
         </span>
         <BookingStatusBadge status={localStatus} />
         {event.assignedToName && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-tint-violet px-2 py-0.5 text-overline font-medium text-link">
             <User className="h-3 w-3" />
             {event.assignedToName}
           </span>
         )}
         {event.paymentAmount != null && event.paymentCurrency && (
-          <span className="rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:text-zinc-400">
+          <span className="rounded-full bg-zinc-500/10 px-2 py-0.5 text-overline font-medium text-zinc-700 dark:text-zinc-400">
             {event.paymentCurrency} {event.paymentAmount}
           </span>
         )}
@@ -689,6 +699,7 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
       {/* Reassign host — only renders for team bookings the caller can
           reassign (booking-page event with hosts + admin/current host). */}
       {!terminal && <BookingReassign event={event} />}
+      {confirmElement}
     </div>
   );
 }
@@ -696,34 +707,34 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
 function BookingStatusBadge({ status }: { status: EventStatus }) {
   if (status === "awaiting_payment") {
     return (
-      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+      <span className="rounded-full bg-status-warning-bg px-2 py-0.5 text-overline font-medium text-status-warning-fg">
         Awaiting payment
       </span>
     );
   }
   if (status === "cancelled") {
     return (
-      <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-400">
+      <span className="rounded-full bg-status-danger-bg px-2 py-0.5 text-overline font-medium text-status-danger-fg">
         Cancelled
       </span>
     );
   }
   if (status === "completed") {
     return (
-      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+      <span className="rounded-full bg-status-success-bg px-2 py-0.5 text-overline font-medium text-status-success-fg">
         Completed
       </span>
     );
   }
   if (status === "no_show") {
     return (
-      <span className="rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:text-zinc-400">
+      <span className="rounded-full bg-zinc-500/10 px-2 py-0.5 text-overline font-medium text-zinc-700 dark:text-zinc-400">
         No-show
       </span>
     );
   }
   return (
-    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+    <span className="rounded-full bg-status-success-bg px-2 py-0.5 text-overline font-medium text-status-success-fg">
       Confirmed
     </span>
   );

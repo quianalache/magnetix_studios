@@ -17,6 +17,9 @@ import type { Task } from "@/types/tasks";
 import type { ExternalCalendarEvent } from "@/types/google-calendar";
 import type { Project } from "@/types/projects";
 import { CalendarView } from "@/components/calendar/calendar-view";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function CalendarPage() {
   const { user, loading: authLoading } = useAuth();
@@ -109,15 +112,12 @@ export default function CalendarPage() {
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
   return (
-    <div className="momentum-scope w-full max-w-none space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4 px-1">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Calendar</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manual events — meetings, calls, reminders. Click any day to add something.
-          </p>
-        </div>
-      </div>
+    <PageShell width="full" className="gap-5">
+      <PageHeader
+        title="Calendar"
+        icon={CalendarDays}
+        description="Manual events — meetings, calls, reminders. Click any day to add something."
+      />
 
       {loading ? (
         <CalendarSkeleton />
@@ -130,32 +130,28 @@ export default function CalendarPage() {
           googleEvents={googleEvents}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
 function CalendarSkeleton() {
   return (
-    <div className="rounded-2xl border bg-card">
-      <div className="flex items-center justify-between border-b p-4">
-        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
-        <div className="h-7 w-24 animate-pulse rounded bg-muted" />
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]" aria-busy="true" aria-label="Loading calendar">
+      <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-8 w-28" />
+        </div>
+        <div className="h-9 bg-table-head" />
+        <div className="grid grid-cols-7">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div key={i} className="min-h-14 border-r border-b border-border-subtle p-1.5 sm:min-h-[104px]">
+              {i % 5 === 0 && <Skeleton className="h-3 w-4" />}
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-7 grid-rows-6">
-        {Array.from({ length: 42 }).map((_, i) => (
-          <div
-            key={i}
-            className="min-h-[100px] border-b border-r bg-muted/10 last:border-r-0"
-          >
-            {i % 5 === 0 && (
-              <div className="m-1.5 h-3 w-4 animate-pulse rounded bg-muted" />
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="sr-only">
-        <CalendarDays />
-      </div>
+      <Skeleton className="hidden h-72 rounded-card xl:block" />
     </div>
   );
 }

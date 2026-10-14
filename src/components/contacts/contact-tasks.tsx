@@ -72,7 +72,7 @@ export function ContactTasks({
           {Array.from({ length: 2 }).map((_, i) => (
             <div
               key={i}
-              className="h-14 animate-pulse rounded-lg border bg-muted/40"
+              className="h-14 animate-pulse rounded-control bg-muted"
             />
           ))}
         </div>

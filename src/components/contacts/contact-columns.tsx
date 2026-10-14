@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Tag } from "@/components/system/status-pill";
 import { SourceBadge } from "@/components/contacts/source-badge";
 import { getStage, type PipelineStage } from "@/types/deals";
 import type { ContactRow, ContactSortField } from "@/types/contact-search";
@@ -48,14 +48,14 @@ function date(iso: string | null): ReactNode {
 export function tagsCell(tags: string[], max = 3): ReactNode {
   if (tags.length === 0) return muted;
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {tags.slice(0, max).map((t) => (
-        <Badge key={t} variant="outline" className="h-5 max-w-[9rem] truncate px-1.5 text-[11px]">
+        <Tag key={t} className="block max-w-36 truncate px-1.5 text-micro">
           {t}
-        </Badge>
+        </Tag>
       ))}
       {tags.length > max && (
-        <span className="text-[11px] text-muted-foreground" title={tags.slice(max).join(", ")}>
+        <span className="text-micro text-muted-foreground" title={tags.slice(max).join(", ")}>
           +{tags.length - max}
         </span>
       )}
@@ -89,7 +89,7 @@ export function buildContactColumns(opts: {
         if (!r.pipelineStage) return muted;
         const stage = getStage(r.pipelineStage, ctx.stages);
         return (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${stage.tone}`}>
+          <span className={`rounded-full px-2 py-0.5 text-micro font-medium ${stage.tone}`}>
             {stage.label}
           </span>
         );
@@ -111,7 +111,7 @@ export function buildContactColumns(opts: {
           <span className="text-sm">
             {t ? t.name : "Global"}
             {t?.status === "archived" && (
-              <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="ml-1 text-overline uppercase tracking-wider text-muted-foreground">
                 archived
               </span>
             )}

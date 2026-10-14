@@ -26,19 +26,19 @@ export function ProjectCard({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col rounded-xl border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/40"
+      className="flex flex-col rounded-card border border-border bg-card p-4 text-left shadow-card transition-colors hover:border-primary/40"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-[15px] font-semibold leading-snug">{project.title}</p>
         {project.status === "active" && (
-          <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+          <span className="shrink-0 rounded-full bg-status-success-bg px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-tag-green-fg">
             Active
           </span>
         )}
       </div>
 
       {project.assignedContactId && (
-        <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+        <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-micro font-medium text-primary">
           <User className="h-3 w-3" />
           For {project.assignedContactName || "a client"}
         </span>
@@ -60,7 +60,7 @@ export function ProjectCard({
       <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+      <div className="mt-1 flex justify-between text-micro text-muted-foreground">
         <span>Progress</span>
         <span className="tabular-nums">{pct}%</span>
       </div>

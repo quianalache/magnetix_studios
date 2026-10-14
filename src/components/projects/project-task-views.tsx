@@ -37,6 +37,8 @@ import { useTaskAssignees } from "@/hooks/use-task-assignees";
 import { subscribeToProjectTasks } from "@/lib/firestore/tasks";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { toDate } from "@/lib/format";
+import { DATA_TABLE_HEAD_ROW } from "@/components/system/data-table";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -100,11 +102,11 @@ function dueLabel(t: Task): { text: string; tone: string } | null {
   const day = new Date(d);
   day.setHours(0, 0, 0, 0);
   const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000);
-  if (t.completed) return { text: "Done", tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
-  if (diff < 0) return { text: `${-diff}d overdue`, tone: "bg-rose-500/10 text-rose-700 dark:text-rose-300" };
-  if (diff === 0) return { text: "Due today", tone: "bg-amber-500/10 text-amber-700 dark:text-amber-300" };
-  if (diff === 1) return { text: "Due tomorrow", tone: "bg-pink-500/10 text-pink-700 dark:text-pink-300" };
-  return { text: `In ${diff} days`, tone: "bg-violet-500/10 text-violet-700 dark:text-violet-300" };
+  if (t.completed) return { text: "Done", tone: "bg-tag-green-bg text-tag-green-fg" };
+  if (diff < 0) return { text: `${-diff}d overdue`, tone: "bg-status-danger-bg text-status-danger-fg" };
+  if (diff === 0) return { text: "Due today", tone: "bg-status-warning-bg text-status-warning-fg" };
+  if (diff === 1) return { text: "Due tomorrow", tone: "bg-tag-pink-bg text-tag-pink-fg" };
+  return { text: `In ${diff} days`, tone: "bg-tag-violet-bg text-tag-violet-fg" };
 }
 
 function fmtDay(d: Date | null) {
@@ -150,10 +152,10 @@ export function TaskProjectOverview({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card icon={BarChart3} title="Project Snapshot">
           <div className="grid grid-cols-2 gap-3">
-            <Tile tone="bg-white border-[#EDD9EC]" icon={<ListChecks className="h-4 w-4 text-[#5E2574]" />} value={project.stepCount} label="Total tasks" />
-            <Tile tone="bg-white border-[#EDD9EC]" icon={<CheckCircle2 className="h-4 w-4 text-[#5E2574]" />} value={project.stepsDoneCount} label="Completed" />
-            <Tile tone="bg-white border-[#EDD9EC]" icon={<Loader className="h-4 w-4 text-[#5E2574]" />} value={inProgress} label="In progress" />
-            <Tile tone="bg-white border-[#EDD9EC]" icon={<Flag className="h-4 w-4 text-[#5E2574]" />} value={milestones.length} label="Milestones" />
+            <Tile tone="border border-border bg-card" icon={<ListChecks className="h-4 w-4 text-tag-violet-fg" />} value={project.stepCount} label="Total tasks" />
+            <Tile tone="border border-border bg-card" icon={<CheckCircle2 className="h-4 w-4 text-tag-violet-fg" />} value={project.stepsDoneCount} label="Completed" />
+            <Tile tone="border border-border bg-card" icon={<Loader className="h-4 w-4 text-tag-violet-fg" />} value={inProgress} label="In progress" />
+            <Tile tone="border border-border bg-card" icon={<Flag className="h-4 w-4 text-tag-violet-fg" />} value={milestones.length} label="Milestones" />
           </div>
           {(project.timeSpentSeconds ?? 0) > 0 && (
             <p className="text-muted-foreground mt-3 flex items-center gap-1.5 text-xs">
@@ -164,7 +166,7 @@ export function TaskProjectOverview({
 
         <Card icon={CalendarDays} title="Upcoming Deadlines" action={<button type="button" onClick={onViewTasks} className="text-primary text-xs font-medium hover:underline">View all</button>}>
           {loading ? (
-            <div className="bg-muted/30 h-24 animate-pulse rounded-lg" />
+            <div className="h-24 animate-pulse rounded-control bg-muted" />
           ) : upcoming.length === 0 ? (
             <p className="text-muted-foreground text-sm">No open tasks with due dates.</p>
           ) : (
@@ -178,7 +180,7 @@ export function TaskProjectOverview({
                       <span className="block truncate text-sm hover:underline">{t.title}</span>
                       <span className="text-muted-foreground text-xs">{fmtDay(toDate(t.dueAt))}</span>
                     </button>
-                    {due && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", due.tone)}>{due.text}</span>}
+                    {due && <span className={cn("rounded-full px-2 py-0.5 text-micro font-medium whitespace-nowrap", due.tone)}>{due.text}</span>}
                   </li>
                 );
               })}
@@ -189,10 +191,10 @@ export function TaskProjectOverview({
         <MilestonesCard project={project} milestones={milestones} />
       </div>
 
-      <section className="bg-card rounded-2xl border">
+      <section className="rounded-card border border-border bg-card shadow-card">
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <ListChecks className="h-4 w-4 text-violet-500" /> Task Preview
+          <h2 className="flex items-center gap-2 text-section font-semibold">
+            <ListChecks className="h-4 w-4 text-link" /> Task Preview
           </h2>
           <button type="button" onClick={onViewTasks} className="text-primary inline-flex items-center gap-1 text-sm font-medium hover:underline">
             View all tasks <ArrowRight className="h-4 w-4" />
@@ -204,10 +206,10 @@ export function TaskProjectOverview({
             <button type="button" onClick={onViewTasks} className="text-primary hover:underline">Add the first one</button>.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-[640px] text-body-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
+                <tr className={DATA_TABLE_HEAD_ROW}>
                   <th className="w-10 px-5 py-2.5"><span className="sr-only">Done</span></th>
                   <th className="px-2 py-2.5">Task</th>
                   <th className="px-2 py-2.5">Due date</th>
@@ -218,7 +220,7 @@ export function TaskProjectOverview({
               </thead>
               <tbody>
                 {preview.map((t) => (
-                  <tr key={t.id} className="hover:bg-muted/40 cursor-pointer border-b last:border-b-0" onClick={() => onOpenTask(t.id)}>
+                  <tr key={t.id} className="cursor-pointer border-b border-border-subtle transition-colors hover:bg-tint-violet last:border-b-0" onClick={() => onOpenTask(t.id)}>
                     <td className="px-5 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={t.completed} onCheckedChange={() => toggle(t)} aria-label={`Complete ${t.title}`} />
                     </td>
@@ -253,10 +255,10 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-card rounded-2xl border p-5 shadow-xs">
+    <section className="rounded-card border border-border bg-card p-5 shadow-card">
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 font-semibold">
-          <Icon className="h-4 w-4 text-violet-500" /> {title}
+        <h2 className="flex items-center gap-2 text-section font-semibold">
+          <Icon className="h-4 w-4 text-link" /> {title}
         </h2>
         {action}
       </div>
@@ -267,10 +269,10 @@ function Card({
 
 function Tile({ tone, icon, value, label }: { tone: string; icon: React.ReactNode; value: React.ReactNode; label: string }) {
   return (
-    <div className={cn("rounded-xl p-3", tone)}>
+    <div className={cn("rounded-control p-3", tone)}>
       {icon}
-      <p className="mt-1.5 text-xl font-semibold tabular-nums">{value}</p>
-      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className="mt-1.5 text-title-md font-semibold tabular-nums">{value}</p>
+      <p className="text-caption text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -282,6 +284,7 @@ function MilestonesCard({
   project: Project;
   milestones: ProjectMilestone[];
 }) {
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
   const { subAccountId } = useSubAccount();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -315,7 +318,7 @@ function MilestonesCard({
       {milestones.length > 0 && (
         <div className="mb-3">
           <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-            <div className="h-full rounded-full bg-[#9EDBDD]" style={{ width: `${Math.round((done / milestones.length) * 100)}%` }} />
+            <div className="h-full rounded-full bg-aqua-300" style={{ width: `${Math.round((done / milestones.length) * 100)}%` }} />
           </div>
           <p className="text-muted-foreground mt-1 text-xs">{done} of {milestones.length} reached</p>
         </div>
@@ -335,11 +338,11 @@ function MilestonesCard({
                   onClick={() => call(`${base}/${m.id}`, "PATCH", { completed: !m.completedAt })}
                   className="mt-0.5"
                 >
-                  {m.completedAt ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 text-violet-400" />}
+                  {m.completedAt ? <CheckCircle2 className="h-5 w-5 text-status-success-fg" /> : <Circle className="h-5 w-5 text-violet-400" />}
                 </button>
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm", m.completedAt && "text-muted-foreground line-through")}>{m.title}</p>
-                  <p className={cn("text-xs", overdue ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                  <p className={cn("text-xs", overdue ? "text-status-danger-fg" : "text-muted-foreground")}>
                     {fmtDay(d)}
                     {m.offsetLabel ? ` · ${m.offsetLabel}` : ""}
                   </p>
@@ -347,7 +350,7 @@ function MilestonesCard({
                 <button
                   type="button"
                   aria-label={`Remove ${m.title}`}
-                  onClick={() => confirm(`Remove milestone “${m.title}”?`) && call(`${base}/${m.id}`, "DELETE")}
+                  onClick={async () => { if (await confirmDialog({ title: `Remove milestone “${m.title}”?`, confirmLabel: "Remove", tone: "danger" })) call(`${base}/${m.id}`, "DELETE"); }}
                   className="text-muted-foreground hover:text-destructive rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -377,8 +380,9 @@ function MilestonesCard({
         </form>
       )}
       {project.assignedContactId && milestones.length > 0 && (
-        <p className="text-muted-foreground mt-3 text-[11px]">Milestones are visible to {project.assignedContactName ?? "your client"} in their portal.</p>
+        <p className="text-muted-foreground mt-3 text-micro">Milestones are visible to {project.assignedContactName ?? "your client"} in their portal.</p>
       )}
+      {confirmElement}
     </Card>
   );
 }
@@ -415,7 +419,7 @@ export function TaskProjectTasks({
             onClick={() => setView(v.id)}
             className={cn(
               "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-              view === v.id ? "bg-background text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
+              view === v.id ? "bg-accent font-semibold text-accent-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             <v.icon className="h-4 w-4" /> {v.label}
@@ -423,7 +427,7 @@ export function TaskProjectTasks({
         ))}
       </div>
       {loading ? (
-        <div className="bg-muted/30 h-48 animate-pulse rounded-2xl border" />
+        <div className="h-48 animate-pulse rounded-card bg-muted" />
       ) : view === "list" ? (
         <TaskList project={project} tasks={tasks} onOpenTask={onOpenTask} />
       ) : view === "board" ? (
@@ -481,7 +485,7 @@ function TaskList({
   const row = (t: Task, nested = false) => {
     const due = dueLabel(t);
     return (
-      <tr key={t.id} className="hover:bg-muted/40 cursor-pointer border-b last:border-b-0" onClick={() => onOpenTask(t.id)}>
+      <tr key={t.id} className="cursor-pointer border-b border-border-subtle transition-colors hover:bg-tint-violet last:border-b-0" onClick={() => onOpenTask(t.id)}>
         <td className="w-10 px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
           <Checkbox checked={t.completed} onCheckedChange={() => toggle(t)} aria-label={`Complete ${t.title}`} />
         </td>
@@ -506,14 +510,14 @@ function TaskList({
     );
   };
   return (
-    <div className="bg-card overflow-hidden rounded-2xl border">
+    <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
       {top.length === 0 ? (
         <p className="text-muted-foreground px-4 py-8 text-center text-sm">No tasks yet — add the first one below.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+        <div className="relative overflow-x-auto">
+          <table className="w-full min-w-[720px] text-body-sm">
             <thead>
-              <tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
+              <tr className={DATA_TABLE_HEAD_ROW}>
                 <th className="px-4 py-2.5"><span className="sr-only">Done</span></th>
                 <th className="py-2.5 pr-2">Task</th>
                 <th className="px-2 py-2.5">Due date</th>
@@ -582,7 +586,7 @@ function BoardColumn({ status, count, children }: { status: TaskStatus; count: n
     <section
       ref={setNodeRef}
       aria-label={statusLabel(status)}
-      className={cn("bg-muted/30 min-h-48 w-64 shrink-0 space-y-2 rounded-2xl border p-3 transition-colors", isOver && "border-primary/50 bg-primary/5")}
+      className={cn("min-h-48 w-64 shrink-0 space-y-2 rounded-card border border-border bg-surface-sunken p-3 transition-colors", isOver && "border-primary/50 bg-tint-violet")}
     >
       <h3 className="flex items-center gap-2 px-1 text-sm font-semibold">
         <span className={cn("h-2 w-2 rounded-full", STATUS_STYLE[status].dot)} />
@@ -611,21 +615,21 @@ function BoardCard({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={cn("bg-card cursor-grab rounded-xl border p-3 shadow-xs active:cursor-grabbing", isDragging && "z-10 opacity-80 shadow-md")}
+      className={cn("cursor-grab rounded-control border border-border bg-card p-3 shadow-card active:cursor-grabbing", isDragging && "z-10 opacity-80 shadow-md")}
       {...listeners}
       {...attributes}
     >
       <button type="button" onClick={onOpen} onPointerDown={(e) => e.stopPropagation()} className={cn("text-left text-sm font-medium hover:underline", task.completed && "text-muted-foreground line-through")}>
         {task.title}
       </button>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-micro">
         <PriorityFlag priority={task.priority ?? null} showLabel={false} />
         {due && <span className={cn("rounded-full px-1.5 py-0.5 font-medium", due.tone)}>{due.text}</span>}
         {subtasks.length > 0 && (
           <span className="text-muted-foreground">{subtasks.filter((s) => s.completed).length}/{subtasks.length} subtasks</span>
         )}
         {assignee && (
-          <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/10 text-[10px] font-semibold text-violet-700 dark:text-violet-300" title={assignee}>
+          <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-tint-violet text-overline font-semibold text-tag-violet-fg" title={assignee}>
             {assignee.slice(0, 2).toUpperCase()}
           </span>
         )}
@@ -667,7 +671,7 @@ function TaskCalendar({
   const today = new Date();
   return (
     <div className="space-y-2">
-      <div className="bg-card overflow-hidden rounded-2xl border">
+      <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <h3 className="text-sm font-semibold">{cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3>
           <div className="flex gap-1">
@@ -679,7 +683,7 @@ function TaskCalendar({
             </Button>
           </div>
         </div>
-        <div className="text-muted-foreground grid grid-cols-7 border-b text-center text-[11px] font-medium">
+        <div className="text-muted-foreground grid grid-cols-7 border-b text-center text-micro font-medium">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d} className="py-2">{d}</div>)}
         </div>
         <div className="grid grid-cols-7">
@@ -691,10 +695,10 @@ function TaskCalendar({
               <div key={i} className={cn("min-h-24 border-r border-b p-1.5 text-xs [&:nth-child(7n)]:border-r-0", muted && "text-muted-foreground/50")}>
                 <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full", sameDay(d, today) && "bg-primary text-primary-foreground")}>{d.getDate()}</span>
                 <div className="mt-0.5 space-y-0.5">
-                  {start && sameDay(d, start) && <p className="truncate rounded bg-teal-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-teal-700 dark:text-teal-300">Project starts</p>}
-                  {due && sameDay(d, due) && <p className="truncate rounded bg-pink-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-pink-700 dark:text-pink-300">Project due</p>}
+                  {start && sameDay(d, start) && <p className="truncate rounded bg-teal-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-tag-aqua-fg">Project starts</p>}
+                  {due && sameDay(d, due) && <p className="truncate rounded bg-pink-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-tag-pink-fg">Project due</p>}
                   {dayMilestones.map((m) => (
-                    <p key={m.id} className="truncate rounded bg-violet-500/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-violet-700 dark:text-violet-300">⚑ {m.title}</p>
+                    <p key={m.id} className="truncate rounded bg-tint-violet px-1.5 py-0.5 text-[10.5px] font-semibold text-tag-violet-fg">⚑ {m.title}</p>
                   ))}
                   {dayTasks.slice(0, 3).map((t) => (
                     <button key={t.id} type="button" onClick={() => onOpenTask(t.id)} className={cn("flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10.5px] hover:bg-muted", t.completed && "text-muted-foreground line-through")}>
@@ -702,7 +706,7 @@ function TaskCalendar({
                       <span className="truncate">{t.title}</span>
                     </button>
                   ))}
-                  {dayTasks.length > 3 && <p className="text-muted-foreground px-1 text-[10px]">+{dayTasks.length - 3} more</p>}
+                  {dayTasks.length > 3 && <p className="text-muted-foreground px-1 text-overline">+{dayTasks.length - 3} more</p>}
                 </div>
               </div>
             );
@@ -745,16 +749,16 @@ export function TaskProjectActivity({
       cancelled = true;
     };
   }, [subAccountId, project.id, project.updatedAt]);
-  if (rows === null) return <div className="bg-muted/30 h-48 animate-pulse rounded-2xl border" />;
+  if (rows === null) return <div className="h-48 animate-pulse rounded-card bg-muted" />;
   return (
     <div className="space-y-3">
       {rows.length === 0 ? (
-        <p className="text-muted-foreground bg-card rounded-2xl border p-6 text-sm">No recorded activity yet.</p>
+        <p className="text-muted-foreground rounded-card border border-border bg-card shadow-card p-6 text-sm">No recorded activity yet.</p>
       ) : (
-        <ol className="bg-card divide-y rounded-2xl border">
+        <ol className="divide-y divide-border-subtle rounded-card border border-border bg-card shadow-card">
           {rows.map((a) => (
             <li key={a.id} className="flex items-start gap-3 px-4 py-3">
-              <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold", a.actorKind === "client" ? "bg-teal-500/10 text-teal-700 dark:text-teal-300" : "bg-violet-500/10 text-violet-700 dark:text-violet-300")}>
+              <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-micro font-semibold", a.actorKind === "client" ? "bg-tag-aqua-bg text-tag-aqua-fg" : "bg-tag-violet-bg text-tag-violet-fg")}>
                 {(a.actorName || "?").slice(0, 2).toUpperCase()}
               </span>
               <div className="min-w-0 flex-1 text-sm">

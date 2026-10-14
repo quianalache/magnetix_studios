@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OptionSelect } from "@/components/system/option-select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ContactPicker } from "@/components/quotes/contact-picker";
@@ -366,7 +367,7 @@ export function ProjectDialog({
                 </Button>
               )}
             </div>
-            <p className="text-muted-foreground text-[11px]">
+            <p className="text-muted-foreground text-micro">
               Assigning shows this project in that client&apos;s Client Portal —
               either of you can check off steps.
             </p>
@@ -375,21 +376,14 @@ export function ProjectDialog({
           {!isEdit && templateOptions.length > 0 && (
             <div className="space-y-1.5">
               <Label htmlFor="project-template">Start from a template</Label>
-              <select
+              <OptionSelect
                 id="project-template"
-                value={templateId}
-                onChange={(e) => setTemplateId(e.target.value)}
-                className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
-              >
-                <option value="">Blank project</option>
-                {templateOptions.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                    {t.category ? ` — ${t.category}` : ""}
-                  </option>
-                ))}
-              </select>
-              <p className="text-muted-foreground text-[11px]">
+                value={templateId || null}
+                onChange={(next) => setTemplateId(next ?? "")}
+                noneLabel="Blank project"
+                options={templateOptions.map((t) => ({ value: t.id, label: `${t.title}${t.category ? ` — ${t.category}` : ""}` }))}
+              />
+              <p className="text-muted-foreground text-micro">
                 {contactId
                   ? "Only client templates are available for assigned projects."
                   : "Only internal templates are available for unassigned projects."}
@@ -435,7 +429,7 @@ export function ProjectDialog({
                         )}
                       </button>
                       <span
-                        className={`flex-1 text-[13px] ${s.done ? "text-muted-foreground line-through" : ""}`}
+                        className={`flex-1 text-body-sm ${s.done ? "text-muted-foreground line-through" : ""}`}
                       >
                         {s.title}
                       </span>
@@ -460,7 +454,7 @@ export function ProjectDialog({
                       }
                     }}
                     placeholder="Add a step…"
-                    className="h-8 text-[13px]"
+                    className="h-8 text-body-sm"
                   />
                   <Button
                     type="button"

@@ -67,7 +67,7 @@ export function ContactDeals({
           {Array.from({ length: 2 }).map((_, i) => (
             <div
               key={i}
-              className="h-12 animate-pulse rounded-lg border bg-muted/40"
+              className="h-12 animate-pulse rounded-control bg-muted"
             />
           ))}
         </div>
@@ -98,7 +98,7 @@ export function ContactDeals({
                 </div>
                 <Link
                   href={saPath(`/pipeline/${dealPipelineId(deal)}`)}
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity hover:opacity-80 ${stage.tone}`}
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-medium transition-opacity hover:opacity-80 ${stage.tone}`}
                 >
                   {stage.label}
                 </Link>

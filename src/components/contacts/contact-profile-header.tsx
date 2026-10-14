@@ -224,9 +224,9 @@ export function ContactProfileHeader({
       <div className="space-y-3">
         <Link
           href={saPath("/contacts")}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
+          <ArrowLeft className="size-3.5" aria-hidden="true" />
           Back to contacts
         </Link>
 
@@ -234,17 +234,17 @@ export function ContactProfileHeader({
           <div className="flex min-w-0 items-center gap-3">
             <span
               aria-hidden="true"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-semibold text-primary sm:h-14 sm:w-14 sm:text-lg"
+              className="flex size-12 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-section font-semibold text-tag-violet-fg sm:size-14 sm:text-title-md"
             >
               {contactInitials(contact)}
             </span>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
+                <h1 className="truncate text-title-md font-semibold tracking-tight text-foreground sm:text-title-lg">
                   {displayName}
                 </h1>
               </div>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="mt-0.5 text-body-sm text-muted-foreground">
                 Added {formatContactDate(contact.createdAt)}
               </p>
             </div>
@@ -259,7 +259,7 @@ export function ContactProfileHeader({
                 disabled={!contact.phone}
                 title={!contact.phone ? "No phone on this contact" : "Call with AI"}
               >
-                <PhoneOutgoing className="mr-1 h-3.5 w-3.5" />
+                <PhoneOutgoing className="h-3.5 w-3.5" />
                 Call
               </Button>
             )}
@@ -271,7 +271,7 @@ export function ContactProfileHeader({
                 disabled={!contact.phone || reviewSending}
                 title={!contact.phone ? "No phone on this contact" : "Request a Google review"}
               >
-                <Star className="mr-1 h-3.5 w-3.5" />
+                <Star className="h-3.5 w-3.5" />
                 Review
               </Button>
             )}
@@ -281,7 +281,7 @@ export function ContactProfileHeader({
             {/* Self-gates: admin only. */}
             <MergeContactButton contact={contact} />
             <Button variant="outline" size="sm" onClick={() => onEditOpenChange(true)}>
-              <Pencil className="mr-1 h-3.5 w-3.5" />
+              <Pencil className="h-3.5 w-3.5" />
               Edit
             </Button>
             {isAdmin && (

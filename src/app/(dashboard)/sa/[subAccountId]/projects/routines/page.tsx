@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FolderKanban, Plus, Repeat, Search } from "lucide-react";
+import { FolderKanban, Plus, Repeat } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToProjects } from "@/lib/firestore/projects";
@@ -14,7 +14,7 @@ import { ProjectsShell } from "@/components/projects/projects-shell";
 import { RoutineCard } from "@/components/routines/routine-card";
 import { RoutineEditorDialog } from "@/components/routines/routine-editor-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SearchField } from "@/components/system/search-field";
+import { OptionSelect } from "@/components/system/option-select";
 import { cn } from "@/lib/utils";
 import { TASK_RECURRENCE_LABELS, type TaskRecurrenceType } from "@/types/tasks";
 import type { Project } from "@/types/projects";
@@ -189,15 +191,15 @@ function RoutinesPageInner() {
               aria-pressed={filter === id}
               onClick={() => setFilter(id)}
               className={cn(
-                "inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
-                filter === id ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"
+                "inline-flex h-(--ds-control-sm) items-center gap-2 rounded-chip border px-3 text-body-sm font-medium transition-colors",
+                filter === id ? "border-primary bg-tint-violet text-link" : "border-border bg-card text-muted-foreground hover:text-foreground"
               )}
             >
               {label}
               <span
                 className={cn(
-                  "rounded-full px-1.5 text-xs tabular-nums",
-                  filter === id ? "bg-primary-foreground/20" : "bg-muted text-muted-foreground"
+                  "text-caption tabular-nums",
+                  filter === id ? "opacity-80" : "text-ink-tertiary"
                 )}
               >
                 {counts[id]}
@@ -206,30 +208,19 @@ function RoutinesPageInner() {
           ))}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label className="relative block">
-            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-            <Input
-              id="routines-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search routines…"
-              aria-label="Search routines"
-              className="bg-card h-9 pl-9 sm:w-64"
-            />
-          </label>
-          <label className="text-muted-foreground flex items-center gap-2 text-sm">
-            Sort
-            <select
-              id="routines-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-              className="border-input bg-card text-foreground h-9 flex-1 rounded-md border px-2.5 text-sm"
-            >
-              <option value="next">Next occurrence</option>
-              <option value="name">Name</option>
-              <option value="recent">Recently created</option>
-            </select>
-          </label>
+          <SearchField value={search} onChange={setSearch} placeholder="Search routines…" aria-label="Search routines" className="sm:w-64" />
+          <OptionSelect
+            id="routines-sort"
+            aria-label="Sort routines"
+            value={sort}
+            onChange={(next) => next && setSort(next)}
+            options={[
+              { value: "next", label: "Sort: Next occurrence" },
+              { value: "name", label: "Sort: Name" },
+              { value: "recent", label: "Sort: Recently created" },
+            ]}
+            className="sm:w-52"
+          />
         </div>
       </div>
 
@@ -245,12 +236,12 @@ function RoutinesPageInner() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-busy>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="bg-muted/40 h-60 animate-pulse rounded-2xl border" />
+            <div key={i} className="h-60 animate-pulse rounded-card bg-muted" />
           ))}
         </div>
       ) : shown.length === 0 && !error ? (
-        <div className="bg-card flex flex-col items-center rounded-2xl border border-dashed px-6 py-14 text-center">
-          <span className="bg-primary/10 text-primary flex h-12 w-12 items-center justify-center rounded-2xl">
+        <div className="flex flex-col items-center rounded-card border border-dashed border-border-strong bg-card px-6 py-14 text-center">
+          <span className="bg-primary/10 text-primary flex h-12 w-12 items-center justify-center rounded-card">
             <Repeat className="h-6 w-6" />
           </span>
           <h2 className="mt-4 text-lg font-semibold">
@@ -293,10 +284,10 @@ function RoutinesPageInner() {
               Routines generated with a project template. They repeat inside their project and are managed there.
             </p>
           </div>
-          <ul className="bg-card divide-y rounded-2xl border">
+          <ul className="divide-y divide-border-subtle rounded-card border border-border bg-card shadow-card">
             {shownProjectRoutines.map((p) => (
               <li key={p.taskId} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-                <Repeat className="h-4 w-4 shrink-0 text-violet-500" aria-hidden />
+                <Repeat className="h-4 w-4 shrink-0 text-link" aria-hidden />
                 <span className="min-w-0 flex-1 font-medium">{p.title}</span>
                 <span className="text-muted-foreground text-xs">
                   {TASK_RECURRENCE_LABELS[p.recurrenceType as TaskRecurrenceType] ?? p.recurrenceType}

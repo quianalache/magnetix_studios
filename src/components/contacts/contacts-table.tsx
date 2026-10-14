@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown, Copy, ExternalLink, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { DataTableShell, DATA_TABLE_HEAD_ROW, DATA_TABLE_ROW } from "@/components/system/data-table";
 import { contactDisplayName, contactInitials } from "@/lib/contacts/names";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
@@ -21,7 +23,8 @@ import type { ContactRow, ContactSort, ContactSortField } from "@/types/contact-
  * server page (25 rows) — sorting is server-side via `onSort`. Name is
  * always the first column; the rest come from the user's saved column
  * choice. Below `md` the rows become cards (name + the chosen fields) so
- * the list stays usable on a phone without horizontal scrolling.
+ * the list stays usable on a phone without horizontal scrolling. Pagination
+ * (`footer`) sits inside the table card, and under the cards on phones.
  */
 export function ContactsTable({
   rows,
@@ -30,6 +33,7 @@ export function ContactsTable({
   sort,
   onSort,
   busy,
+  footer,
 }: {
   rows: ContactRow[];
   columns: ContactColumn[];
@@ -37,6 +41,8 @@ export function ContactsTable({
   sort: ContactSort;
   onSort: (field: ContactSortField) => void;
   busy?: boolean;
+  /** Pagination — rendered inside the table card (and under the phone cards). */
+  footer?: ReactNode;
 }) {
   const { saPath } = useSubAccount();
   const router = useRouter();
@@ -59,7 +65,7 @@ export function ContactsTable({
       <button
         type="button"
         onClick={() => onSort(field)}
-        className="inline-flex items-center gap-1 uppercase hover:text-foreground"
+        className="inline-flex items-center gap-1 uppercase hover:text-white"
         aria-label={`Sort by ${label}`}
       >
         {label}
@@ -74,7 +80,7 @@ export function ContactsTable({
         render={
           <button
             type="button"
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex size-8 items-center justify-center rounded-control text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={`Actions for ${contactDisplayName(row)}`}
             onClick={(e) => e.stopPropagation()}
           />
@@ -102,81 +108,75 @@ export function ContactsTable({
 
   return (
     <div className={cn("transition-opacity", busy && "opacity-60")} aria-busy={busy}>
-      {/* ≥ md: table (scrolls horizontally inside its card if many columns). */}
-      <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="border-b bg-muted/40">
-              <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <th scope="col" className="sticky left-0 z-[1] bg-muted/40 px-3 py-3">
-                  {header("Name", "name")}
-                </th>
-                {columns.map((c) => (
-                  <th key={c.id} scope="col" className={cn("whitespace-nowrap px-3 py-3", c.className)}>
-                    {header(c.label, c.sort)}
-                  </th>
-                ))}
-                <th scope="col" className="w-10 px-2 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="group cursor-pointer hover:bg-muted/30"
-                  onClick={() => router.push(saPath(`/contacts/${row.id}`))}
+      {/* ≥ md: the shared table frame — the body scrolls sideways inside the
+          card when many columns are chosen, never the page. The Name column
+          stays pinned while scrolling. */}
+      <DataTableShell className="hidden md:block" footer={footer}>
+        <thead>
+          <tr className={DATA_TABLE_HEAD_ROW}>
+            <th scope="col" className="sticky left-0 z-[1] bg-table-head px-4 py-3">
+              {header("Name", "name")}
+            </th>
+            {columns.map((c) => (
+              <th key={c.id} scope="col" className={cn("px-3 py-3", c.className)}>
+                {header(c.label, c.sort)}
+              </th>
+            ))}
+            <th scope="col" className="w-12 px-2 py-3">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className={cn(DATA_TABLE_ROW, "group cursor-pointer")} onClick={() => router.push(saPath(`/contacts/${row.id}`))}>
+              <td className="sticky left-0 z-[1] bg-card px-4 py-2.5 transition-colors group-hover:bg-tint-violet">
+                <Link
+                  href={saPath(`/contacts/${row.id}`)}
+                  className="flex min-w-44 items-center gap-2.5"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <td className="sticky left-0 z-[1] bg-card px-3 py-3 group-hover:bg-muted/30">
-                    <Link
-                      href={saPath(`/contacts/${row.id}`)}
-                      className="flex min-w-[11rem] items-center gap-2.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
-                      >
-                        {contactInitials(row)}
-                      </span>
-                      <span className="truncate text-sm font-medium hover:underline">
-                        {contactDisplayName(row)}
-                      </span>
-                    </Link>
-                  </td>
-                  {columns.map((c) => (
-                    <td key={c.id} className="max-w-[15rem] truncate px-3 py-3 align-middle">
-                      {c.render(row, ctx)}
-                    </td>
-                  ))}
-                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                    {rowMenu(row)}
-                  </td>
-                </tr>
+                  <span
+                    aria-hidden="true"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-caption font-semibold text-tag-violet-fg"
+                  >
+                    {contactInitials(row)}
+                  </span>
+                  <span className="truncate text-body-sm font-semibold text-foreground hover:underline">
+                    {contactDisplayName(row)}
+                  </span>
+                </Link>
+              </td>
+              {columns.map((c) => (
+                <td key={c.id} className="max-w-60 truncate px-3 py-2.5 align-middle">
+                  {c.render(row, ctx)}
+                </td>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                {rowMenu(row)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTableShell>
 
       {/* < md: cards. */}
       <ul className="space-y-2 md:hidden">
         {rows.map((row) => (
-          <li key={row.id} className="rounded-xl border bg-card">
+          <li key={row.id} className="rounded-card border border-border bg-card shadow-card">
             <div className="flex items-start gap-3 p-3">
               <Link href={saPath(`/contacts/${row.id}`)} className="flex min-w-0 flex-1 items-start gap-3">
                 <span
                   aria-hidden="true"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-caption font-semibold text-tag-violet-fg"
                 >
                   {contactInitials(row)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{contactDisplayName(row)}</p>
+                  <p className="truncate text-body-sm font-semibold">{contactDisplayName(row)}</p>
                   <dl className="mt-1 space-y-1">
                     {columns.map((c) => (
-                      <div key={c.id} className="flex min-w-0 items-start gap-2 text-xs">
+                      <div key={c.id} className="flex min-w-0 items-start gap-2 text-caption">
                         <dt className="w-20 shrink-0 text-muted-foreground">{c.label}</dt>
                         <dd className="min-w-0 flex-1 truncate">{c.render(row, ctx)}</dd>
                       </div>
@@ -189,6 +189,7 @@ export function ContactsTable({
           </li>
         ))}
       </ul>
+      {footer ? <div className="mt-3 rounded-card border border-border bg-card px-4 py-3 shadow-card md:hidden">{footer}</div> : null}
     </div>
   );
 }

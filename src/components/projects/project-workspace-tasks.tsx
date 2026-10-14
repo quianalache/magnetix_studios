@@ -76,7 +76,7 @@ export function ProjectWorkspaceTasks({
             className={cn(
               "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
               view === v.id
-                ? "bg-background text-primary shadow-xs"
+                ? "bg-accent font-semibold text-accent-foreground"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -147,7 +147,7 @@ export function ClientAddedBadge({
   if (!step.createdByMemberId) return null;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-teal-500/10 px-2 py-0.5 text-[10.5px] font-medium text-teal-700 dark:text-teal-300"
+      className="inline-flex items-center gap-1 rounded-full bg-teal-500/10 px-2 py-0.5 text-[10.5px] font-medium text-tag-aqua-fg"
       title="Added from the Client Portal"
     >
       <UserRound className="h-3 w-3" />
@@ -184,7 +184,7 @@ function StepList({
         }
       }}
       className={cn(
-        "group hover:bg-muted/40 flex items-center gap-3 border-b px-4 py-3 last:border-b-0",
+        "group flex items-center gap-3 border-b border-border-subtle hover:bg-tint-violet px-4 py-3 last:border-b-0",
         onEditProject && "cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       )}
     >
@@ -206,9 +206,9 @@ function StepList({
       <ClientAddedBadge step={s} project={project} />
       <span
         className={cn(
-          "rounded-full px-2 py-0.5 text-[11px] font-medium",
+          "rounded-full px-2 py-0.5 text-micro font-medium",
           s.done
-            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            ? "bg-tag-green-bg text-tag-green-fg"
             : "bg-muted text-muted-foreground"
         )}
       >
@@ -228,7 +228,7 @@ function StepList({
     </li>
   );
   return (
-    <div className="bg-card overflow-hidden rounded-2xl border">
+    <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
       {steps.length === 0 ? (
         <p className="text-muted-foreground px-4 py-8 text-center text-sm">
           No tasks yet — add the first one below.
@@ -237,7 +237,7 @@ function StepList({
         <ul>
           {open.map(row)}
           {done.length > 0 && (
-            <li className="bg-muted/30 text-muted-foreground border-b px-4 py-2 text-xs font-semibold tracking-wider uppercase">
+            <li className="border-b border-border bg-surface-sunken px-4 py-2 text-overline font-semibold tracking-wider text-ink-tertiary uppercase">
               Completed ({done.length})
             </li>
           )}
@@ -318,15 +318,15 @@ function BoardColumn({
       ref={setNodeRef}
       aria-label={label}
       className={cn(
-        "bg-muted/30 min-h-40 space-y-2 rounded-2xl border p-3 transition-colors",
-        isOver && "border-primary/50 bg-primary/5"
+        "min-h-40 space-y-2 rounded-card border border-border bg-surface-sunken p-3 transition-colors",
+        isOver && "border-primary/50 bg-tint-violet"
       )}
     >
       <h3 className="flex items-center gap-2 px-1 text-sm font-semibold">
         <span
           className={cn(
             "h-2 w-2 rounded-full",
-            id === "done" ? "bg-emerald-500" : "bg-violet-500"
+            id === "done" ? "bg-status-success-dot" : "bg-violet-500"
           )}
         />
         {label}
@@ -346,7 +346,7 @@ function BoardCard({ step, project }: { step: ProjectStep; project: Project }) {
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
-        "bg-card flex cursor-grab items-start gap-2 rounded-xl border p-3 shadow-xs active:cursor-grabbing",
+        "flex cursor-grab items-start gap-2 rounded-control border border-border bg-card p-3 shadow-card active:cursor-grabbing",
         isDragging && "z-10 opacity-80 shadow-md"
       )}
       {...listeners}
@@ -414,15 +414,15 @@ function ProjectCalendar({ project }: { project: Project }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2 rounded-xl border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-xs">
-        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />
+      <div className="flex items-start gap-2 rounded-xl border border-violet-500/20 bg-tint-violet px-3 py-2 text-xs">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" />
         <span className="text-muted-foreground">
           Project tasks don&apos;t have their own due dates yet, so the
           calendar shows the project&apos;s start and due dates. Scheduled
           tasks arrive with project task scheduling.
         </span>
       </div>
-      <div className="bg-card overflow-hidden rounded-2xl border">
+      <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <h3 className="text-sm font-semibold">
             {cursor.toLocaleDateString(undefined, {
@@ -455,7 +455,7 @@ function ProjectCalendar({ project }: { project: Project }) {
             </Button>
           </div>
         </div>
-        <div className="text-muted-foreground grid grid-cols-7 border-b text-center text-[11px] font-medium">
+        <div className="text-muted-foreground grid grid-cols-7 border-b text-center text-micro font-medium">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
             <div key={d} className="py-2">
               {d}
@@ -473,7 +473,7 @@ function ProjectCalendar({ project }: { project: Project }) {
                 className={cn(
                   "min-h-20 border-r border-b p-1.5 text-xs [&:nth-child(7n)]:border-r-0",
                   muted && "text-muted-foreground/50",
-                  inRange(d) && !muted && "bg-violet-500/5"
+                  inRange(d) && !muted && "bg-tint-violet"
                 )}
               >
                 <span
@@ -485,12 +485,12 @@ function ProjectCalendar({ project }: { project: Project }) {
                   {d.getDate()}
                 </span>
                 {isStart && (
-                  <p className="mt-1 truncate rounded bg-teal-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-teal-700 dark:text-teal-300">
+                  <p className="mt-1 truncate rounded bg-teal-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-tag-aqua-fg">
                     Project starts
                   </p>
                 )}
                 {isDue && (
-                  <p className="mt-1 truncate rounded bg-pink-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-pink-700 dark:text-pink-300">
+                  <p className="mt-1 truncate rounded bg-pink-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-tag-pink-fg">
                     Project due
                   </p>
                 )}

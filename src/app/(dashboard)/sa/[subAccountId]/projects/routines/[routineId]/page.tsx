@@ -4,6 +4,8 @@ import { use, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSubAccount } from "@/context/sub-account-context";
+import Link from "next/link";
+import { PageShell } from "@/components/system/page-shell";
 import { Button } from "@/components/ui/button";
 import { RoutineDetailSheet } from "@/components/routines/routine-detail-sheet";
 import { RoutineEditorDialog } from "@/components/routines/routine-editor-dialog";
@@ -32,14 +34,13 @@ export default function RoutineWorkspacePage({
   const initialDate = routineCalendarDate(searchParams.get("date"));
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-7xl space-y-5 rounded-2xl">
-      <Button
-        variant="ghost"
-        className="-ml-2 gap-2"
-        onClick={() => router.push(saPath("/projects/routines"))}
+    <PageShell width="wide" className="gap-5">
+      <Link
+        href={saPath("/projects/routines")}
+        className="inline-flex w-fit items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> Back to Routines
-      </Button>
+        <ArrowLeft className="size-3.5" aria-hidden="true" /> Back to Routines
+      </Link>
       <RoutineDetailSheet
         key={detailKey}
         routineId={routineId}
@@ -96,6 +97,6 @@ export default function RoutineWorkspacePage({
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </PageShell>
   );
 }

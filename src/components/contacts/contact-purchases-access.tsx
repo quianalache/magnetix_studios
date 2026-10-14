@@ -49,9 +49,9 @@ const SOURCE_LABEL: Record<AccessSourceLabel, string> = {
 };
 
 const SOURCE_TONE: Record<AccessSourceLabel, string> = {
-  purchase: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400",
-  complimentary: "border-violet-500/40 text-violet-700 dark:text-violet-300",
-  product: "border-sky-500/40 text-sky-700 dark:text-sky-300",
+  purchase: "border-status-success-dot/40 text-status-success-fg",
+  complimentary: "border-violet-ds-300 text-link",
+  product: "border-status-info-dot/40 text-status-info-fg",
   joined: "border-muted-foreground/30 text-muted-foreground",
   staff: "border-muted-foreground/30 text-muted-foreground",
   imported: "border-muted-foreground/30 text-muted-foreground",
@@ -159,7 +159,7 @@ export function ContactPurchasesAccess({
       }
     >
       {loading && !data ? (
-        <div className="h-10 animate-pulse rounded-lg border bg-muted/40" aria-busy="true" />
+        <div className="h-10 animate-pulse rounded-control bg-muted" aria-busy="true" />
       ) : error ? (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
@@ -264,7 +264,7 @@ function AccessList({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="mb-1.5 text-micro font-medium uppercase tracking-wide text-muted-foreground">
         Access
       </p>
       <ul className="divide-y rounded-lg border bg-background">
@@ -275,16 +275,16 @@ function AccessList({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{a.name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-1">
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] capitalize">
+                  <Badge variant="outline" className="h-5 px-1.5 text-overline capitalize">
                     {a.status}
                   </Badge>
                   {a.sources.map((s) => (
-                    <Badge key={s} variant="outline" className={cn("h-5 px-1.5 text-[10px]", SOURCE_TONE[s])}>
+                    <Badge key={s} variant="outline" className={cn("h-5 px-1.5 text-overline", SOURCE_TONE[s])}>
                       {SOURCE_LABEL[s]}
                     </Badge>
                   ))}
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="mt-1 text-micro text-muted-foreground">
                   {a.complimentary
                     ? `Granted ${shortDate(a.complimentary.grantedAt)}${
                         a.complimentary.grantedByName ? ` by ${a.complimentary.grantedByName}` : ""
@@ -316,7 +316,7 @@ function AccessList({
 function PurchaseList({ rows }: { rows: ContactPurchaseView[] }) {
   return (
     <div>
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="mb-1.5 text-micro font-medium uppercase tracking-wide text-muted-foreground">
         Purchases
       </p>
       <ul className="divide-y rounded-lg border bg-background">
@@ -325,7 +325,7 @@ function PurchaseList({ rows }: { rows: ContactPurchaseView[] }) {
             <ShoppingBag className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{p.targetName}</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 {shortDate(p.paidAt ?? p.requestedAt)}
                 {p.markedPaidByStaff ? " · marked paid by staff" : ""}
               </p>
@@ -334,8 +334,8 @@ function PurchaseList({ rows }: { rows: ContactPurchaseView[] }) {
               <p className="text-xs font-medium tabular-nums">{money(p.amountCents, p.currency)}</p>
               <p
                 className={cn(
-                  "text-[10px] capitalize",
-                  p.status === "paid" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+                  "text-overline capitalize",
+                  p.status === "paid" ? "text-status-success-fg" : "text-muted-foreground",
                 )}
               >
                 {p.status}
@@ -450,7 +450,7 @@ function GrantAccessDialog({
           <div className="space-y-3" role="radiogroup" aria-label="What to grant">
             {groups.map((g) => (
               <div key={g.label}>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="mb-1 text-micro font-medium uppercase tracking-wide text-muted-foreground">
                   {g.label}
                 </p>
                 <ul className="divide-y rounded-lg border">
@@ -479,10 +479,10 @@ function GrantAccessDialog({
                             <span className="block truncate font-medium">
                               {item.name}
                               {!item.published && (
-                                <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(draft)</span>
+                                <span className="ml-1.5 text-overline font-normal text-muted-foreground">(draft)</span>
                               )}
                             </span>
-                            <span className="block text-[11px] text-muted-foreground">
+                            <span className="block text-micro text-muted-foreground">
                               {already
                                 ? "Already has access."
                                 : item.grantable
@@ -516,7 +516,7 @@ function GrantAccessDialog({
           </p>
         )}
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           They&apos;ll get the usual &ldquo;access granted&rdquo; notification — in the app, and by
           email if their notification settings allow it.
         </p>

@@ -50,8 +50,8 @@ const MOBILE_SECTIONS: { id: MobileSection; label: string }[] = [
  * contact details). Below lg: one column with a section switcher, so the
  * three desktop columns are never squeezed onto a phone.
  *
- * Width: the approved three-column layout doesn't fit the 5xl data-page
- * container, so the Contacts screens use max-w-7xl (the mockup's ~1280px) — see the page-width convention in CLAUDE.md.
+ * Width: the route wraps this in <PageShell width="wide"> (max-w-7xl, the
+ * documented Contacts exception) — the three columns don't fit 5xl.
  */
 export function ContactProfileView({ contact }: { contact: Contact }) {
   const { subAccountId, agencyId } = useSubAccount();
@@ -91,7 +91,7 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
     cn(mobileSection === section ? "block" : "hidden", "lg:block");
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5">
+    <>
       <ContactProfileHeader
         contact={contact}
         editOpen={editOpen}
@@ -101,7 +101,7 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
       {/* Phone / tablet section switcher. */}
       <nav
         aria-label="Contact sections"
-        className="sticky top-0 z-10 -mx-4 overflow-x-auto border-b bg-background/95 px-4 backdrop-blur lg:hidden"
+        className="sticky top-0 z-10 -mx-4 overflow-x-auto border-b border-border bg-background/95 px-4 backdrop-blur lg:hidden"
       >
         <div className="flex min-w-max gap-4" role="tablist">
           {MOBILE_SECTIONS.map((s) => (
@@ -117,9 +117,9 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
                 }
               }}
               className={cn(
-                "border-b-2 py-2.5 text-sm font-medium transition-colors",
+                "border-b-2 py-2.5 text-body-sm font-medium transition-colors",
                 mobileSection === s.id
-                  ? "border-primary text-foreground"
+                  ? "border-primary font-semibold text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
@@ -147,11 +147,11 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
             "lg:block",
           )}
         >
-          <div className="rounded-xl border bg-card">
+          <div className="rounded-card border border-border bg-card shadow-card">
             <div
               role="tablist"
               aria-label="Contact timeline"
-              className="hidden gap-6 border-b px-4 lg:flex"
+              className="hidden gap-6 border-b border-border px-4 lg:flex"
             >
               {CENTER_TABS.map((t) => (
                 <button
@@ -163,9 +163,9 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
                   aria-controls={`contact-panel-${t.id}`}
                   onClick={() => selectTab(t.id)}
                   className={cn(
-                    "-mb-px border-b-2 py-3 text-sm font-medium transition-colors",
+                    "-mb-px border-b-2 py-3 text-body-sm font-medium transition-colors",
                     tab === t.id
-                      ? "border-primary text-foreground"
+                      ? "border-primary font-semibold text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -210,6 +210,6 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
           />
         </aside>
       </div>
-    </div>
+    </>
   );
 }

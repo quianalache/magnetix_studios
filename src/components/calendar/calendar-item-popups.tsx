@@ -128,11 +128,11 @@ export function CalendarMeetingPopup({
   const statusLabel = eventStatus(event).replaceAll("_", " ");
 
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-2xl p-0">
+    <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-card p-0">
       <DialogTitle className="sr-only">{event.title}</DialogTitle>
-        <div className="border-b border-border/60 bg-blue-500/[0.045] px-5 py-4">
+        <div className="border-b border-border/60 bg-status-info-dot/[0.045] px-5 py-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><CalendarDays className="h-5 w-5" /></div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-info-bg text-status-info-fg"><CalendarDays className="h-5 w-5" /></div>
           <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">{isBooking ? "Booking appointment" : "Meeting or session"}</p></div>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} aria-label="Close"><X className="h-4 w-4" /></Button>
         </div>
@@ -171,9 +171,9 @@ export function CalendarGooglePopup({
   return <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-[20px] border-border/70 bg-background p-0 shadow-xl">
       <DialogTitle className="sr-only">{event.title}</DialogTitle>
-        <div className="border-b border-border/60 bg-blue-500/[0.045] px-5 py-4">
+        <div className="border-b border-border/60 bg-status-info-dot/[0.045] px-5 py-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><CalendarDays className="h-5 w-5" /></div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-info-bg text-status-info-fg"><CalendarDays className="h-5 w-5" /></div>
           <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">Google Calendar event</p></div>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} aria-label="Close"><X className="h-4 w-4" /></Button>
         </div>

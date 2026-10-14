@@ -89,7 +89,7 @@ export function TaskItem({ task, contact, onClick }: TaskItemProps) {
     <div
       onClick={() => onClick?.(task)}
       className={cn(
-        "group flex items-start gap-3 rounded-xl border bg-card p-3 transition-all",
+        "group flex items-start gap-3 rounded-card border border-border bg-card shadow-card p-3 transition-all",
         !task.completed && "cursor-pointer hover:border-primary/40 hover:shadow-sm",
         task.completed && "opacity-60",
       )}
@@ -120,17 +120,17 @@ export function TaskItem({ task, contact, onClick }: TaskItemProps) {
             {task.notes}
           </p>
         )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-micro">
           {dueMeta && (
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium",
                 dueMeta.tone === "overdue" &&
-                  "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+                  "bg-status-danger-bg text-status-danger-fg",
                 dueMeta.tone === "today" &&
-                  "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                  "bg-status-warning-bg text-status-warning-fg",
                 dueMeta.tone === "soon" &&
-                  "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+                  "bg-status-info-bg text-status-info-fg",
                 dueMeta.tone === "later" &&
                   "bg-muted text-muted-foreground",
               )}

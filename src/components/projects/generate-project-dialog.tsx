@@ -120,7 +120,7 @@ export function GenerateProjectDialog({
             Deploy &ldquo;{template.name}&rdquo; as a live project with all tasks and timelines.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-xl bg-violet-500/5 p-3 text-sm">
+        <div className="rounded-xl bg-tint-violet p-3 text-sm">
           <p className="font-medium">What will be generated:</p>
           <ul className="text-muted-foreground mt-1 space-y-0.5">
             <li>{template.tasks.length} tasks with scheduled dates</li>
@@ -151,7 +151,7 @@ export function GenerateProjectDialog({
               </div>
               {contactId && <Button type="button" variant="ghost" size="sm" onClick={() => setContactId(null)}>Clear</Button>}
             </div>
-            <p className="text-muted-foreground text-[11px]">Assigning a client shows the project, its tasks and milestones in their Client Portal.</p>
+            <p className="text-muted-foreground text-micro">Assigning a client shows the project, its tasks and milestones in their Client Portal.</p>
           </div>
           <div className="space-y-2 rounded-xl border p-3">
             <label className="flex items-center justify-between gap-3 text-sm">

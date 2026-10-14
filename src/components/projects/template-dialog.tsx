@@ -200,9 +200,9 @@ export function TemplateDialog({
 
           <div className="space-y-2 rounded-lg border p-3">
             <div>
-              <Label className="text-[13px]">Who is this template for?</Label>
+              <Label className="text-body-sm">Who is this template for?</Label>
             </div>
-            <label className="hover:bg-muted/40 flex cursor-pointer gap-3 rounded-md border p-3">
+            <label className="hover:bg-tint-violet flex cursor-pointer gap-3 rounded-md border p-3">
               <input
                 type="radio"
                 name="template-audience"
@@ -212,15 +212,15 @@ export function TemplateDialog({
                 className="mt-1"
               />
               <span>
-                <span className="block text-[13px] font-medium">
+                <span className="block text-body-sm font-medium">
                   My business
                 </span>
-                <span className="text-muted-foreground block text-[12px]">
+                <span className="text-muted-foreground block text-caption">
                   For projects you or your team use internally.
                 </span>
               </span>
             </label>
-            <label className="hover:bg-muted/40 flex cursor-pointer gap-3 rounded-md border p-3">
+            <label className="hover:bg-tint-violet flex cursor-pointer gap-3 rounded-md border p-3">
               <input
                 type="radio"
                 name="template-audience"
@@ -230,8 +230,8 @@ export function TemplateDialog({
                 className="mt-1"
               />
               <span>
-                <span className="block text-[13px] font-medium">Clients</span>
-                <span className="text-muted-foreground block text-[12px]">
+                <span className="block text-body-sm font-medium">Clients</span>
+                <span className="text-muted-foreground block text-caption">
                   For projects you can assign to clients or include in offers.
                 </span>
               </span>
@@ -252,7 +252,7 @@ export function TemplateDialog({
                   key={i}
                   className="group hover:bg-muted/50 flex items-center gap-2 rounded-md px-1 py-1.5"
                 >
-                  <span className="flex-1 text-[13px]">{s}</span>
+                  <span className="flex-1 text-body-sm">{s}</span>
                   <button
                     type="button"
                     onClick={() => removeStepDraft(i)}
@@ -273,7 +273,7 @@ export function TemplateDialog({
                     }
                   }}
                   placeholder="Add a step…"
-                  className="h-8 text-[13px]"
+                  className="h-8 text-body-sm"
                 />
                 <Button
                   type="button"

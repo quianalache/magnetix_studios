@@ -12,6 +12,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  FolderKanban,
   Circle,
   Clock,
   Home,
@@ -24,6 +25,8 @@ import { useProjectsData } from "@/hooks/use-projects-data";
 import { subscribeToProjectSteps } from "@/lib/firestore/projects";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { toDate } from "@/lib/format";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { EmptyState } from "@/components/system/empty-state";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -133,26 +136,20 @@ export default function ProjectWorkspacePage({
   }, [project?.id, subAccountId]);
 
   if (loading) {
-    return (
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="bg-muted/40 h-6 w-40 animate-pulse rounded" />
-        <div className="bg-muted/30 h-40 animate-pulse rounded-2xl border" />
-        <div className="bg-muted/30 h-64 animate-pulse rounded-2xl border" />
-      </div>
-    );
+    return <PageShellLoading width="data" />;
   }
 
   if (!project) {
     return (
-      <div className="mx-auto w-full max-w-6xl space-y-6">
+      <PageShell width="data">
         <BackLink href={saPath("/projects")} />
-        <div className="bg-card/50 rounded-2xl border border-dashed p-10 text-center">
-          <h1 className="text-lg font-semibold">Project not found</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            It may have been deleted, or it belongs to another workspace.
-          </p>
-        </div>
-      </div>
+        <h1 className="sr-only">Project not found</h1>
+        <EmptyState
+          icon={FolderKanban}
+          title="Project not found"
+          description="It may have been deleted, or it belongs to another workspace."
+        />
+      </PageShell>
     );
   }
 
@@ -166,7 +163,7 @@ export default function ProjectWorkspacePage({
   ];
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-6 rounded-2xl">
+    <PageShell width="data">
       <BackLink
         href={saPath(
           project.status === "archived" ? "/projects/archived" : "/projects"
@@ -176,7 +173,7 @@ export default function ProjectWorkspacePage({
       <header className="grid gap-5 lg:grid-cols-[1fr_minmax(280px,360px)]">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="min-w-0 text-title-lg font-semibold tracking-tight break-words text-foreground">
               {project.title}
             </h1>
             <StatusMenu
@@ -191,12 +188,12 @@ export default function ProjectWorkspacePage({
               className="ml-auto"
               onClick={() => setEditOpen(true)}
             >
-              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              <Pencil className="h-3.5 w-3.5" />
               Edit project
             </Button>
           </div>
           {project.description && (
-            <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed whitespace-pre-line">
+            <p className="max-w-3xl text-body-sm leading-relaxed whitespace-pre-line text-muted-foreground">
               {project.description}
             </p>
           )}
@@ -221,20 +218,20 @@ export default function ProjectWorkspacePage({
             />
           </dl>
         </div>
-        <div className="bg-card rounded-2xl border p-5 shadow-xs">
+        <div className="rounded-card border border-border bg-card p-5 shadow-card">
           <div className="flex items-baseline justify-between">
-            <p className="text-sm font-semibold">Overall Progress</p>
-            <p className="text-2xl font-bold text-violet-600 tabular-nums dark:text-violet-300">
+            <p className="text-section font-semibold">Overall Progress</p>
+            <p className="text-title-lg font-semibold text-link tabular-nums">
               {pct}%
             </p>
           </div>
           <div className="bg-muted mt-3 h-2.5 overflow-hidden rounded-full">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600 transition-all"
+              className="h-full rounded-full bg-primary transition-all"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="text-muted-foreground mt-2 text-sm">
+          <p className="mt-2 text-body-sm text-muted-foreground">
             {project.stepsDoneCount} of {project.stepCount}{" "}
             {project.stepCount === 1 ? "task" : "tasks"} completed
           </p>
@@ -249,7 +246,7 @@ export default function ProjectWorkspacePage({
       <nav
         role="tablist"
         aria-label="Project workspace"
-        className="flex gap-2 border-b"
+        className="flex gap-5 overflow-x-auto border-b border-border"
       >
         {tabs.map((t) => (
           <button
@@ -259,10 +256,10 @@ export default function ProjectWorkspacePage({
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+              "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-0.5 pt-1 pb-2.5 text-body-sm font-medium whitespace-nowrap transition-colors",
               tab === t.id
-                ? "border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground border-transparent"
+                ? "border-primary font-semibold text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             <t.icon className="h-4 w-4" />
@@ -336,7 +333,7 @@ export default function ProjectWorkspacePage({
           router.replace(saPath("/projects"));
         }}
       />
-    </div>
+    </PageShell>
   );
 }
 
@@ -344,9 +341,9 @@ function BackLink({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="text-primary inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+      className="inline-flex w-fit items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
     >
-      <ArrowLeft className="h-4 w-4" />
+      <ArrowLeft className="size-3.5" aria-hidden="true" />
       Back to Projects
     </Link>
   );
@@ -363,7 +360,7 @@ function Meta({
 }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tag-violet-bg text-tag-violet-fg">
         <Icon className="h-4 w-4" />
       </span>
       <div>
@@ -392,7 +389,7 @@ function StatusMenu({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
               active
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                ? "bg-tag-green-bg text-tag-green-fg"
                 : "bg-muted text-muted-foreground"
             )}
           />
@@ -401,7 +398,7 @@ function StatusMenu({
         <span
           className={cn(
             "h-1.5 w-1.5 rounded-full",
-            active ? "bg-emerald-500" : "bg-muted-foreground"
+            active ? "bg-status-success-dot" : "bg-muted-foreground"
           )}
         />
         {active ? "Active" : "Archived"}
@@ -451,12 +448,12 @@ function WorkspaceOverview({
     const diff = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
     dueNote =
       project.stepCount > 0 && remaining === 0
-        ? { text: "All tasks complete", tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" }
+        ? { text: "All tasks complete", tone: "bg-tag-green-bg text-tag-green-fg" }
         : diff < 0
-          ? { text: `${-diff} ${diff === -1 ? "day" : "days"} overdue`, tone: "bg-rose-500/10 text-rose-700 dark:text-rose-300" }
+          ? { text: `${-diff} ${diff === -1 ? "day" : "days"} overdue`, tone: "bg-status-danger-bg text-status-danger-fg" }
           : diff === 0
-            ? { text: "Due today", tone: "bg-amber-500/10 text-amber-700 dark:text-amber-300" }
-            : { text: `${diff} ${diff === 1 ? "day" : "days"} left`, tone: "bg-violet-500/10 text-violet-700 dark:text-violet-300" };
+            ? { text: "Due today", tone: "bg-status-warning-bg text-status-warning-fg" }
+            : { text: `${diff} ${diff === 1 ? "day" : "days"} left`, tone: "bg-tag-violet-bg text-tag-violet-fg" };
   }
 
   // Limited preview: open tasks first, in checklist order.
@@ -467,10 +464,10 @@ function WorkspaceOverview({
       <div className="grid gap-4 lg:grid-cols-3">
         <OverviewCard icon={BarChart3} title="Project Snapshot">
           <div className="grid grid-cols-2 gap-3">
-            <SnapTile tone="bg-violet-500/10" icon={<ListChecks className="h-4 w-4 text-violet-600 dark:text-violet-300" />} value={project.stepCount} label="Total tasks" />
-            <SnapTile tone="bg-emerald-500/10" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />} value={project.stepsDoneCount} label="Completed" />
-            <SnapTile tone="bg-sky-500/10" icon={<Circle className="h-4 w-4 text-sky-600 dark:text-sky-300" />} value={remaining} label="Remaining" />
-            <SnapTile tone="bg-pink-500/10" icon={<BarChart3 className="h-4 w-4 text-pink-600 dark:text-pink-300" />} value={`${projectProgressPct(project)}%`} label="Progress" />
+            <SnapTile tone="bg-tag-violet-bg" icon={<ListChecks className="h-4 w-4 text-tag-violet-fg" />} value={project.stepCount} label="Total tasks" />
+            <SnapTile tone="bg-tag-green-bg" icon={<CheckCircle2 className="h-4 w-4 text-tag-green-fg" />} value={project.stepsDoneCount} label="Completed" />
+            <SnapTile tone="bg-tag-blue-bg" icon={<Circle className="h-4 w-4 text-tag-blue-fg" />} value={remaining} label="Remaining" />
+            <SnapTile tone="bg-tag-pink-bg" icon={<BarChart3 className="h-4 w-4 text-tag-pink-fg" />} value={`${projectProgressPct(project)}%`} label="Progress" />
           </div>
         </OverviewCard>
 
@@ -509,10 +506,10 @@ function WorkspaceOverview({
         </OverviewCard>
       </div>
 
-      <section className="bg-card rounded-2xl border">
+      <section className="rounded-card border border-border bg-card shadow-card">
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <ListChecks className="h-4 w-4 text-violet-500" />
+          <h2 className="flex items-center gap-2 text-section font-semibold">
+            <ListChecks className="h-4 w-4 text-link" />
             Task Preview
           </h2>
           <button
@@ -526,7 +523,7 @@ function WorkspaceOverview({
         {stepsLoading ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-muted/30 h-9 animate-pulse rounded-lg" />
+              <div key={i} className="h-9 animate-pulse rounded-control bg-muted" />
             ))}
           </div>
         ) : preview.length === 0 ? (
@@ -552,9 +549,9 @@ function WorkspaceOverview({
                 <ClientAddedBadge step={s} project={project} />
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    "rounded-full px-2 py-0.5 text-micro font-medium",
                     s.done
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-tag-green-bg text-tag-green-fg"
                       : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -584,9 +581,9 @@ function OverviewCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-card rounded-2xl border p-5 shadow-xs">
-      <h2 className="mb-4 flex items-center gap-2 font-semibold">
-        <Icon className="h-4 w-4 text-violet-500" />
+    <section className="rounded-card border border-border bg-card p-5 shadow-card">
+      <h2 className="mb-4 flex items-center gap-2 text-section font-semibold">
+        <Icon className="h-4 w-4 text-link" />
         {title}
       </h2>
       {children}
@@ -606,9 +603,9 @@ function SnapTile({
   label: string;
 }) {
   return (
-    <div className={cn("rounded-xl p-3", tone)}>
+    <div className={cn("rounded-control p-3", tone)}>
       {icon}
-      <p className="mt-1.5 text-xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1.5 text-title-md font-semibold tabular-nums">{value}</p>
       <p className="text-muted-foreground text-xs">{label}</p>
     </div>
   );
@@ -631,7 +628,7 @@ function DateRow({
         <p className="font-medium">{formatDay(value)}</p>
       </div>
       {badge && (
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", badge.tone)}>
+        <span className={cn("rounded-full px-2 py-0.5 text-micro font-medium whitespace-nowrap", badge.tone)}>
           {badge.text}
         </span>
       )}

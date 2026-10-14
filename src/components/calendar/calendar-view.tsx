@@ -9,14 +9,15 @@ import {
   ChevronRight,
   Clock3,
   Plus,
-  Search,
   CalendarDays,
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SearchField } from "@/components/system/search-field";
+import { Tag } from "@/components/system/status-pill";
 import { EventDialog } from "@/components/calendar/event-dialog";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { TASK_TIME_BLOCKS } from "@/types/tasks";
@@ -370,20 +371,20 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
   return (
     <>
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="overflow-hidden rounded-[20px] border border-border/70 bg-background shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-card border border-border bg-card shadow-card">
         {/* Header — was showing the outer card's pink through unless
             explicitly overridden; real page keeps this row on
             bg-background, only the outer rounded card wrapper itself
             carries the tint (and gets fully covered by its children). */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 bg-background px-5 py-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
-            <span className="rounded-full border border-border/60 bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3.5 sm:px-5 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-title-md font-semibold tracking-tight text-foreground">{title}</h2>
+            <Tag color="gray" className="shrink-0">
               {events.length} events
-            </span>
+            </Tag>
           </div>
           <div className="flex items-center gap-1.5">
-            <Button variant="outline" size="sm" className="rounded-lg" onClick={goToday}>
+            <Button variant="outline" size="sm" onClick={goToday}>
               Today
             </Button>
             <Button
@@ -406,37 +407,18 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
         </div>
 
         {/* Toolbar: search + view toggle + new event */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-background px-5 py-3.5">
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search calendar..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 rounded-lg border-border/70 bg-background pl-8 text-xs shadow-none"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted/30 p-1">
-              {VIEW_MODES.map((vm) => (
-                <button
-                  key={vm.value}
-                  type="button"
-                  onClick={() => setView(vm.value)}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    view === vm.value
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {vm.label}
-                </button>
-              ))}
-            </div>
-            <Button size="sm" className="rounded-lg" onClick={() => openNew()}>
-              <Plus className="mr-1 h-3.5 w-3.5" />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-5">
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Search calendar…"
+            aria-label="Search calendar"
+            className="sm:max-w-xs"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <SegmentedControl value={view} onChange={setView} options={VIEW_MODES} />
+            <Button size="sm" onClick={() => openNew()}>
+              <Plus className="h-3.5 w-3.5" />
               New Event
             </Button>
           </div>
@@ -444,7 +426,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
 
         {searchResults ? (
           <div className="space-y-6 p-6">
-            <h3 className="text-sm font-semibold">
+            <h3 className="text-section font-semibold">
               Search results for &quot;{search.trim()}&quot;
             </h3>
             {searchResults.matchedEvents.length === 0 &&
@@ -466,11 +448,11 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                         key={ev.id}
                         type="button"
                         onClick={(e) => openEventDetail(ev, e)}
-                        className="flex flex-col items-start rounded-xl border p-3 text-left text-sm hover:border-primary/40"
+                        className="flex flex-col items-start rounded-control border border-border bg-card p-3 text-left text-body-sm hover:border-primary/40 hover:bg-tint-violet"
                       >
                         <span className="font-medium">{ev.title}</span>
                         {start && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-caption text-muted-foreground">
                             {start.toLocaleDateString()} · {formatTime(start)}
                           </span>
                         )}
@@ -493,7 +475,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                         key={t.id}
                         type="button"
                         onClick={(e) => openTask(t, e)}
-                        className="flex flex-col items-start rounded-xl border p-3 text-left text-sm hover:border-primary/40"
+                        className="flex flex-col items-start rounded-control border border-border bg-card p-3 text-left text-body-sm hover:border-primary/40 hover:bg-tint-violet"
                       >
                         <span
                           className={cn(
@@ -504,7 +486,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                           {t.title}
                         </span>
                         {due && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-caption text-muted-foreground">
                             Due {due.toLocaleDateString()}
                           </span>
                         )}
@@ -520,20 +502,21 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
             {/* Weekday header */}
             <div
               className={cn(
-                "grid border-b border-border/60 bg-muted/20",
+                "grid bg-table-head text-table-head-foreground",
                 cols === 7 ? "grid-cols-7" : "grid-cols-1",
+                view === "week" && "max-sm:hidden",
               )}
             >
               {view === "day"
                 ? (
-                    <div className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    <div className="px-2 py-2.5 text-center text-th font-semibold tracking-[0.08em] uppercase">
                       {cursor.toLocaleDateString("en-US", { weekday: "long" })}
                     </div>
                   )
                 : WEEKDAYS.map((w) => (
                     <div
                       key={w}
-                      className="px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+                      className="px-1 py-2.5 text-center text-th font-semibold tracking-[0.08em] uppercase sm:px-2 sm:text-left"
                     >
                       {w}
                     </div>
@@ -547,8 +530,8 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                 a clean white grid with color reserved for real content. */}
             <div
               className={cn(
-                "grid divide-x divide-y divide-border/60 bg-background",
-                cols === 7 ? "grid-cols-7" : "grid-cols-1",
+                "grid divide-x divide-y divide-border-subtle bg-card",
+                cols === 7 ? (view === "week" ? "grid-cols-1 sm:grid-cols-7" : "grid-cols-7") : "grid-cols-1",
                 view === "month" && "grid-rows-6",
               )}
             >
@@ -560,29 +543,30 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                 const cap = view === "day" ? 20 : 3;
                 const visible = dayItems.slice(0, cap);
                 const overflow = dayItems.length - visible.length;
+                const isSelected = d.getTime() === dayOnly(selectedDate).getTime();
                 return (
                   <div
                     key={dayKey(d)}
                     onClick={() => setSelectedDate(d)}
                     className={cn(
-                      "group relative cursor-pointer p-1.5 transition-colors hover:bg-muted/30",
+                      "group relative cursor-pointer p-1 transition-colors hover:bg-tint-violet sm:p-1.5",
                       view === "day"
                         ? "min-h-[420px]"
                         : view === "week"
-                          ? "min-h-[220px]"
-                          : "min-h-[104px]",
-                      !isCurrentMonth && "bg-muted/10",
-                      isWeekend && isCurrentMonth && !isToday && "bg-muted/[0.04]",
-                      isToday && "bg-primary/[0.035]",
+                          ? "min-h-24 sm:min-h-[220px]"
+                          : "min-h-14 sm:min-h-[104px]",
+                      !isCurrentMonth && "bg-surface-sunken",
+                      isWeekend && isCurrentMonth && !isToday && "bg-surface-sunken/40",
+                      isToday && "bg-tint-violet/60",
+                      isSelected && "ring-2 ring-inset ring-violet-ds-300",
                     )}
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span
                         className={cn(
-                          "flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium tabular-nums",
-                          // Was a hardcoded indigo/violet/pink gradient, totally
-                          // disconnected from the theme system — momentum-scope
-                          // could never touch it. Real markup: plain bg-primary.
+                          "flex size-6 items-center justify-center rounded-full text-caption font-medium tabular-nums sm:size-7",
+                          // Today: plain bg-primary (was a hardcoded gradient
+                          // outside the theme system).
                           isToday && "bg-primary text-primary-foreground shadow-sm",
                           !isToday && isCurrentMonth && "text-foreground",
                           !isToday && !isCurrentMonth && "text-muted-foreground/50",
@@ -590,10 +574,35 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                       >
                         {d.getDate()}
                       </span>
-                      {isToday && <span className="text-[10px] font-medium uppercase tracking-wide text-primary">Today</span>}
+                      {view === "week" && (
+                        <span className="mr-auto ml-2 text-caption font-medium text-muted-foreground sm:hidden">
+                          {d.toLocaleDateString("en-US", { weekday: "long" })}
+                        </span>
+                      )}
+                      {isToday && <span className="text-overline font-semibold tracking-wide text-link uppercase max-sm:hidden">Today</span>}
                     </div>
 
-                    <div className="space-y-1">
+                    {/* Phones: the month grid is a date picker — one dot per item;
+                        tapping a day shows its full agenda in the day panel. */}
+                    {view === "month" && dayItems.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-center gap-0.5 sm:hidden" aria-label={`${dayItems.length} items`}>
+                        {dayItems.slice(0, 4).map((item, i) => (
+                          <span
+                            key={i}
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              item.kind === "event" && "bg-tag-violet-fg",
+                              item.kind === "google" && "bg-tag-blue-fg",
+                              item.kind === "task" && "bg-ink-tertiary",
+                            )}
+                            style={item.kind === "routine" ? { background: routineHex(item.entry.color) } : undefined}
+                          />
+                        ))}
+                        {dayItems.length > 4 && <span className="text-overline leading-none text-muted-foreground">+</span>}
+                      </div>
+                    )}
+
+                    <div className={cn("space-y-1", view === "month" && "max-sm:hidden")}>
                       {visible.map((item) => {
                         if (item.kind === "routine") {
                           const e = item.entry;
@@ -606,7 +615,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                               type="button"
                               onClick={(ev) => openRoutine(e, ev)}
                               title={`${e.name} · ${when ?? "All day"} · ${e.done}/${e.total} done`}
-                              className="flex w-full items-center gap-1 truncate rounded-lg border px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors hover:brightness-95"
+                              className="flex w-full items-center gap-1 truncate rounded-control border px-2 py-1.5 text-left text-micro font-medium leading-tight transition-colors hover:brightness-95"
                               style={{
                                 background: `color-mix(in oklab, ${hex} 12%, var(--background))`,
                                 borderColor: `color-mix(in oklab, ${hex} 30%, transparent)`,
@@ -634,7 +643,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                               key={`ev-${ev.id}`}
                               type="button"
                               onClick={(e) => openEventDetail(ev, e)}
-                              className="group/event flex w-full items-center gap-1 truncate rounded-lg border border-accent/30 bg-accent/10 px-2 py-1.5 text-left text-[11px] font-medium leading-tight text-accent-foreground transition-colors hover:border-accent"
+                              className="group/event flex w-full items-center gap-1 truncate rounded-control border border-accent/30 bg-accent/10 px-2 py-1.5 text-left text-micro font-medium leading-tight text-accent-foreground transition-colors hover:border-accent"
                             >
                               {start && (
                                 <span className="shrink-0 text-muted-foreground">
@@ -664,11 +673,11 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                                 e.stopPropagation();
                                 setDetailGoogleEvent(ge);
                               }}
-                              className="flex w-full items-center gap-1 truncate rounded-lg border border-transparent bg-blue-500/[0.07] px-2 py-1.5 text-left text-[11px] font-medium leading-tight text-blue-700 transition-colors hover:border-blue-500/30 dark:text-blue-400"
+                              className="flex w-full items-center gap-1 truncate rounded-control border border-transparent bg-tag-blue-bg px-2 py-1.5 text-left text-micro font-medium leading-tight text-tag-blue-fg transition-colors hover:border-tag-blue-fg/30"
                             >
-                              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                              <span className="inline-block size-1.5 shrink-0 rounded-full bg-tag-blue-fg" />
                               {start && !ge.allDay && (
-                                <span className="shrink-0 text-blue-700/70 dark:text-blue-400/70">
+                                <span className="shrink-0 text-tag-blue-fg/70">
                                   {formatTime(start)}
                                 </span>
                               )}
@@ -682,7 +691,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                             key={`task-${t.id}`}
                             type="button"
                             onClick={(e) => openTask(t, e)}
-                            className="flex w-full items-center gap-1 truncate rounded-lg border border-border/60 bg-secondary/10 px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors hover:border-primary/30"
+                            className="flex w-full items-center gap-1 truncate rounded-control border border-border bg-surface-sunken px-2 py-1.5 text-left text-micro font-medium leading-tight transition-colors hover:border-primary/30"
                           >
                             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full border border-secondary-foreground/50" />
                             <span className="truncate">{t.title}</span>
@@ -690,7 +699,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                         );
                       })}
                       {overflow > 0 && (
-                        <span className="px-1 text-[10px] text-muted-foreground">
+                        <span className="px-1 text-overline text-muted-foreground">
                           +{overflow} more
                         </span>
                       )}
@@ -704,8 +713,8 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
       </div>
 
       <div className="space-y-4">
-      <aside className="rounded-[20px] border border-border/70 bg-background p-5 shadow-sm">
-        <div className="mb-4 flex items-start justify-between gap-2 border-b border-border/60 pb-4">
+      <aside className="rounded-card border border-border bg-card p-5 shadow-card">
+        <div className="mb-4 flex items-start justify-between gap-2 border-b border-border pb-4">
           <div>
             <p className="text-base font-semibold text-foreground">{selectedDate.toLocaleDateString("en-US", { weekday: "long" })}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
@@ -713,46 +722,46 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
           <CalendarDays className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <div className="space-y-2">
-          {selectedDayItems.length === 0 && <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 p-5 text-center text-sm text-muted-foreground">Nothing scheduled</p>}
+          {selectedDayItems.length === 0 && <p className="rounded-control border border-dashed border-border-strong bg-surface-sunken p-5 text-center text-sm text-muted-foreground">Nothing scheduled</p>}
           {selectedDayItems.map((item) => {
             if (item.kind === "routine") {
-              return <button key={`side-routine-${item.entry.routineId}-${item.entry.date}`} type="button" onClick={(e) => openRoutine(item.entry, e)} className="flex w-full items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-left hover:bg-primary/10"><Repeat className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.entry.name}</span><span className="text-xs text-muted-foreground">Routine · {item.entry.done}/{item.entry.total} complete</span></span></button>;
+              return <button key={`side-routine-${item.entry.routineId}-${item.entry.date}`} type="button" onClick={(e) => openRoutine(item.entry, e)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><Repeat className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.entry.name}</span><span className="text-caption text-muted-foreground">Routine · {item.entry.done}/{item.entry.total} complete</span></span></button>;
             }
             if (item.kind === "task") {
-              return <button key={`side-task-${item.task.id}`} type="button" onClick={(e) => openTask(item.task, e)} className="flex w-full items-start gap-2 rounded-xl border border-secondary/30 bg-secondary/10 p-3 text-left hover:bg-secondary/20"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.task.title}</span><span className="text-xs text-muted-foreground">Task</span></span></button>;
+              return <button key={`side-task-${item.task.id}`} type="button" onClick={(e) => openTask(item.task, e)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.task.title}</span><span className="text-caption text-muted-foreground">Task</span></span></button>;
             }
             if (item.kind === "event") {
-              return <button key={`side-event-${item.event.id}`} type="button" onClick={(e) => openEventDetail(item.event, e)} className="flex w-full items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-left hover:bg-accent/20"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-accent-foreground" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">{toDate(item.event.startAt) ? formatTime(toDate(item.event.startAt)!) : "Event"}</span></span></button>;
+              return <button key={`side-event-${item.event.id}`} type="button" onClick={(e) => openEventDetail(item.event, e)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-tag-violet-fg" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.event.title}</span><span className="text-caption text-muted-foreground">{toDate(item.event.startAt) ? formatTime(toDate(item.event.startAt)!) : "Event"}</span></span></button>;
             }
-            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => setDetailGoogleEvent(item.event)} className="flex w-full items-start gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-left hover:bg-blue-500/10"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">Calendar item</span></span></button>;
+            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => setDetailGoogleEvent(item.event)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-tag-blue-fg" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.event.title}</span><span className="text-caption text-muted-foreground">Calendar item</span></span></button>;
           })}
         </div>
       </aside>
-      <section className="rounded-[20px] border border-border/70 bg-background shadow-sm">
-        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-          <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-primary" /><h3 className="text-sm font-semibold">Upcoming Deadlines</h3></div>
+      <section className="rounded-card border border-border bg-card shadow-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-primary" /><h3 className="text-section font-semibold">Upcoming Deadlines</h3></div>
           <span className="text-xs font-medium text-primary">View all</span>
         </div>
         <div className="space-y-2 p-4">
-          {upcomingDeadlines.length === 0 && <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 p-4 text-center text-sm text-muted-foreground">No upcoming deadlines.</p>}
+          {upcomingDeadlines.length === 0 && <p className="rounded-control border border-dashed border-border-strong bg-surface-sunken p-4 text-center text-sm text-muted-foreground">No upcoming deadlines.</p>}
           {upcomingDeadlines.map(({ task, due }) => (
-            <button key={task.id} type="button" onClick={(e) => openTask(task, e)} className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/60 bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40">
+            <button key={task.id} type="button" onClick={(e) => openTask(task, e)} className="flex w-full items-center justify-between gap-2 rounded-control border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/40">
               <span className="truncate text-sm font-medium">{task.title}</span>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{formatShortDate(due)}</span>
+              <span className="shrink-0 rounded-chip bg-tag-violet-bg px-2 py-0.5 text-caption font-medium text-tag-violet-fg">{formatShortDate(due)}</span>
             </button>
           ))}
         </div>
       </section>
-      <section className="rounded-[20px] border border-border/70 bg-background shadow-sm">
-        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-          <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" /><h3 className="text-sm font-semibold">Today&apos;s Time Blocks</h3></div>
+      <section className="rounded-card border border-border bg-card shadow-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" /><h3 className="text-section font-semibold">Today&apos;s Time Blocks</h3></div>
           <span className="text-xs font-medium text-primary">Edit</span>
         </div>
         <div className="space-y-2 p-4">
           {todaysTimeBlocks.map((block) => (
             <div key={block.value} className="flex items-start gap-3">
               <div className="w-14 pt-2 text-xs font-medium text-muted-foreground">{block.label}</div>
-              <div className="min-h-[36px] flex-1 rounded-xl border border-border/60 bg-muted/[0.04] p-2 text-xs text-foreground">{block.titles.length > 0 ? block.titles.join(", ") : <span className="text-muted-foreground">Nothing scheduled</span>}</div>
+              <div className="min-h-[36px] flex-1 rounded-control border border-border bg-surface-sunken p-2 text-caption text-foreground">{block.titles.length > 0 ? block.titles.join(", ") : <span className="text-muted-foreground">Nothing scheduled</span>}</div>
             </div>
           ))}
         </div>

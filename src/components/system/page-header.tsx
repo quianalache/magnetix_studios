@@ -51,8 +51,10 @@ export function PageHeader(props: PageHeaderProps) {
     >
       {motif ? <Motif kind={motif} size="header" placement="top-right" hideBelow="sm" className="right-0 top-0" /> : null}
       {breadcrumbs ? <div className="text-caption text-muted-foreground">{breadcrumbs}</div> : null}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
+      {/* Title and actions share a row while both fit; when a page has many
+          actions they wrap onto their own line instead of crushing the title. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        <div className="flex min-w-0 flex-[1_1_18rem] items-start gap-3">
           {Icon ? (
             <span className={cn("flex shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg", moment ? "size-10 sm:size-12" : "size-10")}>
               <Icon className={moment ? "size-5 sm:size-6" : "size-5"} aria-hidden="true" />
@@ -76,7 +78,7 @@ export function PageHeader(props: PageHeaderProps) {
           </div>
         </div>
         {actions || accent ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             {accent ? <Motif kind={accent} size="corner" placement="static" hideBelow="sm" className="mr-1" /> : null}
             {actions}
           </div>

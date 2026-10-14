@@ -6,15 +6,15 @@ import {
 } from "@/lib/projects/template-library";
 
 const CATEGORY_TONE: Record<string, string> = {
-  launch: "bg-pink-500/10 text-pink-700 dark:text-pink-300",
-  content_workflow: "bg-teal-500/10 text-teal-700 dark:text-teal-300",
-  weekly_planning: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  visibility: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  product_creation: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  client_delivery: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  ceo_operations: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300",
-  marketing: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
-  challenge_event: "bg-orange-500/10 text-orange-700 dark:text-orange-300",
+  launch: "bg-tag-pink-bg text-tag-pink-fg",
+  content_workflow: "bg-tag-aqua-bg text-tag-aqua-fg",
+  weekly_planning: "bg-tag-violet-bg text-tag-violet-fg",
+  visibility: "bg-tag-blue-bg text-tag-blue-fg",
+  product_creation: "bg-tag-gold-bg text-tag-gold-fg",
+  client_delivery: "bg-tag-green-bg text-tag-green-fg",
+  ceo_operations: "bg-tag-gray-bg text-tag-gray-fg",
+  marketing: "bg-tag-pink-bg text-tag-pink-fg",
+  challenge_event: "bg-tag-gold-bg text-tag-gold-fg",
   custom: "bg-muted text-foreground",
 };
 
@@ -26,7 +26,7 @@ export function CategoryBadge({ template }: { template: LibraryTemplate }) {
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[11px] font-medium",
+        "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-micro font-medium",
         CATEGORY_TONE[template.categoryKey] ?? "bg-muted text-muted-foreground"
       )}
     >
@@ -39,14 +39,14 @@ export function CategoryBadge({ template }: { template: LibraryTemplate }) {
 export function SourceBadge({ template }: { template: LibraryTemplate }) {
   if (template.source === "system") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-tint-violet px-2 py-0.5 text-micro font-medium text-tag-violet-fg">
         <Crown className="h-3 w-3" /> System
       </span>
     );
   }
   const client = template.audience === "client";
   return (
-    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-micro font-medium">
       {client ? <Users className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
       {client ? "Clients" : "My business"}
     </span>

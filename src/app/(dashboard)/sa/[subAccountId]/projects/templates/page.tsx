@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowUpDown,
   CalendarDays,
   Crown,
   Eye,
@@ -16,7 +15,6 @@ import {
   Pencil,
   Plus,
   Repeat,
-  Search,
   SlidersHorizontal,
   Star,
   UserRound,
@@ -37,9 +35,11 @@ import {
   workspaceTemplateToLibrary,
   type LibraryTemplate,
 } from "@/lib/projects/template-library";
+import { SearchField } from "@/components/system/search-field";
+import { OptionSelect } from "@/components/system/option-select";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -269,10 +269,10 @@ export default function TemplateLibraryPage() {
           setChip(isActive && c.kind === "category" ? { kind: "all" } : c)
         }
         className={cn(
-          "flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
+          "flex h-(--ds-control-sm) items-center gap-1.5 rounded-chip border px-3 text-body-sm transition-colors",
           isActive
-            ? "border-primary bg-primary text-primary-foreground"
-            : "bg-card hover:bg-muted"
+            ? "border-primary bg-tint-violet font-medium text-link"
+            : "border-border bg-card text-muted-foreground hover:text-foreground"
         )}
       >
         {label}
@@ -299,50 +299,41 @@ export default function TemplateLibraryPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <ProjectsMetric
               icon={<LayoutTemplate className="h-5 w-5" />}
-              tone="bg-violet-500/10 text-violet-600 dark:text-violet-300"
+              tone="bg-tag-violet-bg text-tag-violet-fg"
               value={loading ? "–" : counts.all}
               label="Total templates"
             />
             <ProjectsMetric
               icon={<Star className="h-5 w-5" />}
-              tone="bg-pink-500/10 text-pink-600 dark:text-pink-300"
+              tone="bg-tag-pink-bg text-tag-pink-fg"
               value={counts.favorites}
               label="Favorite templates"
             />
             <ProjectsMetric
               icon={<Layers className="h-5 w-5" />}
-              tone="bg-teal-500/10 text-teal-600 dark:text-teal-300"
+              tone="bg-tag-aqua-bg text-tag-aqua-fg"
               value={counts.system}
               label="System templates"
             />
             <ProjectsMetric
               icon={<UserRound className="h-5 w-5" />}
-              tone="bg-violet-500/10 text-violet-600 dark:text-violet-300"
+              tone="bg-tag-violet-bg text-tag-violet-fg"
               value={loading ? "–" : counts.workspace}
               label="Workspace templates"
             />
           </div>
 
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <div className="relative flex-1">
-              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search templates…"
-                aria-label="Search templates"
-                className="h-10 pl-9"
-              />
-            </div>
+            <SearchField value={search} onChange={setSearch} placeholder="Search templates…" aria-label="Search templates" className="flex-1" />
             <div className="flex flex-wrap gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  render={<Button variant="outline" className="h-10" />}
+                  render={<Button variant="outline" />}
                 >
                   <SlidersHorizontal className="mr-1.5 h-4 w-4" />
                   Filter
                   {audience !== "all" && (
-                    <span className="bg-primary text-primary-foreground ml-1.5 rounded-full px-1.5 text-[11px]">
+                    <span className="bg-primary text-primary-foreground ml-1.5 rounded-full px-1.5 text-micro">
                       1
                     </span>
                   )}
@@ -366,22 +357,13 @@ export default function TemplateLibraryPage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <label className="bg-background flex h-10 items-center gap-2 rounded-lg border px-3 text-sm">
-                <ArrowUpDown className="text-muted-foreground h-4 w-4" />
-                <span className="text-muted-foreground">Sort:</span>
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortKey)}
-                  aria-label="Sort templates"
-                  className="[&_option]:bg-background [&_option]:text-foreground bg-transparent font-medium outline-none"
-                >
-                  {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                    <option key={k} value={k}>
-                      {SORT_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <OptionSelect
+                aria-label="Sort templates"
+                value={sort}
+                onChange={(next) => next && setSort(next)}
+                options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({ value: k, label: `Sort: ${SORT_LABELS[k]}` }))}
+                className="w-48"
+              />
             </div>
           </div>
 
@@ -408,7 +390,7 @@ export default function TemplateLibraryPage() {
           </div>
 
           {shown.length === 0 ? (
-            <div className="bg-card/50 rounded-2xl border border-dashed p-10 text-center">
+            <div className="rounded-card border border-dashed border-border-strong bg-card p-10 text-center">
               <LayoutTemplate className="text-muted-foreground mx-auto h-8 w-8" />
               <h3 className="mt-3 text-base font-semibold">
                 No templates here yet
@@ -445,7 +427,7 @@ export default function TemplateLibraryPage() {
         </div>
 
         {selected && isWide && (
-          <div className="sticky top-4 h-[calc(100vh-7rem)] w-[400px] shrink-0 overflow-hidden rounded-2xl border shadow-sm">
+          <div className="sticky top-4 h-[calc(100vh-7rem)] w-[400px] shrink-0 overflow-hidden rounded-card border shadow-sm">
             {preview}
           </div>
         )}
@@ -505,7 +487,7 @@ function TemplateCard({
   return (
     <article
       className={cn(
-        "bg-card flex flex-col rounded-2xl border p-4 shadow-xs transition-colors",
+        "flex flex-col rounded-card border border-border bg-card p-4 shadow-card transition-colors",
         selected
           ? "border-primary ring-primary/30 ring-2"
           : "hover:border-primary/40"

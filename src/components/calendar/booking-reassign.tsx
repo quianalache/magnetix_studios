@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { OptionSelect } from "@/components/system/option-select";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { doc, getDoc } from "firebase/firestore";
 import { Loader2, Users } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
@@ -23,6 +25,7 @@ export function BookingReassign({ event }: { event: CalendarEvent }) {
   const { isAdmin } = useSubAccount();
   const [hosts, setHosts] = useState<BookingHost[]>([]);
   const [busy, setBusy] = useState(false);
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
 
   const isBookingPage = eventSource(event) === "booking_page";
   const { subAccountId, bookingPageSlug } = event;
@@ -76,9 +79,11 @@ export function BookingReassign({ event }: { event: CalendarEvent }) {
       // Soft conflict — confirm, then retry with force.
       if (res.ok && data.needsConfirm && !force) {
         if (
-          confirm(
-            `${data.warning ?? "This host may have a conflict."}\n\nReassign anyway?`,
-          )
+          await confirmDialog({
+            title: "Reassign anyway?",
+            description: data.warning ?? "This host may have a conflict.",
+            confirmLabel: "Reassign anyway",
+          })
         ) {
           await reassign(toUid, true);
         }
@@ -96,13 +101,13 @@ export function BookingReassign({ event }: { event: CalendarEvent }) {
   }
 
   // If the current assignee was removed from the page's host list after the
-  // booking, still surface them as an option so the <select> value matches.
+  // booking, still surface them as an option so the selected value matches.
   const assigneeMissing =
     !!event.assignedToUid && !hosts.some((h) => h.uid === event.assignedToUid);
 
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="text-overline font-medium uppercase tracking-wide text-muted-foreground">
         Assigned host
       </p>
       <div className="flex items-center gap-2">
@@ -110,28 +115,28 @@ export function BookingReassign({ event }: { event: CalendarEvent }) {
         <label htmlFor={`reassign-${event.id}`} className="sr-only">
           Reassign host
         </label>
-        <select
+        <OptionSelect
           id={`reassign-${event.id}`}
-          value={event.assignedToUid ?? ""}
+          size="sm"
+          className="flex-1"
+          value={event.assignedToUid ?? null}
           disabled={busy}
-          onChange={(e) => reassign(e.target.value)}
-          className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground"
-        >
-          {assigneeMissing && (
-            <option value={event.assignedToUid ?? ""}>
-              {event.assignedToName ?? "Current host"}
-            </option>
-          )}
-          {hosts.map((h) => (
-            <option key={h.uid} value={h.uid}>
-              {h.name}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => {
+            // The old native select never fired for the current value — keep that.
+            if (next && next !== event.assignedToUid) void reassign(next);
+          }}
+          options={[
+            ...(assigneeMissing && event.assignedToUid
+              ? [{ value: event.assignedToUid, label: event.assignedToName ?? "Current host" }]
+              : []),
+            ...hosts.map((h) => ({ value: h.uid, label: h.name })),
+          ]}
+        />
         {busy && (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
         )}
       </div>
+      {confirmElement}
     </div>
   );
 }

@@ -88,15 +88,15 @@ export default function ProjectsOverviewPage() {
       active="overview"
       actions={
         <div className="flex">
-          <Button className="h-11 rounded-r-none px-5" onClick={openNew}>
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button className="rounded-r-none" onClick={openNew}>
+            <Plus className="h-4 w-4" />
             New Project
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <Button
-                  className="h-11 rounded-l-none border-l border-white/20 px-3"
+                  className="rounded-l-none border-l border-white/20 px-2.5"
                   aria-label="More ways to start a project"
                 />
               }
@@ -115,22 +115,22 @@ export default function ProjectsOverviewPage() {
         </div>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <ProjectsMetric
           icon={<FolderOpen className="h-5 w-5" />}
-          tone="bg-violet-500/10 text-violet-600 dark:text-violet-300"
+          tone="bg-tag-violet-bg text-tag-violet-fg"
           value={loading ? "–" : active.length}
           label="Active projects"
         />
         <ProjectsMetric
           icon={<CheckCircle2 className="h-5 w-5" />}
-          tone="bg-teal-500/10 text-teal-600 dark:text-teal-300"
+          tone="bg-tag-aqua-bg text-tag-aqua-fg"
           value={loading ? "–" : stats.totalTasks}
           label="Total project tasks"
         />
         <ProjectsMetric
           icon={<CalendarDays className="h-5 w-5" />}
-          tone="bg-pink-500/10 text-pink-600 dark:text-pink-300"
+          tone="bg-tag-pink-bg text-tag-pink-fg"
           value={loading ? "–" : stats.dueThisWeek}
           label="Projects due this week"
         />
@@ -142,22 +142,22 @@ export default function ProjectsOverviewPage() {
         />
       </div>
 
-      <section className="rounded-2xl border bg-gradient-to-br from-pink-50/70 to-violet-50/40 p-4 dark:from-pink-500/5 dark:to-violet-500/5">
+      <section className="rounded-card border border-border bg-card p-4 shadow-card sm:p-5">
         <div className="mb-3 flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-pink-600 dark:text-pink-300" />
-          <h2 className="text-lg font-semibold">Upcoming Project Deadlines</h2>
+          <CalendarDays className="size-4 text-tag-pink-fg" aria-hidden="true" />
+          <h2 className="text-section font-semibold">Upcoming Project Deadlines</h2>
         </div>
         {loading ? (
           <div className="grid gap-3 md:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-card/60 h-20 animate-pulse rounded-xl border"
+                className="h-20 animate-pulse rounded-control bg-muted"
               />
             ))}
           </div>
         ) : stats.upcoming.length === 0 ? (
-          <p className="text-muted-foreground px-1 pb-1 text-sm">
+          <p className="px-1 pb-1 text-body-sm text-muted-foreground">
             No upcoming due dates. Add a due date to an active project to see
             it here.
           </p>
@@ -172,10 +172,10 @@ export default function ProjectsOverviewPage() {
                 <Link
                   key={p.id}
                   href={saPath(`/projects/${p.id}`)}
-                  className="bg-card hover:border-primary/40 flex items-center gap-3 rounded-xl border p-3 shadow-xs transition-colors"
+                  className="flex items-center gap-3 rounded-control border border-border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-tint-violet"
                 >
-                  <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-full bg-pink-500/10 text-pink-700 dark:text-pink-300">
-                    <span className="text-[10px] font-semibold uppercase">
+                  <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-full bg-tag-pink-bg text-tag-pink-fg">
+                    <span className="text-overline font-semibold uppercase">
                       {due.toLocaleDateString(undefined, { month: "short" })}
                     </span>
                     <span className="text-base leading-none font-bold">
@@ -183,10 +183,10 @@ export default function ProjectsOverviewPage() {
                     </span>
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">
+                    <span className="block truncate text-body-sm font-semibold">
                       {p.title}
                     </span>
-                    <span className="text-muted-foreground flex items-center gap-2 text-xs">
+                    <span className="flex items-center gap-2 text-caption text-muted-foreground">
                       {remaining} {remaining === 1 ? "task" : "tasks"}{" "}
                       remaining
                       <TypePill project={p} />
@@ -237,14 +237,14 @@ function ProgressRing({ pct }: { pct: number }) {
   const r = 18;
   const c = 2 * Math.PI * r;
   return (
-    <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90" aria-hidden>
+    <svg viewBox="0 0 44 44" className="size-full -rotate-90" aria-hidden>
       <circle
         cx="22"
         cy="22"
         r={r}
         fill="none"
         strokeWidth="5"
-        className="stroke-violet-500/15"
+        className="stroke-tag-violet-bg"
       />
       <circle
         cx="22"
@@ -255,7 +255,7 @@ function ProgressRing({ pct }: { pct: number }) {
         strokeLinecap="round"
         strokeDasharray={c}
         strokeDashoffset={c - (c * Math.min(100, Math.max(0, pct))) / 100}
-        className="stroke-violet-500"
+        className="stroke-tag-violet-fg"
       />
     </svg>
   );

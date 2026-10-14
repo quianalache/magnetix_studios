@@ -78,7 +78,7 @@ export function ActivityTimeline({ contactId, limit }: { contactId: string; limi
     return (
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-xl border bg-card p-4">
+          <div key={i} className="rounded-card border border-border bg-card shadow-card p-4">
             <div className="mb-2 h-3 w-24 animate-pulse rounded bg-muted" />
             <div className="h-4 w-full animate-pulse rounded bg-muted" />
           </div>
@@ -89,7 +89,7 @@ export function ActivityTimeline({ contactId, limit }: { contactId: string; limi
 
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed bg-card/50 p-8 text-center">
+      <div className="rounded-card border border-dashed border-border-strong bg-card p-8 text-center">
         <Activity className="mx-auto h-6 w-6 text-muted-foreground" />
         <p className="mt-2 text-sm font-medium">No activity yet</p>
         <p className="text-xs text-muted-foreground">
@@ -162,7 +162,7 @@ function TimelineRow({
       <span className="absolute -left-[14px] top-3 flex h-6 w-6 items-center justify-center rounded-full border bg-background">
         {icon}
       </span>
-      <div className="rounded-xl border bg-card p-4">
+      <div className="rounded-card border border-border bg-card shadow-card p-4">
         <div className="mb-1 flex items-center justify-between gap-2">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {label}

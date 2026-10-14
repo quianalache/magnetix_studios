@@ -274,7 +274,7 @@ export function RoutineDetailSheet({
 
   return (
     <>
-      {open && <main aria-label="Routine workspace" className="bg-card min-w-0 overflow-hidden rounded-2xl border shadow-xs">
+      {open && <main aria-label="Routine workspace" className="bg-card min-w-0 overflow-hidden rounded-card border shadow-card">
           {!routine ? (
             <div className="flex flex-1 items-center justify-center">
               <h1 className="sr-only">Routine</h1>
@@ -343,12 +343,12 @@ export function RoutineDetailSheet({
                     onClick={() => setTab(id)}
                     className={cn(
                       "flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors",
-                      tab === id ? "bg-background text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
+                      tab === id ? "bg-accent font-semibold text-accent-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     {label}
                     {id === "tasks" && (
-                      <span className="bg-primary/10 text-primary rounded-full px-1.5 text-[11px] tabular-nums">
+                      <span className="bg-primary/10 text-primary rounded-full px-1.5 text-micro tabular-nums">
                         {routine.activities.length}
                       </span>
                     )}
@@ -439,7 +439,7 @@ export function RoutineDetailSheet({
                           <p className="text-muted-foreground col-span-full py-3 text-sm">Not scheduled this month.</p>
                         )}
                       </div>
-                      <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                      <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro">
                         <Legend swatch={{ background: `color-mix(in oklab, ${hex} 16%, var(--card))`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${hex} 35%, transparent)` }}>
                           Scheduled
                         </Legend>
@@ -544,9 +544,9 @@ export function RoutineDetailSheet({
                         <p className="text-sm font-medium">No tasks yet</p>
                         <p className="text-muted-foreground mt-1 text-xs">Add the first recurring task to this routine.</p>
                       </div>
-                    ) : <div className="overflow-x-auto rounded-xl border">
+                    ) : <div className="relative overflow-x-auto rounded-control border border-border">
                       <table className="w-full min-w-[620px] text-sm">
-                        <thead><tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
+                        <thead><tr className="text-muted-foreground border-b text-left text-micro font-semibold tracking-wider uppercase">
                           <th className="px-3 py-2.5">Task</th><th className="px-3 py-2.5">Recurrence / next</th><th className="px-3 py-2.5">Time</th><th className="px-3 py-2.5">Estimate</th><th className="px-3 py-2.5">Actions</th>
                         </tr></thead>
                         <tbody>{routine.activities.map((a, i) => {
@@ -555,7 +555,7 @@ export function RoutineDetailSheet({
                           : null;
                         const taskId = next ? occurrenceId(routine.id, next, a.id) : null;
                         return (
-                        <tr key={a.id} className="hover:bg-muted/40 border-b last:border-b-0">
+                        <tr key={a.id} className="hover:bg-tint-violet border-b last:border-b-0">
                           <td className="px-3 py-3"><div className="min-w-0"><p className="font-medium">{a.title}</p><p className="text-muted-foreground mt-0.5 text-xs">Task {i + 1}</p></div></td>
                           <td className="text-muted-foreground px-3 py-3 text-xs"><p>{describeScheduleLong(a.schedule ?? routine.schedule)}</p><p>{next ? `Next: ${formatYmd(next)}` : "No upcoming date"}</p></td>
                           <td className="text-muted-foreground px-3 py-3 text-xs">{describeTime(a.timeMode ?? routine.timeMode, a.timeBlock ?? routine.timeBlock, a.time ?? routine.time)}</td>
@@ -605,7 +605,7 @@ function MetaChip({ icon, children }: { icon: React.ReactNode; children: React.R
 function Aggregate({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border bg-background/70 px-3 py-2">
-      <p className="text-muted-foreground text-[11px]">{label}</p>
+      <p className="text-muted-foreground text-micro">{label}</p>
       <p className="mt-0.5 truncate text-sm font-semibold">{value}</p>
     </div>
   );
@@ -649,10 +649,10 @@ function DayCell({
         day.date === today && !selected && "border-border"
       )}
     >
-      <span className={cn("text-[11px] font-semibold", day.date === today ? "text-primary" : "text-muted-foreground")}>
+      <span className={cn("text-micro font-semibold", day.date === today ? "text-primary" : "text-muted-foreground")}>
         {WEEKDAY_SHORT[weekdayOf(day.date)]}
       </span>
-      <span className="text-muted-foreground text-[10px] tabular-nums">
+      <span className="text-muted-foreground text-overline tabular-nums">
         {formatYmd(day.date, { month: "short", day: "numeric" })}
       </span>
       <span
@@ -776,11 +776,11 @@ function HistoryTab({ routine, today, onPick }: { routine: RoutineView; today: s
                 </span>
                 <span
                   className={cn(
-                    "w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-medium",
+                    "w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-micro font-medium",
                     complete
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-tag-green-bg text-tag-green-fg"
                       : e.done > 0
-                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        ? "bg-status-warning-bg text-status-warning-fg"
                         : e.date === today
                           ? "bg-primary/10 text-primary"
                           : "bg-muted text-muted-foreground"

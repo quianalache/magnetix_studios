@@ -23,6 +23,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { OptionSelect } from "@/components/system/option-select";
 import { cn } from "@/lib/utils";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -101,7 +102,7 @@ export function TaskDetailModal({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-full lg:h-[min(900px,calc(100dvh-3rem))] lg:w-[min(1240px,calc(100vw-3rem))] lg:max-w-[min(1240px,calc(100vw-3rem))] lg:rounded-2xl"
+        className="flex h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-full lg:h-[min(900px,calc(100dvh-3rem))] lg:w-[min(1240px,calc(100vw-3rem))] lg:max-w-[min(1240px,calc(100vw-3rem))] lg:rounded-card"
       >
         <TaskDetailBody
           key={currentId}
@@ -157,8 +158,8 @@ function TaskDetailBody({
         <DialogTitle className="sr-only">Loading task</DialogTitle>
         <div className="space-y-4 p-6">
           <div className="bg-muted/50 h-6 w-2/3 animate-pulse rounded" />
-          <div className="bg-muted/40 h-32 animate-pulse rounded-xl" />
-          <div className="bg-muted/40 h-48 animate-pulse rounded-xl" />
+          <div className="h-32 animate-pulse rounded-control bg-muted" />
+          <div className="h-48 animate-pulse rounded-control bg-muted" />
         </div>
       </>
     );
@@ -331,8 +332,8 @@ function TitleRow({
         className={cn(
           "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
           task.completed
-            ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-violet-300 text-violet-400 hover:border-violet-500 hover:text-violet-600"
+            ? "border-emerald-500 bg-status-success-dot text-white"
+            : "border-violet-300 text-violet-400 hover:border-violet-500 hover:text-link"
         )}
       >
         <Check className="h-5 w-5" />
@@ -364,7 +365,7 @@ function TitleRow({
           )}
           {rolled > 0 && (
             <span
-              className="rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300"
+              className="rounded-full bg-status-danger-bg px-2.5 py-0.5 text-xs font-medium text-status-danger-fg"
               title={task.originalDueAt ? `Originally due ${new Date(task.originalDueAt).toLocaleDateString()}` : undefined}
             >
               Rolled over {rolled} {rolled === 1 ? "time" : "times"}
@@ -373,7 +374,7 @@ function TitleRow({
           {task.routineId && (
             <a
               href={`/sa/${task.subAccountId}/projects/routines?routine=${encodeURIComponent(task.routineId)}${task.occurrenceDate ? `&date=${task.occurrenceDate}` : ""}`}
-              className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-700 hover:bg-violet-500/15 dark:text-violet-300"
+              className="inline-flex items-center gap-1 rounded-full bg-tint-violet px-2.5 py-0.5 text-xs font-medium text-link hover:bg-tint-violet dark:text-violet-300"
             >
               <Repeat className="h-3 w-3" />
               {task.routineName || "Routine"}
@@ -415,7 +416,7 @@ function SelectButton({
         <button
           type="button"
           aria-label={label}
-          className="border-input hover:bg-muted/40 flex h-10 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm"
+          className="border-input hover:bg-tint-violet flex h-10 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm"
         />
       }
     >
@@ -509,7 +510,7 @@ function PrimaryFields({
           <FieldLabel>Assignee</FieldLabel>
           <DropdownMenu>
             <SelectButton label={`Assignee: ${assigneeLabel}`}>
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-[10px] font-semibold text-violet-700 dark:text-violet-300">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-tint-violet text-overline font-semibold text-tag-violet-fg">
                 {assigneeLabel === "Unassigned" ? "–" : assigneeLabel.slice(0, 2).toUpperCase()}
               </span>
               <span className="truncate">{assigneeLabel}</span>
@@ -636,7 +637,7 @@ function PrimaryFields({
           </button>
         )}
         {task.createdByMemberId && (
-          <span className="rounded-full bg-teal-500/10 px-2.5 py-0.5 text-xs text-teal-700 dark:text-teal-300">
+          <span className="rounded-full bg-teal-500/10 px-2.5 py-0.5 text-xs text-tag-aqua-fg">
             Added by {project?.assignedContactName ?? "your client"}
           </span>
         )}
@@ -705,7 +706,7 @@ function Description({
         className="min-h-24 resize-y rounded-none rounded-b-xl border-0 shadow-none focus-visible:ring-0"
       />
       {bundle.project?.assignedContactId && task.visibility !== "internal" && (
-        <p className="text-muted-foreground border-t px-4 py-2 text-[11px]">
+        <p className="text-muted-foreground border-t px-4 py-2 text-micro">
           Your client sees this description. Use Comments for internal notes.
         </p>
       )}
@@ -766,16 +767,17 @@ function ActivityComments({
       {tab === "activity" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
           <div className="mb-3 flex justify-end">
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as ActivityFilter)}
+            <OptionSelect
+              size="sm"
               aria-label="Filter activity"
-              className="border-input bg-background h-8 rounded-md border px-2 text-xs"
-            >
-              <option value="all">All activity</option>
-              <option value="status">Status &amp; dates</option>
-              <option value="time">Time tracking</option>
-            </select>
+              value={filter}
+              onChange={(next) => next && setFilter(next)}
+              options={[
+                { value: "all" as ActivityFilter, label: "All activity" },
+                { value: "status" as ActivityFilter, label: "Status & dates" },
+                { value: "time" as ActivityFilter, label: "Time tracking" },
+              ]}
+            />
           </div>
           {rows.length === 0 ? (
             <p className="text-muted-foreground text-sm">No recorded activity yet.</p>
@@ -784,8 +786,8 @@ function ActivityComments({
               {rows.map((a) => (
                 <li key={a.id} className="flex gap-3">
                   <span className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                    a.actorKind === "client" ? "bg-teal-500/10 text-teal-700 dark:text-teal-300" : a.actorKind === "system" ? "bg-muted text-muted-foreground" : "bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-micro font-semibold",
+                    a.actorKind === "client" ? "bg-tag-aqua-bg text-tag-aqua-fg" : a.actorKind === "system" ? "bg-muted text-muted-foreground" : "bg-tag-violet-bg text-tag-violet-fg"
                   )}>
                     {a.actorKind === "system" ? <Repeat className="h-3.5 w-3.5" /> : (a.actorName || "?").slice(0, 2).toUpperCase()}
                   </span>
@@ -870,7 +872,7 @@ function Comments({
       >
         <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a comment…" rows={2} aria-label="New comment" />
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-muted-foreground text-[11px]">Comments are internal — never shown to clients.</p>
+          <p className="text-muted-foreground text-micro">Comments are internal — never shown to clients.</p>
           <Button type="submit" size="sm" disabled={busy || !draft.trim()}>Post</Button>
         </div>
       </form>

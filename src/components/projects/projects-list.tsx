@@ -7,21 +7,23 @@ import { toast } from "sonner";
 import {
   Archive,
   ArchiveRestore,
-  ArrowUpDown,
   ExternalLink,
   FolderKanban,
   LayoutGrid,
   List,
   MoreHorizontal,
   Pencil,
-  Search,
   SlidersHorizontal,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { toDate } from "@/lib/format";
+import { DataTableShell, DATA_TABLE_HEAD_ROW, DATA_TABLE_ROW } from "@/components/system/data-table";
+import { SearchField } from "@/components/system/search-field";
+import { OptionSelect } from "@/components/system/option-select";
+import { EmptyState } from "@/components/system/empty-state";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,8 +102,8 @@ export function TypePill({ project }: { project: Project }) {
       className={cn(
         "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
         client
-          ? "bg-teal-500/10 text-teal-700 dark:text-teal-300"
-          : "bg-violet-500/10 text-violet-700 dark:text-violet-300"
+          ? "bg-tag-aqua-bg text-tag-aqua-fg"
+          : "bg-tag-violet-bg text-tag-violet-fg"
       )}
     >
       {client ? "Client" : "Internal"}
@@ -127,7 +129,7 @@ export function AssigneeCell({ project }: { project: Project }) {
   const name = project.assignedContactName || "Client";
   return (
     <span className="flex min-w-0 items-center gap-2" title={name}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-xs font-semibold text-violet-700 dark:text-violet-300">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-tint-violet text-xs font-semibold text-tag-violet-fg">
         {initials(name)}
       </span>
       <span className="truncate text-sm">{name}</span>
@@ -139,7 +141,7 @@ function progressBarTone(index: number): string {
   // Aqua Glow is the primary progress signal; the pale brand accents remain
   // available for surrounding metadata without turning the board pink.
   void index;
-  return "bg-[#9EDBDD]";
+  return "bg-aqua-300";
 }
 
 export function ProjectsList({
@@ -233,37 +235,28 @@ export function ProjectsList({
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <h2 className="text-2xl font-semibold tracking-tight">
+        <h2 className="text-title-md font-semibold tracking-tight">
           {title}{" "}
-          <span className="text-muted-foreground font-normal">
+          <span className="font-normal text-muted-foreground">
             ({projects.length})
           </span>
         </h2>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-          <div className="relative w-full sm:w-60">
-            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search projects…"
-              aria-label="Search projects"
-              className="h-10 pl-9"
-            />
-          </div>
+          <SearchField value={search} onChange={setSearch} placeholder="Search projects…" aria-label="Search projects" className="sm:w-60" />
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="outline" className="h-10" />}
+              render={<Button variant="outline" />}
             >
               <SlidersHorizontal className="mr-1.5 h-4 w-4" />
               Filter
               {activeFilterCount > 0 && (
-                <span className="bg-primary text-primary-foreground ml-1.5 rounded-full px-1.5 text-[11px]">
+                <span className="bg-primary text-primary-foreground ml-1.5 rounded-full px-1.5 text-micro">
                   {activeFilterCount}
                 </span>
               )}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <p className="text-muted-foreground px-2 pt-1.5 pb-1 text-xs font-medium">
+              <p className="px-2 pt-1.5 pb-1 text-caption font-medium text-muted-foreground">
                 Type
               </p>
               {(
@@ -280,7 +273,7 @@ export function ProjectsList({
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <p className="text-muted-foreground px-2 pt-1.5 pb-1 text-xs font-medium">
+              <p className="px-2 pt-1.5 pb-1 text-caption font-medium text-muted-foreground">
                 Progress
               </p>
               {(
@@ -301,24 +294,15 @@ export function ProjectsList({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <label className="bg-background flex h-10 items-center gap-2 rounded-lg border px-3 text-sm">
-            <ArrowUpDown className="text-muted-foreground h-4 w-4" />
-            <span className="text-muted-foreground">Sort:</span>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              aria-label="Sort projects"
-              className="[&_option]:bg-background [&_option]:text-foreground bg-transparent font-medium outline-none"
-            >
-              {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                <option key={k} value={k}>
-                  {SORT_LABELS[k]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <OptionSelect
+            aria-label="Sort projects"
+            value={sort}
+            onChange={(next) => next && setSort(next)}
+            options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({ value: k, label: `Sort: ${SORT_LABELS[k]}` }))}
+            className="w-48"
+          />
           <div
-            className="flex items-center gap-1 rounded-lg border p-1"
+            className="flex items-center gap-1 rounded-control border border-border bg-card p-1"
             role="group"
             aria-label="Display"
           >
@@ -351,18 +335,14 @@ export function ProjectsList({
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="bg-muted/30 h-16 animate-pulse rounded-xl border"
+              className="h-16 animate-pulse rounded-control bg-muted"
             />
           ))}
         </div>
       ) : projects.length === 0 ? (
         emptyState
       ) : filtered.length === 0 ? (
-        <div className="bg-card/50 rounded-2xl border border-dashed p-10 text-center">
-          <p className="text-muted-foreground text-sm">
-            No projects match these filters.
-          </p>
-        </div>
+        <EmptyState compact icon={FolderKanban} title="No projects match these filters" description="Try another search or clear a filter." />
       ) : view === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paged.rows.map((p) => (
@@ -374,10 +354,20 @@ export function ProjectsList({
           ))}
         </div>
       ) : (
-        <div className="bg-card overflow-x-auto rounded-2xl border">
-          <table className="w-full min-w-[860px] text-sm">
+        <>
+          {/* Phones: cards — the 8-column table never squeezes into 390px. */}
+          <div className="grid gap-3 md:hidden">
+            {paged.rows.map((p) => (
+              <ProjectCard
+                key={p.id}
+                project={p}
+                onClick={() => router.push(saPath(`/projects/${p.id}`))}
+              />
+            ))}
+          </div>
+          <DataTableShell minWidth="860px" className="hidden md:block">
             <thead>
-              <tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
+              <tr className={DATA_TABLE_HEAD_ROW}>
                 <th className="px-5 py-3">Project</th>
                 <th className="px-3 py-3">Type</th>
                 <th className="px-3 py-3">Progress</th>
@@ -398,7 +388,7 @@ export function ProjectsList({
                   <tr
                     key={p.id}
                     onClick={() => router.push(href)}
-                    className="hover:bg-muted/40 cursor-pointer border-b transition-colors last:border-b-0"
+                    className={cn(DATA_TABLE_ROW, "cursor-pointer")}
                   >
                     <td className="max-w-[320px] px-5 py-4">
                       <div className="flex gap-3">
@@ -473,8 +463,8 @@ export function ProjectsList({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+          </DataTableShell>
+        </>
       )}
 
       {!loading && filtered.length > 0 && (
@@ -547,14 +537,5 @@ export function ProjectsEmptyState({
   desc: string;
   action?: React.ReactNode;
 }) {
-  return (
-    <div className="bg-card/50 rounded-2xl border border-dashed p-10 text-center">
-      <div className="bg-primary/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
-        <FolderKanban className="text-primary h-6 w-6" />
-      </div>
-      <h3 className="text-base font-semibold">{title}</h3>
-      <p className="text-muted-foreground mt-1 text-sm">{desc}</p>
-      {action && <div className="mt-6 flex justify-center">{action}</div>}
-    </div>
-  );
+  return <EmptyState icon={FolderKanban} title={title} description={desc} action={action} />;
 }

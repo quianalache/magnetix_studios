@@ -78,7 +78,7 @@ export function ContactSubmittedForms({
     >
       {loading && !data ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading submitted forms">
-          <div className="h-9 animate-pulse rounded-lg border bg-muted/40" />
+          <div className="h-9 animate-pulse rounded-control bg-muted" />
         </div>
       ) : error ? (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs">
@@ -152,7 +152,7 @@ function SubmissionRows({
           <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{s.formName}</p>
-            <p className="text-[11px] text-muted-foreground">{formatDate(s.createdAt)}</p>
+            <p className="text-micro text-muted-foreground">{formatDate(s.createdAt)}</p>
           </div>
           <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => onView(s)}>
             View

@@ -98,7 +98,7 @@ export function ContactQuotes({ contactId, scope, collapsible = null }: ContactQ
                     <p className="truncate font-mono text-xs font-semibold text-foreground">
                       {q.quoteNumber}
                     </p>
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="truncate text-micro text-muted-foreground">
                       {formatRelativeTime(q.updatedAt)}
                     </p>
                   </div>

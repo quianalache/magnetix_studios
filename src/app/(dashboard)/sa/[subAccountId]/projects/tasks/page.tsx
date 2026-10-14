@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
-  ArrowUpDown,
   CalendarDays,
   CheckCircle2,
   CheckSquare,
@@ -14,7 +13,6 @@ import {
   MoreHorizontal,
   Plus,
   Repeat,
-  Search,
   SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,10 +23,14 @@ import { subscribeToTasks } from "@/lib/firestore/tasks";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import { toDate } from "@/lib/format";
+import { DATA_TABLE_HEAD_ROW } from "@/components/system/data-table";
+import { SearchField } from "@/components/system/search-field";
+import { OptionSelect } from "@/components/system/option-select";
+import { EmptyState } from "@/components/system/empty-state";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -125,20 +127,20 @@ function relativeDue(d: Date, today: number): string {
 const STATUS_PILL: Record<TaskStatus, { label: string; cls: string }> = {
   overdue: {
     label: "Overdue",
-    cls: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    cls: "bg-status-danger-bg text-status-danger-fg",
   },
   today: {
     label: "Due today",
-    cls: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    cls: "bg-status-warning-bg text-status-warning-fg",
   },
   upcoming: {
     label: "Upcoming",
-    cls: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    cls: "bg-tag-violet-bg text-tag-violet-fg",
   },
   no_date: { label: "No due date", cls: "bg-muted text-muted-foreground" },
   done: {
     label: "Completed",
-    cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    cls: "bg-tag-green-bg text-tag-green-fg",
   },
 };
 
@@ -409,11 +411,11 @@ export default function MyTasksPage() {
         </Button>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricButton onClick={() => setStatusFilter("today")}>
           <ProjectsMetric
             icon={<CalendarDays className="h-5 w-5" />}
-            tone="bg-pink-500/10 text-pink-600 dark:text-pink-300"
+            tone="bg-tag-pink-bg text-tag-pink-fg"
             value={loading ? "–" : counts.today}
             label="Due today"
             hint={
@@ -426,7 +428,7 @@ export default function MyTasksPage() {
         <MetricButton onClick={() => setStatusFilter("overdue")}>
           <ProjectsMetric
             icon={<AlertCircle className="h-5 w-5" />}
-            tone="bg-rose-500/10 text-rose-600 dark:text-rose-300"
+            tone="bg-status-danger-bg text-status-danger-fg"
             value={loading ? "–" : counts.overdue}
             label="Overdue"
             hint={`${counts.overdue} ${counts.overdue === 1 ? "task" : "tasks"} past due`}
@@ -435,7 +437,7 @@ export default function MyTasksPage() {
         <MetricButton onClick={() => setStatusFilter("upcoming")}>
           <ProjectsMetric
             icon={<Clock className="h-5 w-5" />}
-            tone="bg-violet-500/10 text-violet-600 dark:text-violet-300"
+            tone="bg-tag-violet-bg text-tag-violet-fg"
             value={loading ? "–" : counts.upcoming}
             label="Upcoming"
             hint="Later or no due date"
@@ -444,7 +446,7 @@ export default function MyTasksPage() {
         <MetricButton onClick={() => setStatusFilter("done")}>
           <ProjectsMetric
             icon={<CheckCircle2 className="h-5 w-5" />}
-            tone="bg-teal-500/10 text-teal-600 dark:text-teal-300"
+            tone="bg-tag-aqua-bg text-tag-aqua-fg"
             value={loading ? "–" : counts.done}
             label="Completed"
             hint="Finished tasks"
@@ -452,28 +454,19 @@ export default function MyTasksPage() {
         </MetricButton>
       </div>
 
-      <section className="bg-card space-y-4 rounded-2xl border p-4 shadow-xs">
+      <section className="space-y-4 rounded-card border border-border bg-card p-4 shadow-card">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <h2 className="text-2xl font-semibold tracking-tight">
+          <h2 className="text-title-md font-semibold tracking-tight">
             My Tasks{" "}
-            <span className="text-muted-foreground font-normal">
+            <span className="font-normal text-muted-foreground">
               ({shown.length})
             </span>
           </h2>
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <div className="relative w-full sm:w-56">
-              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tasks…"
-                aria-label="Search tasks"
-                className="h-10 pl-9"
-              />
-            </div>
+            <SearchField value={search} onChange={setSearch} placeholder="Search tasks…" aria-label="Search tasks" className="sm:w-56" />
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button variant="outline" className="h-10" />}
+                render={<Button variant="outline" />}
               >
                 <SlidersHorizontal className="mr-1.5 h-4 w-4" />
                 {FILTER_LABELS[statusFilter]}
@@ -488,24 +481,15 @@ export default function MyTasksPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <label className="bg-background flex h-10 items-center gap-2 rounded-lg border px-3 text-sm">
-              <ArrowUpDown className="text-muted-foreground h-4 w-4" />
-              <span className="text-muted-foreground">Sort:</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                aria-label="Sort tasks"
-                className="[&_option]:bg-background [&_option]:text-foreground bg-transparent font-medium outline-none"
-              >
-                {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                  <option key={k} value={k}>
-                    {SORT_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <OptionSelect
+              aria-label="Sort tasks"
+              value={sort}
+              onChange={(next) => next && setSort(next)}
+              options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({ value: k, label: `Sort: ${SORT_LABELS[k]}` }))}
+              className="w-48"
+            />
             <div
-              className="flex items-center gap-1 rounded-lg border p-1"
+              className="flex items-center gap-1 rounded-control border border-border bg-card p-1"
               role="group"
               aria-label="Display"
             >
@@ -538,34 +522,28 @@ export default function MyTasksPage() {
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-muted/30 h-14 animate-pulse rounded-xl border"
+                className="h-14 animate-pulse rounded-control bg-muted"
               />
             ))}
           </div>
         ) : shown.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-10 text-center">
-            <div className="bg-primary/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
-              <CheckSquare className="text-primary h-6 w-6" />
-            </div>
-            <h3 className="text-base font-semibold">
-              {tasks.length === 0
+          <EmptyState
+            icon={CheckSquare}
+            title={tasks.length === 0
                 ? "No tasks yet"
                 : search
                   ? "No tasks match your search"
                   : `Nothing in “${FILTER_LABELS[statusFilter]}”`}
-            </h3>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {tasks.length === 0
+            description={tasks.length === 0
                 ? "Add your first follow-up or reminder."
                 : "Try another filter, or add a task."}
-            </p>
-            <div className="mt-6 flex justify-center">
+            action={
               <Button onClick={openNew}>
                 <Plus className="mr-1 h-4 w-4" />
                 New task
               </Button>
-            </div>
-          </div>
+            }
+          />
         ) : view === "grid" ? (
           <div className="grid gap-2 md:grid-cols-2">
             {paged.rows.map(({ t }) => (
@@ -578,201 +556,214 @@ export default function MyTasksPage() {
             ))}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
-                  <th className="w-10 px-3 py-3">
-                    <span className="sr-only">Complete</span>
-                  </th>
-                  <th className="px-3 py-3">Task</th>
-                  <th className="px-3 py-3">Project / Routine</th>
-                  <th className="px-3 py-3">Due date</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Priority</th>
-                  <th className="px-3 py-3">Assigned to</th>
-                  <th className="px-3 py-3">Type</th>
-                  <th className="w-12 px-3 py-3">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.rows.map(({ t, status }) => {
-                  const due = toDate(t.dueAt);
-                  const contact = t.contactId
-                    ? contactById.get(t.contactId)
-                    : undefined;
-                  const project = t.projectId ? projectById.get(t.projectId) : undefined;
-                  const who = assigneeName(t);
-                  const workflow = taskStatusOf(t);
-                  return (
-                    <tr
-                      key={t.id}
-                      onClick={() => openEdit(t)}
-                      className={cn(
-                        "hover:bg-muted/40 cursor-pointer border-b transition-colors last:border-b-0",
-                        t.completed && "opacity-60"
-                      )}
-                    >
-                      <td
-                        className="px-3 py-3"
-                        onClick={(e) => e.stopPropagation()}
+          <>
+            {/* Phones: task cards — the 9-column table never squeezes into 390px. */}
+            <div className="grid gap-2 md:hidden">
+              {paged.rows.map(({ t }) => (
+                <TaskItem
+                  key={t.id}
+                  task={t}
+                  contact={t.contactId ? contactById.get(t.contactId) : undefined}
+                  onClick={openEdit}
+                />
+              ))}
+            </div>
+            <div className="relative hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[980px] text-body-sm">
+                <thead>
+                  <tr className={DATA_TABLE_HEAD_ROW}>
+                    <th className="w-10 px-3 py-3">
+                      <span className="sr-only">Complete</span>
+                    </th>
+                    <th className="px-3 py-3">Task</th>
+                    <th className="px-3 py-3">Project / Routine</th>
+                    <th className="px-3 py-3">Due date</th>
+                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3">Priority</th>
+                    <th className="px-3 py-3">Assigned to</th>
+                    <th className="px-3 py-3">Type</th>
+                    <th className="w-12 px-3 py-3">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.rows.map(({ t, status }) => {
+                    const due = toDate(t.dueAt);
+                    const contact = t.contactId
+                      ? contactById.get(t.contactId)
+                      : undefined;
+                    const project = t.projectId ? projectById.get(t.projectId) : undefined;
+                    const who = assigneeName(t);
+                    const workflow = taskStatusOf(t);
+                    return (
+                      <tr
+                        key={t.id}
+                        onClick={() => openEdit(t)}
+                        className={cn(
+                          "cursor-pointer border-b border-border-subtle transition-colors hover:bg-tint-violet transition-colors last:border-b-0",
+                          t.completed && "opacity-60"
+                        )}
                       >
-                        <Checkbox
-                          checked={t.completed}
-                          onCheckedChange={() => toggleComplete(t)}
-                          disabled={toggling.has(t.id)}
-                          aria-label={
-                            t.completed
-                              ? `Reopen ${t.title}`
-                              : `Mark ${t.title} complete`
-                          }
-                        />
-                      </td>
-                      <td className="max-w-[300px] px-3 py-3">
-                        <p
-                          className={cn(
-                            "truncate font-semibold",
-                            t.completed && "line-through"
-                          )}
+                        <td
+                          className="px-3 py-3"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {t.title}
-                        </p>
-                        {(t.parentTaskId || contact || t.notes) && (
-                          <p className="text-muted-foreground truncate text-xs">
-                            {t.parentTaskId && "Subtask · "}
-                            {contact ? (
-                              <Link
-                                href={saPath(`/contacts/${contact.id}`)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="hover:text-primary hover:underline"
-                              >
-                                {contact.name || contact.email}
-                              </Link>
-                            ) : (
-                              t.notes
-                            )}
-                          </p>
-                        )}
-                      </td>
-                      <td className="max-w-[180px] px-3 py-3">
-                        {project ? (
-                          <Link
-                            href={saPath(`/projects/${project.id}`)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-2 truncate hover:underline"
-                          >
-                            <span className={cn("h-3.5 w-1 shrink-0 rounded-full", project.assignedContactId ? "bg-teal-400" : "bg-violet-400")} />
-                            <span className="truncate">{project.title}</span>
-                          </Link>
-                        ) : t.routineId ? (
-                          <Link
-                            href={saPath(`/projects/routines?routine=${encodeURIComponent(t.routineId)}${t.occurrenceDate ? `&date=${t.occurrenceDate}` : ""}`)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-2 truncate hover:underline"
-                          >
-                            <Repeat className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                            <span className="truncate">{t.routineName || "Routine"}</span>
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        {due ? (
-                          <>
-                            <p>
-                              {due.toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                            </p>
-                            {!t.completed && (
-                              <p
-                                className={cn(
-                                  "text-xs",
-                                  status === "overdue"
-                                    ? "text-rose-600 dark:text-rose-400"
-                                    : "text-muted-foreground"
-                                )}
-                              >
-                                {relativeDue(due, today)}
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        {status === "overdue" ? (
-                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap", STATUS_PILL.overdue.cls)}>
-                            Overdue
-                          </span>
-                        ) : (
-                          <StatusPill status={workflow} />
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <PriorityFlag priority={t.priority ?? null} />
-                      </td>
-                      <td className="max-w-[160px] px-3 py-3">
-                        {who ? (
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-[10px] font-semibold text-violet-700 dark:text-violet-300">
-                              {who.slice(0, 2).toUpperCase()}
-                            </span>
-                            <span className="truncate text-sm">{who}</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        {project ? (
-                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", project.assignedContactId && t.visibility !== "internal" ? "bg-teal-500/10 text-teal-700 dark:text-teal-300" : "bg-violet-500/10 text-violet-700 dark:text-violet-300")}>
-                            {project.assignedContactId && t.visibility !== "internal" ? "Client" : "Internal"}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td
-                        className="px-3 py-3"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Actions for ${t.title}`}
-                              />
+                          <Checkbox
+                            checked={t.completed}
+                            onCheckedChange={() => toggleComplete(t)}
+                            disabled={toggling.has(t.id)}
+                            aria-label={
+                              t.completed
+                                ? `Reopen ${t.title}`
+                                : `Mark ${t.title} complete`
                             }
+                          />
+                        </td>
+                        <td className="max-w-[300px] px-3 py-3">
+                          <p
+                            className={cn(
+                              "truncate font-semibold",
+                              t.completed && "line-through"
+                            )}
                           >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem onClick={() => openEdit(t)}>
-                              Open task
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => toggleComplete(t)}
+                            {t.title}
+                          </p>
+                          {(t.parentTaskId || contact || t.notes) && (
+                            <p className="text-muted-foreground truncate text-xs">
+                              {t.parentTaskId && "Subtask · "}
+                              {contact ? (
+                                <Link
+                                  href={saPath(`/contacts/${contact.id}`)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-primary hover:underline"
+                                >
+                                  {contact.name || contact.email}
+                                </Link>
+                              ) : (
+                                t.notes
+                              )}
+                            </p>
+                          )}
+                        </td>
+                        <td className="max-w-[180px] px-3 py-3">
+                          {project ? (
+                            <Link
+                              href={saPath(`/projects/${project.id}`)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 truncate hover:underline"
                             >
-                              {t.completed ? "Reopen" : "Mark complete"}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                              <span className={cn("h-3.5 w-1 shrink-0 rounded-full", project.assignedContactId ? "bg-teal-400" : "bg-violet-400")} />
+                              <span className="truncate">{project.title}</span>
+                            </Link>
+                          ) : t.routineId ? (
+                            <Link
+                              href={saPath(`/projects/routines?routine=${encodeURIComponent(t.routineId)}${t.occurrenceDate ? `&date=${t.occurrenceDate}` : ""}`)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 truncate hover:underline"
+                            >
+                              <Repeat className="h-3.5 w-3.5 shrink-0 text-link" />
+                              <span className="truncate">{t.routineName || "Routine"}</span>
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          {due ? (
+                            <>
+                              <p>
+                                {due.toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })}
+                              </p>
+                              {!t.completed && (
+                                <p
+                                  className={cn(
+                                    "text-xs",
+                                    status === "overdue"
+                                      ? "text-status-danger-fg"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  {relativeDue(due, today)}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          {status === "overdue" ? (
+                            <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap", STATUS_PILL.overdue.cls)}>
+                              Overdue
+                            </span>
+                          ) : (
+                            <StatusPill status={workflow} />
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <PriorityFlag priority={t.priority ?? null} />
+                        </td>
+                        <td className="max-w-[160px] px-3 py-3">
+                          {who ? (
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-tint-violet text-overline font-semibold text-tag-violet-fg">
+                                {who.slice(0, 2).toUpperCase()}
+                              </span>
+                              <span className="truncate text-sm">{who}</span>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          {project ? (
+                            <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", project.assignedContactId && t.visibility !== "internal" ? "bg-tag-aqua-bg text-tag-aqua-fg" : "bg-tag-violet-bg text-tag-violet-fg")}>
+                              {project.assignedContactId && t.visibility !== "internal" ? "Client" : "Internal"}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td
+                          className="px-3 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Actions for ${t.title}`}
+                                />
+                              }
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem onClick={() => openEdit(t)}>
+                                Open task
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toggleComplete(t)}
+                              >
+                                {t.completed ? "Reopen" : "Mark complete"}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {!loading && shown.length > 0 && (
@@ -813,7 +804,7 @@ function MetricButton({
     <button
       type="button"
       onClick={onClick}
-      className="focus-visible:ring-ring rounded-2xl text-left transition-transform outline-none hover:-translate-y-0.5 focus-visible:ring-2"
+      className="focus-visible:ring-ring rounded-card text-left transition-transform outline-none hover:-translate-y-0.5 focus-visible:ring-2"
     >
       {children}
     </button>

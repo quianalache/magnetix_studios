@@ -48,7 +48,7 @@ export function PriorityDot({ priority }: { priority: TemplatePriority | null })
       title={`${priority[0].toUpperCase()}${priority.slice(1)} priority`}
       className={cn(
         "mt-1 h-2 w-2 shrink-0 rounded-full",
-        priority === "high" && "bg-rose-500",
+        priority === "high" && "bg-status-danger-dot",
         priority === "medium" && "bg-amber-400",
         priority === "low" && "bg-muted-foreground/50"
       )}
@@ -61,11 +61,11 @@ export function TimeBlockChip({ block }: { block: TemplateTimeBlock | null }) {
   return (
     <span
       className={cn(
-        "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-        block === "AM" && "bg-teal-500/10 text-teal-700 dark:text-teal-300",
+        "rounded-full px-1.5 py-0.5 text-overline font-medium",
+        block === "AM" && "bg-tag-aqua-bg text-tag-aqua-fg",
         block === "Midday" &&
-          "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-        block === "PM" && "bg-pink-500/10 text-pink-700 dark:text-pink-300",
+          "bg-tag-violet-bg text-tag-violet-fg",
+        block === "PM" && "bg-tag-pink-bg text-tag-pink-fg",
         block === "Anytime" && "bg-muted text-muted-foreground"
       )}
     >
@@ -131,7 +131,7 @@ export function TemplatePreviewPanel({
       className={cn("bg-card flex flex-col overflow-hidden", className)}
     >
       <div className="flex items-start gap-3 border-b px-5 py-4">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-tag-violet-bg text-tag-violet-fg">
           <FolderKanban className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -237,7 +237,7 @@ export function TemplatePreviewPanel({
                 {template.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-full bg-pink-500/10 px-2.5 py-0.5 text-xs text-pink-700 dark:text-pink-300"
+                    className="rounded-full bg-pink-500/10 px-2.5 py-0.5 text-xs text-tag-pink-fg"
                   >
                     {tag}
                   </span>
@@ -279,13 +279,13 @@ export function TemplatePreviewPanel({
                   {(task.offsetLabel || task.timeBlock || task.estimatedMinutes) && (
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       {task.offsetLabel && (
-                        <span className="text-muted-foreground text-[11px]">
+                        <span className="text-muted-foreground text-micro">
                           {task.offsetLabel}
                         </span>
                       )}
                       <TimeBlockChip block={task.timeBlock} />
                       {formatEstimate(task.estimatedMinutes) && (
-                        <span className="text-muted-foreground flex items-center gap-0.5 text-[11px]">
+                        <span className="text-muted-foreground flex items-center gap-0.5 text-micro">
                           <Clock className="h-3 w-3" />
                           {formatEstimate(task.estimatedMinutes)}
                         </span>
@@ -297,7 +297,7 @@ export function TemplatePreviewPanel({
                       {task.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
-                          className="bg-background text-muted-foreground rounded-full border px-1.5 py-0.5 text-[10px]"
+                          className="bg-background text-muted-foreground rounded-full border px-1.5 py-0.5 text-overline"
                         >
                           {tag}
                         </span>
@@ -326,7 +326,7 @@ export function TemplatePreviewPanel({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{m.title}</p>
                   {m.offsetLabel && (
-                    <p className="text-muted-foreground text-[11px]">
+                    <p className="text-muted-foreground text-micro">
                       {m.offsetLabel}
                     </p>
                   )}
@@ -346,7 +346,7 @@ export function TemplatePreviewPanel({
                 key={`${r.title}-${i}`}
                 className="flex items-start gap-3 rounded-xl border px-3 py-2"
               >
-                <Repeat className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
+                <Repeat className="mt-0.5 h-4 w-4 shrink-0 text-link" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{r.title}</p>
                   {r.description && (
@@ -354,7 +354,7 @@ export function TemplatePreviewPanel({
                       {r.description}
                     </p>
                   )}
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-micro">
                     <span className="text-muted-foreground">
                       {TEMPLATE_RECURRENCE_LABELS[r.recurrenceType] ??
                         r.recurrenceType}
@@ -377,9 +377,9 @@ export function TemplatePreviewPanel({
       </div>
 
       <div className="border-t p-4">
-        <div className="rounded-xl border bg-violet-500/5 p-4">
+        <div className="rounded-xl border bg-tint-violet p-4">
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <Sparkles className="h-4 w-4 text-violet-500" />
+            <Sparkles className="h-4 w-4 text-link" />
             Use this template
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -418,7 +418,7 @@ function Stat({
     <div className="px-2 py-3">
       <dt className="sr-only">{label}</dt>
       <dd className="flex items-center justify-center gap-1.5 text-lg font-semibold tabular-nums">
-        <span className="text-violet-500">{icon}</span>
+        <span className="text-link">{icon}</span>
         {value}
       </dd>
       <p className="text-muted-foreground text-xs">{label}</p>
@@ -444,7 +444,7 @@ function TimelineOverview({ template }: { template: LibraryTemplate }) {
   return (
     <div className="rounded-xl border">
       <div className="flex items-center gap-2 border-b px-4 py-3">
-        <CalendarDays className="h-4 w-4 text-violet-500" />
+        <CalendarDays className="h-4 w-4 text-link" />
         <span className="text-sm font-semibold">Project timeline</span>
         <span className="text-muted-foreground ml-auto text-xs">
           {total} day workflow
@@ -463,7 +463,7 @@ function TimelineOverview({ template }: { template: LibraryTemplate }) {
             />
           ))}
         </div>
-        <div className="text-muted-foreground mt-1.5 flex justify-between text-[10px]">
+        <div className="text-muted-foreground mt-1.5 flex justify-between text-overline">
           <span>Day 0</span>
           <span>Day {total}</span>
         </div>
@@ -493,7 +493,7 @@ function TimelineOverview({ template }: { template: LibraryTemplate }) {
                     return next;
                   })
                 }
-                className="hover:bg-muted/40 flex w-full items-center gap-3 px-3 py-2.5 text-left"
+                className="hover:bg-tint-violet flex w-full items-center gap-3 px-3 py-2.5 text-left"
               >
                 <span
                   className={cn(
@@ -525,14 +525,14 @@ function TimelineOverview({ template }: { template: LibraryTemplate }) {
                 <div className="space-y-1.5 border-t px-3 py-2">
                   {weekDays.map((d) => (
                     <div key={d.day} className="flex items-start gap-3">
-                      <span className="text-muted-foreground w-12 shrink-0 pt-0.5 text-right text-[10px] font-medium">
+                      <span className="text-muted-foreground w-12 shrink-0 pt-0.5 text-right text-overline font-medium">
                         Day {d.day}
                       </span>
                       <div className="flex-1 space-y-1">
                         {d.items.map((item, i) => (
                           <div key={i} className="flex items-start gap-1.5">
                             {item.type === "milestone" ? (
-                              <Flag className="mt-0.5 h-3 w-3 shrink-0 text-violet-600" />
+                              <Flag className="mt-0.5 h-3 w-3 shrink-0 text-link" />
                             ) : (
                               <PriorityDot priority={item.priority} />
                             )}

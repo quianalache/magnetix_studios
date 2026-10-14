@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { OptionSelect } from "@/components/system/option-select";
 import { cn } from "@/lib/utils";
 import { useSubAccount } from "@/context/sub-account-context";
 import { createRoutineApi, updateRoutineApi } from "@/lib/client/routines-api";
@@ -266,11 +267,10 @@ function DayPicker({ value, onChange }: { value: number[]; onChange: (v: number[
   );
 }
 
-const selectCls =
-  "border-input bg-background focus-visible:ring-ring/40 h-9 rounded-md border px-2.5 text-sm outline-none focus-visible:ring-2";
 
 function NumberSelect({
   id,
+  className = "mt-1 w-full",
   value,
   max,
   onChange,
@@ -279,15 +279,17 @@ function NumberSelect({
   value: number;
   max: number;
   onChange: (n: number) => void;
+  className?: string;
 }) {
   return (
-    <select id={id} className={selectCls} value={value} onChange={(e) => onChange(Number(e.target.value))}>
-      {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
-        <option key={n} value={n}>
-          {n}
-        </option>
-      ))}
-    </select>
+    <OptionSelect
+      id={id}
+      size="sm"
+      className={className}
+      value={String(value)}
+      onChange={(next) => next != null && onChange(Number(next))}
+      options={Array.from({ length: max }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+    />
   );
 }
 
@@ -295,13 +297,14 @@ const NTH_OPTIONS = [1, 2, 3, 4, 5, -1];
 
 function WeekdaySelect({ id, value, onChange }: { id: string; value: number; onChange: (n: number) => void }) {
   return (
-    <select id={id} className={selectCls} value={value} onChange={(e) => onChange(Number(e.target.value))}>
-      {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => (
-        <option key={d} value={i}>
-          {d}
-        </option>
-      ))}
-    </select>
+    <OptionSelect
+      id={id}
+      size="sm"
+      className="mt-1 w-full"
+      value={String(value)}
+      onChange={(next) => next != null && onChange(Number(next))}
+      options={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => ({ value: String(i), label: d }))}
+    />
   );
 }
 
@@ -347,7 +350,7 @@ function ActivityScheduleFields({
       {(s.frequency === "daily" || s.frequency === "weekly") && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs">
-            Repeat every <NumberSelect id={`routine-${activity.key}-interval`} value={s.interval} max={s.frequency === "daily" ? 30 : 12} onChange={(interval) => updateSchedule({ interval })} /> {s.frequency === "daily" ? "day(s)" : "week(s)"}
+            Repeat every <NumberSelect className="w-20" id={`routine-${activity.key}-interval`} value={s.interval} max={s.frequency === "daily" ? 30 : 12} onChange={(interval) => updateSchedule({ interval })} /> {s.frequency === "daily" ? "day(s)" : "week(s)"}
           </div>
           <DayPicker value={s.days} onChange={(days) => updateSchedule({ days })} />
         </div>
@@ -356,18 +359,27 @@ function ActivityScheduleFields({
       {(s.frequency === "monthly" || s.frequency === "custom") && (
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="text-xs font-medium">Pattern
-            <select className={cn(selectCls, "mt-1 w-full")} value={s.customMode === "nthWeekday" || s.monthMode === "weekdays" ? "nthWeekday" : s.customMode} onChange={(e) => updateSchedule({ customMode: e.target.value as RoutineCustomMode, monthMode: e.target.value === "nthWeekday" ? "weekdays" : "dates" })}>
-              <option value="dates">Specific dates</option>
-              <option value="nthWeekday">Nth weekday</option>
-              {s.frequency === "custom" && <><option value="weeks">Every few weeks</option><option value="months">Every few months</option></>}
-            </select>
+            <OptionSelect
+              size="sm"
+              className="mt-1 w-full"
+              aria-label="Pattern"
+              value={(s.customMode === "nthWeekday" || s.monthMode === "weekdays" ? "nthWeekday" : s.customMode) as RoutineCustomMode}
+              onChange={(next) => next && updateSchedule({ customMode: next, monthMode: next === "nthWeekday" ? "weekdays" : "dates" })}
+              options={[
+                { value: "dates" as RoutineCustomMode, label: "Specific dates" },
+                { value: "nthWeekday" as RoutineCustomMode, label: "Nth weekday" },
+                ...(s.frequency === "custom"
+                  ? [{ value: "weeks" as RoutineCustomMode, label: "Every few weeks" }, { value: "months" as RoutineCustomMode, label: "Every few months" }]
+                  : []),
+              ]}
+            />
           </label>
           <label className="text-xs font-medium">Interval
             <NumberSelect id={`routine-${activity.key}-month-interval`} value={s.interval} max={12} onChange={(interval) => updateSchedule({ interval })} />
           </label>
           {s.customMode === "nthWeekday" ? (
             <><label className="text-xs font-medium">Week
-              <select className={cn(selectCls, "mt-1 w-full")} value={s.nthWeeks[0] ?? 1} onChange={(e) => updateSchedule({ nthWeeks: [Number(e.target.value)] })}>{NTH_OPTIONS.map((n) => <option key={n} value={n}>{n === -1 ? "Last" : ordinal(n)}</option>)}</select>
+              <OptionSelect size="sm" className="mt-1 w-full" aria-label="Week" value={String(s.nthWeeks[0] ?? 1)} onChange={(next) => next != null && updateSchedule({ nthWeeks: [Number(next)] })} options={NTH_OPTIONS.map((n) => ({ value: String(n), label: n === -1 ? "Last" : ordinal(n) }))} />
             </label><label className="text-xs font-medium">Weekday
               <WeekdaySelect id={`routine-${activity.key}-weekday`} value={s.weekday} onChange={(weekday) => updateSchedule({ weekday })} />
             </label></>
@@ -384,12 +396,12 @@ function ActivityScheduleFields({
           <Input className="mt-1" type="date" value={s.startDate} onChange={(e) => updateSchedule({ startDate: e.target.value })} />
         </label>
         <label className="text-xs font-medium">Ends
-          <div className="mt-1 flex gap-2"><select className={cn(selectCls, "flex-1")} value={s.endsOn} onChange={(e) => updateSchedule({ endsOn: e.target.value as ScheduleDraft["endsOn"] })}><option value="never">Never</option><option value="date">On a date</option></select>{s.endsOn === "date" && <Input type="date" value={s.endDate} min={s.startDate} onChange={(e) => updateSchedule({ endDate: e.target.value })} />}</div>
+          <div className="mt-1 flex gap-2"><OptionSelect size="sm" className="flex-1" aria-label="Ends" value={s.endsOn} onChange={(next) => next && updateSchedule({ endsOn: next })} options={[{ value: "never" as ScheduleDraft["endsOn"], label: "Never" }, { value: "date" as ScheduleDraft["endsOn"], label: "On a date" }]} />{s.endsOn === "date" && <Input type="date" value={s.endDate} min={s.startDate} onChange={(e) => updateSchedule({ endDate: e.target.value })} />}</div>
         </label>
       </div>
 
       <div className="space-y-1.5"><span className="text-xs font-semibold">Time preference</span><div className="grid gap-2 sm:grid-cols-3">
-        {(["anytime", "block", "time"] as RoutineTimeMode[]).map((mode) => <label key={mode} className={cn("rounded-md border p-2 text-xs", activity.timeMode === mode && "border-primary bg-primary/5")}><span className="flex items-center gap-1.5"><input type="radio" name={`time-${activity.key}`} checked={activity.timeMode === mode} onChange={() => onChange({ timeMode: mode })} />{mode === "anytime" ? "Anytime" : mode === "block" ? "Time block" : "Specific time"}</span>{mode === "block" && activity.timeMode === mode && <select className={cn(selectCls, "mt-1 w-full")} value={activity.timeBlock} onChange={(e) => onChange({ timeBlock: e.target.value as RoutineTimeBlock })}><option value="am">AM</option><option value="midday">Midday</option><option value="pm">PM</option></select>}{mode === "time" && activity.timeMode === mode && <Input className="mt-1" type="time" value={activity.time} onChange={(e) => onChange({ time: e.target.value })} />}</label>)}
+        {(["anytime", "block", "time"] as RoutineTimeMode[]).map((mode) => <label key={mode} className={cn("rounded-md border p-2 text-xs", activity.timeMode === mode && "border-primary bg-tint-violet")}><span className="flex items-center gap-1.5"><input type="radio" name={`time-${activity.key}`} checked={activity.timeMode === mode} onChange={() => onChange({ timeMode: mode })} />{mode === "anytime" ? "Anytime" : mode === "block" ? "Time block" : "Specific time"}</span>{mode === "block" && activity.timeMode === mode && <OptionSelect size="sm" className="mt-1 w-full" aria-label="Time block" value={activity.timeBlock} onChange={(next) => next && onChange({ timeBlock: next })} options={[{ value: "am" as RoutineTimeBlock, label: "AM" }, { value: "midday" as RoutineTimeBlock, label: "Midday" }, { value: "pm" as RoutineTimeBlock, label: "PM" }]} />}{mode === "time" && activity.timeMode === mode && <Input className="mt-1" type="time" value={activity.time} onChange={(e) => onChange({ time: e.target.value })} />}</label>)}
       </div></div>
     </div>
   );
@@ -541,7 +553,7 @@ export function RoutineEditorDialog({
                   aria-current={current ? "step" : undefined}
                   className={cn(
                     "flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                    current ? "bg-background font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
+                    current ? "bg-background font-semibold shadow-card" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <span
@@ -652,7 +664,7 @@ export function RoutineEditorDialog({
                           key={o.v}
                           className={cn(
                             "cursor-pointer rounded-xl border p-3 text-sm transition-colors",
-                            draft.visibility === o.v ? "border-primary/50 bg-primary/5" : "hover:bg-muted/50"
+                            draft.visibility === o.v ? "border-primary/50 bg-tint-violet" : "hover:bg-muted/50"
                           )}
                         >
                           <span className="flex items-center gap-2 font-medium">
@@ -817,7 +829,7 @@ export function RoutineEditorDialog({
                   <DialogTitle className="text-lg font-bold">Review</DialogTitle>
                   <DialogDescription>Check everything before you {routine ? "save" : "create the routine"}.</DialogDescription>
                 </div>
-                <div className="flex items-start gap-3 rounded-2xl border p-4">
+                <div className="flex items-start gap-3 rounded-card border p-4">
                   <RoutineIcon icon={draft.icon} color={draft.color} />
                   <div className="min-w-0">
                     <p className="font-bold">{draft.name || "Untitled routine"}</p>

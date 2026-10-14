@@ -141,7 +141,7 @@ export function ContactActivityFeed({
       {loading ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading activity">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg border bg-muted/40" />
+            <div key={i} className="h-14 animate-pulse rounded-control bg-muted" />
           ))}
         </div>
       ) : error && items.length === 0 ? (
@@ -153,7 +153,7 @@ export function ContactActivityFeed({
           </Button>
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card/50 p-8 text-center">
+        <div className="rounded-card border border-dashed border-border-strong bg-card p-8 text-center">
           <Activity className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-2 text-sm font-medium">
             {filter === "all" ? "No activity yet" : "Nothing here yet"}
@@ -163,7 +163,7 @@ export function ContactActivityFeed({
           </p>
         </div>
       ) : (
-        <ol className="divide-y rounded-xl border bg-card">
+        <ol className="divide-y rounded-card border border-border bg-card shadow-card">
           {items.map((item) => (
             <ActivityRow key={item.id} item={item} onOpenNote={onOpenNote} />
           ))}

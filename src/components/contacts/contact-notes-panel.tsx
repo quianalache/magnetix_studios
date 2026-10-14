@@ -173,7 +173,7 @@ export function ContactNotesPanel({
       {loading ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading notes">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl border bg-muted/40" />
+            <div key={i} className="h-20 animate-pulse rounded-control bg-muted" />
           ))}
         </div>
       ) : error ? (
@@ -185,7 +185,7 @@ export function ContactNotesPanel({
           </Button>
         </div>
       ) : notes.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card/50 p-8 text-center">
+        <div className="rounded-card border border-dashed border-border-strong bg-card p-8 text-center">
           <StickyNote className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-2 text-sm font-medium">No notes yet</p>
           <p className="text-xs text-muted-foreground">
@@ -202,7 +202,7 @@ export function ContactNotesPanel({
                 key={note.id}
                 id={`note-${note.id}`}
                 className={cn(
-                  "rounded-xl border bg-card p-4 transition-shadow",
+                  "rounded-card border border-border bg-card shadow-card p-4 transition-shadow",
                   focusNoteId === note.id && "ring-2 ring-primary/40",
                 )}
               >

@@ -48,7 +48,7 @@ export function ContactPortalAccess({ contact }: { contact: Contact }) {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="rounded-card border border-border bg-card shadow-card p-4">
       <div className="mb-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Client Portal

@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FolderKanban, Plus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RelatedCard } from "@/components/contacts/related-card";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
+
   subscribeToProjectsForContact,
   subscribeToProjectTemplates,
 } from "@/lib/firestore/projects";
@@ -21,6 +23,9 @@ import {
   type ProjectTemplate,
 } from "@/types/projects";
 import type { Contact } from "@/types/contacts";
+
+/** Base UI Select can't hold "" as a value — "Blank project" maps through this. */
+const BLANK_TEMPLATE = "__blank";
 
 function formatDate(value: Parameters<typeof toDate>[0]): string | null {
   const date = toDate(value);
@@ -129,18 +134,23 @@ export function ContactProjects({
 
       {addOpen && (
         <div className="mb-3 space-y-2 rounded-lg border p-3">
-          <select
-            value={templateId}
-            onChange={(e) => setTemplateId(e.target.value)}
-            className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+          <Select
+            value={templateId || BLANK_TEMPLATE}
+            onValueChange={(value) => value != null && setTemplateId(value === BLANK_TEMPLATE ? "" : value)}
+            items={{ [BLANK_TEMPLATE]: "Blank project", ...Object.fromEntries(clientTemplates.map((t) => [t.id, t.title])) }}
           >
-            <option value="">Blank project</option>
-            {clientTemplates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.title}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="Project template">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={BLANK_TEMPLATE}>Blank project</SelectItem>
+              {clientTemplates.map((template) => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {!templateId && (
             <Input
               value={title}
@@ -169,7 +179,7 @@ export function ContactProjects({
           {Array.from({ length: 2 }).map((_, i) => (
             <div
               key={i}
-              className="bg-muted/40 h-16 animate-pulse rounded-lg border"
+              className="h-16 animate-pulse rounded-control bg-muted"
             />
           ))}
         </div>

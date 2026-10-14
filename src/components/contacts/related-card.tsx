@@ -77,7 +77,7 @@ export function RelatedCard({
   );
 
   return (
-    <section className={cn("rounded-xl border bg-card p-4", className)} aria-label={title}>
+    <section className={cn("rounded-card border border-border bg-card shadow-card p-4", className)} aria-label={title}>
       <div className={cn("flex items-center justify-between gap-2", !collapsed && "mb-3")}>
         {collapsible ? (
           <button

@@ -6,6 +6,8 @@ import { Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/system/confirm-dialog";
+import { OptionSelect } from "@/components/system/option-select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ContactPicker } from "@/components/quotes/contact-picker";
@@ -75,6 +77,7 @@ function StandaloneTaskDialog({
   defaultProjectId,
   onSaved,
 }: TaskDialogProps) {
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
   const { subAccountId } = useSubAccount();
   const { assignees } = useTaskAssignees();
   const isEdit = !!task;
@@ -206,7 +209,7 @@ function StandaloneTaskDialog({
 
   async function handleDelete() {
     if (!task) return;
-    if (!confirm(`Delete task "${task.title}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete task "${task.title}"?`, confirmLabel: "Delete task", tone: "danger" }))) return;
     setDeleting(true);
     try {
       await deleteTask(task.id);
@@ -252,10 +255,7 @@ function StandaloneTaskDialog({
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="task-priority">Priority</Label>
-              <select id="task-priority" value={priority ?? ""} onChange={(e) => setPriority((e.target.value || null) as TaskPriority | null)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="">Unset</option>
-                {TASK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+              <OptionSelect id="task-priority" value={priority ?? null} onChange={setPriority} noneLabel="Unset" options={TASK_PRIORITIES} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="task-estimate">Estimate (minutes)</Label>
@@ -263,19 +263,13 @@ function StandaloneTaskDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="task-recurrence">Repeats</Label>
-              <select id="task-recurrence" value={recurrence ?? ""} onChange={(e) => setRecurrence((e.target.value || null) as TaskRecurrenceType | null)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="">Doesn&apos;t repeat</option>
-                {(Object.keys(TASK_RECURRENCE_LABELS) as TaskRecurrenceType[]).map((r) => <option key={r} value={r}>{TASK_RECURRENCE_LABELS[r]}</option>)}
-              </select>
+              <OptionSelect id="task-recurrence" value={recurrence ?? null} onChange={setRecurrence} noneLabel="Doesn't repeat" options={(Object.keys(TASK_RECURRENCE_LABELS) as TaskRecurrenceType[]).map((r) => ({ value: r, label: TASK_RECURRENCE_LABELS[r] }))} />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="task-assignee">Assignee</Label>
-            <select id="task-assignee" value={assigneeUid ?? ""} onChange={(e) => setAssigneeUid(e.target.value || null)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <option value="">Unassigned</option>
-              {assignees.map((member) => <option key={member.uid} value={member.uid}>{member.name}</option>)}
-            </select>
+            <OptionSelect id="task-assignee" value={assigneeUid ?? null} onChange={setAssigneeUid} noneLabel="Unassigned" options={assignees.map((member) => ({ value: member.uid, label: member.name }))} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -302,24 +296,8 @@ function StandaloneTaskDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="task-time-block">Time block</Label>
-            <select
-              id="task-time-block"
-              value={timeBlock ?? ""}
-              onChange={(e) =>
-                setTimeBlock(
-                  e.target.value ? (e.target.value as TaskTimeBlock) : null,
-                )
-              }
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Unset</option>
-              {TASK_TIME_BLOCKS.map((tb) => (
-                <option key={tb.value} value={tb.value}>
-                  {tb.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-muted-foreground">
+            <OptionSelect id="task-time-block" value={timeBlock ?? null} onChange={setTimeBlock} noneLabel="Unset" options={TASK_TIME_BLOCKS} />
+            <p className="text-micro text-muted-foreground">
               Sorts this task into a slot on the Calendar page&apos;s Today&apos;s Time Blocks panel.
             </p>
           </div>
@@ -327,7 +305,7 @@ function StandaloneTaskDialog({
           <div className="space-y-1.5">
             <Label htmlFor="task-tags">Tags</Label>
             <Input id="task-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="marketing, follow-up" />
-            <p className="text-[11px] text-muted-foreground">Separate tags with commas.</p>
+            <p className="text-micro text-muted-foreground">Separate tags with commas.</p>
           </div>
 
           {!isEdit && !defaultDealId && (
@@ -405,6 +383,7 @@ function StandaloneTaskDialog({
           </div>
         </form>
       </DialogContent>
+      {confirmElement}
     </Dialog>
   );
 }

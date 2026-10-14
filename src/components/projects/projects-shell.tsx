@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { Pagination as SystemPagination } from "@/components/system/pagination";
 
 export type ProjectsSection = "overview" | "tasks" | "routines" | "templates" | "archived";
 
@@ -68,62 +71,54 @@ export function ProjectsShell({
 }) {
   const { saPath } = useSubAccount();
   return (
-    <div
-      className={cn(
-        "momentum-scope mx-auto w-full space-y-6 rounded-2xl",
-        wide ? "max-w-7xl" : "max-w-6xl"
-      )}
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-200 to-violet-300 text-violet-700 shadow-sm dark:from-pink-500/30 dark:to-violet-500/40 dark:text-violet-100"
-            aria-hidden
-          >
-            <FolderKanban className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{heading}</h1>
-            <p className="text-muted-foreground mt-1 text-sm">{subheading}</p>
-          </div>
-        </div>
-        {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
-      </div>
+    <PageShell width={wide ? "wide" : "data"}>
+      <PageHeader
+        title={heading}
+        description={subheading}
+        icon={FolderKanban}
+        // Overview tracks project progress → the small orbit (Wave 2). The
+        // denser sections (tasks, routines, templates, archive) stay quiet.
+        accent={active === "overview" ? "orbit" : undefined}
+        actions={actions}
+      />
 
-      <nav
-        aria-label="Projects sections"
-        className="bg-muted/60 flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1"
-      >
-        {PROJECTS_SECTIONS.map((s) => {
-          const isActive = s.id === active;
-          const Icon = s.icon;
-          return (
-            <Link
-              key={s.id}
-              href={saPath(s.href)}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary/10 text-primary shadow-xs"
-                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
-              )}
-            >
-              <Icon
-                className={cn("h-3.5 w-3.5", !isActive && "opacity-60")}
-              />
-              {s.label}
-            </Link>
-          );
-        })}
+      {/* Section nav — approved pill tabs; scrolls sideways inside its own
+          strip on phones instead of wrapping or widening the page. */}
+      <nav aria-label="Projects sections" className="-mx-1 overflow-x-auto px-1">
+        <div className="flex w-max gap-1 rounded-control border border-border bg-card p-1 shadow-card">
+          {PROJECTS_SECTIONS.map((s) => {
+            const isActive = s.id === active;
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.id}
+                href={saPath(s.href)}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex h-(--ds-control-sm) shrink-0 items-center gap-1.5 rounded-lg px-3 text-body-sm font-medium whitespace-nowrap transition-colors",
+                  isActive
+                    ? "bg-accent font-semibold text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className={cn("size-3.5", !isActive && "opacity-70")} aria-hidden="true" />
+                {s.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       {children}
-    </div>
+    </PageShell>
   );
 }
 
-/** Mockup-style metric tile: tinted icon disc + value + label (+ hint). */
+/**
+ * Metric tile — same look as the system MetricCard (tinted round icon chip,
+ * label, value, hint). Kept as its own component because callers pass a
+ * ReactNode icon and a tone class.
+ */
 export function ProjectsMetric({
   icon,
   tone,
@@ -132,124 +127,41 @@ export function ProjectsMetric({
   hint,
 }: {
   icon: React.ReactNode;
-  /** Utility classes for the icon disc, e.g. "bg-violet-500/10 text-violet-600". */
+  /** Utility classes for the icon disc, e.g. "bg-tag-violet-bg text-tag-violet-fg". */
   tone: string;
   value: React.ReactNode;
   label: string;
   hint?: string;
 }) {
   return (
-    <div className="bg-card flex items-center gap-4 rounded-2xl border p-4 shadow-xs">
-      <span
-        className={cn(
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
-          tone
-        )}
-      >
-        {icon}
-      </span>
+    <div className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-card p-4 shadow-card sm:gap-4">
+      <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full sm:size-11", tone)}>{icon}</span>
       <div className="min-w-0">
-        <p className="text-2xl leading-tight font-semibold tabular-nums">
-          {value}
-        </p>
-        <p className="text-muted-foreground truncate text-sm">{label}</p>
-        {hint && (
-          <p className="text-muted-foreground/80 truncate text-xs">{hint}</p>
-        )}
+        <p className="truncate text-caption text-muted-foreground">{label}</p>
+        <p className="text-title-md leading-tight font-semibold tracking-tight tabular-nums sm:text-title-lg">{value}</p>
+        {hint && <p className="truncate text-caption text-ink-tertiary max-sm:hidden">{hint}</p>}
       </div>
     </div>
   );
 }
 
+/** Thin adapter over the system Pagination (keeps this module's prop names). */
 export function Pagination({
   page,
-  pageCount,
   total,
   pageSize,
   noun,
   onPage,
 }: {
   page: number;
-  pageCount: number;
+  pageCount?: number;
   total: number;
   pageSize: number;
   noun: string;
   onPage: (page: number) => void;
 }) {
   if (total === 0) return null;
-  const from = (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, total);
-  // Compact window around the current page so very large lists stay tidy.
-  const pages: number[] = [];
-  const start = Math.max(1, Math.min(page - 2, pageCount - 4));
-  for (let p = start; p <= Math.min(pageCount, start + 4); p++) pages.push(p);
-  return (
-    <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
-      <p className="text-muted-foreground text-sm">
-        Showing {from}–{to} of {total} {noun}
-      </p>
-      {pageCount > 1 && (
-        <div className="flex items-center gap-1">
-          <PageButton
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-            label="Previous page"
-          >
-            ‹
-          </PageButton>
-          {pages.map((p) => (
-            <PageButton
-              key={p}
-              active={p === page}
-              onClick={() => onPage(p)}
-              label={`Page ${p}`}
-            >
-              {p}
-            </PageButton>
-          ))}
-          <PageButton
-            disabled={page >= pageCount}
-            onClick={() => onPage(page + 1)}
-            label="Next page"
-          >
-            ›
-          </PageButton>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PageButton({
-  children,
-  active,
-  disabled,
-  onClick,
-  label,
-}: {
-  children: React.ReactNode;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-current={active ? "page" : undefined}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-sm font-medium tabular-nums transition-colors disabled:opacity-40",
-        active
-          ? "border-primary/40 bg-primary/10 text-primary"
-          : "bg-card hover:bg-muted"
-      )}
-    >
-      {children}
-    </button>
-  );
+  return <SystemPagination page={page} pageSize={pageSize} total={total} onPageChange={onPage} itemLabel={noun} />;
 }
 
 export function usePaged<T>(items: T[], pageSize: number, page: number) {

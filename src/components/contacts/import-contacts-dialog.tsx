@@ -238,7 +238,7 @@ export function ImportContactsDialog({
           {headers.length === 0 ? (
             <label
               htmlFor="csv-file"
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed bg-muted/20 p-10 text-center transition-colors hover:border-primary/40 hover:bg-primary/5"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-card border border-dashed bg-muted/20 p-10 text-center transition-colors hover:border-primary/40 hover:bg-primary/5"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Upload className="h-5 w-5" />
@@ -283,7 +283,7 @@ export function ImportContactsDialog({
                 </Label>
                 <div className="overflow-hidden rounded-lg border">
                   <table className="w-full text-sm">
-                    <thead className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <thead className="border-b bg-muted/40 text-left text-micro uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 font-semibold">CSV column</th>
                         <th className="px-3 py-2 font-semibold">Preview</th>
@@ -322,7 +322,7 @@ export function ImportContactsDialog({
                   </table>
                 </div>
                 {!hasEmailColumn && (
-                  <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="flex items-center gap-1.5 text-xs text-status-warning-fg">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Map at least one column to Email — rows without emails get
                     skipped.
@@ -333,7 +333,7 @@ export function ImportContactsDialog({
               {result && (
                 <div className="space-y-2 rounded-lg border bg-card p-3 text-sm">
                   <p className="flex items-center gap-2 font-medium">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <CheckCircle2 className="h-4 w-4 text-status-success-fg" />
                     Import finished · {result.created} created · {result.skipped} skipped
                   </p>
                   {result.errors.length > 0 && (
