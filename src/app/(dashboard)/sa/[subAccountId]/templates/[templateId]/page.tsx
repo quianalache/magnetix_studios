@@ -19,6 +19,9 @@ import {
   type TemplateFormValues,
 } from "@/components/automations/template-editor";
 import type { MessageTemplateDoc } from "@/types";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
 
 export default function EditTemplatePage() {
   const params = useParams<{ templateId: string }>();
@@ -64,47 +67,36 @@ export default function EditTemplatePage() {
     toast.success("Template saved.");
   }
 
+  const back = (
+    <Link href={saPath("/templates")} className="inline-flex items-center gap-1 hover:text-foreground">
+      <ArrowLeft className="size-3.5" aria-hidden="true" />
+      Back to SMS Templates
+    </Link>
+  );
+
   if (loading || subLoading) {
-    return (
-      <div className="mx-auto w-full max-w-3xl space-y-4">
-        <div className="h-7 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-72 animate-pulse rounded-2xl bg-muted/40" />
-      </div>
-    );
+    return <PageShellLoading width="form" />;
   }
 
   if (!template) {
     return (
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-dashed bg-card/50 p-10 text-center">
-        <FileText className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-        <h2 className="text-base font-semibold">Template not found</h2>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href={saPath("/templates")} />}
-          className="mt-4"
-        >
-          Back to SMS Templates
-        </Button>
-      </div>
+      <PageShell width="form">
+        <SystemEmptyState
+          icon={FileText}
+          title="Template not found"
+          action={
+            <Button variant="outline" size="sm" render={<Link href={saPath("/templates")} />}>
+              Back to SMS Templates
+            </Button>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
-      <div>
-        <Link
-          href={saPath("/templates")}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Back to SMS Templates
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">
-          {template.name}
-        </h1>
-        <p className="text-sm text-muted-foreground">SMS template</p>
-      </div>
+    <PageShell width="form">
+      <PageHeader breadcrumbs={back} title={template.name} description="SMS template" />
 
       <TemplateEditor
         initial={{
@@ -117,6 +109,6 @@ export default function EditTemplatePage() {
         submitLabel={isAdmin ? "Save changes" : "Read-only"}
         onSubmit={handleSubmit}
       />
-    </div>
+    </PageShell>
   );
 }

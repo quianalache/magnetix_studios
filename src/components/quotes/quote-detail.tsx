@@ -32,6 +32,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { Quote } from "@/types/quotes";
 import type { TenantScope } from "@/types";
+import { Alert } from "@/components/ui/alert";
+import { Tag } from "@/components/system/status-pill";
 
 /**
  * Operator-facing detail/edit view for a single quote.
@@ -233,17 +235,13 @@ export function QuoteDetail({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-mono text-xl font-semibold tracking-tight sm:text-2xl">
+            <h1 className="font-mono text-title-lg font-semibold tracking-tight text-foreground">
               {quote.quoteNumber}
             </h1>
             <QuoteStatusBadge status={effStatus} />
-            {isInvoice && (
-              <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
-                Invoice
-              </span>
-            )}
+            <Tag color={isInvoice ? "green" : "violet"}>{isInvoice ? "Invoice" : "Quote"}</Tag>
           </div>
-          <p className="text-muted-foreground mt-1 text-xs">
+          <p className="mt-1 text-caption text-muted-foreground">
             Created {formatContactDate(quote.createdAt)} · last updated{" "}
             {formatRelativeTime(quote.updatedAt)}
           </p>
@@ -353,14 +351,10 @@ export function QuoteDetail({
       </div>
 
       {flash && (
-        <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
-          {flash}
-        </p>
+        <Alert tone="success">{flash}</Alert>
       )}
       {error && (
-        <p className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-xs">
-          {error}
-        </p>
+        <Alert tone="danger">{error}</Alert>
       )}
 
       {editing ? (

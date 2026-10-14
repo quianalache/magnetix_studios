@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,9 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { usePipelineStages } from "@/hooks/use-pipeline-stages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Tag } from "@/components/system/status-pill";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { GhlImportHelpDialog } from "@/components/import/ghl-import-help-dialog";
 import {
@@ -57,6 +60,7 @@ interface CfChoice {
 export function GhlImportWizard() {
   const { subAccountId, isAdmin } = useSubAccount();
   const stages = usePipelineStages();
+  const stageItems: Record<string, string> = Object.fromEntries(stages.map((cs) => [cs.id, cs.label]));
 
   const [step, setStep] = useState<Step>("connect");
   const [showHelp, setShowHelp] = useState(false);
@@ -83,9 +87,9 @@ export function GhlImportWizard() {
 
   if (!isAdmin) {
     return (
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm text-amber-700 dark:text-amber-400">
+      <Alert tone="warning" title="Admins only">
         Importing is sub-account admin only.
-      </div>
+      </Alert>
     );
   }
 
@@ -224,7 +228,7 @@ export function GhlImportWizard() {
           <Field label="Location id">
             <Input value={locationId} onChange={(e) => setLocationId(e.target.value)} placeholder="e.g. abc123…" />
           </Field>
-          <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+          <p className="flex items-start gap-1.5 text-caption text-muted-foreground">
             <Lock className="mt-0.5 h-3 w-3 shrink-0" />
             Your token is stored securely and only used to read your data during the import.
           </p>
@@ -259,17 +263,22 @@ export function GhlImportWizard() {
                     <div key={s.id} className="flex items-center gap-2 text-sm">
                       <span className="min-w-0 flex-1 truncate">{s.name}</span>
                       <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      <select
+                      <Select
                         value={stageMap[s.id] ?? "new"}
-                        onChange={(e) =>
-                          setStageMap((m) => ({ ...m, [s.id]: e.target.value as PipelineStageId }))
-                        }
-                        className="h-8 rounded-md border bg-background px-2 text-sm"
+                        onValueChange={(value) => value && setStageMap((m) => ({ ...m, [s.id]: value as PipelineStageId }))}
+                        items={stageItems}
                       >
-                        {stages.map((cs) => (
-                          <option key={cs.id} value={cs.id}>{cs.label}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger size="sm" aria-label={`Stage for ${s.name}`} className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stages.map((cs) => (
+                            <SelectItem key={cs.id} value={cs.id}>
+                              {cs.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   ))}
                 </div>
@@ -277,15 +286,22 @@ export function GhlImportWizard() {
             ))}
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <Label className="text-xs">Default for unmapped:</Label>
-              <select
-                value={defaultStage}
-                onChange={(e) => setDefaultStage(e.target.value as PipelineStageId)}
-                className="h-8 rounded-md border bg-background px-2 text-sm"
-              >
-                {stages.map((cs) => (
-                  <option key={cs.id} value={cs.id}>{cs.label}</option>
-                ))}
-              </select>
+              <Select
+                        value={defaultStage}
+                        onValueChange={(value) => value && setDefaultStage(value as PipelineStageId)}
+                        items={stageItems}
+                      >
+                        <SelectTrigger size="sm" aria-label="Default stage" className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stages.map((cs) => (
+                            <SelectItem key={cs.id} value={cs.id}>
+                              {cs.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
               <Label className="text-xs">Currency:</Label>
               <Input
                 value={defaultCurrency}
@@ -325,7 +341,7 @@ export function GhlImportWizard() {
                       }
                       className="h-8 flex-1"
                     />
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] capitalize text-muted-foreground">
+                    <span className="rounded-chip bg-surface-sunken px-2 py-0.5 text-micro capitalize text-muted-foreground">
                       {c.entity} · {c.type}
                     </span>
                   </li>
@@ -358,9 +374,9 @@ export function GhlImportWizard() {
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-sm">
           {job?.status === "completed" ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle2 className="h-4 w-4 text-status-success-fg" />
           ) : job?.status === "failed" ? (
-            <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+            <XCircle className="h-4 w-4 text-status-danger-fg" />
           ) : (
             <Loader2 className="h-4 w-4 animate-spin" />
           )}
@@ -384,14 +400,13 @@ export function GhlImportWizard() {
         </div>
 
         {done && (job?.errors?.length ?? 0) > 0 && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
-            <p className="font-medium">{job?.errors.length} record(s) skipped:</p>
+          <Alert tone="warning" title={`${job?.errors.length} record(s) skipped`}>
             <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
               {job?.errors.slice(0, 20).map((er, i) => (
                 <li key={i}>{er.entity} {er.externalId ?? ""}: {er.error}</li>
               ))}
             </ul>
-          </div>
+          </Alert>
         )}
 
         {done && (
@@ -416,15 +431,13 @@ function Card({
   headerAction?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border bg-card p-5">
+    <div className="rounded-card border border-border bg-card p-5 shadow-card">
       <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
-          Beta
-        </span>
+        <h2 className="text-section font-semibold">{title}</h2>
+        <Tag color="pink">Beta</Tag>
         {headerAction ? <div className="ml-auto">{headerAction}</div> : null}
       </div>
-      <p className="mt-0.5 mb-4 text-sm text-muted-foreground">{desc}</p>
+      <p className="mt-0.5 mb-4 text-body-sm text-muted-foreground">{desc}</p>
       {children}
     </div>
   );

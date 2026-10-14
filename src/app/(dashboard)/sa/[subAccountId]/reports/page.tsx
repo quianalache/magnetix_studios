@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  BarChart3,
   TrendingUp,
   Trophy,
   Users,
@@ -29,7 +30,14 @@ import { type Deal } from "@/types/deals";
 import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
 import { dealPipelineId, toDisplayStages } from "@/types/pipelines";
 import type { Contact } from "@/types/contacts";
-import { cn } from "@/lib/utils";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { MetricCard } from "@/components/system/metric-card";
+import { Tag } from "@/components/system/status-pill";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type RangeKey = "7d" | "30d" | "90d" | "all";
 type TabKey = "overview" | "attribution";
@@ -267,83 +275,72 @@ export default function ReportsPage() {
       .sort((a, b) => b.value - a.value);
   }, [inRange.contactsIn]);
 
-  return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-          <p className="text-sm text-muted-foreground">
-            {tab === "attribution"
-              ? "Which sources and campaigns produce your revenue."
-              : "Live analytics across your contacts and pipeline."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Pipeline"
-            value={pipelineFilter}
-            onChange={(e) => setPipelineFilter(e.target.value)}
-            className="h-9 rounded-xl border bg-background px-2.5 text-sm [&_option]:bg-background"
-          >
-            <option value="all">All pipelines</option>
-            {pipelines.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.status === "archived" ? " (archived)" : ""}
-              </option>
-            ))}
-          </select>
-          {otherCurrencies && (
-            <select
-              aria-label="Currency"
-              value={currency}
-              onChange={(e) => setCurrencyChoice(e.target.value)}
-              className="h-9 rounded-xl border bg-background px-2.5 text-sm [&_option]:bg-background"
-              title="Money is shown one currency at a time; deal counts include every currency."
-            >
-              {currencies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          )}
-        <div className="flex items-center gap-1 rounded-xl border bg-muted/30 p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => setRange(r.id)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
-                range === r.id
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-        </div>
-      </div>
+  const pipelineItems: Record<string, string> = {
+    all: "All pipelines",
+    ...Object.fromEntries(pipelines.map((p) => [p.id, `${p.name}${p.status === "archived" ? " (archived)" : ""}`])),
+  };
+  const currencyItems: Record<string, string> = Object.fromEntries(currencies.map((c) => [c, c]));
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-              tab === t.id
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+  return (
+    <PageShell width="data">
+      <PageHeader
+        title="Reports"
+        icon={BarChart3}
+        accent="orbit"
+        description={
+          tab === "attribution"
+            ? "Which sources and campaigns produce your revenue."
+            : "Live analytics across your contacts and pipeline."
+        }
+      />
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)}>
+          <TabsList variant="underline" className="gap-5">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.id} value={t.id}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={pipelineFilter} onValueChange={(value) => value && setPipelineFilter(value)} items={pipelineItems}>
+            <SelectTrigger aria-label="Pipeline" className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(pipelineItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {otherCurrencies && (
+            <Select value={currency} onValueChange={(value) => value && setCurrencyChoice(value)} items={currencyItems}>
+              <SelectTrigger
+                aria-label="Currency"
+                className="w-24"
+                title="Money is shown one currency at a time; deal counts include every currency."
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {currencies.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <SegmentedControl
+            value={range}
+            onChange={setRange}
+            options={RANGES.map((r) => ({ value: r.id, label: r.label }))}
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -360,53 +357,25 @@ export default function ReportsPage() {
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi
-              icon={<Users className="h-4 w-4" />}
-              label="New leads"
-              value={String(newLeads)}
-              hint="In selected range"
-              tone="text-indigo-600 dark:text-indigo-400"
-              bg="bg-indigo-500/10"
-            />
-            <Kpi
-              icon={<Trophy className="h-4 w-4" />}
-              label="Won revenue"
-              value={formatCurrency(wonValue, currency)}
-              hint={`${wonDeals.length} deal${wonDeals.length === 1 ? "" : "s"} closed${
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <MetricCard icon={Users} tone="violet" label="New leads" value={String(newLeads)} hint="In selected range" />
+            <MetricCard icon={Trophy} tone="green" label="Won revenue" value={formatCurrency(wonValue, currency)} hint={`${wonDeals.length} deal${wonDeals.length === 1 ? "" : "s"} closed${
                 otherCurrencies ? ` · ${currency} only` : ""
-              }`}
-              tone="text-emerald-600 dark:text-emerald-400"
-              bg="bg-emerald-500/10"
-            />
-            <Kpi
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Avg deal size"
-              value={formatCurrency(avgDeal, currency)}
-              hint={
+              }`} />
+            <MetricCard icon={TrendingUp} tone="aqua" label="Avg deal size" value={formatCurrency(avgDeal, currency)} hint={
                 wonDeals.length === 0
                   ? "No wins yet"
                   : `Across ${wonInCurrency.length} ${currency} win${wonInCurrency.length === 1 ? "" : "s"}`
-              }
-              tone="text-violet-600 dark:text-violet-400"
-              bg="bg-violet-500/10"
-            />
-            <Kpi
-              icon={<Target className="h-4 w-4" />}
-              label="Win rate"
-              value={`${conversion}%`}
-              hint={`${wonDeals.length} won · ${lostDeals.length} lost`}
-              tone="text-amber-600 dark:text-amber-400"
-              bg="bg-amber-500/10"
-            />
+              } />
+            <MetricCard icon={Target} tone="gold" label="Win rate" value={`${conversion}%`} hint={`${wonDeals.length} won · ${lostDeals.length} lost`} />
           </div>
 
           {/* Charts row 1 */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
+            <section className="rounded-card border border-border bg-card p-5 shadow-card">
+              <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold">
+                  <h2 className="text-section font-semibold">
                     {selectedPipeline ? `${selectedPipeline.name} funnel` : "Pipelines"}
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -415,17 +384,15 @@ export default function ReportsPage() {
                       : "Current deals per pipeline · choose a pipeline for its stages"}
                   </p>
                 </div>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                  {formatCurrency(openValue, currency)} open
-                </span>
+                <Tag color="gray">{formatCurrency(openValue, currency)} open</Tag>
               </div>
               <FunnelChart data={funnelData} />
             </section>
 
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
+            <section className="rounded-card border border-border bg-card p-5 shadow-card">
+              <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold">Leads by source</h2>
+                  <h2 className="text-section font-semibold">Leads by source</h2>
                   <p className="text-xs text-muted-foreground">
                     In selected range
                   </p>
@@ -441,10 +408,10 @@ export default function ReportsPage() {
 
           {/* Charts row 2 */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
+            <section className="rounded-card border border-border bg-card p-5 shadow-card">
+              <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold">Won revenue</h2>
+                  <h2 className="text-section font-semibold">Won revenue</h2>
                   <p className="text-xs text-muted-foreground">
                     Daily · {formatCurrency(wonValue, currency)} total
                   </p>
@@ -458,10 +425,10 @@ export default function ReportsPage() {
               )}
             </section>
 
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
+            <section className="rounded-card border border-border bg-card p-5 shadow-card">
+              <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold">New leads</h2>
+                  <h2 className="text-section font-semibold">New leads</h2>
                   <p className="text-xs text-muted-foreground">
                     Daily · {newLeads} total
                   </p>
@@ -476,42 +443,13 @@ export default function ReportsPage() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function Kpi({
-  icon,
-  label,
-  value,
-  hint,
-  tone,
-  bg,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  hint: string;
-  tone: string;
-  bg: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-card p-4">
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${bg} ${tone}`}>
-        {icon}
-      </span>
-      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-2xl font-semibold tracking-tight">{value}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-    </div>
+    </PageShell>
   );
 }
 
 function EmptyHint({ text }: { text: string }) {
   return (
-    <div className="flex h-32 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+    <div className="flex h-32 items-center justify-center rounded-control border border-dashed border-border bg-surface-sunken text-caption text-muted-foreground">
       {text}
     </div>
   );
@@ -520,14 +458,14 @@ function EmptyHint({ text }: { text: string }) {
 function PageSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted/30" />
+          <Skeleton key={i} className="h-24 rounded-card" />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="h-72 animate-pulse rounded-2xl bg-muted/30" />
-        <div className="h-72 animate-pulse rounded-2xl bg-muted/30" />
+        <Skeleton className="h-72 rounded-card" />
+        <Skeleton className="h-72 rounded-card" />
       </div>
     </div>
   );

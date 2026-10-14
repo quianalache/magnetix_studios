@@ -14,6 +14,11 @@ import {
   type QrCodeFormValues,
 } from "@/components/qr-codes/qr-code-builder";
 import { QrScanChart } from "@/components/qr-codes/qr-scan-chart";
+import { Button } from "@/components/ui/button";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { Tag } from "@/components/system/status-pill";
 
 export default function EditQrCodePage() {
   const params = useParams<{ qrId: string }>();
@@ -48,28 +53,28 @@ export default function EditQrCodePage() {
     toast.success("QR code saved.");
   }
 
+  const back = (
+    <Link href={saPath("/qr-codes")} className="inline-flex items-center gap-1 hover:text-foreground">
+      <ArrowLeft className="size-3.5" aria-hidden="true" />
+      Back to QR codes
+    </Link>
+  );
+
   if (loading || subLoading) {
-    return (
-      <div className="mx-auto w-full max-w-4xl space-y-4">
-        <div className="h-7 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-96 animate-pulse rounded-2xl bg-muted/40" />
-      </div>
-    );
+    return <PageShellLoading width="data" />;
   }
 
   if (!code) {
     return (
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-dashed bg-card/50 p-10 text-center">
-        <QrCodeIcon className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-        <h2 className="text-base font-semibold">QR code not found</h2>
-        <Link
-          href={saPath("/qr-codes")}
-          className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to QR codes
-        </Link>
-      </div>
+      <PageShell width="data">
+        <PageHeader breadcrumbs={back} title="QR code" icon={QrCodeIcon} />
+        <EmptyState
+          icon={QrCodeIcon}
+          title="QR code not found"
+          description="It may have been deleted, or the link is wrong."
+          action={<Button variant="outline" render={<Link href={saPath("/qr-codes")} />}>Back to QR codes</Button>}
+        />
+      </PageShell>
     );
   }
 
@@ -77,23 +82,21 @@ export default function EditQrCodePage() {
   const redirectUrl = `${base}/qr/${id}`;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4">
-      <Link
-        href={saPath("/qr-codes")}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3 w-3" />
-        Back to QR codes
-      </Link>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{code.name}</h1>
-        {code.kind === "link" && (
-          <p className="text-sm text-muted-foreground">
-            {code.scanCount} scan{code.scanCount === 1 ? "" : "s"} · short link{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">{redirectUrl}</code>
-          </p>
-        )}
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        breadcrumbs={back}
+        title={code.name}
+        icon={QrCodeIcon}
+        actions={<Tag color={code.kind === "link" ? "violet" : "aqua"}>{code.kind === "link" ? "Link" : "Contact card"}</Tag>}
+        description={
+          code.kind === "link" ? (
+            <>
+              {code.scanCount} scan{code.scanCount === 1 ? "" : "s"} · short link{" "}
+              <code className="rounded-chip bg-surface-sunken px-1.5 py-0.5 font-mono text-caption break-all">{redirectUrl}</code>
+            </>
+          ) : undefined
+        }
+      />
       {code.kind === "link" && <QrScanChart qrId={id} />}
       {isAdmin ? (
         <QrCodeBuilder
@@ -113,10 +116,10 @@ export default function EditQrCodePage() {
           redirectUrl={code.kind === "link" ? redirectUrl : undefined}
         />
       ) : (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body-sm text-muted-foreground">
           Only sub-account admins can edit QR codes.
         </p>
       )}
-    </div>
+    </PageShell>
   );
 }

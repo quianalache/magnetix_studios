@@ -4,11 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SettingsSection } from "@/components/system/settings-section";
+import { EmptyState } from "@/components/system/empty-state";
 
 import { QuoteBuilder, type QuoteFormValues } from "@/components/quotes/quote-builder";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
@@ -118,79 +124,64 @@ export default function NewQuotePage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          New {kind}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {kind === "invoice"
+    <PageShell width="data">
+      <PageHeader
+        breadcrumbs={
+          <Link href={saPath("/quotes")} className="inline-flex items-center gap-1 hover:text-foreground">
+            <ChevronLeft className="size-3.5" aria-hidden="true" /> Invoices and Quotes
+          </Link>
+        }
+        title={`New ${kind}`}
+        description={
+          kind === "invoice"
             ? "Build the line items and totals. Save as draft now — sending generates a payment link and emails the recipient."
-            : "Build the line items, totals, and terms. Save as a draft now — send to the recipient when you're ready."}
-        </p>
-      </div>
+            : "Build the line items, totals, and terms. Save as a draft now — send to the recipient when you're ready."
+        }
+      />
 
-      <Card className="p-5">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-          Type
-        </Label>
-        <div className="mt-2 inline-flex rounded-lg border bg-muted/30 p-1">
-          {(["quote", "invoice"] as QuoteKind[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKind(k)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${
-                kind === k
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {kind === "invoice"
+      <SettingsSection
+        title="Type"
+        description={
+          kind === "invoice"
             ? "Skip the estimate step — go straight to a payable invoice."
-            : "Send an estimate that the recipient can accept or decline. Convert to an invoice once accepted."}
-        </p>
-      </Card>
+            : "Send an estimate that the recipient can accept or decline. Convert to an invoice once accepted."
+        }
+      >
+        <SegmentedControl<QuoteKind>
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: "quote", label: "Quote" },
+            { value: "invoice", label: "Invoice" },
+          ]}
+          className="self-start"
+        />
+      </SettingsSection>
 
       {kind === "invoice" && noPaymentMethodConnected && (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div className="flex-1 text-sm">
-            <p className="font-semibold text-amber-700 dark:text-amber-400">
-              No payment method connected for this workspace.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              You can save this invoice as a draft, but you won&apos;t be
-              able to send it until Stripe or PayPal is connected — the
-              payment link is generated at send time.{" "}
-              <Link
-                href={saPath("/dashboard/settings?section=payments")}
-                className="font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-400"
-              >
-                Connect a payment method →
-              </Link>
-            </p>
-          </div>
-        </div>
+        <Alert tone="warning" title="No payment method connected for this workspace.">
+          You can save this invoice as a draft, but you won&apos;t be able to send it until Stripe or PayPal is
+          connected — the payment link is generated at send time.{" "}
+          <Link
+            href={saPath("/dashboard/settings?section=payments")}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            Connect a payment method →
+          </Link>
+        </Alert>
       )}
 
       {contacts.length === 0 ? (
-        <Card className="p-5">
-          <p className="text-sm text-muted-foreground">
-            No contacts in this sub-account yet.{" "}
-            <a
-              className="text-primary underline"
-              href={saPath("/contacts")}
-            >
-              Add a contact first.
-            </a>
-          </p>
-        </Card>
+        <EmptyState
+          compact
+          title="No contacts in this sub-account yet"
+          description="Quotes and invoices go to a contact."
+          action={
+            <Button variant="outline" size="sm" render={<Link href={saPath("/contacts")} />}>
+              Add a contact first
+            </Button>
+          }
+        />
       ) : (
         <>
           <QuoteBuilder
@@ -205,12 +196,12 @@ export default function NewQuotePage() {
             saveLabel={submitting ? "Creating…" : "Create draft"}
           />
           {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <Alert tone="danger" title="Couldn't create it">
               {error}
-            </p>
+            </Alert>
           )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

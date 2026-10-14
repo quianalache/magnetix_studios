@@ -29,13 +29,13 @@ export function SocialConnections() {
 
   return (
     <section className="space-y-4">
-      <div className="rounded-2xl border bg-card p-5">
+      <div className="rounded-card border border-border bg-card p-5 shadow-card">
         <header className="mb-4 flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
             <Facebook className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold">Connected account</h2>
+            <h2 className="text-section font-semibold">Connected account</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               The Social Planner publishes through the same Facebook /
               Instagram connection as your inbox. Manage that connection in
@@ -44,7 +44,7 @@ export function SocialConnections() {
           </div>
         </header>
 
-        <div className="rounded-lg border bg-background p-4">
+        <div className="rounded-control border border-border bg-surface-sunken p-4">
           {canPublish ? (
             <div className="space-y-1">
               <p className="flex items-center gap-2 text-sm font-medium">

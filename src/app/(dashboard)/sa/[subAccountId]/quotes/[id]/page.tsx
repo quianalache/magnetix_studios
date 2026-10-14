@@ -2,11 +2,13 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageShell } from "@/components/system/page-shell";
+import { EmptyState } from "@/components/system/empty-state";
 import { ChevronLeft } from "lucide-react";
 
 import { QuoteDetail } from "@/components/quotes/quote-detail";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getContact } from "@/lib/firestore/contacts";
@@ -58,31 +60,27 @@ export default function QuoteDetailPage({ params }: PageProps) {
     };
   }, [quote?.contactId]);
 
+  const back = (
+    <Link href={saPath("/quotes")} className="inline-flex items-center gap-1 text-body-sm text-muted-foreground hover:text-foreground">
+      <ChevronLeft className="size-4" aria-hidden="true" />
+      Back to quotes
+    </Link>
+  );
+
   if (loadingQuote) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-6">
-        <Card className="text-muted-foreground p-8 text-center text-sm">
-          Loading quote…
-        </Card>
-      </div>
+      <PageShell width="data">
+        <Skeleton className="h-64 w-full rounded-card" aria-label="Loading quote" />
+      </PageShell>
     );
   }
 
   if (!quote) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-6">
-        <Button
-          render={<Link href={saPath("/quotes")} />}
-          variant="ghost"
-          size="sm"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to quotes
-        </Button>
-        <Card className="text-muted-foreground p-8 text-center text-sm">
-          Quote not found. It may have been deleted.
-        </Card>
-      </div>
+      <PageShell width="data">
+        {back}
+        <EmptyState compact title="Quote not found" description="It may have been deleted." />
+      </PageShell>
     );
   }
 
@@ -91,16 +89,8 @@ export default function QuoteDetailPage({ params }: PageProps) {
     : "(loading…)";
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 p-6">
-      <Button
-        render={<Link href={saPath("/quotes")} />}
-        variant="ghost"
-        size="sm"
-        className="-ml-2"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to quotes
-      </Button>
+    <PageShell width="data" className="gap-4">
+      {back}
 
       <QuoteDetail
         quote={quote}
@@ -109,6 +99,6 @@ export default function QuoteDetailPage({ params }: PageProps) {
         contactEmail={contact?.email || undefined}
         listHref={saPath("/quotes")}
       />
-    </div>
+    </PageShell>
   );
 }

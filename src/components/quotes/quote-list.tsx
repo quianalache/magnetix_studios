@@ -5,8 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FileText } from "lucide-react";
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+
 import { computeQuoteTotals, effectiveQuoteStatus } from "@/lib/quotes/calc";
 import { subscribeToQuotes } from "@/lib/firestore/quotes";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
@@ -14,6 +13,12 @@ import { formatCurrency, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Quote, QuoteStatus } from "@/types/quotes";
 import type { TenantScope } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/system/empty-state";
+import { FilterBar } from "@/components/system/filter-bar";
+import { SearchField } from "@/components/system/search-field";
+import { Tag } from "@/components/system/status-pill";
+import { DATA_TABLE_HEAD_ROW } from "@/components/system/data-table";
 
 /**
  * Sub-account-wide quote list. Subscribes to all quotes in the active
@@ -110,82 +115,66 @@ export function QuoteList({ scope, contacts }: QuoteListProps) {
   }, [quotes, filter, search, contacts]);
 
   if (loading) {
-    return (
-      <Card className="text-muted-foreground p-8 text-center text-sm">
-        Loading quotes…
-      </Card>
-    );
+    return <Skeleton className="h-64 w-full rounded-card" aria-label="Loading quotes" />;
   }
 
   if (quotes.length === 0) {
     return (
-      <Card className="flex flex-col items-center gap-3 p-10 text-center">
-        <span className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
-          <FileText className="h-5 w-5" />
-        </span>
-        <p className="text-sm font-medium">No quotes or invoices yet</p>
-        <p className="text-muted-foreground max-w-md text-xs">
-          Use &ldquo;New quote&rdquo; to create one. Pick the
-          <strong> Quote</strong> type to send an estimate, or{" "}
-          <strong>Invoice</strong> to bill directly.
-        </p>
-      </Card>
+      <EmptyState
+        icon={FileText}
+        title="No quotes or invoices yet"
+        description={
+          <>
+            Use &ldquo;New quote&rdquo; to create one. Pick the <strong>Quote</strong> type to send an estimate, or{" "}
+            <strong>Invoice</strong> to bill directly.
+          </>
+        }
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Filter chips + search */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1.5">
-          {STATUS_CHIPS.map((chip) => {
-            const isActive = filter === chip.value;
-            const count = statusCounts[chip.value] ?? 0;
-            if (chip.value !== "all" && count === 0 && !isActive) return null;
-            return (
-              <button
-                key={chip.value}
-                type="button"
-                onClick={() => setFilter(chip.value)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  isActive
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted"
-                )}
-              >
-                {chip.label}
-                <span
-                  className={cn(
-                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                    isActive
-                      ? "bg-primary/20 text-primary"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search quote number, contact, organization…"
-          className="w-full sm:w-64"
-        />
-      </div>
+      <FilterBar
+        search={
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Search quote number, contact, organization…"
+            aria-label="Search quotes and invoices"
+          />
+        }
+        filters={STATUS_CHIPS.map((chip) => {
+          const isActive = filter === chip.value;
+          const count = statusCounts[chip.value] ?? 0;
+          if (chip.value !== "all" && count === 0 && !isActive) return null;
+          return (
+            <button
+              key={chip.value}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => setFilter(chip.value)}
+              className={cn(
+                "inline-flex h-(--ds-control-sm) items-center gap-1.5 rounded-control border px-3 text-caption font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                isActive
+                  ? "border-violet-ds-300 bg-accent text-accent-foreground"
+                  : "border-border bg-background text-foreground hover:bg-muted",
+              )}
+            >
+              {chip.label}
+              <span className="tabular-nums text-muted-foreground">{count}</span>
+            </button>
+          );
+        })}
+      />
 
       {filtered.length === 0 ? (
-        <Card className="text-muted-foreground p-6 text-center text-sm">
-          No quotes match this filter.
-        </Card>
+        <EmptyState compact title="No quotes match this filter" />
       ) : (
-        <Card className="overflow-hidden">
-          {/* Header */}
-          <div className="bg-muted/40 text-muted-foreground hidden grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] gap-3 border-b px-4 py-2.5 text-xs font-semibold tracking-wider uppercase sm:grid">
+        <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
+          {/* Header — the approved plum index band */}
+          <div className={cn(DATA_TABLE_HEAD_ROW, "hidden grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] gap-3 px-4 py-3 sm:grid")}>
             <div>Number</div>
             <div>Type</div>
             <div>Recipient</div>
@@ -194,63 +183,43 @@ export function QuoteList({ scope, contacts }: QuoteListProps) {
             <div className="text-right">Updated</div>
           </div>
           {/* Rows */}
-          <ul className="divide-y">
+          <ul className="divide-y divide-border-subtle">
             {filtered.map((q) => {
               const eff = effectiveQuoteStatus(q);
               const totals = computeQuoteTotals(q);
               const contact = contacts[q.contactId];
-              const recipient =
-                contact?.name || contact?.email || "(deleted contact)";
+              const recipient = contact?.name || contact?.email || "(deleted contact)";
               const isInvoice = q.kind === "invoice";
               return (
                 <li key={q.id}>
                   <Link
                     href={`/sa/${scope.subAccountId}/quotes/${q.id}`}
-                    className="hover:bg-muted/30 grid grid-cols-2 gap-2 px-4 py-3 text-sm transition-colors sm:grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] sm:items-center"
+                    className="grid grid-cols-2 gap-2 px-4 py-3 text-body-sm transition-colors outline-none hover:bg-tint-violet focus-visible:bg-tint-violet sm:grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] sm:items-center"
                   >
-                    <div className="text-foreground font-mono text-xs font-semibold sm:text-sm">
-                      {q.quoteNumber}
+                    <div className="font-mono text-caption font-semibold text-foreground sm:text-body-sm">{q.quoteNumber}</div>
+                    <div>
+                      <Tag color={isInvoice ? "green" : "violet"}>{isInvoice ? "Invoice" : "Quote"}</Tag>
                     </div>
-                    <div className="sm:order-none">
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase",
-                          isInvoice
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                            : "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-                        )}
-                      >
-                        {isInvoice ? "Invoice" : "Quote"}
-                      </span>
-                    </div>
-                    <div className="text-foreground truncate sm:order-none">
+                    <div className="truncate text-foreground">
                       <p className="truncate font-medium">{recipient}</p>
                       {contact?.name && contact.email && (
-                        <p className="text-muted-foreground truncate text-[11px]">
-                          {contact.email}
-                        </p>
+                        <p className="truncate text-caption text-muted-foreground">{contact.email}</p>
                       )}
                       {q.billedToOrganization && (
-                        <p className="text-muted-foreground truncate text-[11px]">
-                          {q.billedToOrganization}
-                        </p>
+                        <p className="truncate text-caption text-muted-foreground">{q.billedToOrganization}</p>
                       )}
                     </div>
-                    <div className="sm:order-none">
+                    <div>
                       <QuoteStatusBadge status={eff} />
                     </div>
-                    <div className="text-right font-medium tabular-nums sm:order-none">
-                      {formatCurrency(totals.total, q.currency)}
-                    </div>
-                    <div className="text-muted-foreground text-right text-xs sm:order-none">
-                      {formatRelativeTime(q.updatedAt)}
-                    </div>
+                    <div className="text-right font-medium tabular-nums text-foreground">{formatCurrency(totals.total, q.currency)}</div>
+                    <div className="text-right text-caption text-muted-foreground">{formatRelativeTime(q.updatedAt)}</div>
                   </Link>
                 </li>
               );
             })}
           </ul>
-        </Card>
+        </div>
       )}
     </div>
   );

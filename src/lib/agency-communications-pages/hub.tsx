@@ -1,8 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
-import { Mail, FileText, ArrowRight } from "lucide-react";
+import { Mail, FileText, Lock } from "lucide-react";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { NavCard } from "@/components/system/nav-card";
+import { EmptyState } from "@/components/system/empty-state";
 
 /**
  * Agency → Communications hub — Magnetix Studios' own Broadcasts + Email
@@ -18,49 +21,37 @@ export default function AgencyCommunicationsHubPage() {
   if (authLoading) return null;
   if (!isOwner) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-          Communications is managed by the agency owner.
-        </div>
-      </div>
+      <PageShell width="data">
+        <EmptyState icon={Lock} title="Owner only" description="Communications is managed by the agency owner." />
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Communications</h1>
-        <p className="text-sm text-muted-foreground">
-          Reach Magnetix customers, Agency Community members, and course/offer buyers — sent as Magnetix Studios.
-        </p>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        title="Communications"
+        description="Reach Magnetix customers, Agency Community members, and course/offer buyers — sent as Magnetix Studios."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/agency/communications/broadcasts" className="group rounded-2xl border bg-card p-5 transition hover:border-primary/50 hover:bg-accent/40">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              <Mail className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="font-semibold">Broadcasts</h2>
-              <p className="text-xs text-muted-foreground">Compose and send email to a real Agency audience.</p>
-            </div>
-            <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-          </div>
-        </Link>
-        <Link href="/agency/communications/templates" className="group rounded-2xl border bg-card p-5 transition hover:border-primary/50 hover:bg-accent/40">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
-              <FileText className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="font-semibold">Email Templates</h2>
-              <p className="text-xs text-muted-foreground">Reusable Magnetix-branded templates for announcements.</p>
-            </div>
-            <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-          </div>
-        </Link>
+        <NavCard
+          href="/agency/communications/broadcasts"
+          icon={Mail}
+          tone="blue"
+          title="Broadcasts"
+          description="Compose and send email to a real Agency audience."
+          actionLabel="Go to Broadcasts"
+        />
+        <NavCard
+          href="/agency/communications/templates"
+          icon={FileText}
+          tone="violet"
+          title="Email Templates"
+          description="Reusable Magnetix-branded templates for announcements."
+          actionLabel="Go to Email Templates"
+        />
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -11,8 +11,13 @@ import { Motif, type MotifKind } from "@/components/brand/motif";
  * variant="moment" — approved moment pages only (Dashboard, Energetic Decoder
  *   editorial surfaces, selected index/landing moments): DM Serif Display
  *   title and an optional motif (one per page; see MOTIF_FOR in
- *   components/brand/motif.tsx). The motif slot does not exist on the
- *   operational variant, by design.
+ *   components/brand/motif.tsx). The full-size motif slot does not exist on
+ *   the operational variant, by design.
+ *
+ * `accent` (operational only) is the small 40px family motif for index pages
+ * (crescent) and reporting overviews (orbit) — Wave 1 migration, 2026-10-14.
+ * Hidden on phones; still one motif per page, so don't combine it with a
+ * `sparks` EmptyState.
  *
  * Owns the page's single <h1>.
  */
@@ -31,13 +36,14 @@ type Common = {
 };
 
 export type PageHeaderProps =
-  | (Common & { variant?: "operational" })
+  | (Common & { variant?: "operational"; accent?: "crescent" | "orbit" })
   | (Common & { variant: "moment"; motif?: MotifKind });
 
 export function PageHeader(props: PageHeaderProps) {
   const { title, description, eyebrow, breadcrumbs, actions, icon: Icon, className } = props;
   const moment = props.variant === "moment";
   const motif = moment ? props.motif : undefined;
+  const accent = !moment ? props.accent : undefined;
   return (
     <header
       data-page-header={moment ? "moment" : "operational"}
@@ -69,7 +75,12 @@ export function PageHeader(props: PageHeaderProps) {
             {description ? <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions || accent ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {accent ? <Motif kind={accent} size="corner" placement="static" hideBelow="sm" className="mr-1" /> : null}
+            {actions}
+          </div>
+        ) : null}
       </div>
     </header>
   );

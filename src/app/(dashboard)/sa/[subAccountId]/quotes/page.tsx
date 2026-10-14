@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
 import { FileText, Receipt } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,37 +38,29 @@ export default function QuotesPage() {
   }, [contacts]);
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Invoices and Quotes
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Send branded invoices for payment or quotes for review. Recipients
-            view on a shareable link; invoices include a PayPal payment link,
-            quotes get accepted/declined.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            render={<Link href={saPath("/quotes/new")} />}
-          >
-            <FileText className="h-4 w-4" />
-            New quote
-          </Button>
-          <Button render={<Link href={saPath("/quotes/new?kind=invoice")} />}>
-            <Receipt className="h-4 w-4" />
-            New invoice
-          </Button>
-        </div>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        accent="crescent"
+        title="Invoices and Quotes"
+        description="Send branded invoices for payment or quotes for review. Recipients view on a shareable link; invoices include a PayPal payment link, quotes get accepted/declined."
+        actions={
+          <>
+            <Button variant="outline" render={<Link href={saPath("/quotes/new")} />}>
+              <FileText className="size-4" aria-hidden="true" />
+              New quote
+            </Button>
+            <Button render={<Link href={saPath("/quotes/new?kind=invoice")} />}>
+              <Receipt className="size-4" aria-hidden="true" />
+              New invoice
+            </Button>
+          </>
+        }
+      />
 
       <QuoteList
         scope={{ agencyId: agencyId ?? "", subAccountId }}
         contacts={contactsById}
       />
-    </div>
+    </PageShell>
   );
 }

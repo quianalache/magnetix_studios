@@ -4,8 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlarmClockCheck, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { Alert } from "@/components/ui/alert";
+import { StatusPill } from "@/components/system/status-pill";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
@@ -21,6 +24,10 @@ import type {
  */
 
 const THRESHOLD_OPTIONS = [1, 2, 3, 6, 12, 24] as const;
+const THRESHOLD_ITEMS: Record<string, string> = Object.fromEntries(
+  THRESHOLD_OPTIONS.map((h) => [String(h), `${h} hour${h === 1 ? "" : "s"}+`]),
+);
+const HOUR_ITEMS: Record<string, string> = Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h), `${h}:00`]));
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
@@ -129,26 +136,17 @@ export function WatchdogSection() {
   const lastRun = runs[0] ?? null;
 
   return (
-    <div className="rounded-2xl border bg-card p-6">
+    <div className="rounded-card border border-border bg-card p-5 shadow-card sm:p-6">
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-tag-gold-bg text-tag-gold-fg">
           <AlarmClockCheck className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold">Inbox Follow-up Watchdog</h2>
-            <span
-              className={
-                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
-                (config?.enabled
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "border text-muted-foreground")
-              }
-            >
-              {config?.enabled ? "Active" : "Off"}
-            </span>
+            <h2 className="text-section font-semibold">Inbox Follow-up Watchdog</h2>
+            <StatusPill tone={config?.enabled ? "success" : "neutral"}>{config?.enabled ? "Active" : "Off"}</StatusPill>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-body-sm text-muted-foreground">
             Checks your unified inbox every hour, spots inbound conversations
             that have gone unanswered too long, and judges which ones genuinely
             need a human — then creates a follow-up task and sends a push
@@ -169,12 +167,12 @@ export function WatchdogSection() {
       ) : (
         <div className="mt-5 space-y-4">
           {!aiGateOn && (
-            <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            <Alert tone="warning">
               The watchdog needs the <strong>AI Suite</strong> enabled for this
               workspace (it spends your agency&apos;s AI credits). Ask your
               agency owner to enable it from the Manage panel before switching
               the watchdog on.
-            </p>
+            </Alert>
           )}
 
           <label className="flex cursor-pointer items-start gap-2.5">
@@ -198,18 +196,23 @@ export function WatchdogSection() {
               <Label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Flag conversations unanswered for
               </Label>
-              <select
-                value={thresholdHours}
-                onChange={(e) => setThresholdHours(Number(e.target.value))}
+              <Select
+                value={String(thresholdHours)}
+                onValueChange={(value) => value != null && setThresholdHours(Number(value))}
+                items={THRESHOLD_ITEMS}
                 disabled={saving}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground"
               >
-                {THRESHOLD_OPTIONS.map((h) => (
-                  <option key={h} value={h}>
-                    {h} hour{h === 1 ? "" : "s"}+
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Alert threshold" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(THRESHOLD_ITEMS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -221,31 +224,41 @@ export function WatchdogSection() {
                   onCheckedChange={(v) => setQuietOn(v === true)}
                   disabled={saving}
                 />
-                <select
-                  value={quietStart}
-                  onChange={(e) => setQuietStart(Number(e.target.value))}
-                  disabled={saving || !quietOn}
-                  className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground"
-                >
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <option key={h} value={h}>
-                      {h}:00
-                    </option>
+                <Select
+                value={String(quietStart)}
+                onValueChange={(value) => value != null && setQuietStart(Number(value))}
+                items={HOUR_ITEMS}
+                disabled={saving || !quietOn}
+              >
+                <SelectTrigger aria-label="Quiet hours start" className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(HOUR_ITEMS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
                   ))}
-                </select>
+                </SelectContent>
+              </Select>
                 <span className="text-xs text-muted-foreground">to</span>
-                <select
-                  value={quietEnd}
-                  onChange={(e) => setQuietEnd(Number(e.target.value))}
-                  disabled={saving || !quietOn}
-                  className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground"
-                >
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <option key={h} value={h}>
-                      {h}:00
-                    </option>
+                <Select
+                value={String(quietEnd)}
+                onValueChange={(value) => value != null && setQuietEnd(Number(value))}
+                items={HOUR_ITEMS}
+                disabled={saving || !quietOn}
+              >
+                <SelectTrigger aria-label="Quiet hours end" className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(HOUR_ITEMS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
                   ))}
-                </select>
+                </SelectContent>
+              </Select>
               </div>
             </div>
           </div>
@@ -265,7 +278,7 @@ export function WatchdogSection() {
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {lastRun
                 ? `Last run ${relativeTime(lastRun.startedAt)} — ${
                     lastRun.status === "completed"
@@ -290,7 +303,7 @@ export function WatchdogSection() {
 
           {runs.length > 0 && (
             <div className="border-t pt-3">
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1.5 text-caption font-medium uppercase tracking-wide text-muted-foreground">
                 Recent runs
               </p>
               <ul className="space-y-1">
@@ -302,24 +315,24 @@ export function WatchdogSection() {
                     <span className="w-16 shrink-0 tabular-nums">
                       {relativeTime(r.startedAt)}
                     </span>
-                    <span
-                      className={
-                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase " +
-                        (r.status === "completed"
+                    <StatusPill
+                      tone={
+                        r.status === "completed"
                           ? r.flagged > 0
-                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                            : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            ? "warning"
+                            : "success"
                           : r.status === "skipped"
-                            ? "bg-muted"
-                            : "bg-destructive/10 text-destructive")
+                            ? "neutral"
+                            : "danger"
                       }
+                      className="capitalize"
                     >
                       {r.status === "completed"
                         ? r.flagged > 0
                           ? `${r.flagged} flagged`
                           : "all clear"
                         : r.status}
-                    </span>
+                    </StatusPill>
                     <span className="min-w-0 flex-1 truncate">
                       {r.status === "completed"
                         ? r.actions.length > 0

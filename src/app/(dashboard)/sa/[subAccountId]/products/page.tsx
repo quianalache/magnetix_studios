@@ -19,6 +19,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToProducts } from "@/lib/firestore/products";
 import type { Product } from "@/types/products";
+import { Switch } from "@/components/ui/switch";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { StatusPill } from "@/components/system/status-pill";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
+import { DataTableShell, DATA_TABLE_HEAD_ROW, DATA_TABLE_ROW, DATA_TABLE_TD, DATA_TABLE_TH } from "@/components/system/data-table";
 
 /**
  * Sub-account product catalog. Operator creates reusable products here;
@@ -56,62 +62,49 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Reusable line items for quotes and invoices. Snapshotted into each
-            document at the moment of add — editing a product never changes
-            historical quotes or invoices.
-          </p>
-        </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" />
-          New product
-        </Button>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        accent="crescent"
+        title="Products"
+        description="Reusable line items for quotes and invoices. Snapshotted into each document at the moment of add — editing a product never changes historical quotes or invoices."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" aria-hidden="true" />
+            New product
+          </Button>
+        }
+      />
 
       {archivedCount > 0 && (
-        <div className="flex items-center gap-2 text-xs">
-          <label className="flex items-center gap-2 text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
-              className="h-3.5 w-3.5"
-            />
+        <div className="flex items-center gap-2.5">
+          <Switch id="show-archived" checked={showArchived} onCheckedChange={setShowArchived} />
+          <Label htmlFor="show-archived" className="font-medium text-muted-foreground">
             Show archived ({archivedCount})
-          </label>
+          </Label>
         </div>
       )}
 
       {visible.length === 0 ? (
         <EmptyState onCreate={() => setCreating(true)} />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border bg-card">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">Description</th>
-                <th className="px-4 py-2.5 text-right font-medium">Price</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((p) => (
-                <ProductRow
-                  key={p.id}
-                  product={p}
-                  subAccountId={subAccountId}
-                  onEdit={() => setEditing(p)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTableShell minWidth="40rem">
+          <thead>
+            <tr className={DATA_TABLE_HEAD_ROW}>
+              <th className={DATA_TABLE_TH}>Name</th>
+              <th className={DATA_TABLE_TH}>Description</th>
+              <th className={`${DATA_TABLE_TH} text-right`}>Price</th>
+              <th className={DATA_TABLE_TH}>Status</th>
+              <th className={DATA_TABLE_TH}>
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((p) => (
+              <ProductRow key={p.id} product={p} subAccountId={subAccountId} onEdit={() => setEditing(p)} />
+            ))}
+          </tbody>
+        </DataTableShell>
       )}
 
       <ProductDialog
@@ -123,23 +116,23 @@ export default function ProductsPage() {
           setEditing(null);
         }}
       />
-    </div>
+    </PageShell>
   );
 }
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-2xl border bg-card p-12 text-center">
-      <Package className="mx-auto h-10 w-10 text-muted-foreground" />
-      <h2 className="mt-4 text-base font-semibold">No products yet</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Add your first product to start building quotes and invoices.
-      </p>
-      <Button onClick={onCreate} className="mt-4">
-        <Plus className="h-4 w-4" />
-        New product
-      </Button>
-    </div>
+    <SystemEmptyState
+      icon={Package}
+      title="No products yet"
+      description="Add your first product to start building quotes and invoices."
+      action={
+        <Button onClick={onCreate}>
+          <Plus className="size-4" aria-hidden="true" />
+          New product
+        </Button>
+      }
+    />
   );
 }
 
@@ -181,30 +174,20 @@ function ProductRow({
   }
 
   return (
-    <tr className="border-b last:border-0">
-      <td className="px-4 py-3 font-medium">{product.name}</td>
-      <td className="max-w-md truncate px-4 py-3 text-muted-foreground">
-        {product.description || (
-          <span className="italic text-muted-foreground/60">No description</span>
-        )}
+    <tr className={DATA_TABLE_ROW}>
+      <td className={`${DATA_TABLE_TD} font-medium text-foreground`}>{product.name}</td>
+      <td className={`${DATA_TABLE_TD} max-w-md truncate text-muted-foreground`}>
+        {product.description || <span className="italic text-ink-tertiary">No description</span>}
       </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+      <td className={`${DATA_TABLE_TD} whitespace-nowrap text-right tabular-nums text-foreground`}>
         {formatPrice(product.unitPriceCents, product.currency)}
       </td>
-      <td className="px-4 py-3">
-        {product.active ? (
-          <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-            Active
-          </span>
-        ) : (
-          <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            Archived
-          </span>
-        )}
+      <td className={DATA_TABLE_TD}>
+        <StatusPill tone={product.active ? "success" : "neutral"}>{product.active ? "Active" : "Archived"}</StatusPill>
       </td>
-      <td className="px-4 py-3">
+      <td className={DATA_TABLE_TD}>
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="ghost" onClick={onEdit}>
+          <Button size="sm" variant="ghost" onClick={onEdit} aria-label={`Edit ${product.name}`}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button
@@ -213,6 +196,7 @@ function ProductRow({
             disabled={busy}
             onClick={toggleArchive}
             title={product.active ? "Archive" : "Restore"}
+            aria-label={`${product.active ? "Archive" : "Restore"} ${product.name}`}
           >
             {busy ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

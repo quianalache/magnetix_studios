@@ -2,9 +2,15 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert } from "@/components/ui/alert";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { SearchField } from "@/components/system/search-field";
+import { DataTableShell, DATA_TABLE_HEAD_ROW, DATA_TABLE_ROW, DATA_TABLE_TD, DATA_TABLE_TH } from "@/components/system/data-table";
+import { ArrowLeft } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { Input } from "@/components/ui/input";
 
 interface AdminPollVote {
   memberId: string;
@@ -82,83 +88,93 @@ export default function PollResponsesPage({
   }, [detail, query]);
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
-      <Link
-        href={saPath("/forms/community-polls")}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Community Polls
-      </Link>
-
+    <PageShell width="data">
       {loading ? (
-        <div className="h-40 animate-pulse rounded-2xl border bg-muted/30" />
+        <PageShellLoadingBlock />
       ) : error ? (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-10 text-center">
-          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
-          <p className="text-sm font-medium text-destructive">Couldn&apos;t load this poll</p>
-          <p className="mt-1 text-xs text-muted-foreground">{error}</p>
-        </div>
+        <>
+          <BackLink href={saPath("/forms/community-polls")} />
+          <Alert tone="danger" title="Couldn't load this poll">
+            {error}
+          </Alert>
+        </>
       ) : !detail ? (
-        <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          Poll not found.
-        </div>
+        <>
+          <BackLink href={saPath("/forms/community-polls")} />
+          <EmptyState compact title="Poll not found" />
+        </>
       ) : (
         <>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{detail.groupName}</p>
-            <h1 className="text-xl font-bold tracking-tight">{detail.postTitle}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {detail.votes.length} {detail.votes.length === 1 ? "response" : "responses"} ·{" "}
-              {detail.allowMultiple ? "Multiple answers allowed" : "Single answer"} ·{" "}
-              {detail.showResults ? "Results visible to members" : "Results hidden from members"} ·{" "}
-              {detail.closed ? "Closed" : "Open"}
-            </p>
-          </div>
+          <PageHeader
+            breadcrumbs={
+              <Link href={saPath("/forms/community-polls")} className="inline-flex items-center gap-1 hover:text-foreground">
+                <ArrowLeft className="size-3.5" aria-hidden="true" /> Community Polls
+              </Link>
+            }
+            eyebrow={detail.groupName}
+            title={detail.postTitle}
+            description={
+              <>
+                {detail.votes.length} {detail.votes.length === 1 ? "response" : "responses"} ·{" "}
+                {detail.allowMultiple ? "Multiple answers allowed" : "Single answer"} ·{" "}
+                {detail.showResults ? "Results visible to members" : "Results hidden from members"} ·{" "}
+                {detail.closed ? "Closed" : "Open"}
+              </>
+            }
+          />
 
-          <div className="relative max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by member name…"
-              className="pl-8"
-            />
-          </div>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Search by member name…"
+            aria-label="Search by member name"
+            className="sm:max-w-xs"
+          />
 
-          <div className="overflow-x-auto rounded-2xl border">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <DataTableShell minWidth="36rem">
+            <thead>
+              <tr className={DATA_TABLE_HEAD_ROW}>
+                <th className={DATA_TABLE_TH}>Member</th>
+                <th className={DATA_TABLE_TH}>Selected</th>
+                <th className={DATA_TABLE_TH}>Voted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredVotes.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">Member</th>
-                  <th className="px-4 py-2.5 font-medium">Selected</th>
-                  <th className="px-4 py-2.5 font-medium">Voted</th>
+                  <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                    {query ? "No members match that search." : "No votes yet."}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredVotes.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
-                      {query ? "No members match that search." : "No votes yet."}
+              ) : (
+                filteredVotes.map((v) => (
+                  <tr key={v.memberId} className={DATA_TABLE_ROW}>
+                    <td className={`${DATA_TABLE_TD} font-medium text-foreground`}>{v.memberDisplayName}</td>
+                    <td className={`${DATA_TABLE_TD} text-muted-foreground`}>
+                      {v.optionIds.map((id) => optionText.get(id) ?? id).join(", ") || "—"}
+                    </td>
+                    <td className={`${DATA_TABLE_TD} text-muted-foreground`}>
+                      {v.votedAtMs ? new Date(v.votedAtMs).toLocaleString() : "—"}
                     </td>
                   </tr>
-                ) : (
-                  filteredVotes.map((v) => (
-                    <tr key={v.memberId} className="border-b last:border-0">
-                      <td className="px-4 py-2.5 font-medium">{v.memberDisplayName}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">
-                        {v.optionIds.map((id) => optionText.get(id) ?? id).join(", ") || "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-muted-foreground">
-                        {v.votedAtMs ? new Date(v.votedAtMs).toLocaleString() : "—"}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </DataTableShell>
         </>
       )}
-    </div>
+    </PageShell>
   );
+}
+
+function BackLink({ href }: { href: string }) {
+  return (
+    <Link href={href} className="inline-flex items-center gap-1 text-body-sm text-muted-foreground hover:text-foreground">
+      <ArrowLeft className="size-4" aria-hidden="true" /> Community Polls
+    </Link>
+  );
+}
+
+function PageShellLoadingBlock() {
+  return <Skeleton className="h-40 rounded-card" />;
 }

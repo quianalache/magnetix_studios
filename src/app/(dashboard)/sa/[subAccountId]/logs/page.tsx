@@ -1,4 +1,5 @@
 import { LogsView } from "@/components/logs/logs-view";
+import { PageShell } from "@/components/system/page-shell";
 
 /**
  * Sub-account Logs — read-only delivery + request history for the public
@@ -7,8 +8,8 @@ import { LogsView } from "@/components/logs/logs-view";
  */
 export default function LogsPage() {
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl rounded-2xl">
+    <PageShell width="data">
       <LogsView />
-    </div>
+    </PageShell>
   );
 }

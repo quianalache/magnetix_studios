@@ -219,7 +219,7 @@ export function SocialPostComposer({
                 onChange={(e) => setCaption(e.target.value)}
                 placeholder="What do you want to share?"
               />
-              <p className="text-right text-[11px] text-muted-foreground">
+              <p className="text-right text-caption text-muted-foreground">
                 {caption.length}/{SOCIAL_CAPTION_MAX}
               </p>
             </div>
@@ -243,7 +243,7 @@ export function SocialPostComposer({
                     <input id="sp-media-upload" type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { void uploadImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
                   </div>
                 )}
-                <p className="mt-2 text-[11px] text-muted-foreground">Instagram feed posts require media. New uploads remain private until an administrator approves public delivery in Assets.</p>
+                <p className="mt-2 text-caption text-muted-foreground">Instagram feed posts require media. New uploads remain private until an administrator approves public delivery in Assets.</p>
               </div>
             </div>
 
@@ -266,7 +266,7 @@ export function SocialPostComposer({
                   <Facebook className="h-4 w-4 text-blue-500" />
                   Facebook Page
                   {!canFacebook && (
-                    <span className="ml-auto text-[11px] text-muted-foreground">
+                    <span className="ml-auto text-caption text-muted-foreground">
                       Connect a Page first
                     </span>
                   )}
@@ -287,7 +287,7 @@ export function SocialPostComposer({
                   <Instagram className="h-4 w-4 text-pink-500" />
                   Instagram
                   {!canInstagram && (
-                    <span className="ml-auto text-[11px] text-muted-foreground">
+                    <span className="ml-auto text-caption text-muted-foreground">
                       No IG account linked
                     </span>
                   )}
@@ -319,7 +319,7 @@ export function SocialPostComposer({
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 Leave blank to keep it as a draft.
               </p>
             </div>
@@ -349,7 +349,7 @@ export function SocialPostComposer({
                 />
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               Approximate — exact rendering varies by platform.
             </p>
           </div>
@@ -407,7 +407,7 @@ function PreviewImage({
         )}
       >
         <ImageIcon className="h-6 w-6" />
-        <span className="text-[11px]">
+        <span className="text-caption">
           {url.trim() ? "Image couldn't load" : "Image preview"}
         </span>
       </div>
@@ -451,7 +451,7 @@ function FacebookPreview({
         <Avatar label={name} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{name}</p>
-          <p className="text-[11px] text-muted-foreground">Just now · 🌐</p>
+          <p className="text-caption text-muted-foreground">Just now · 🌐</p>
         </div>
         <MoreHorizontal className="ml-auto h-4 w-4 text-muted-foreground" />
       </div>
@@ -463,7 +463,7 @@ function FacebookPreview({
         </p>
       )}
       {imageUrl.trim() && <PreviewImage url={imageUrl} />}
-      <div className="flex items-center justify-around border-t py-1.5 text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-around border-t py-1.5 text-caption text-muted-foreground">
         <span className="flex items-center gap-1">
           <ThumbsUp className="h-3.5 w-3.5" /> Like
         </span>

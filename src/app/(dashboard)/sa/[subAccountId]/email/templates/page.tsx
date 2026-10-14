@@ -3,17 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  Copy,
-  FileText,
-  Loader2,
-  Mail,
-  MoreVertical,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Copy, FileText, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
@@ -42,6 +32,12 @@ import {
   type EmailTemplateSummary,
 } from "@/lib/email/template-library";
 import { useEmailTemplateList } from "@/hooks/use-email-template-list";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmailTemplatePreview } from "@/components/broadcasts/email-template-preview";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SearchField } from "@/components/system/search-field";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
 
 /**
  * Email Template Library — the one place every reusable email starting
@@ -92,45 +88,39 @@ export default function EmailTemplateLibraryPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Email Templates</h1>
-          <p className="text-sm text-muted-foreground">
-            Reusable starting points for Broadcasts and workflow emails.
-          </p>
-        </div>
-        <Button render={<Link href={saPath("/email/templates/new")} />}>
-          <Plus className="mr-1 h-4 w-4" />
-          New template
-        </Button>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        accent="crescent"
+        title="Email Templates"
+        description="Reusable starting points for Broadcasts and workflow emails."
+        actions={
+          <Button render={<Link href={saPath("/email/templates/new")} />}>
+            <Plus className="size-4" aria-hidden="true" />
+            New template
+          </Button>
+        }
+      />
 
       {(templates.length > 0 || loading) && (
-        <div className="relative max-w-sm">
-          <Search className="text-muted-foreground absolute top-2.5 left-2.5 h-3.5 w-3.5" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search templates…"
-            className="pl-8"
-            aria-label="Search email templates"
-          />
-        </div>
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search templates…"
+          aria-label="Search email templates"
+          className="sm:max-w-sm"
+        />
       )}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-52 animate-pulse rounded-xl border bg-muted/30" />
+            <Skeleton key={i} className="h-52 rounded-card" />
           ))}
         </div>
       ) : templates.length === 0 ? (
         <EmptyState newTemplateHref={saPath("/email/templates/new")} />
       ) : filtered.length === 0 ? (
-        <p className="rounded-md border border-dashed bg-muted/30 px-3 py-8 text-center text-sm text-muted-foreground">
-          No templates match that search.
-        </p>
+        <SystemEmptyState compact title="No templates match that search" />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => (
@@ -155,7 +145,7 @@ export default function EmailTemplateLibraryPage() {
         template={deleting}
         onOpenChange={(open) => !open && setDeleting(null)}
       />
-    </div>
+    </PageShell>
   );
 }
 
@@ -175,15 +165,15 @@ function TemplateCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-xl border bg-card transition hover:border-primary/50 hover:bg-accent/30">
-      <Link href={href} className="flex flex-1 flex-col">
-        <TemplatePreview blockCount={template.blockCount} />
+    <div className="group relative flex flex-col overflow-hidden rounded-card border border-border bg-card shadow-card transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop">
+      <Link href={href} className="flex flex-1 flex-col outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+        <EmailTemplatePreview blockCount={template.blockCount} />
         <div className="min-w-0 flex-1 space-y-1 p-3">
-          <p className="truncate text-sm font-medium">{template.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-body-sm font-semibold text-foreground">{template.name}</p>
+          <p className="truncate text-caption text-muted-foreground">
             {template.subject || "(no subject)"}
           </p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-ink-tertiary">
             Updated {formatRelativeTime(new Date(template.updatedAtMs))}
           </p>
         </div>
@@ -224,32 +214,6 @@ function TemplateCard({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Abstract visual preview built purely from the summary's block count — no
- * extra per-card content fetch. Reads as "a designed email," not a generic
- * document icon, without the cost of loading every template's full content
- * just to render a list.
- */
-function TemplatePreview({ blockCount }: { blockCount: number }) {
-  const bars = Math.max(1, Math.min(blockCount, 5));
-  return (
-    <div className="flex h-28 flex-col items-center justify-center gap-1.5 border-b bg-gradient-to-b from-muted/40 to-muted/10 px-6">
-      <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <Mail className="h-3 w-3" />
-      </div>
-      <div className="flex w-full flex-col gap-1 pt-1">
-        {Array.from({ length: bars }).map((_, i) => (
-          <div
-            key={i}
-            className="h-1.5 rounded-full bg-foreground/10"
-            style={{ width: `${100 - i * 14}%` }}
-          />
-        ))}
       </div>
     </div>
   );
@@ -369,21 +333,16 @@ function DeleteDialog({
 
 function EmptyState({ newTemplateHref }: { newTemplateHref: string }) {
   return (
-    <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <FileText className="h-5 w-5" />
-      </div>
-      <h3 className="text-base font-semibold">No email templates yet</h3>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Build a reusable starting point once, then reuse it from any
-        broadcast or workflow email — subject, content, and images included.
-      </p>
-      <div className="mt-6 flex justify-center">
+    <SystemEmptyState
+      icon={FileText}
+      title="No email templates yet"
+      description="Build a reusable starting point once, then reuse it from any broadcast or workflow email — subject, content, and images included."
+      action={
         <Button render={<Link href={newTemplateHref} />}>
-          <Plus className="mr-1 h-4 w-4" />
+          <Plus className="size-4" aria-hidden="true" />
           Build your first template
         </Button>
-      </div>
-    </div>
+      }
+    />
   );
 }

@@ -18,6 +18,11 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { toDate } from "@/lib/format";
 import type { MessageTemplateDoc } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
+import { useConfirm } from "@/components/system/confirm-dialog";
 
 /**
  * SMS Templates (2026-09-10) — this surface used to be a generic
@@ -31,6 +36,7 @@ export default function SmsTemplatesListPage() {
   const { subAccountId, agencyId, isAdmin, saPath } = useSubAccount();
   const [templates, setTemplates] = useState<MessageTemplateDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const { confirm: confirmDialog, dialog } = useConfirm();
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -57,7 +63,8 @@ export default function SmsTemplatesListPage() {
   }, [user, agencyId, subAccountId, authLoading]);
 
   async function handleDelete(t: MessageTemplateDoc) {
-    if (!confirm(`Delete template "${t.name}"?`)) return;
+    const ok = await confirmDialog({ title: `Delete template "${t.name}"?`, description: "Automations that use it will need a new template.", confirmLabel: "Delete template", tone: "danger" });
+    if (!ok) return;
     try {
       await deleteDoc(doc(getFirebaseDb(), "message_templates", t.id));
       toast.success("Template deleted");
@@ -67,53 +74,57 @@ export default function SmsTemplatesListPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">SMS Templates</h1>
-          <p className="text-sm text-muted-foreground">
-            Reusable text message bodies, with merge tags resolved at
-            send-time.
-          </p>
-        </div>
-        {isAdmin && (
-          <Button render={<Link href={saPath("/templates/new")} />}>
-            <Plus className="mr-1 h-4 w-4" />
-            New template
-          </Button>
-        )}
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        accent="crescent"
+        title="SMS Templates"
+        description="Reusable text message bodies, with merge tags resolved at send-time."
+        actions={
+          isAdmin ? (
+            <Button render={<Link href={saPath("/templates/new")} />}>
+              <Plus className="size-4" aria-hidden="true" />
+              New template
+            </Button>
+          ) : undefined
+        }
+      />
 
       {loading ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-16 animate-pulse rounded-xl border bg-muted/30"
-            />
+            <Skeleton key={i} className="h-16 rounded-card" />
           ))}
         </div>
       ) : templates.length === 0 ? (
-        <EmptyState />
+        <SystemEmptyState
+          icon={MessageSquare}
+          title="No SMS templates yet"
+          description={
+            <>
+              Create a text message template to use in an automation. Tags like <code>{"{{contact.firstName}}"}</code> get
+              filled in at send-time.
+            </>
+          }
+        />
       ) : (
-        <ul className="space-y-2">
+        <ul className="flex flex-col gap-2">
           {templates.map((t) => (
             <li
               key={t.id}
-              className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4"
+              className="flex items-center justify-between gap-3 rounded-card border border-border bg-card p-4 shadow-card transition-[border-color,box-shadow] hover:border-border-strong"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                  <MessageSquare className="h-4 w-4" />
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
+                  <MessageSquare className="size-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
                   <Link
                     href={saPath(`/templates/${t.id}`)}
-                    className="block truncate font-medium hover:text-primary hover:underline"
+                    className="block truncate text-body-sm font-semibold text-foreground hover:text-link hover:underline"
                   >
                     {t.name}
                   </Link>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate text-caption text-muted-foreground">
                     {t.body.slice(0, 80) + (t.body.length > 80 ? "…" : "")}
                   </p>
                 </div>
@@ -124,30 +135,16 @@ export default function SmsTemplatesListPage() {
                   size="sm"
                   onClick={() => handleDelete(t)}
                   className="text-destructive hover:text-destructive"
-                  aria-label="Delete template"
+                  aria-label={`Delete template ${t.name}`}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="size-3.5" aria-hidden="true" />
                 </Button>
               )}
             </li>
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <MessageSquare className="h-5 w-5" />
-      </div>
-      <h3 className="text-base font-semibold">No SMS templates yet</h3>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Create a text message template to use in an automation. Tags like{" "}
-        <code>{"{{contact.firstName}}"}</code> get filled in at send-time.
-      </p>
-    </div>
+      {dialog}
+    </PageShell>
   );
 }

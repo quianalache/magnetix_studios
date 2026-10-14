@@ -1,7 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Loader2, Lock } from "lucide-react";
+import { Mail } from "lucide-react";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { LockedNotice } from "@/components/system/locked-notice";
 import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
 
 /**
@@ -23,33 +26,27 @@ export default function BroadcastsLayout({ children }: { children: ReactNode }) 
   });
 
   if (!gate.known) {
-    return (
-      <div className="mx-auto flex w-full max-w-5xl justify-center py-16">
-        {gate.timedOut ? (
-          <p className="max-w-md text-center text-sm text-muted-foreground">
-            Couldn&apos;t confirm Broadcasts&apos; status. Try refreshing the
-            page.
-          </p>
-        ) : (
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        )}
-      </div>
+    return gate.timedOut ? (
+      <PageShell width="data">
+        <PageHeader title="Broadcasts" icon={Mail} />
+        <p className="text-body-sm text-muted-foreground">
+          Couldn&apos;t confirm Broadcasts&apos; status. Try refreshing the page.
+        </p>
+      </PageShell>
+    ) : (
+      <PageShellLoading width="data" />
     );
   }
 
   if (!gate.enabled) {
     return (
-      <div className="momentum-scope mx-auto w-full max-w-5xl rounded-2xl p-6">
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
-          <Lock className="h-8 w-8 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Broadcasts is locked</h1>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Your agency administrator hasn&apos;t enabled Broadcasts for this
-            sub-account yet. Ask them to switch it on from Manage in the
-            agency sub-accounts list.
-          </p>
-        </div>
-      </div>
+      <PageShell width="data">
+        <PageHeader title="Broadcasts" icon={Mail} />
+        <LockedNotice title="Broadcasts is locked">
+          Your agency administrator hasn&apos;t enabled Broadcasts for this sub-account yet. Ask them to switch it on from
+          Manage in the agency sub-accounts list.
+        </LockedNotice>
+      </PageShell>
     );
   }
 

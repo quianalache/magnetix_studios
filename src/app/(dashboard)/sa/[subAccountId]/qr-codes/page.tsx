@@ -21,7 +21,12 @@ import { subscribeToQrCodes, deleteQrCode, updateQrCode } from "@/lib/firestore/
 import { subscribeToQrFolders, createQrFolder } from "@/lib/firestore/qr-folders";
 import { downloadQrCode } from "@/lib/qr-codes/render";
 import { buildVcardText } from "@/types/qr-codes";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
+import { Tag } from "@/components/system/status-pill";
+import { useConfirm } from "@/components/system/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,6 +64,7 @@ export default function QrCodesListPage() {
   const [folders, setFolders] = useState<QrFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -93,7 +99,13 @@ export default function QrCodesListPage() {
   }, [codes, folders]);
 
   async function handleDelete(c: QrCodeDoc) {
-    if (!confirm(`Delete QR code "${c.name}"? Anyone who scans a printed copy will hit a dead link.`)) return;
+    const ok = await confirmDialog({
+      title: `Delete QR code "${c.name}"?`,
+      description: "Anyone who scans a printed copy will hit a dead link.",
+      confirmLabel: "Delete QR code",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteQrCode(c.id);
       toast.success("QR code deleted");
@@ -132,19 +144,21 @@ export default function QrCodesListPage() {
   const isEmpty = codes.length === 0;
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
+    <PageShell width="data">
       <PageHeader
+        accent="crescent"
         title="QR Codes"
+        icon={QrCode}
         description="Generate a QR for any link, or a digital business card people can scan to save your contact info."
         actions={
           isAdmin && (
             <>
               <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
-                <FolderPlus className="mr-1 h-4 w-4" />
+                <FolderPlus className="h-4 w-4" />
                 New folder
               </Button>
               <Button render={<Link href={saPath("/qr-codes/new")} />}>
-                <Plus className="mr-1 h-4 w-4" />
+                <Plus className="h-4 w-4" />
                 New QR Code
               </Button>
             </>
@@ -155,16 +169,28 @@ export default function QrCodesListPage() {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl border bg-muted/30" />
+            <Skeleton key={i} className="h-16 w-full rounded-card" />
           ))}
         </div>
       ) : isEmpty ? (
-        <EmptyState />
+        <SystemEmptyState
+          icon={QrCode}
+          title="No QR codes yet"
+          description="Create one for any link — a booking page, offer, or website — or a digital business card people can scan to save your contact info."
+          action={
+            isAdmin ? (
+              <Button render={<Link href={saPath("/qr-codes/new")} />}>
+                <Plus className="h-4 w-4" />
+                New QR Code
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="space-y-6">
           {groups.named.map(({ folder, codes: list }) => (
             <div key={folder.id} className="space-y-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h2 className="text-overline font-semibold tracking-[0.12em] text-ink-tertiary uppercase">
                 {folder.name}
               </h2>
               <QrList
@@ -181,7 +207,7 @@ export default function QrCodesListPage() {
           {groups.unfiled.length > 0 && (
             <div className="space-y-2">
               {groups.named.length > 0 && (
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <h2 className="text-overline font-semibold tracking-[0.12em] text-ink-tertiary uppercase">
                   Unfiled
                 </h2>
               )}
@@ -204,7 +230,8 @@ export default function QrCodesListPage() {
         onOpenChange={setNewFolderOpen}
         onCreate={handleCreateFolder}
       />
-    </div>
+      {confirmElement}
+    </PageShell>
   );
 }
 
@@ -226,18 +253,18 @@ function QrList({
   onDownload: (c: QrCodeDoc, extension: "png" | "svg") => void;
 }) {
   return (
-    <ul className="space-y-2">
+    <ul className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border bg-card shadow-card">
       {codes.map((c) => (
         <li
           key={c.id}
-          className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4"
+          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-tint-violet"
         >
           <div className="flex min-w-0 items-center gap-3">
             <span
               className={
                 c.kind === "link"
-                  ? "flex h-8 w-8 items-center justify-center rounded-lg bg-[#5E2574]/10 text-[#5E2574] dark:bg-[#C892DE]/15 dark:text-[#C892DE]"
-                  : "flex h-8 w-8 items-center justify-center rounded-lg bg-[#9EDBDD]/25 text-teal-700 dark:bg-[#9EDBDD]/15 dark:text-[#9EDBDD]"
+                  ? "flex size-9 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg"
+                  : "flex size-9 shrink-0 items-center justify-center rounded-chip bg-tag-aqua-bg text-tag-aqua-fg"
               }
             >
               {c.kind === "link" ? <Link2 className="h-4 w-4" /> : <Contact className="h-4 w-4" />}
@@ -245,17 +272,19 @@ function QrList({
             <div className="min-w-0">
               <Link
                 href={saPath(`/qr-codes/${c.id}`)}
-                className="block truncate font-medium hover:text-primary hover:underline"
+                className="block truncate text-body-sm font-semibold hover:text-link hover:underline"
               >
                 {c.name}
               </Link>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-caption text-muted-foreground">
                 {c.kind === "link"
                   ? `${c.destinationUrl || "No destination set"} · ${c.scanCount} scan${c.scanCount === 1 ? "" : "s"}`
                   : "Contact card"}
               </p>
             </div>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+          <Tag color={c.kind === "link" ? "violet" : "aqua"} className="hidden sm:inline-flex">{c.kind === "link" ? "Link" : "Contact card"}</Tag>
           {isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -310,6 +339,7 @@ function QrList({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </div>
         </li>
       ))}
     </ul>
@@ -360,20 +390,5 @@ function NewFolderDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <QrCode className="h-5 w-5" />
-      </div>
-      <h3 className="text-base font-semibold">No QR codes yet</h3>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Create one for any link — a booking page, offer, or website — or a
-        digital business card people can scan to save your contact info.
-      </p>
-    </div>
   );
 }

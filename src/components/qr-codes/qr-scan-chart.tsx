@@ -52,7 +52,7 @@ export function QrScanChart({ qrId }: { qrId: string }) {
   const total = days.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="rounded-2xl border bg-card p-4">
+    <div className="rounded-card border border-border bg-card p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold">Scans — last 14 days</h3>
         <span className="text-xs text-muted-foreground">

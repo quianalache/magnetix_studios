@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, MessageSquare, Sparkles } from "lucide-react";
+import { ArrowLeft, MessageSquare } from "lucide-react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,6 +15,10 @@ import {
   type TemplateFormValues,
 } from "@/components/automations/template-editor";
 import { TEMPLATE_PRESETS } from "@/lib/automations/template-presets";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SettingsSection } from "@/components/system/settings-section";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
 
 /**
  * Quick-start preset chips. The preset content lives in
@@ -64,19 +68,17 @@ export default function NewTemplatePage() {
 
   if (!loading && !isAdmin) {
     return (
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border bg-card p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Only sub-account admins can manage templates.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href={saPath("/templates")} />}
-          className="mt-4"
-        >
-          Back
-        </Button>
-      </div>
+      <PageShell width="form">
+        <SystemEmptyState
+          title="Admins only"
+          description="Only sub-account admins can manage templates."
+          action={
+            <Button variant="outline" size="sm" render={<Link href={saPath("/templates")} />}>
+              Back
+            </Button>
+          }
+        />
+      </PageShell>
     );
   }
 
@@ -109,42 +111,26 @@ export default function NewTemplatePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
-      <div>
-        <Link
-          href={saPath("/templates")}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Back to SMS Templates
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">
-          New SMS template
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Write a body and use merge tags for personalisation. Building an
-          email template?{" "}
-          <Link
-            href={saPath("/email/templates/new")}
-            className="text-primary underline"
-          >
-            Use the Email Template Library instead.
+    <PageShell width="form">
+      <PageHeader
+        breadcrumbs={
+          <Link href={saPath("/templates")} className="inline-flex items-center gap-1 hover:text-foreground">
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            Back to SMS Templates
           </Link>
-        </p>
-      </div>
+        }
+        title="New SMS template"
+        description={
+          <>
+            Write a body and use merge tags for personalisation. Building an email template?{" "}
+            <Link href={saPath("/email/templates/new")} className="text-link underline-offset-2 hover:underline">
+              Use the Email Template Library instead.
+            </Link>
+          </>
+        }
+      />
 
-      <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
-            <Sparkles className="h-3.5 w-3.5" />
-          </span>
-          <div>
-            <h2 className="text-sm font-semibold">Start from a preset</h2>
-            <p className="text-[11px] text-muted-foreground">
-              One-click starting point. Edit anything below before saving.
-            </p>
-          </div>
-        </div>
+      <SettingsSection title="Start from a preset" description="One-click starting point. Edit anything below before saving.">
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((p) => (
             <Button
@@ -155,7 +141,7 @@ export default function NewTemplatePage() {
               onClick={() => applyPreset(p.values)}
               title={p.description}
             >
-              <MessageSquare className="mr-1 h-3.5 w-3.5" />
+              <MessageSquare className="size-3.5" aria-hidden="true" />
               {p.label}
             </Button>
           ))}
@@ -170,15 +156,9 @@ export default function NewTemplatePage() {
             Clear
           </Button>
         </div>
-      </section>
+      </SettingsSection>
 
-      <TemplateEditor
-        key={editorKey}
-        initial={initial}
-        submitLabel="Create template"
-        onSubmit={handleSubmit}
-        lockType
-      />
-    </div>
+      <TemplateEditor key={editorKey} initial={initial} submitLabel="Create template" onSubmit={handleSubmit} lockType />
+    </PageShell>
   );
 }

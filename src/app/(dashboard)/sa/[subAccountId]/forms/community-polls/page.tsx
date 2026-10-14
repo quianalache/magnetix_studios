@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ListChecks, Users } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert } from "@/components/ui/alert";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { StatusPill, Tag } from "@/components/system/status-pill";
+import { ListChecks, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 
 interface AdminPollSummary {
@@ -69,61 +75,53 @@ export default function CommunityPollsPage() {
   }, [subAccountId]);
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-4xl space-y-6 rounded-2xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Community Polls</h1>
-        <p className="text-sm text-muted-foreground">
-          Responses to polls created inside your Community — separate from Forms &amp; Quizzes submissions.
-        </p>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        title="Community Polls"
+        description="Responses to polls created inside your Community — separate from Forms & Quizzes submissions."
+        breadcrumbs={
+          <Link href={saPath("/forms")} className="hover:text-foreground">
+            Forms
+          </Link>
+        }
+      />
 
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-2xl border bg-muted/30" />
+            <Skeleton key={i} className="h-24 rounded-card" />
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-10 text-center">
-          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
-          <p className="text-sm font-medium text-destructive">Couldn&apos;t load Community polls</p>
-          <p className="mt-1 text-xs text-muted-foreground">{error}</p>
-        </div>
+        <Alert tone="danger" title="Couldn't load Community polls">
+          {error}
+        </Alert>
       ) : polls.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-10 text-center">
-          <ListChecks className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No Community polls yet. A moderator can create one from a post in your Community.
-          </p>
-        </div>
+        <EmptyState
+          icon={ListChecks}
+          title="No Community polls yet"
+          description="A moderator can create one from a post in your Community."
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {polls.map((p) => (
             <Link
               key={`${p.groupId}-${p.postId}`}
               href={saPath(`/forms/community-polls/${p.groupId}/${p.postId}`)}
-              className="flex flex-col rounded-2xl border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-sm"
+              className="flex flex-col rounded-card border border-border bg-card p-4 shadow-card outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  {p.groupName}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    p.closed ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                  }`}
-                >
-                  {p.closed ? "Closed" : "Open"}
-                </span>
+                <Tag>{p.groupName}</Tag>
+                <StatusPill tone={p.closed ? "neutral" : "success"}>{p.closed ? "Closed" : "Open"}</StatusPill>
               </div>
-              <h3 className="mt-2 truncate font-semibold">{p.question}</h3>
-              <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                <Users className="h-3 w-3" /> {p.voterCount} {p.voterCount === 1 ? "voter" : "voters"} · {p.optionCount} options
+              <h3 className="mt-2 truncate text-section font-semibold text-foreground">{p.question}</h3>
+              <p className="mt-0.5 flex items-center gap-1 text-caption text-muted-foreground">
+                <Users className="size-3" aria-hidden="true" /> {p.voterCount} {p.voterCount === 1 ? "voter" : "voters"} · {p.optionCount} options
               </p>
             </Link>
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

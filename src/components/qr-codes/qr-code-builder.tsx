@@ -288,7 +288,7 @@ export function QrCodeBuilder({
       </div>
 
       <div className="space-y-4">
-        <div className="flex flex-col items-center gap-3 rounded-2xl border bg-card p-4">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-border bg-card p-4 shadow-card">
           <QrPreview
             data={qrData}
             style={style}

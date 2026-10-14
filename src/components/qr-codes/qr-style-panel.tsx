@@ -44,7 +44,7 @@ export function QrStylePanel({
   qrId: string;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border bg-card p-4">
+    <div className="space-y-4 rounded-card border border-border bg-card p-4 shadow-card">
       <h3 className="text-sm font-semibold">Style</h3>
       <div className="flex flex-wrap gap-4">
         <ColorInput

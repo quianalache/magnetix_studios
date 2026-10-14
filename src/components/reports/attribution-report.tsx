@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { BarChart3, ChevronRight } from "lucide-react";
 import { formatCurrency, toDate } from "@/lib/format";
 import { FunnelChart } from "@/components/reports/charts";
 import { SourceBadge, sourceLabel } from "@/components/contacts/source-badge";
@@ -9,6 +9,9 @@ import type { Contact } from "@/types/contacts";
 import type { Deal } from "@/types/deals";
 import type { AttributionVisitRow } from "@/lib/firestore/attribution-visits";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/system/empty-state";
+import { DATA_TABLE_HEAD_ROW } from "@/components/system/data-table";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 /**
  * Revenue attribution — first-touch model. Won-deal revenue is credited
@@ -237,22 +240,20 @@ export function AttributionReport({
 
   if (rows.length === 0 && visitRows.length === 0) {
     return (
-      <div className="flex h-48 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed text-sm text-muted-foreground">
-        <p>No leads, deals, or page visits in this range yet.</p>
-        <p className="text-xs">
-          Attribution builds up as contacts, won deals, and booking/checkout
-          visits accumulate.
-        </p>
-      </div>
+      <EmptyState
+        icon={BarChart3}
+        title="No leads, deals, or page visits in this range yet"
+        description="Attribution builds up as contacts, won deals, and booking/checkout visits accumulate."
+      />
     );
   }
 
   return (
     <div className="space-y-4">
       {revenueBars.length > 0 && (
-        <section className="rounded-2xl border bg-card p-5">
+        <section className="rounded-card border border-border bg-card p-5 shadow-card">
           <div className="mb-4">
-            <h2 className="text-sm font-semibold">Won revenue by source</h2>
+            <h2 className="text-section font-semibold">Won revenue by source</h2>
             <p className="text-xs text-muted-foreground">
               Deals won in range · credited to the source that created the
               contact
@@ -265,9 +266,9 @@ export function AttributionReport({
         </section>
       )}
 
-      <section className="rounded-2xl border bg-card">
-        <div className="border-b p-5 pb-4">
-          <h2 className="text-sm font-semibold">Source performance</h2>
+      <section className="overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <div className="border-b border-border p-5 pb-4">
+          <h2 className="text-section font-semibold">Source performance</h2>
           <p className="text-xs text-muted-foreground">
             First-touch attribution. Leads count contacts created in range;
             revenue counts deals won in range. Expand a source to break it
@@ -277,7 +278,7 @@ export function AttributionReport({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
+              <tr className={cn(DATA_TABLE_HEAD_ROW)}>
                 <th className="px-5 py-2.5 font-medium">Source</th>
                 <th className="px-3 py-2.5 text-right font-medium">Leads</th>
                 <th className="px-3 py-2.5 text-right font-medium">Deals</th>
@@ -312,7 +313,7 @@ export function AttributionReport({
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t bg-muted/30 font-medium">
+              <tr className="border-t border-border bg-surface-sunken font-semibold">
                 <td className="px-5 py-2.5">Total</td>
                 <Cells stats={totals} currency={currency} />
               </tr>
@@ -321,42 +322,35 @@ export function AttributionReport({
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-card">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b p-5 pb-4">
+      <section className="overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5 pb-4">
           <div>
-            <h2 className="text-sm font-semibold">Page visits &amp; conversions</h2>
+            <h2 className="text-section font-semibold">Page visits &amp; conversions</h2>
             <p className="text-xs text-muted-foreground">
               Every landing on a booking or checkout page, whether or not it
               converted, broken down by UTM tag — or, for untagged traffic, an
               auto-detected referrer.
             </p>
           </div>
-          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-0.5">
-            {(["all", "booking", "offer"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setVisitPageFilter(f)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
-                  visitPageFilter === f
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {f === "all" ? "All pages" : f}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            value={visitPageFilter}
+            onChange={setVisitPageFilter}
+            options={[
+              { value: "all", label: "All pages" },
+              { value: "booking", label: "Booking" },
+              { value: "offer", label: "Offer" },
+            ]}
+          />
         </div>
         {visitRows.length === 0 ? (
-          <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+          <div className="flex h-32 items-center justify-center text-caption text-muted-foreground">
             No page visits in this range yet.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
+                <tr className={cn(DATA_TABLE_HEAD_ROW)}>
                   <th className="px-5 py-2.5 font-medium">Source</th>
                   <th className="px-3 py-2.5 font-medium">Medium</th>
                   <th className="px-3 py-2.5 font-medium">Campaign</th>
@@ -448,8 +442,8 @@ function SourceRows({
     <>
       <tr
         className={cn(
-          "border-b last:border-b-0",
-          canExpand && "cursor-pointer hover:bg-muted/30",
+          "border-b border-border-subtle last:border-b-0",
+          canExpand && "cursor-pointer transition-colors hover:bg-tint-violet",
         )}
         onClick={canExpand ? onToggle : undefined}
       >

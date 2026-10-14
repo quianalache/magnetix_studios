@@ -2,7 +2,8 @@
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { StatusPill } from "@/components/system/status-pill";
 
 export type ModeFilter = "all" | "live" | "test";
 
@@ -17,24 +18,17 @@ export function fmtTime(iso: string | null): string {
 /** Tailwind text colour for an HTTP status code. 0 = never attempted. */
 export function httpStatusClass(status: number | null): string {
   if (!status) return "text-muted-foreground";
-  if (status >= 200 && status < 300) return "text-emerald-600 dark:text-emerald-400";
-  if (status >= 300 && status < 400) return "text-sky-600 dark:text-sky-400";
-  if (status >= 400 && status < 500) return "text-amber-600 dark:text-amber-400";
-  return "text-rose-600 dark:text-rose-400";
+  if (status >= 200 && status < 300) return "text-status-success-fg";
+  if (status >= 300 && status < 400) return "text-status-info-fg";
+  if (status >= 400 && status < 500) return "text-status-warning-fg";
+  return "text-status-danger-fg";
 }
 
 export function ModeBadge({ mode }: { mode: "live" | "test" }) {
   return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-        mode === "live"
-          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-          : "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-      )}
-    >
+    <StatusPill tone={mode === "live" ? "success" : "warning"} className="shrink-0 capitalize">
       {mode}
-    </span>
+    </StatusPill>
   );
 }
 
@@ -57,26 +51,14 @@ export function LogToolbar({
 }) {
   const modes: ModeFilter[] = ["all", "live", "test"];
   return (
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <div className="inline-flex rounded-lg border bg-muted/30 p-0.5 text-xs">
-        {modes.map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => onModeChange(m)}
-            className={cn(
-              "rounded-md px-2.5 py-1 font-medium capitalize transition-colors",
-              mode === m
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <SegmentedControl
+        value={mode}
+        onChange={onModeChange}
+        options={modes.map((m) => ({ value: m, label: m === "all" ? "All" : m === "live" ? "Live" : "Test" }))}
+      />
       <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <span className="text-caption text-muted-foreground tabular-nums">
           {count} {count === 1 ? "entry" : "entries"}
         </span>
         <Button
@@ -109,10 +91,10 @@ export function CodeBlock({ label, value }: { label: string; value: string }) {
   }
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="text-micro font-semibold tracking-wider text-muted-foreground uppercase">
         {label}
       </p>
-      <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-[11px] leading-relaxed text-foreground">
+      <pre className="max-h-64 overflow-auto rounded-control border border-border bg-surface-sunken p-2 font-mono text-caption leading-relaxed text-foreground">
         {pretty}
       </pre>
     </div>

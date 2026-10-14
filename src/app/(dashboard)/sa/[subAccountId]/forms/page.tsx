@@ -29,6 +29,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { LeadForm } from "@/types/forms";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { RecordCard } from "@/components/system/record-card";
+import { StatusPill } from "@/components/system/status-pill";
+import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
+import { useConfirm } from "@/components/system/confirm-dialog";
 
 export default function FormsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -38,6 +45,7 @@ export default function FormsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -94,7 +102,13 @@ export default function FormsPage() {
   }
 
   async function handleDelete(form: LeadForm) {
-    if (!confirm(`Delete form "${form.name}"?`)) return;
+    const ok = await confirm({
+      title: `Delete form "${form.name}"?`,
+      description: "Its public link stops working. Contacts already created from it are kept.",
+      confirmLabel: "Delete form",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteForm(form.id);
       toast.success("Form deleted");
@@ -112,22 +126,20 @@ export default function FormsPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Forms</h1>
-          <p className="text-sm text-muted-foreground">
-            Public lead-capture forms. Every submission becomes a contact.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <PageShell width="data">
+      <PageHeader
+        accent="crescent"
+        title="Forms"
+        description="Public lead-capture forms. Every submission becomes a contact."
+        actions={
+        <>
           {/* Community Polls (2026-08-20) — a separate, poll-specific
               response experience, not a LeadForm — see that page's own
               comment for why. Linked from here so it's discoverable
               "under Forms & Quizzes" per the explicit product instruction,
               without merging its data or UI into the forms list below. */}
           <Button variant="outline" render={<Link href={saPath("/forms/community-polls")} />}>
-            <ListChecks className="mr-1 h-4 w-4" />
+            <ListChecks className="size-4" aria-hidden="true" />
             Community Polls
           </Button>
           <Button
@@ -135,15 +147,16 @@ export default function FormsPage() {
             onClick={handleCreateContact}
             disabled={creating}
           >
-            <MessageSquare className="mr-1 h-4 w-4" />
+            <MessageSquare className="size-4" aria-hidden="true" />
             Contact form
           </Button>
           <Button onClick={() => setCreateOpen(true)} disabled={creating}>
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus className="size-4" aria-hidden="true" />
             New Form
           </Button>
-        </div>
-      </div>
+        </>
+        }
+      />
 
       {loading ? (
         <ListSkeleton />
@@ -205,7 +218,8 @@ export default function FormsPage() {
           </div>
         </SheetContent>
       </Sheet>
-    </div>
+      {dialog}
+    </PageShell>
   );
 }
 
@@ -225,77 +239,63 @@ function FormCard({
   const created = toDate(form.createdAt);
   const unread = form.unreadSubmissionCount ?? 0;
   return (
-    <div className="group flex flex-col rounded-2xl border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white">
-          <FileText className="h-4 w-4" />
-        </div>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            form.enabled
-              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-              : "bg-muted text-muted-foreground"
-          }`}
-        >
-          {form.enabled ? "Live" : "Paused"}
-        </span>
-      </div>
-      <h3 className="mt-3 truncate font-semibold">{form.name}</h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {form.fields.length} fields · {form.submissionCount ?? 0} submissions
-      </p>
-      {created && (
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          Created{" "}
-          {created.toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}
-        </p>
-      )}
-
-      <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        <Button size="sm" render={<Link href={editHref} />}>
-          <Pencil className="mr-1 h-3.5 w-3.5" />
-          Edit
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="relative"
-          render={<Link href={submissionsHref} />}
-        >
-          <Inbox className="mr-1 h-3.5 w-3.5" />
-          Submissions
-          {unread > 0 && (
-            <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
-              {unread > 99 ? "99+" : unread}
-            </span>
+    <RecordCard
+      icon={FileText}
+      tone="violet"
+      title={form.name}
+      status={<StatusPill tone={form.enabled ? "success" : "neutral"}>{form.enabled ? "Live" : "Paused"}</StatusPill>}
+      meta={
+        <>
+          <p>
+            {form.fields.length} fields · {form.submissionCount ?? 0} submissions
+          </p>
+          {created && (
+            <p className="text-ink-tertiary">
+              Created{" "}
+              {created.toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </p>
           )}
-        </Button>
-        <Button size="sm" variant="outline" onClick={onCopy}>
-          <Copy className="mr-1 h-3.5 w-3.5" />
-          Copy link
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          render={<a href={`/f/${form.id}`} target="_blank" rel="noreferrer" />}
-        >
-          <ExternalLink className="mr-1 h-3.5 w-3.5" />
-          Preview
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDelete}
-          className="ml-auto text-destructive hover:text-destructive"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    </div>
+        </>
+      }
+      actions={
+        <>
+          <Button size="sm" render={<Link href={editHref} />}>
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Edit
+          </Button>
+          <Button size="sm" variant="outline" className="relative" render={<Link href={submissionsHref} />}>
+            <Inbox className="size-3.5" aria-hidden="true" />
+            Submissions
+            {unread > 0 && (
+              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-micro font-semibold leading-none text-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onCopy}>
+            <Copy className="size-3.5" aria-hidden="true" />
+            Copy link
+          </Button>
+          <Button size="sm" variant="outline" render={<a href={`/f/${form.id}`} target="_blank" rel="noreferrer" />}>
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+            Preview
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            aria-label={`Delete ${form.name}`}
+            className="ml-auto text-destructive hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+          </Button>
+        </>
+      }
+    />
   );
 }
 
@@ -303,10 +303,7 @@ function ListSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div
-          key={i}
-          className="h-40 animate-pulse rounded-2xl border bg-muted/30"
-        />
+        <Skeleton key={i} className="h-40 rounded-card" />
       ))}
     </div>
   );
@@ -322,32 +319,27 @@ function EmptyState({
   creating: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-12 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white">
-        <FileText className="h-6 w-6" />
-      </div>
-      <h3 className="text-base font-semibold">Create your first lead form</h3>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-        Drop a public form on your site. Submissions land as contacts in your
-        pipeline automatically.
-      </p>
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button
-          variant="outline"
-          onClick={onCreateContact}
-          disabled={creating}
-        >
-          <MessageSquare className="mr-1 h-4 w-4" />
-          Quick contact form
-        </Button>
-        <Button onClick={onCreate} disabled={creating}>
-          <Plus className="mr-1 h-4 w-4" />
-          New form
-        </Button>
-      </div>
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Quick contact form pre-fills Name, Email, Phone, and Message.
-      </p>
-    </div>
+    <SystemEmptyState
+      icon={FileText}
+      title="Create your first lead form"
+      description="Drop a public form on your site. Submissions land as contacts in your pipeline automatically."
+      action={
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={onCreateContact} disabled={creating}>
+              <MessageSquare className="size-4" aria-hidden="true" />
+              Quick contact form
+            </Button>
+            <Button onClick={onCreate} disabled={creating}>
+              <Plus className="size-4" aria-hidden="true" />
+              New form
+            </Button>
+          </div>
+          <p className="text-caption text-muted-foreground">
+            Quick contact form pre-fills Name, Email, Phone, and Message.
+          </p>
+        </div>
+      }
+    />
   );
 }

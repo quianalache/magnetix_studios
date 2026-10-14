@@ -8,6 +8,8 @@ import {
   Loader2,
   RotateCw,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill } from "@/components/system/status-pill";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -96,7 +98,7 @@ export function WebhookLogsTab() {
   }
 
   return (
-    <section className="rounded-2xl border bg-card p-6">
+    <section className="rounded-card border border-border bg-card p-4 shadow-card sm:p-6">
       <LogToolbar
         mode={mode}
         onModeChange={setMode}
@@ -106,20 +108,17 @@ export function WebhookLogsTab() {
       />
 
       {loading && events.length === 0 ? (
-        <div className="flex items-center justify-center rounded-lg border bg-background p-8 text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Loading webhook logs…
-        </div>
+        <div className="space-y-2" aria-busy="true" aria-label="Loading">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-10 w-full rounded-control" />)}</div>
       ) : visible.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-background p-8 text-center">
-          <p className="text-sm font-medium">No webhook events yet</p>
+        <div className="rounded-control border border-dashed border-border bg-surface-sunken p-8 text-center">
+          <p className="text-body-sm font-semibold">No webhook events yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Each event emitted to a subscription is recorded here with its
             delivery attempts. Events are retained for 90 days.
           </p>
         </div>
       ) : (
-        <ul className="divide-y rounded-lg border bg-background">
+        <ul className="divide-y divide-border-subtle overflow-hidden rounded-control border border-border bg-card">
           {visible.map((event) => (
             <EventRow
               key={event.id}
@@ -135,7 +134,7 @@ export function WebhookLogsTab() {
         </ul>
       )}
 
-      <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+      <p className="mt-4 text-caption leading-relaxed text-muted-foreground">
         Each delivery retries 3× (1m / 5m / 30m) before it&apos;s marked
         exhausted; 10 consecutive failures auto-pauses the subscription.
         Resend re-fires the archived payload to a single subscription as a
@@ -166,31 +165,31 @@ function EventRow({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40"
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-tint-violet"
       >
         {expanded ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         ) : (
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-cyan-700 dark:text-cyan-300">
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-link">
           {event.type}
         </span>
         <DeliveryStatusBadge label={summary.label} tone={summary.tone} />
-        <span className="hidden w-24 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground sm:inline">
+        <span className="hidden w-24 shrink-0 text-right text-caption tabular-nums text-muted-foreground sm:inline">
           {event.deliveries.length}{" "}
           {event.deliveries.length === 1 ? "attempt" : "attempts"}
         </span>
         <ModeBadge mode={event.mode} />
-        <span className="hidden shrink-0 text-[11px] text-muted-foreground md:inline">
+        <span className="hidden shrink-0 text-caption text-muted-foreground md:inline">
           {fmtTime(event.createdAt)}
         </span>
       </button>
 
       {expanded && (
-        <div className="space-y-2 border-t bg-muted/20 px-4 py-3">
+        <div className="space-y-2 border-t border-border-subtle bg-surface-sunken px-4 py-3">
           {event.deliveries.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               No delivery attempts recorded for this event (no active
               subscription matched at emit time).
             </p>
@@ -221,23 +220,23 @@ function DeliveryRow({
 }) {
   const tone = statusTone(delivery.status);
   return (
-    <div className="rounded-md border bg-background p-2.5">
+    <div className="rounded-control border border-border bg-card p-2.5">
       <div className="flex items-center gap-2">
-        <span className="font-mono text-[10px] text-muted-foreground">
+        <span className="font-mono text-micro text-muted-foreground">
           #{delivery.attempt}
         </span>
         <DeliveryStatusBadge label={delivery.status} tone={tone} />
         {delivery.httpStatus !== null && (
           <span
             className={cn(
-              "font-mono text-[11px] font-semibold tabular-nums",
+              "font-mono text-caption font-semibold tabular-nums",
               httpStatusClass(delivery.httpStatus),
             )}
           >
             HTTP {delivery.httpStatus}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground">
           {delivery.url}
         </span>
         <Button
@@ -246,7 +245,7 @@ function DeliveryRow({
           size="sm"
           onClick={onResend}
           disabled={busy}
-          className="h-7 shrink-0 px-2 text-[11px]"
+          className="h-7 shrink-0 px-2 text-caption"
           title="Re-fire this event to this subscription"
         >
           {busy ? (
@@ -259,16 +258,16 @@ function DeliveryRow({
       </div>
 
       {delivery.errorMessage && (
-        <p className="mt-1.5 text-[11px] text-rose-700 dark:text-rose-400">
+        <p className="mt-1.5 text-caption text-status-danger-fg">
           {delivery.errorMessage}
         </p>
       )}
 
-      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-muted-foreground">
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-micro text-muted-foreground">
         <span>scheduled {fmtTime(delivery.scheduledAt)}</span>
         {delivery.attemptedAt && <span>attempted {fmtTime(delivery.attemptedAt)}</span>}
         {delivery.nextRetryAt && (
-          <span className="text-amber-600 dark:text-amber-400">
+          <span className="text-status-warning-fg">
             next retry {fmtTime(delivery.nextRetryAt)}
           </span>
         )}
@@ -287,16 +286,9 @@ type Tone = "ok" | "fail" | "pending";
 
 function DeliveryStatusBadge({ label, tone }: { label: string; tone: Tone }) {
   return (
-    <span
-      className={cn(
-        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-        tone === "ok" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-        tone === "fail" && "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-        tone === "pending" && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-      )}
-    >
+    <StatusPill tone={tone === "ok" ? "success" : tone === "fail" ? "danger" : "warning"} className="shrink-0 capitalize">
       {label}
-    </span>
+    </StatusPill>
   );
 }
 

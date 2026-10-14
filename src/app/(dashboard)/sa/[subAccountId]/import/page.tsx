@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, DatabaseZap } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { GhlImportWizard } from "@/components/import/ghl-import-wizard";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
 
 /**
  * GoHighLevel migration importer. Reached from Settings → Admin. The wizard
@@ -12,26 +14,19 @@ import { GhlImportWizard } from "@/components/import/ghl-import-wizard";
 export default function ImportPage() {
   const { saPath } = useSubAccount();
   return (
-    <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
-      <Link
-        href={saPath("/dashboard/settings?section=import")}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to settings
-      </Link>
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Migrate from GoHighLevel
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Bring your contacts (with custom fields + tags), opportunities, and
-          notes across. Re-running is safe — records update instead of
-          duplicating. Workflows, funnels, and page designs can&apos;t be
-          exported from GoHighLevel and are rebuilt here.
-        </p>
-      </header>
+    <PageShell width="form">
+      <PageHeader
+        breadcrumbs={
+          <Link href={saPath("/dashboard/settings?section=import")} className="inline-flex items-center gap-1 hover:text-foreground">
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            Back to settings
+          </Link>
+        }
+        title="Migrate from GoHighLevel"
+        icon={DatabaseZap}
+        description="Bring your contacts (with custom fields + tags), opportunities, and notes across. Re-running is safe — records update instead of duplicating. Workflows, funnels, and page designs can’t be exported from GoHighLevel and are rebuilt here."
+      />
       <GhlImportWizard />
-    </div>
+    </PageShell>
   );
 }

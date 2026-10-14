@@ -121,7 +121,7 @@ export function TemplateEditor({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-5 rounded-2xl border bg-card p-5"
+      className="space-y-5 rounded-card border border-border bg-card p-5 shadow-card"
     >
       <div className="space-y-1.5">
         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -156,7 +156,7 @@ export function TemplateEditor({
           </button>
         </div>
         {lockType && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Channel can&apos;t be changed once created. Make a new template
             for the other channel.
           </p>
@@ -171,7 +171,7 @@ export function TemplateEditor({
           onChange={(e) => setName(e.target.value)}
           placeholder="Welcome SMS"
         />
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           Internal label only — shown in the automation picker.
         </p>
       </div>
@@ -208,7 +208,7 @@ export function TemplateEditor({
                   className="flex flex-col items-start gap-0.5"
                 >
                   <code className="text-xs">{`{{${t.tag}}}`}</code>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-micro text-muted-foreground">
                     {t.description}
                   </span>
                 </DropdownMenuItem>
@@ -230,13 +230,13 @@ export function TemplateEditor({
           className="font-mono text-sm"
         />
         {type === "email" && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Email bodies must include <code>{"{{unsubscribeLink}}"}</code>.
             Required for compliance.
           </p>
         )}
         {type === "sms" && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Keep SMS short. Include a way to opt out (&quot;reply STOP to
             unsubscribe&quot;) if your audience hasn&apos;t given prior consent.
           </p>

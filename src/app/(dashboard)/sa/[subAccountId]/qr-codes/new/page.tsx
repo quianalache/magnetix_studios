@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Lock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { createQrCode } from "@/lib/firestore/qr-codes";
 import { defaultQrStyle, emptyVcard } from "@/types/qr-codes";
+import { Button } from "@/components/ui/button";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 import {
   QrCodeBuilder,
   type QrCodeFormValues,
@@ -30,20 +34,24 @@ export default function NewQrCodePage() {
   const { agencyId, subAccountId, isAdmin, saPath, loading } = useSubAccount();
   const [draftId] = useState(() => crypto.randomUUID());
 
+  const back = (
+    <Link href={saPath("/qr-codes")} className="inline-flex items-center gap-1 hover:text-foreground">
+      <ArrowLeft className="size-3.5" aria-hidden="true" />
+      Back to QR codes
+    </Link>
+  );
+
   if (!loading && !isAdmin) {
     return (
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border bg-card p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Only sub-account admins can manage QR codes.
-        </p>
-        <Link
-          href={saPath("/qr-codes")}
-          className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back
-        </Link>
-      </div>
+      <PageShell width="data">
+        <PageHeader breadcrumbs={back} title="New QR Code" icon={QrCode} />
+        <EmptyState
+          icon={Lock}
+          title="Admins only"
+          description="Only sub-account admins can manage QR codes."
+          action={<Button variant="outline" render={<Link href={saPath("/qr-codes")} />}>Back to QR codes</Button>}
+        />
+      </PageShell>
     );
   }
 
@@ -63,15 +71,8 @@ export default function NewQrCodePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4">
-      <Link
-        href={saPath("/qr-codes")}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3 w-3" />
-        Back to QR codes
-      </Link>
-      <h1 className="text-2xl font-bold tracking-tight">New QR Code</h1>
+    <PageShell width="data">
+      <PageHeader breadcrumbs={back} title="New QR Code" icon={QrCode} />
       <QrCodeBuilder
         initial={BLANK}
         submitLabel="Create QR Code"
@@ -79,6 +80,6 @@ export default function NewQrCodePage() {
         subAccountId={subAccountId}
         qrId={draftId}
       />
-    </div>
+    </PageShell>
   );
 }
