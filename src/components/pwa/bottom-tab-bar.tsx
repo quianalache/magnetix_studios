@@ -43,14 +43,14 @@ export function BottomTabBar({ onMore }: { onMore: () => void }) {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      className="bg-background/95 fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
       <div className="flex h-[var(--crm-mobile-tab-bar-h)] items-stretch">
         {TABS.map((tab) => {
           const href = `${subRoot}${tab.path}`;
           const active =
             tab.path === "/dashboard"
-              ? pathname === href || pathname.startsWith(`${href}/`)
+              ? pathname === href
               : pathname.startsWith(href);
           const Icon = tab.icon;
           return (
@@ -59,19 +59,21 @@ export function BottomTabBar({ onMore }: { onMore: () => void }) {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 text-micro transition-colors active:opacity-60",
-                active ? "font-semibold text-primary" : "font-medium text-muted-foreground",
+                "text-micro relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 transition-colors select-none active:opacity-60",
+                active
+                  ? "text-primary font-semibold"
+                  : "text-muted-foreground font-medium"
               )}
             >
               <span
                 className={cn(
                   "relative flex h-7 w-11 items-center justify-center rounded-full transition-colors",
-                  active && "bg-tag-violet-bg",
+                  active && "bg-tag-violet-bg"
                 )}
               >
                 <Icon className="size-5" aria-hidden="true" />
                 {"badge" in tab && tab.badge && unread > 0 && (
-                  <span className="absolute -top-1 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold tabular-nums text-primary-foreground">
+                  <span className="bg-primary text-primary-foreground absolute -top-1 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold tabular-nums">
                     {unread > 99 ? "99+" : unread}
                   </span>
                 )}
@@ -84,7 +86,7 @@ export function BottomTabBar({ onMore }: { onMore: () => void }) {
           type="button"
           onClick={onMore}
           aria-label="More — open the full menu"
-          className="flex min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 text-micro font-medium text-muted-foreground transition-colors active:opacity-60"
+          className="text-micro text-muted-foreground flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 font-medium transition-colors select-none active:opacity-60"
         >
           <span className="flex h-7 w-11 items-center justify-center">
             <Menu className="size-5" aria-hidden="true" />

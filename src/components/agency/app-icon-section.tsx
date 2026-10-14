@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Smartphone, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { renderIconVariants } from "@/lib/pwa/render-icons-client";
@@ -23,7 +23,11 @@ export function AppIconSection() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"upload" | "remove" | null>(null);
   // Bumped after every change so the <img> previews refetch.
-  const [previewNonce, setPreviewNonce] = useState(() => Date.now());
+  const [previewNonce, setPreviewNonce] = useState(0);
+
+  useEffect(() => {
+    setPreviewNonce(Date.now());
+  }, []);
 
   async function handleFile(file: File) {
     setBusy("upload");
@@ -40,7 +44,7 @@ export function AppIconSection() {
       if (!res.ok) throw new Error(payload.error ?? "Upload failed.");
       setPreviewNonce(Date.now());
       toast.success(
-        "App icon updated — new installs use it right away. Already-installed devices keep the old icon until they reinstall.",
+        "App icon updated — new installs use it right away. Already-installed devices keep the old icon until they reinstall."
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed.");
@@ -65,17 +69,17 @@ export function AppIconSection() {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border bg-card p-5">
+    <section className="bg-card space-y-4 rounded-2xl border p-5">
       <div className="flex items-center gap-2">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
           <Smartphone className="h-4 w-4" />
         </span>
         <div>
           <h2 className="text-sm font-semibold">Mobile app icon</h2>
-          <p className="text-xs text-muted-foreground">
-            The home-screen icon shown when someone installs your app on
-            their phone. Separate from the logo above — icons need a square
-            mark, not a wide wordmark.
+          <p className="text-muted-foreground text-xs">
+            The home-screen icon shown when someone installs your app on their
+            phone. Separate from the logo above — icons need a square mark, not
+            a wide wordmark.
           </p>
         </div>
       </div>
@@ -102,9 +106,9 @@ export function AppIconSection() {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">
-            Upload a square image, ideally 512×512 or larger (PNG, JPG, WebP,
-            or SVG). We generate every size phones need, including the padded
+          <p className="text-muted-foreground text-xs">
+            Upload a square image, ideally 512×512 or larger (PNG, JPG, WebP, or
+            SVG). We generate every size phones need, including the padded
             variant Android crops into a circle — shown right.
           </p>
         </div>

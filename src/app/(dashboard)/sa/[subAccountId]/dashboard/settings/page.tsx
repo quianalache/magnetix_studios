@@ -40,17 +40,61 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageShell } from "@/components/system/page-shell";
 import { PageHeader } from "@/components/system/page-header";
 import { SettingsSection } from "@/components/system/settings-section";
-import { StatusPill, Tag, type StatusTone } from "@/components/system/status-pill";
+import {
+  StatusPill,
+  Tag,
+  type StatusTone,
+} from "@/components/system/status-pill";
+import {
+  SettingsSubNavigation,
+  type SettingsSubNavigationItem,
+} from "@/components/settings/settings-sub-navigation";
 import type { UserDoc, SubscriptionStatus } from "@/types";
 import type { Contact } from "@/types/contacts";
 
-const PLAN_LABEL: Record<SubscriptionStatus, { label: string; tone: StatusTone }> = {
+const PLAN_LABEL: Record<
+  SubscriptionStatus,
+  { label: string; tone: StatusTone }
+> = {
   active: { label: "Pro · Active", tone: "success" },
   trialing: { label: "Pro · Trial", tone: "info" },
   past_due: { label: "Pro · Past due", tone: "warning" },
   canceled: { label: "Canceled", tone: "danger" },
   inactive: { label: "Free plan", tone: "neutral" },
 };
+
+const SETTINGS_NAV: SettingsSubNavigationItem[] = [
+  {
+    key: "admin",
+    label: "Business profile",
+    href: "?tab=admin#business-profile",
+  },
+  { key: "members", label: "Members", href: "?tab=admin#members" },
+  {
+    key: "messaging",
+    label: "Sending preferences",
+    href: "?tab=messaging#sending-preferences",
+  },
+  {
+    key: "email-domain",
+    label: "Email domain",
+    href: "?tab=messaging#email-domain",
+  },
+  { key: "payments", label: "Payments", href: "?tab=admin#payments" },
+  {
+    key: "subscription",
+    label: "Subscription",
+    href: "?tab=admin#subscription",
+  },
+  { key: "api", label: "API keys", href: "?tab=api#api-keys" },
+  { key: "webhooks", label: "Webhooks", href: "?tab=api#webhooks" },
+  {
+    key: "business-brain",
+    label: "Business Brain",
+    href: "?tab=business-brain#business-brain",
+  },
+  { key: "import", label: "Importer", href: "?tab=import#importer" },
+];
 
 export default function SettingsPage() {
   const { user, role } = useAuth();
@@ -59,12 +103,39 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<UserDoc | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeTab, setActiveTab] = useState("admin");
+  const [activeSettingsKey, setActiveSettingsKey] = useState("admin");
+
+  function tabForSettingsKey(key: string) {
+    if (key === "members" || key === "payments" || key === "subscription") {
+      return "admin";
+    }
+    if (key === "email-domain") return "messaging";
+    if (key === "webhooks") return "api";
+    return key;
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const requested = new URLSearchParams(window.location.search).get("tab");
-    if (["admin", "messaging", "api", "custom-fields", "business-brain", "import"].includes(requested ?? "")) {
+    if (
+      [
+        "admin",
+        "messaging",
+        "api",
+        "custom-fields",
+        "business-brain",
+        "import",
+      ].includes(requested ?? "")
+    ) {
       setActiveTab(requested as string);
+      const hash = window.location.hash.slice(1);
+      const hashItem = SETTINGS_NAV.find((item) =>
+        item.href.endsWith(`#${hash}`)
+      );
+      setActiveSettingsKey(
+        hashItem?.key ??
+          (requested === "custom-fields" ? "admin" : (requested as string))
+      );
     }
   }, []);
 
@@ -75,10 +146,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!user || !agencyId) return;
-    const unsub = subscribeToContacts(
-      { agencyId, subAccountId },
-      setContacts,
-    );
+    const unsub = subscribeToContacts({ agencyId, subAccountId }, setContacts);
     return () => unsub();
   }, [user, agencyId, subAccountId]);
 
@@ -124,9 +192,14 @@ export default function SettingsPage() {
         description={
           <>
             Workspace-level configuration for{" "}
-            <strong className="font-medium text-foreground">{workspaceName}</strong>. For
-            your personal profile / password, open{" "}
-            <Link href="/me/settings" className="text-link underline-offset-2 hover:underline">
+            <strong className="text-foreground font-medium">
+              {workspaceName}
+            </strong>
+            . For your personal profile / password, open{" "}
+            <Link
+              href="/me/settings"
+              className="text-link underline-offset-2 hover:underline"
+            >
               Your account
             </Link>
             .
@@ -134,178 +207,222 @@ export default function SettingsPage() {
         }
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList variant="underline" className="max-w-full overflow-x-auto [scrollbar-width:none]">
-          <TabsTrigger value="admin">Admin</TabsTrigger>
-          <TabsTrigger value="messaging">Messaging</TabsTrigger>
-          <TabsTrigger value="api">API</TabsTrigger>
-          <TabsTrigger value="custom-fields">Custom Fields</TabsTrigger>
-          <TabsTrigger value="business-brain">Business Brain</TabsTrigger>
-          <TabsTrigger value="import">Importer</TabsTrigger>
-        </TabsList>
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[11rem_minmax(0,1fr)] xl:items-start">
+        <SettingsSubNavigation
+          items={SETTINGS_NAV}
+          activeKey={activeSettingsKey}
+          onSelect={(key) => {
+            setActiveSettingsKey(key);
+            setActiveTab(tabForSettingsKey(key));
+          }}
+        />
 
-        {/* ---------- Admin: contact, branding, plan, members, territories,
+        <Tabs
+          className="min-w-0"
+          value={activeTab}
+          onValueChange={(value) => {
+            setActiveTab(value);
+            setActiveSettingsKey(value === "custom-fields" ? "admin" : value);
+          }}
+        >
+          <TabsList
+            variant="underline"
+            className="max-w-full overflow-x-auto [scrollbar-width:none]"
+          >
+            <TabsTrigger value="admin">Admin</TabsTrigger>
+            <TabsTrigger value="messaging">Messaging</TabsTrigger>
+            <TabsTrigger value="api">API</TabsTrigger>
+            <TabsTrigger value="custom-fields">Custom Fields</TabsTrigger>
+            <TabsTrigger value="business-brain">Business Brain</TabsTrigger>
+            <TabsTrigger value="import">Importer</TabsTrigger>
+          </TabsList>
+
+          {/* ---------- Admin: contact, branding, plan, members, territories,
             calendar, payments, data ---------- */}
-        <TabsContent value="admin" className="mt-6 space-y-6">
-          {/* Workspace / business name — self-service rename, admin-only.
+          <TabsContent value="admin" className="mt-6 space-y-6">
+            {/* Workspace / business name — self-service rename, admin-only.
               Same canonical field + membership sync as the Agency-side
               rename dialog; only the slug (the public Space URL) is off
               limits here. */}
-          <SubAccountWorkspaceNameSection />
+            <div id="business-profile" className="scroll-mt-6 space-y-6">
+              <SubAccountWorkspaceNameSection />
 
-          {/* Account contact — the human at the client this sub-account belongs to. */}
-          <SubAccountContactSection />
+              {/* Account contact — the human at the client this sub-account belongs to. */}
+              <SubAccountContactSection />
 
-          {/* Branding — the client's logo, used on quote/invoice emails, public
+              {/* Branding — the client's logo, used on quote/invoice emails, public
               link pages, and PDFs. Independent of agency-level branding. */}
-          <SubAccountBrandingSection />
+              <SubAccountBrandingSection />
+            </div>
 
-          {/* Subscription — admin only, and only on the LeadStack-branded
+            {/* Subscription — admin only, and only on the LeadStack-branded
               deployment. Buyer clones (LANDING_VARIANT === "custom") collect
               payment off-system and provision sub-accounts by invite, so this
               panel is hidden there. */}
-          {role === "admin" && LANDING_VARIANT === "leadstack" && (
-            <SettingsSection
-              title="Subscription"
-              description="This sub-account's plan with the agency. Defaults to free; upgrade unlocks higher limits + premium features."
-              action={<Tag color="gray">Roadmap</Tag>}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border p-4">
-                <StatusPill tone={plan.tone}>{plan.label}</StatusPill>
-                <span
-                  title="Per-sub-account billing is on the roadmap. Coming with the Stripe Connect upgrade."
-                  className="cursor-not-allowed"
-                >
-                  <Button size="sm" disabled className="pointer-events-none">
-                    See plans
-                  </Button>
-                </span>
-              </div>
-              <p className="text-caption text-muted-foreground">
-                Sub-account billing is on the roadmap — agencies will be able
-                to set tiered plans (free / pro / etc.) and clients can upgrade
-                from this card. Until then every sub-account is on the free
-                plan.
-              </p>
-            </SettingsSection>
-          )}
+            {role === "admin" && LANDING_VARIANT === "leadstack" && (
+              <SettingsSection
+                title="Subscription"
+                description="This sub-account's plan with the agency. Defaults to free; upgrade unlocks higher limits + premium features."
+                action={<Tag color="gray">Roadmap</Tag>}
+              >
+                <div className="rounded-control border-border flex flex-wrap items-center justify-between gap-3 border p-4">
+                  <StatusPill tone={plan.tone}>{plan.label}</StatusPill>
+                  <span
+                    title="Per-sub-account billing is on the roadmap. Coming with the Stripe Connect upgrade."
+                    className="cursor-not-allowed"
+                  >
+                    <Button size="sm" disabled className="pointer-events-none">
+                      See plans
+                    </Button>
+                  </span>
+                </div>
+                <p className="text-caption text-muted-foreground">
+                  Sub-account billing is on the roadmap — agencies will be able
+                  to set tiered plans (free / pro / etc.) and clients can
+                  upgrade from this card. Until then every sub-account is on the
+                  free plan.
+                </p>
+              </SettingsSection>
+            )}
 
-          {/* Members — admins (and the agency owner) invite, promote, remove. */}
-          <SubAccountMembersSection />
+            {/* Members — admins (and the agency owner) invite, promote, remove. */}
+            <div id="members" className="scroll-mt-6">
+              <SubAccountMembersSection />
+            </div>
 
-          {/* Territory Scoping — opt-in restriction pinning collaborators to
+            {/* Territory Scoping — opt-in restriction pinning collaborators to
               the regions they cover. Off by default. */}
-          <SubAccountTerritoriesSection />
+            <SubAccountTerritoriesSection />
 
-          {/* Pipeline — rename + reorder deal stages (labels/order only;
+            {/* Pipeline — rename + reorder deal stages (labels/order only;
               ids + won/lost terminals are fixed). */}
-          <SubAccountPipelineSection />
+            <SubAccountPipelineSection />
 
-          {/* Calendar sync — per-sub-account .ics subscription URL. */}
-          <SubAccountCalendarSyncSection />
+            {/* Calendar sync — per-sub-account .ics subscription URL. */}
+            <SubAccountCalendarSyncSection />
 
-          {/* Google Calendar two-way sync (Phase 1) — the reverse
+            {/* Google Calendar two-way sync (Phase 1) — the reverse
               direction: pull a connected member's own events in. */}
-          <SubAccountGoogleCalendarSection />
+            <SubAccountGoogleCalendarSection />
 
-          {/* Your subscription — Client Billing v1. Self-gating: only renders
+            {/* Your subscription — Client Billing v1. Self-gating: only renders
               when this workspace is billed through the platform by the agency
               (billing present + not comped). */}
-          <SubAccountPlanBillingSection />
+            <SubAccountPlanBillingSection />
 
-          {/* Payments — PayPal.me username for the Products + Invoices flow. */}
-          <SubAccountPayPalSection />
+            {/* Payments — PayPal.me username for the Products + Invoices flow. */}
+            <div id="payments" className="scroll-mt-6 space-y-6">
+              <SubAccountPayPalSection />
 
-          {/* Stripe Connect — v2 roadmap placeholder. */}
-          <SubAccountStripeSection />
-
-          {/* Data export */}
-          <SettingsSection title="Data" description="Take your data with you, any time.">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border p-4">
-              <div>
-                <p className="text-body-sm font-medium text-foreground">Export contacts</p>
-                <p className="text-caption text-muted-foreground">
-                  {contacts.length} contact{contacts.length === 1 ? "" : "s"} ·
-                  CSV with tags, source, and timestamps
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportContacts}
-                disabled={contacts.length === 0}
-              >
-                <Download className="size-3.5" aria-hidden="true" />
-                Download CSV
-              </Button>
+              {/* Stripe Connect — v2 roadmap placeholder. */}
+              <SubAccountStripeSection />
             </div>
-          </SettingsSection>
-        </TabsContent>
 
-        {/* ---------- Custom Fields: operator-defined fields on contacts + deals
+            {/* Data export */}
+            <SettingsSection
+              title="Data"
+              description="Take your data with you, any time."
+            >
+              <div className="rounded-control border-border flex flex-wrap items-center justify-between gap-3 border p-4">
+                <div>
+                  <p className="text-body-sm text-foreground font-medium">
+                    Export contacts
+                  </p>
+                  <p className="text-caption text-muted-foreground">
+                    {contacts.length} contact{contacts.length === 1 ? "" : "s"}{" "}
+                    · CSV with tags, source, and timestamps
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportContacts}
+                  disabled={contacts.length === 0}
+                >
+                  <Download className="size-3.5" aria-hidden="true" />
+                  Download CSV
+                </Button>
+              </div>
+            </SettingsSection>
+          </TabsContent>
+
+          {/* ---------- Custom Fields: operator-defined fields on contacts + deals
             (the migration-target schema; also useful standalone) ---------- */}
-        <TabsContent value="custom-fields" className="mt-6 space-y-6">
-          <SubAccountCustomFieldsSection />
-        </TabsContent>
+          <TabsContent value="custom-fields" className="mt-6 space-y-6">
+            <SubAccountCustomFieldsSection />
+          </TabsContent>
 
-        {/* ---------- Business Brain: shared sub-account-level strategic
+          {/* ---------- Business Brain: shared sub-account-level strategic
             context (Creator Vision, Audience, Offers, Frameworks, Stories +
             Proof, Brand Voice, Topics + Subtopics, Positioning). Not owned
             by YouTube Content Studio or any other module — the canonical
             businessBrain/main document, consumed via getBusinessBrain() by
             every current and future AI-assisted content feature. ---------- */}
-        <TabsContent value="business-brain" className="mt-6 space-y-6">
-          <SubAccountBusinessBrainSection />
-        </TabsContent>
+          <TabsContent
+            value="business-brain"
+            id="business-brain"
+            className="mt-6 space-y-6"
+          >
+            <SubAccountBusinessBrainSection />
+          </TabsContent>
 
-        {/* ---------- Import: GoHighLevel migration wizard ---------- */}
-        <TabsContent value="import" className="mt-6 space-y-6">
-          <GhlImportWizard />
-        </TabsContent>
+          {/* ---------- Import: GoHighLevel migration wizard ---------- */}
+          <TabsContent value="import" id="importer" className="mt-6 space-y-6">
+            <GhlImportWizard />
+          </TabsContent>
 
-        {/* ---------- Messaging: SMS/WhatsApp sender, email domain, reviews ---------- */}
-        <TabsContent value="messaging" className="mt-6 space-y-6">
-          {/* SMS — opt-in dedicated Twilio number (also hosts the WhatsApp sender). */}
-          <SubAccountSmsSection />
+          {/* ---------- Messaging: SMS/WhatsApp sender, email domain, reviews ---------- */}
+          <TabsContent value="messaging" className="mt-6 space-y-6">
+            {/* SMS — opt-in dedicated Twilio number (also hosts the WhatsApp sender). */}
+            <SubAccountSmsSection />
 
-          {/* Facebook + Instagram inbox (beta) — self-gates: renders only when
+            {/* Facebook + Instagram inbox (beta) — self-gates: renders only when
               the agency flipped metaInboxEnabledByAgency on for this sub-account. */}
-          <SubAccountMetaSection />
+            <SubAccountMetaSection />
 
-          {/* Sending preferences — Reply-To, send window, pause-all-workflows.
+            {/* Sending preferences — Reply-To, send window, pause-all-workflows.
               Rehomed from the deleted legacy Automations → Settings page; MUST
               render above the email-domain card, whose Reply-To banner points
               at "the Sending preferences card above". */}
-          <SubAccountSendingPreferencesSection />
+            <div id="sending-preferences" className="scroll-mt-6">
+              <SubAccountSendingPreferencesSection />
+            </div>
 
-          {/* Email sending domain — opt-in dedicated Resend domain. */}
-          <SubAccountEmailDomainSection />
+            {/* Email sending domain — opt-in dedicated Resend domain. */}
+            <div id="email-domain" className="scroll-mt-6">
+              <SubAccountEmailDomainSection />
+            </div>
 
-          {/* Custom domain — opt-in Vercel domain for public pages
+            {/* Custom domain — opt-in Vercel domain for public pages
               (booking/decoder/courses/portal). Separate from the email
               domain above: different provider, different gate. */}
-          <SubAccountCustomDomainSection />
+            <SubAccountCustomDomainSection />
 
-          {/* Business mailing address — CAN-SPAM footer requirement, gates
+            {/* Business mailing address — CAN-SPAM footer requirement, gates
               broadcast sending. */}
-          <SubAccountBroadcastComplianceSection />
+            <SubAccountBroadcastComplianceSection />
 
-          {/* Google reviews — SMS / WhatsApp review-request sends. */}
-          <SubAccountGoogleReviewSection />
-        </TabsContent>
+            {/* Google reviews — SMS / WhatsApp review-request sends. */}
+            <SubAccountGoogleReviewSection />
+          </TabsContent>
 
-        {/* ---------- API: recipes, keys, webhooks ---------- */}
-        <TabsContent value="api" className="mt-6 space-y-6">
-          {/* Quick start — guided setup for the common integrations. */}
-          <SubAccountApiRecipesSection />
+          {/* ---------- API: recipes, keys, webhooks ---------- */}
+          <TabsContent value="api" className="mt-6 space-y-6">
+            {/* Quick start — guided setup for the common integrations. */}
+            <SubAccountApiRecipesSection />
 
-          {/* API keys — programmatic access for Zapier, Make, custom pages. */}
-          <SubAccountApiKeysSection />
+            {/* API keys — programmatic access for Zapier, Make, custom pages. */}
+            <div id="api-keys" className="scroll-mt-6">
+              <SubAccountApiKeysSection />
+            </div>
 
-          {/* Webhooks — outbound event delivery to subscriber URLs. */}
-          <SubAccountWebhooksSection />
-        </TabsContent>
-      </Tabs>
+            {/* Webhooks — outbound event delivery to subscriber URLs. */}
+            <div id="webhooks" className="scroll-mt-6">
+              <SubAccountWebhooksSection />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </PageShell>
   );
 }
