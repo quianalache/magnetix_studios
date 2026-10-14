@@ -43,7 +43,7 @@ export async function POST(
   try {
     const session = await getStripeServer().billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${base}/sa/${subAccountId}/dashboard/settings`,
+      return_url: `${base}/sa/${subAccountId}/dashboard/settings?section=subscription`,
     });
     return NextResponse.json({ url: session.url });
   } catch (err) {

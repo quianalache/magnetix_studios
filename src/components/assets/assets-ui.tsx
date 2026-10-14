@@ -24,6 +24,7 @@ export function AssetsHeader({ actions }: { actions?: React.ReactNode }) {
     <PageHeader
       variant="moment"
       motif="crescent"
+      eyebrow="Assets"
       title="Assets"
       description="Organize your resources, CRM materials, media, and affiliate programs in one place."
       actions={actions}

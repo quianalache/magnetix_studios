@@ -169,7 +169,7 @@ export default function NewQuotePage() {
               able to send it until Stripe or PayPal is connected — the
               payment link is generated at send time.{" "}
               <Link
-                href={saPath("/dashboard/settings")}
+                href={saPath("/dashboard/settings?section=payments")}
                 className="font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-400"
               >
                 Connect a payment method →

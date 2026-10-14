@@ -245,7 +245,7 @@ export function ResourceLibrary({
   function ResourceIcon({ r }: { r: ResourceRow }) {
     const Icon = r.sourceKind === "internal" ? FileText : r.type === "Design Asset" ? ImageIcon : r.type === "Link" ? Link2 : FileText;
     return (
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-tag-violet-bg text-tag-violet-fg">
         <Icon className="h-5 w-5" />
       </span>
     );
@@ -343,10 +343,11 @@ export function ResourceLibrary({
               );
             })}
           </ul>
-          <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card md:block">
+          <div className="hidden overflow-hidden rounded-card border border-border bg-card shadow-card md:block">
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-surface-sunken/60 text-left text-micro font-semibold tracking-[0.08em] text-ink-tertiary uppercase">
+                <tr className="border-b border-border bg-table-head text-left text-micro font-semibold tracking-[0.08em] text-table-head-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Resource</th>
                   <th className="px-3 py-3 font-semibold">Type</th>
                   <th className="px-3 py-3 font-semibold">Access / Source</th>
@@ -363,7 +364,7 @@ export function ResourceLibrary({
                   const src = sourceLabel(r);
                   return (
                     <tr key={r.id} className="border-b border-border-subtle transition-colors last:border-0 hover:bg-tint-violet">
-                      <td className="max-w-[320px] px-4 py-3">
+                      <td className="max-w-[320px] px-4 py-2.5">
                         <div className="flex items-center gap-3">
                           <ResourceIcon r={r} />
                           <button type="button" onClick={() => void open(r)} className="min-w-0 text-left">
@@ -372,25 +373,25 @@ export function ResourceLibrary({
                           </button>
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2.5">
                         <TagPill label={r.type || "Other"} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2.5">
                         <span className="block font-medium">{src.name}</span>
                         <span className="text-muted-foreground block text-xs">{src.kind}</span>
                       </td>
-                      <td className="px-3 py-3">{r.relatedArea ? <TagPill label={r.relatedArea} /> : <span className="text-muted-foreground">—</span>}</td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2.5">{r.relatedArea ? <TagPill label={r.relatedArea} /> : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="px-3 py-2.5">
                         <StatusPill tone={st.tone}>{st.label}</StatusPill>
                       </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
+                      <td className="px-3 py-2.5 whitespace-nowrap">
                         <span className="block">{formatDay(r.updatedAt)}</span>
                         {r.updatedByName && <span className="text-muted-foreground block text-xs">by {r.updatedByName}</span>}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2.5">
                         {r.updatedByName ? <Initials name={r.updatedByName} /> : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-3 py-3 text-right">
+                      <td className="px-3 py-2.5 text-right">
                         <RowMenu r={r} />
                       </td>
                     </tr>
@@ -398,11 +399,17 @@ export function ResourceLibrary({
                 })}
               </tbody>
             </table>
+            </div>
+            {filtered.length > 0 && (
+              <div className="border-t border-border px-4 py-3">
+                <Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="resources" onPage={setPage} />
+              </div>
+            )}
           </div>
         </>
       )}
 
-      <Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="resources" onPage={setPage} />
+      <div className="md:hidden"><Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="resources" onPage={setPage} /></div>
 
       {bundles.length > 0 && (
         <section aria-labelledby="legacy-bundles" className="space-y-2">

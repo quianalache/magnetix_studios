@@ -570,7 +570,7 @@ export function BroadcastComposer({
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
           You need a business mailing address before you can send a broadcast
           — required by CAN-SPAM.{" "}
-          <a href={saPath("/dashboard/settings")} className="underline">
+          <a href={saPath("/dashboard/settings?section=sending-preferences")} className="underline">
             Add it in Settings → Sending preferences
           </a>
           .

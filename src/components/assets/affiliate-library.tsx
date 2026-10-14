@@ -554,10 +554,11 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
               </li>
             ))}
           </ul>
-          <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card md:block">
+          <div className="hidden overflow-hidden rounded-card border border-border bg-card shadow-card md:block">
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-surface-sunken/60 text-left text-micro font-semibold tracking-[0.08em] text-ink-tertiary uppercase">
+                <tr className="border-b border-border bg-table-head text-left text-micro font-semibold tracking-[0.08em] text-table-head-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Program</th>
                   <th className="px-3 py-3 font-semibold">Category</th>
                   <th className="px-3 py-3 font-semibold">Status</th>
@@ -571,7 +572,7 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.id} className="border-b border-border-subtle transition-colors last:border-0 hover:bg-tint-violet">
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3">
                         <ProgramMark name={r.programName} />
                         <button type="button" onClick={() => { setEditing(r); setSheetOpen(true); }} className="min-w-0 text-left">
@@ -580,24 +581,30 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3"><TagPill label={affiliateCategoryOf(r)} /></td>
-                    <td className="px-3 py-3">{statusPill(r)}</td>
-                    <td className="px-3 py-3">{recurrencePill(r)}</td>
-                    <td className="px-3 py-3">{affiliatePayoutSummary(r) ?? <span className="text-muted-foreground">—</span>}</td>
-                    <td className="px-3 py-3">{r.cookieWindow || <span className="text-muted-foreground">—</span>}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2.5"><TagPill label={affiliateCategoryOf(r)} /></td>
+                    <td className="px-3 py-2.5">{statusPill(r)}</td>
+                    <td className="px-3 py-2.5">{recurrencePill(r)}</td>
+                    <td className="px-3 py-2.5">{affiliatePayoutSummary(r) ?? <span className="text-muted-foreground">—</span>}</td>
+                    <td className="px-3 py-2.5">{r.cookieWindow || <span className="text-muted-foreground">—</span>}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className="block">{formatDay(r.updatedAt)}</span>
                       {r.updatedByName && <span className="text-muted-foreground block text-xs">by {r.updatedByName}</span>}
                     </td>
-                    <td className="px-3 py-3 text-right"><Menu r={r} /></td>
+                    <td className="px-3 py-2.5 text-right"><Menu r={r} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
+            {filtered.length > 0 && (
+              <div className="border-t border-border px-4 py-3">
+                <Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="affiliate programs" onPage={setPage} />
+              </div>
+            )}
           </div>
         </>
       )}
-      <Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="affiliate programs" onPage={setPage} />
+      <div className="md:hidden"><Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="affiliate programs" onPage={setPage} /></div>
       <p className="text-muted-foreground text-xs">
         This library is for programs you promote. Commissions are tracked by each program — Magnetix doesn&apos;t estimate or pay them.
       </p>

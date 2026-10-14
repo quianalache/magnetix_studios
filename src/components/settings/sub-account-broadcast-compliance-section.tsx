@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { SettingsSection } from "@/components/system/settings-section";
+import { useSettingsForm } from "@/components/system/settings-workspace";
 import { StatusPill, Tag } from "@/components/system/status-pill";
 
 /**
@@ -33,27 +34,45 @@ export function SubAccountBroadcastComplianceSection() {
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  const addr = subAccount?.mailingAddress ?? null;
+  const saved = {
+    line1: addr?.line1 ?? "",
+    line2: addr?.line2 ?? "",
+    city: addr?.city ?? "",
+    region: addr?.region ?? "",
+    postalCode: addr?.postalCode ?? "",
+    country: addr?.country ?? "",
+  };
+  function resetToSaved() {
+    setLine1(saved.line1);
+    setLine2(saved.line2);
+    setCity(saved.city);
+    setRegion(saved.region);
+    setPostalCode(saved.postalCode);
+    setCountry(saved.country);
+    setSubmitted(false);
+  }
+
   useEffect(() => {
-    const addr = subAccount?.mailingAddress ?? null;
-    setLine1(addr?.line1 ?? "");
-    setLine2(addr?.line2 ?? "");
-    setCity(addr?.city ?? "");
-    setRegion(addr?.region ?? "");
-    setPostalCode(addr?.postalCode ?? "");
-    setCountry(addr?.country ?? "");
+    resetToSaved();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subAccountId, subAccount?.updatedAt]);
 
-  if (!isAdmin) return null;
+  const fields = { line1, city, region, postalCode, country };
+  const missing = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => !fields[k].trim());
+  const dirty =
+    line1 !== saved.line1 ||
+    line2 !== saved.line2 ||
+    city !== saved.city ||
+    region !== saved.region ||
+    postalCode !== saved.postalCode ||
+    country !== saved.country;
 
-  const hasAddress = !!subAccount?.mailingAddress;
-
-  async function handleSave(e: FormEvent) {
-    e.preventDefault();
+  async function save(): Promise<boolean> {
     setSubmitted(true);
     if (missing.length > 0) {
       toast.error("Fill in the highlighted fields to save the address.");
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -74,15 +93,32 @@ export function SubAccountBroadcastComplianceSection() {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to save.");
       toast.success("Mailing address saved — broadcasts can now send.");
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save.");
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
-  const fields = { line1, city, region, postalCode, country };
-  const missing = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => !fields[k].trim());
+  // Inside the Settings workspace the sticky save bar saves this form.
+  const managed = useSettingsForm("mailing-address", {
+    label: "Mailing address",
+    dirty: isAdmin && dirty,
+    save,
+    discard: resetToSaved,
+  });
+
+  if (!isAdmin) return null;
+
+  const hasAddress = !!subAccount?.mailingAddress;
+
+  function handleSave(e: FormEvent) {
+    e.preventDefault();
+    void save();
+  }
+
   const showErr = (k: keyof typeof fields) => submitted && missing.includes(k);
 
   function field(
@@ -119,20 +155,22 @@ export function SubAccountBroadcastComplianceSection() {
   return (
     <form onSubmit={handleSave} noValidate>
       <SettingsSection
-        title="Broadcast compliance"
-        description="CAN-SPAM requires a real postal address on every marketing email. We add it (plus the unsubscribe link) to every broadcast's footer automatically — you never have to remember it."
+        title="Mailing address"
+        description="CAN-SPAM requires a real postal address on every marketing email. We add it (plus the unsubscribe link) to every broadcast's footer automatically."
         action={hasAddress ? <StatusPill tone="success">Saved</StatusPill> : <Tag color="gray">Required for broadcasts</Tag>}
         footer={
-          <Button type="submit" disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                Saving…
-              </>
-            ) : (
-              "Save mailing address"
-            )}
-          </Button>
+          managed ? undefined : (
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                  Saving…
+                </>
+              ) : (
+                "Save mailing address"
+              )}
+            </Button>
+          )
         }
       >
         {!hasAddress ? (
@@ -140,14 +178,16 @@ export function SubAccountBroadcastComplianceSection() {
             Anti-spam law requires a physical address in every bulk email footer. It&apos;s added automatically.
           </Alert>
         ) : null}
-        {field("line1", "Street address", line1, setLine1, "123 Main St")}
-        {field("line2", "Suite / unit (optional)", line2, setLine2, "Suite 200", true)}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-[1.6fr_1fr]">
+          {field("line1", "Street address", line1, setLine1, "123 Main St")}
+          {field("line2", "Suite / unit (optional)", line2, setLine2, "Suite 200", true)}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[1.4fr_1fr_1fr]">
           {field("city", "City", city, setCity, "Atlanta")}
           {field("region", "State / region", region, setRegion, "GA")}
           {field("postalCode", "Postal code", postalCode, setPostalCode, "30301")}
-          {field("country", "Country", country, setCountry, "United States")}
         </div>
+        <div className="sm:max-w-xs">{field("country", "Country", country, setCountry, "United States")}</div>
       </SettingsSection>
     </form>
   );

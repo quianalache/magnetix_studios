@@ -39,7 +39,7 @@ export default function EmailHomePage() {
         sendingReady={sendingReady}
         domainReady={domainReady}
         hasMailingAddress={hasMailingAddress}
-        settingsHref={saPath("/dashboard/settings?tab=messaging")}
+        settingsHref={saPath("/dashboard/settings?section=email-domain")}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

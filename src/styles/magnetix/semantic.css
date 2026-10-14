@@ -151,6 +151,10 @@
   --ds-tag-gray-bg: #f3f1f7;
   --ds-tag-gray-fg: var(--color-ink-2);
 
+  /* Table header row (approved index table: dark-plum labels on a faint wash). */
+  --ds-table-head-bg: #fcfbfe;
+  --ds-table-head-fg: #4b3e6e;
+
   /* Switch track (approved toggle: soft grey-lilac off, violet on). */
   --ds-switch-off: #dcd6e6;
   --ds-switch-on: var(--color-violet-ds-600);
@@ -232,6 +236,8 @@
   --color-bubble-in: var(--ds-bubble-in-bg);
   --color-note: var(--ds-note-bg);
   --color-switch-off: var(--ds-switch-off);
+  --color-table-head: var(--ds-table-head-bg);
+  --color-table-head-foreground: var(--ds-table-head-fg);
   --color-switch-on: var(--ds-switch-on);
 }
 
@@ -336,4 +342,18 @@
     radial-gradient(80% 120% at 10% 100%, #fde3ef 0%, rgb(253 227 239 / 0) 60%),
     linear-gradient(180deg, #fbf8ff, #f6f0ff);
   border-color: #e9def9;
+}
+
+/* Approved Dashboard hero planet (Section 4.1): sphere + tilted gold ring. */
+.mx-crm .mx-hero-planet {
+  background: radial-gradient(circle at 34% 30%, #ffffff 0%, #f1e7ff 18%, #d9c3fb 45%, #b798ee 72%, #9877dd 100%);
+  box-shadow:
+    inset -18px -14px 40px rgb(110 70 190 / 0.25),
+    0 20px 60px rgb(160 120 230 / 0.25);
+}
+.mx-crm .mx-hero-planet-ring {
+  border: 2px solid rgb(214 168 82 / 0.75);
+}
+.mx-crm .mx-hero-quote {
+  color: #4b3e6e;
 }

@@ -209,7 +209,7 @@ export function MetaChannelSection() {
           <strong>Connect a Facebook Page first.</strong> The bot needs the
           shared Meta connection — set it up under{" "}
           <Link
-            href={`/sa/${subAccountId}/dashboard/settings`}
+            href={`/sa/${subAccountId}/dashboard/settings?section=facebook-instagram`}
             className="underline-offset-2 hover:underline"
           >
             Settings → Facebook &amp; Instagram
@@ -224,7 +224,7 @@ export function MetaChannelSection() {
           doesn&apos;t carry the Instagram messaging permission, so the bot
           will answer Messenger DMs but skip Instagram. Click Reconnect under{" "}
           <Link
-            href={`/sa/${subAccountId}/dashboard/settings`}
+            href={`/sa/${subAccountId}/dashboard/settings?section=facebook-instagram`}
             className="underline-offset-2 hover:underline"
           >
             Settings → Facebook &amp; Instagram

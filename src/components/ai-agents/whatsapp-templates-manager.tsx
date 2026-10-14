@@ -293,7 +293,7 @@ export function WhatsappTemplatesManager() {
           You can draft templates now, but submitting needs a WhatsApp sender —
           add one under{" "}
           <Link
-            href={`/sa/${subAccountId}/dashboard/settings`}
+            href={`/sa/${subAccountId}/dashboard/settings?section=sms`}
             className="underline-offset-2 hover:underline"
           >
             Settings → SMS

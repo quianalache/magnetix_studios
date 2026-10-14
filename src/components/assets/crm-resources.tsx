@@ -224,7 +224,7 @@ export function CrmResources() {
               return (
                 <li key={`${i.type}-${i.id}`} className="bg-card space-y-3 rounded-card border border-border shadow-card p-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-tag-violet-bg text-tag-violet-fg">
                       <M.icon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -241,10 +241,11 @@ export function CrmResources() {
               );
             })}
           </ul>
-          <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card md:block">
+          <div className="hidden overflow-hidden rounded-card border border-border bg-card shadow-card md:block">
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-surface-sunken/60 text-left text-micro font-semibold tracking-[0.08em] text-ink-tertiary uppercase">
+                <tr className="border-b border-border bg-table-head text-left text-micro font-semibold tracking-[0.08em] text-table-head-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Resource</th>
                   <th className="px-3 py-3 font-semibold">Type</th>
                   <th className="px-3 py-3 font-semibold">Source Module</th>
@@ -260,9 +261,9 @@ export function CrmResources() {
                   const M = TYPE_META[i.type];
                   return (
                     <tr key={`${i.type}-${i.id}`} className="border-b border-border-subtle transition-colors last:border-0 hover:bg-tint-violet">
-                      <td className="max-w-[320px] px-4 py-3">
+                      <td className="max-w-[320px] px-4 py-2.5">
                         <div className="flex items-center gap-3">
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
+                          <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-tag-violet-bg text-tag-violet-fg">
                             <M.icon className="h-5 w-5" />
                           </span>
                           <div className="min-w-0">
@@ -271,8 +272,8 @@ export function CrmResources() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3"><TagPill label={M.label} /></td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2.5"><TagPill label={M.label} /></td>
+                      <td className="px-3 py-2.5">
                         <span className="flex items-center gap-2">
                           <M.icon className="text-muted-foreground h-4 w-4 shrink-0" />
                           <span>
@@ -281,25 +282,31 @@ export function CrmResources() {
                           </span>
                         </span>
                       </td>
-                      <td className="px-3 py-3"><TagPill label={i.delivery} /></td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2.5"><TagPill label={i.delivery} /></td>
+                      <td className="px-3 py-2.5">
                         <StatusPill tone={i.status === "active" ? "green" : i.status === "draft" ? "amber" : "gray"}>{i.statusLabel}</StatusPill>
                       </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
+                      <td className="px-3 py-2.5 whitespace-nowrap">
                         <span className="block">{formatDay(i.updatedAt)}</span>
                         {i.updatedByName && <span className="text-muted-foreground block text-xs">by {i.updatedByName}</span>}
                       </td>
-                      <td className="px-3 py-3">{i.updatedByName ? <Initials name={i.updatedByName} /> : <span className="text-muted-foreground">—</span>}</td>
-                      <td className="px-3 py-3"><Actions i={i} /></td>
+                      <td className="px-3 py-2.5">{i.updatedByName ? <Initials name={i.updatedByName} /> : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="px-3 py-2.5"><Actions i={i} /></td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            </div>
+            {filtered.length > 0 && (
+              <div className="border-t border-border px-4 py-3">
+                <Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="CRM resources" onPage={setPage} />
+              </div>
+            )}
           </div>
         </>
       )}
-      <Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="CRM resources" onPage={setPage} />
+      <div className="md:hidden"><Pager page={page} pageCount={pageCount} total={filtered.length} pageSize={PAGE_SIZE} noun="CRM resources" onPage={setPage} /></div>
     </div>
   );
 }

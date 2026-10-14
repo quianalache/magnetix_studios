@@ -106,7 +106,7 @@ export default function YtcsDashboardPage() {
       </div>
 
       <a
-        href={saPath("/dashboard/settings")}
+        href={saPath("/dashboard/settings?section=business-brain")}
         className="flex items-center gap-3 rounded-2xl border bg-card p-5 transition-all hover:-translate-y-px hover:border-primary/30"
       >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">

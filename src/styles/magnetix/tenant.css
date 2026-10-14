@@ -112,3 +112,24 @@
   outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
 }
+
+/* Booking layout pieces (visual-parity pass, 2026-10-14). */
+.tenant-surface .tenant-display {
+  font-family: var(--brand-display-font);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--brand-primary-text) 35%, #111827);
+}
+.tenant-surface .tenant-divider {
+  border-color: color-mix(in srgb, var(--brand-primary) 8%, #eef0eb);
+}
+/* The chosen time: a quiet dark chip next to the brand "Next" button. */
+.tenant-surface .tenant-choice.tenant-choice-picked {
+  background: color-mix(in srgb, var(--brand-primary-text) 55%, #3f3f46);
+  border-color: transparent;
+  color: #ffffff;
+}
+/* Today, when it isn't the chosen day. */
+.tenant-surface .tenant-today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-primary-text) 25%, #ffffff);
+}

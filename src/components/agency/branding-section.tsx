@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { SettingsSection } from "@/components/system/settings-section";
+import { useSettingsForm } from "@/components/system/settings-workspace";
 import { renderLogo } from "@/lib/brand/render-logo-client";
 
 // Accepts a full https:// URL (manually pasted) OR our own served path from
@@ -66,8 +67,27 @@ export function BrandingSection() {
   };
   const err = (k: keyof typeof errors) => (submitted ? errors[k] : null);
 
-  async function handleSave(e: FormEvent) {
+  const savedName = agency.name === "LeadStack" ? "" : agency.name;
+  function resetToSaved() {
+    setName(savedName);
+    setLogoUrl(agency.logoUrl ?? "");
+    setSupportEmail(agency.supportEmail ?? "");
+    setPrimaryDomain(agency.primaryDomain ?? "");
+    setSubmitted(false);
+  }
+  const dirty =
+    hydrated &&
+    (name !== savedName ||
+      logoUrl !== (agency.logoUrl ?? "") ||
+      supportEmail !== (agency.supportEmail ?? "") ||
+      primaryDomain !== (agency.primaryDomain ?? ""));
+
+  function handleSave(e: FormEvent) {
     e.preventDefault();
+    void save();
+  }
+
+  async function save(): Promise<boolean> {
     setSubmitted(true);
     const trimmedName = name.trim();
     const trimmedLogo = logoUrl.trim();
@@ -80,19 +100,19 @@ export function BrandingSection() {
 
     if (!trimmedName) {
       toast.error("Agency name is required.");
-      return;
+      return false;
     }
     if (trimmedLogo && !URL_RE.test(trimmedLogo)) {
       toast.error("Logo URL must start with http:// or https://.");
-      return;
+      return false;
     }
     if (trimmedEmail && !EMAIL_RE.test(trimmedEmail)) {
       toast.error("Support email must be a valid email address.");
-      return;
+      return false;
     }
     if (trimmedDomain && !DOMAIN_RE.test(trimmedDomain)) {
       toast.error("Primary domain must be a bare domain like example.com.");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -112,8 +132,10 @@ export function BrandingSection() {
       };
       if (!res.ok) throw new Error(payload.error ?? "Could not save.");
       toast.success("Branding updated.");
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -159,10 +181,13 @@ export function BrandingSection() {
     }
   }
 
+  // Inside the Settings workspace the sticky save bar saves this form.
+  const managed = useSettingsForm("agency-branding", { label: "Branding", dirty, save, discard: resetToSaved });
+
   return (
     <form onSubmit={handleSave} noValidate>
     <SettingsSection
-      title="Branding"
+      title="Brand identity"
       description={
         <>
           What clients see in the sidebar, browser tab, AND the public landing
@@ -171,10 +196,12 @@ export function BrandingSection() {
         </>
       }
       footer={
+        managed ? undefined : (
         <Button type="submit" disabled={saving || !hydrated}>
           {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Save className="size-3.5" aria-hidden="true" />}
           {saving ? "Saving…" : "Save"}
         </Button>
+        )
       }
     >
       <div className="space-y-1.5">

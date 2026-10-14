@@ -194,7 +194,7 @@ export function WhatsappChannelSection() {
           <strong>Heads up:</strong> the WhatsApp agent needs a WhatsApp sender
           number on this sub-account. Add one under{" "}
           <Link
-            href={`/sa/${subAccountId}/dashboard/settings`}
+            href={`/sa/${subAccountId}/dashboard/settings?section=sms`}
             className="underline-offset-2 hover:underline"
           >
             Settings → SMS

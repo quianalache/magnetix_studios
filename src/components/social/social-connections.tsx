@@ -25,7 +25,7 @@ export function SocialConnections() {
   const cfg = subAccount?.metaConfig ?? null;
   const connected = !!cfg?.connected;
   const canPublish = metaCanPublish(cfg);
-  const settingsHref = saPath("/dashboard/settings?tab=messaging");
+  const settingsHref = saPath("/dashboard/settings?section=facebook-instagram");
 
   return (
     <section className="space-y-4">

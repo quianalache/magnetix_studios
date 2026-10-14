@@ -247,3 +247,58 @@
    every real `hover:` utility already on an actual link/button are
    untouched by this removal, since those were never reachable through
    this selector in the first place. */
+
+/* ── Settings workspace: legacy section cards (visual-parity pass, 2026-10-14)
+ *
+ * Settings sections written before the design system render their own card
+ * shell (`rounded-2xl border bg-card p-5/6` + a header row with a coloured icon
+ * chip). Inside the one Settings workspace (Section 4.4) every card must read
+ * the same: system radius/border/shadow, 20px padding, NO decorative chip,
+ * 15px section title, 13px helper text. This normalizes ONLY a section's
+ * outer shell and its first header row — nothing inside the form changes.
+ * Unlayered on purpose: it has to beat the utilities those shells carry.
+ * Scoped to [data-settings-panel] (components/system/settings-workspace.tsx);
+ * migrated sections use <SettingsSection> and never match.
+ */
+[data-settings-panel] > .rounded-2xl.border {
+  border-radius: var(--radius-card);
+  border-color: var(--color-line);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+}
+[data-settings-panel] > .rounded-2xl.border > :first-child:has(h2) {
+  gap: 0;
+  margin-bottom: 1rem;
+}
+[data-settings-panel] > .rounded-2xl.border > :first-child:has(h2) > span:first-child:has(> svg) {
+  display: none;
+}
+[data-settings-panel] > .rounded-2xl.border > :first-child h2 {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+[data-settings-panel] > .rounded-2xl.border > :first-child h2 + p {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-ink-3);
+}
+/* A card title that only repeats the section title is hidden visually (kept
+   for screen readers) — see SettingsWorkspace. */
+[data-settings-panel] h2[data-settings-dup] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+[data-settings-panel] h2[data-settings-dup] + p {
+  margin-top: 0;
+}
+[data-settings-panel] > * {
+  position: relative;
+}

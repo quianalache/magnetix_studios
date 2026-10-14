@@ -14,7 +14,7 @@ export default function ImportPage() {
   return (
     <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
       <Link
-        href={saPath("/dashboard/settings")}
+        href={saPath("/dashboard/settings?section=import")}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" />

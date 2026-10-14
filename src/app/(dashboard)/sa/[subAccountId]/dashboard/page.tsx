@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -14,9 +14,9 @@ import {
   Upload,
   Download,
   Users,
-  Activity,
+  BarChart3,
   GitBranch,
-  LayoutDashboard,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
@@ -42,15 +42,14 @@ import type { Contact } from "@/types/contacts";
 import type { Quote } from "@/types/quotes";
 import type { BroadcastDoc } from "@/types/broadcasts";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { PageShell } from "@/components/system/page-shell";
 import { PageHeader } from "@/components/system/page-header";
 import { MomentHero } from "@/components/system/moment-hero";
 import { MetricCard } from "@/components/system/metric-card";
 import { EmptyState } from "@/components/system/empty-state";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
-import { LeadsMap } from "@/components/dashboard/leads-map";
 
 // Pipeline stages draw from the categorical chart palette; custom stages
 // rotate through it so every stage gets a distinct, on-system color.
@@ -332,18 +331,27 @@ export default function DashboardPage() {
       });
     }
 
-    return items.sort((a, b) => b.time - a.time).slice(0, 6);
+    return items.sort((a, b) => b.time - a.time).slice(0, 5);
   }, [contacts, deals, recentBroadcasts, quotes, contactById]);
 
   const isEmpty = !loading && contacts.length === 0 && deals.length === 0;
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  // Time-of-day greeting + date come from the VIEWER's clock, so they're
+  // computed after mount. Rendering them during SSR used the server's (UTC)
+  // clock and produced a different string than the browser's — React
+  // hydration error 418 in production.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => setNow(new Date()), []);
+  const today = now
+    ? now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+    : "";
+  const hour = now?.getHours() ?? 12;
+  const greeting = !now
+    ? "Welcome back"
+    : hour < 12
+      ? "Good morning"
+      : hour < 18
+        ? "Good afternoon"
+        : "Good evening";
 
   const subtitle = useMemo(() => {
     if (isEmpty) return "Let's get your first lead in.";
@@ -366,44 +374,38 @@ export default function DashboardPage() {
   const firstName = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : "";
 
   return (
-    <PageShell width="data">
+    <PageShell width="wide">
       <PageHeader
         variant="moment"
-        icon={LayoutDashboard}
+        icon={BarChart3}
         title="Dashboard"
         description="Your hub for leads, bookings and sales."
         actions={!isEmpty ? <NewDealDialog contacts={contacts} /> : undefined}
       />
 
       <MomentHero
-        eyebrow={`${today}${firstName ? ` · Welcome back, ${firstName}` : ""}`}
+        eyebrow={firstName ? `Welcome back, ${firstName}` : "Welcome back"}
         title={
           <>
-            {greeting}. Here&apos;s <em className="text-link">what&apos;s moving</em> today.
+            {greeting}
+            {firstName ? (
+              <>
+                , <em className="text-link">{firstName}.</em>
+              </>
+            ) : (
+              "."
+            )}
           </>
         }
-        description={subtitle}
+        description={
+          <>
+            {today ? <span className="font-medium text-foreground">{today}</span> : null}
+            {today ? " · " : null}
+            {subtitle}
+          </>
+        }
+        quote="“Aligned systems create extraordinary opportunities.”"
       />
-
-      {!loading && unreadConversations > 0 && (
-        <Card variant="tint" tint="violet" className="flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-tag-violet-fg">
-              <MessageCircle className="size-5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-micro font-semibold uppercase tracking-[0.14em] text-link">Needs a reply</p>
-              <h2 className="text-section font-semibold text-foreground">
-                {unreadConversations} conversation{unreadConversations === 1 ? "" : "s"} waiting for a reply
-              </h2>
-              <p className="text-body-sm text-muted-foreground">Catch up in your unified inbox.</p>
-            </div>
-          </div>
-          <Button render={<Link href={saPath("/conversations")} />} className="self-start sm:self-auto">
-            Open inbox <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Button>
-        </Card>
-      )}
 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
         <MetricCard
@@ -412,7 +414,7 @@ export default function DashboardPage() {
           tone="aqua"
           label="New leads today"
           value={String(newLeadsToday)}
-          hint={`${contacts.length} total`}
+          hint={`${contacts.length} total contacts`}
           loading={loading}
         />
         <MetricCard
@@ -444,56 +446,88 @@ export default function DashboardPage() {
         />
       </div>
 
-      <LeadsMap contacts={contacts} deals={deals} />
+      {!loading && unreadConversations > 0 && (
+        <Link
+          href={saPath("/conversations")}
+          className="group flex items-center gap-3 rounded-card border border-border bg-card px-5 py-3.5 shadow-card outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tag-pink-bg text-tag-pink-fg">
+            <MessageCircle className="size-4" aria-hidden="true" />
+          </span>
+          <p className="min-w-0 flex-1 truncate text-body-sm text-foreground">
+            <span className="font-semibold">
+              {unreadConversations} conversation{unreadConversations === 1 ? "" : "s"} waiting for a reply
+            </span>
+            <span className="text-muted-foreground max-sm:hidden"> · Catch up in your unified inbox.</span>
+          </p>
+          <span className="inline-flex shrink-0 items-center gap-1 text-caption font-semibold text-link">
+            Open inbox <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </span>
+        </Link>
+      )}
 
       {isEmpty ? (
         <GettingStarted />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-12">
-          <DashboardCard
-            className="lg:col-span-7"
-            icon={Activity}
-            tone="gold"
-            title="Recent activity"
-            description="Across every channel, newest first."
-          >
-            {activityItems.length === 0 ? (
-              <p className="py-8 text-center text-body-sm text-muted-foreground">
-                Nothing has happened yet — once you get a lead, a won deal, or a
-                sale, it&apos;ll show up here.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border-subtle">
-                {activityItems.map((item) => {
-                  const { Icon, tone } = ACTIVITY_VISUAL[item.kind];
-                  return (
-                    <li key={item.id} className="flex items-start gap-3 py-2.5">
-                      <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full", CHIP_TONE[tone])}>
-                        <Icon className="size-4" aria-hidden="true" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-body-sm text-foreground">{item.title}</p>
-                        <p className="truncate text-caption text-muted-foreground">{item.meta}</p>
-                      </div>
-                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-caption text-ink-tertiary">
-                        {relativeTime(item.time)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </DashboardCard>
+        <>
+          <div className="grid gap-4 xl:grid-cols-12">
+            <DashboardCard
+              className="xl:col-span-7"
+              icon={BarChart3}
+              tone="violet"
+              title="Audience growth"
+              description="Contacts added to your CRM over the last 30 days"
+              action={<span className="rounded-control border border-border px-2.5 py-1 text-caption text-foreground">Last 30 days</span>}
+            >
+              <AudienceGrowth contacts={contacts} loading={loading} />
+            </DashboardCard>
 
-          <div className="flex flex-col gap-4 lg:col-span-5">
+            <DashboardCard
+              className="xl:col-span-5"
+              icon={Zap}
+              tone="gold"
+              title="Recent activity"
+              description="Across every channel, newest first."
+            >
+              {activityItems.length === 0 ? (
+                <p className="py-8 text-center text-body-sm text-muted-foreground">
+                  Nothing has happened yet — once you get a lead, a won deal, or a
+                  sale, it&apos;ll show up here.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border-subtle">
+                  {activityItems.map((item) => {
+                    const { Icon, tone } = ACTIVITY_VISUAL[item.kind];
+                    return (
+                      <li key={item.id} className="flex items-center gap-3 py-2.5">
+                        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", CHIP_TONE[tone])}>
+                          <Icon className="size-4" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-body-sm text-foreground">{item.title}</p>
+                          <p className="truncate text-caption text-muted-foreground">{item.meta}</p>
+                        </div>
+                        <span className="shrink-0 whitespace-nowrap text-caption text-ink-tertiary">
+                          {relativeTime(item.time)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </DashboardCard>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
             <DashboardCard
               icon={CalendarClock}
               tone="blue"
               title="Today's bookings"
-              description={
-                bookingsToday.length > 0
-                  ? `${bookingsToday.length} scheduled.`
-                  : "Nothing on the calendar today."
+              description={bookingsToday.length > 0 ? `${bookingsToday.length} scheduled.` : "Nothing on the calendar today."}
+              action={
+                <Link href={saPath("/calendar")} className="text-caption font-semibold text-link hover:underline">
+                  View all
+                </Link>
               }
             >
               {bookingsToday.length === 0 ? (
@@ -530,12 +564,13 @@ export default function DashboardPage() {
 
             <DashboardCard
               icon={GitBranch}
-              tone="violet"
+              tone="pink"
               title="Pipeline"
+              description={`${openDeals.length} open deal${openDeals.length === 1 ? "" : "s"}`}
               action={
-                <Button render={<Link href={saPath("/pipeline")} />} size="sm" variant="ghost" className="gap-1 text-link">
-                  Open <ArrowRight className="size-3" aria-hidden="true" />
-                </Button>
+                <Link href={saPath("/pipeline")} className="text-caption font-semibold text-link hover:underline">
+                  View all
+                </Link>
               }
             >
               {onlyPipeline ? (
@@ -553,7 +588,7 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                     {stages.map((s, i) => (
                       <span key={s.id} className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
                         <span className="size-2 rounded-sm" style={{ background: stageColor(s.id, i) }} />
@@ -582,7 +617,7 @@ export default function DashboardPage() {
               )}
             </DashboardCard>
           </div>
-        </div>
+        </>
       )}
     </PageShell>
   );
@@ -607,8 +642,8 @@ function DashboardCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("flex min-w-0 flex-col gap-3 rounded-card border border-border bg-card p-5 shadow-card", className)}>
-      <div className="flex items-start gap-3">
+    <section className={cn("flex min-w-0 flex-col gap-3 rounded-card border border-border bg-card px-5 pt-4 pb-5 shadow-card", className)}>
+      <div className="flex items-center gap-3">
         <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", CHIP_TONE[tone])}>
           <Icon className="size-4" aria-hidden="true" />
         </span>
@@ -669,5 +704,111 @@ function GettingStarted() {
         </div>
       }
     />
+  );
+}
+
+/**
+ * Audience growth (approved Section 4.1 chart) — REAL data only: contacts
+ * created per day over the last 30 days, in the viewer's local days. No
+ * invented trend. The clock is read after mount so SSR and the browser
+ * can't disagree (hydration).
+ */
+function AudienceGrowth({ contacts, loading }: { contacts: Contact[]; loading: boolean }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
+  // Draw at the container's real pixel width so axis text stays 11px at
+  // every screen size (a fixed viewBox would shrink it on phones).
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(620);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setW(Math.max(280, Math.round(entry.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading, now]);
+
+  const days = useMemo(() => {
+    if (now === null) return [];
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 29);
+    const buckets = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return { date: d, count: 0 };
+    });
+    for (const c of contacts) {
+      const created = toDate(c.createdAt);
+      if (!created) continue;
+      const idx = Math.floor((created.getTime() - start.getTime()) / 86_400_000);
+      if (idx >= 0 && idx < 30) buckets[idx].count += 1;
+    }
+    return buckets;
+  }, [contacts, now]);
+
+  if (loading || days.length === 0) return <Skeleton className="h-[210px] w-full rounded-control" />;
+
+  const total = days.reduce((n, d) => n + d.count, 0);
+  const peak = days.reduce((best, d, i) => (d.count > days[best].count ? i : best), 0);
+  const maxRaw = Math.max(1, ...days.map((d) => d.count));
+  const step = Math.max(1, Math.ceil(maxRaw / 4));
+  const yMax = step * 4;
+  const X0 = 36;
+  const X1 = W - 8;
+  const Y0 = 178;
+  const Y1 = 14;
+  const x = (i: number) => X0 + (i / 29) * (X1 - X0);
+  const y = (v: number) => Y0 - (v / yMax) * (Y0 - Y1);
+  const line = days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(d.count).toFixed(1)}`).join(" ");
+  const area = `${line} L${X1} ${Y0} L${X0} ${Y0}Z`;
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const label = `Line chart: ${total} contacts added in the last 30 days${total ? `, peaking at ${days[peak].count} on ${fmt(days[peak].date)}` : ""}.`;
+
+  return (
+    <div ref={boxRef} className="relative">
+      <svg viewBox={`0 0 ${W} 210`} width={W} height={210} className="block h-[210px] w-full" role="img" aria-label={label}>
+        <g style={{ stroke: "var(--color-line)" }} strokeWidth="1">
+          {[0, 1, 2, 3, 4].map((t) => (
+            <line key={t} x1={X0} x2={X1} y1={y(t * step)} y2={y(t * step)} />
+          ))}
+        </g>
+        <g fontSize="11" style={{ fill: "var(--color-ink-3)" }}>
+          {[0, 1, 2, 3, 4].map((t) => (
+            <text key={t} x={X0 - 10} y={y(t * step) + 4} textAnchor="end">
+              {t * step}
+            </text>
+          ))}
+          {(W < 420 ? [0, 14, 29] : [0, 7, 14, 21, 29]).map((i) => (
+            <text key={i} x={x(i)} y={200} textAnchor={i === 29 ? "end" : i === 0 ? "start" : "middle"}>
+              {fmt(days[i].date)}
+            </text>
+          ))}
+        </g>
+        <path d={area} style={{ fill: "var(--color-violet-ds-100)" }} opacity="0.8" />
+        <path d={line} fill="none" style={{ stroke: "var(--ds-chart-1)" }} strokeWidth="2.25" strokeLinejoin="round" />
+        {total > 0 ? (
+          <>
+            <path d={`M${x(peak)} ${y(days[peak].count) + 6}V${Y0}`} style={{ stroke: "var(--color-violet-ds-300)" }} strokeDasharray="3 3" />
+            <circle cx={x(peak)} cy={y(days[peak].count)} r="5" style={{ fill: "var(--ds-chart-1)" }} stroke="white" strokeWidth="2" />
+          </>
+        ) : null}
+      </svg>
+      {total > 0 ? (
+        <div
+          className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-control border border-border bg-card px-2.5 py-1.5 text-center shadow-card"
+          style={{ left: `${Math.min(88, Math.max(12, (x(peak) / W) * 100))}%` }}
+        >
+          <p className="text-caption font-semibold text-link">
+            {days[peak].count} new contact{days[peak].count === 1 ? "" : "s"}
+          </p>
+          <p className="text-micro text-muted-foreground">{fmt(days[peak].date)}</p>
+        </div>
+      ) : (
+        <p className="absolute inset-x-0 top-1/3 text-center text-body-sm text-muted-foreground">
+          No new contacts in the last 30 days.
+        </p>
+      )}
+    </div>
   );
 }

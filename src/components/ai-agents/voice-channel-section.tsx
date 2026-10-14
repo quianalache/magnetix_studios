@@ -337,7 +337,7 @@ export function VoiceChannelSection() {
           <strong>Heads up:</strong> BYOC mode attaches to your
           dedicated Twilio number. Configure one in{" "}
           <Link
-            href={`/sa/${subAccountId}/dashboard/settings`}
+            href={`/sa/${subAccountId}/dashboard/settings?section=sms`}
             className="underline-offset-2 hover:underline"
           >
             Settings → SMS

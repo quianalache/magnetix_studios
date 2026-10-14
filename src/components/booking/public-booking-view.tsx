@@ -8,6 +8,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Globe,
   Info,
 } from "lucide-react";
 import type { BookingPage, IntakeField } from "@/types/booking";
@@ -76,18 +77,10 @@ function formatTimeInTz(iso: string, tz: string): string {
   }).format(new Date(iso));
 }
 
-function formatDateHeadingInTz(dayKey: string, tz: string): string {
-  // dayKey is "YYYY-MM-DD" in `tz`. Build a noon-in-tz Date for
-  // formatting so the day rendered matches the bucket.
+function formatShortDayInTz(dayKey: string, tz: string): string {
   const [y, m, d] = dayKey.split("-").map(Number);
-  // Anchor at 12:00 UTC of the date — within rounding of correct tz day.
   const anchor = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: tz,
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  }).format(anchor);
+  return new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(anchor);
 }
 
 export function PublicBookingView({ subAccountId, page, branding }: Props) {
@@ -173,12 +166,19 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
     [slotsByDay, activeDay],
   );
 
-  function advanceDay(dir: 1 | -1) {
-    if (!activeDay) return;
-    const idx = slotsByDay.findIndex((d) => d.dateKey === activeDay);
-    const next = idx + dir;
-    if (next < 0 || next >= slotsByDay.length) return;
-    setActiveDay(slotsByDay[next].dateKey);
+  // Month calendar (approved Section 4.8 layout): the months that contain
+  // availability, one at a time. Day keys are YYYY-MM-DD in the viewer's tz.
+  const availableDays = useMemo(() => new Set(slotsByDay.map((d) => d.dateKey)), [slotsByDay]);
+  const months = useMemo(() => [...new Set(slotsByDay.map((d) => d.dateKey.slice(0, 7)))], [slotsByDay]);
+  const [monthKey, setMonthKey] = useState<string | null>(null);
+  const shownMonth = monthKey && months.includes(monthKey) ? monthKey : (activeDay?.slice(0, 7) ?? months[0] ?? null);
+  const monthIdx = shownMonth ? months.indexOf(shownMonth) : -1;
+  const [todayKey, setTodayKey] = useState<string | null>(null);
+  useEffect(() => setTodayKey(isoDayKeyInTz(new Date().toISOString(), viewerTz)), [viewerTz]);
+
+  const intakeRef = useRef<HTMLDivElement>(null);
+  function pickDay(key: string) {
+    setActiveDay(key);
     setSelectedSlot(null);
   }
 
@@ -191,10 +191,16 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
     logoUrl: branding.logoUrl,
     primary: branding.accentColor,
   });
+  const initials = branding.name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <main
-      className="tenant-surface tenant-wash min-h-screen px-4 py-8 text-foreground sm:py-14"
+      className="tenant-surface tenant-wash flex min-h-screen flex-col px-4 py-8 text-foreground sm:py-10"
       style={brandStyle}
     >
       <AttributionVisitLogger
@@ -202,189 +208,259 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
         pageType="booking"
         pageId={page.slug}
       />
+
       {/* ── Tenant brand lockup — the business leads the page ── */}
-      <div className="mx-auto mb-5 flex max-w-3xl items-center justify-center gap-2.5 sm:mb-6">
+      <div className="mx-auto mb-6 flex items-center justify-center gap-2.5">
         {branding.logoUrl ? (
           // Decorative; alt is the business name.
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={branding.logoUrl}
-            alt={branding.name}
-            className="h-10 w-auto max-w-[180px] rounded-md object-contain"
-          />
+          <img src={branding.logoUrl} alt={branding.name} className="h-10 w-auto max-w-[200px] rounded-md object-contain" />
         ) : (
           <>
             <span className="tenant-mark flex size-9 items-center justify-center rounded-full" aria-hidden="true">
               <CalendarClock className="size-4.5" />
             </span>
-            <span className="text-lg font-semibold tracking-tight text-foreground">{branding.name}</span>
+            <span className="tenant-display text-title-md">{branding.name}</span>
           </>
         )}
       </div>
 
-      <article className="tenant-card mx-auto max-w-3xl space-y-8 p-6 sm:p-10">
-        {/* ── Hero ──────────────────────────────────────────── */}
-        <header className="space-y-3 text-center">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {page.name}
-          </h1>
-          {page.description && (
-            <p className="mx-auto max-w-prose whitespace-pre-wrap text-sm text-muted-foreground">
-              {page.description}
-            </p>
-          )}
-          <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            {page.durationMinutes} minutes
-            {page.payment && (
-              <>
-                <span className="mx-1">·</span>
-                <span className="tenant-soft rounded-full px-2 py-0.5 text-[11px] font-medium">
-                  {page.payment.currency} {page.payment.amount} deposit
-                </span>
-              </>
-            )}
-          </p>
-        </header>
-
-        {/* ── Timezone switcher ────────────────────────────── */}
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <span>Times shown in</span>
-          <select
-            value={viewerTz}
-            onChange={(e) => {
-              setViewerTz(e.target.value);
-              setActiveDay(null);
-              setSelectedSlot(null);
-            }}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value={viewerTz}>{viewerTz}</option>
-            {pageTz !== viewerTz && <option value={pageTz}>{pageTz}</option>}
-          </select>
-        </div>
-
-        {/* ── Slot picker ──────────────────────────────────── */}
-        <section className="space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed py-12 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading available
-              times…
-            </div>
-          ) : loadError ? (
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-5 text-sm text-rose-700 dark:text-rose-400">
-              {loadError}
-            </div>
-          ) : slotsByDay.length === 0 ? (
-            <div className="rounded-2xl border border-dashed bg-card p-10 text-center text-sm text-muted-foreground">
-              No times available in the next {page.visibleDays} days. Try
-              again soon.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => advanceDay(-1)}
-                  disabled={
-                    !activeDay ||
-                    slotsByDay[0]?.dateKey === activeDay
-                  }
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-input bg-background text-muted-foreground transition hover:text-foreground disabled:opacity-40"
-                  aria-label="Previous day"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <h2 className="text-sm font-semibold">
-                  {activeDay
-                    ? formatDateHeadingInTz(activeDay, viewerTz)
-                    : ""}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => advanceDay(1)}
-                  disabled={
-                    !activeDay ||
-                    slotsByDay[slotsByDay.length - 1]?.dateKey === activeDay
-                  }
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-input bg-background text-muted-foreground transition hover:text-foreground disabled:opacity-40"
-                  aria-label="Next day"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {activeDaySlots.map((s) => {
-                  const isSelected =
-                    selectedSlot?.startAt === s.startAt;
-                  return (
-                    <button
-                      key={s.startAt}
-                      type="button"
-                      onClick={() => setSelectedSlot(s)}
-                      aria-pressed={isSelected}
-                      className={`tenant-choice min-h-11 rounded-lg px-2 py-2 text-sm font-medium tabular-nums transition ${
-                        isSelected ? "shadow-sm" : ""
-                      }`}
+      <article className="tenant-card mx-auto w-full max-w-[56.25rem] overflow-hidden">
+        {confirmation ? (
+          <div className="p-6 sm:p-10">
+            <ConfirmationPanel confirmation={confirmation} page={page} />
+          </div>
+        ) : (
+          <>
+            <div className="grid md:grid-cols-[minmax(0,1fr)_12.5rem] lg:grid-cols-[17.5rem_minmax(0,1fr)_12.5rem]">
+              {/* ── Who + what ── */}
+              <section className="flex flex-col gap-3.5 border-b p-6 tenant-divider md:col-span-2 lg:col-span-1 lg:border-r lg:border-b-0">
+                {branding.logoUrl ? null : (
+                  <span className="tenant-soft flex size-11 items-center justify-center rounded-full text-sm font-semibold" aria-hidden="true">
+                    {initials}
+                  </span>
+                )}
+                <div>
+                  <p className="text-xs text-muted-foreground">{branding.name}</p>
+                  <h1 className="tenant-display mt-1 text-[1.75rem] leading-[1.1] text-balance">{page.name}</h1>
+                </div>
+                <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <Clock className="size-4 shrink-0" aria-hidden="true" />
+                    {page.durationMinutes} minutes
+                  </li>
+                  {page.payment ? (
+                    <li className="flex items-center gap-2">
+                      <span className="tenant-soft rounded-full px-2 py-0.5 text-xs font-medium">
+                        {page.payment.currency} {page.payment.amount} deposit
+                      </span>
+                    </li>
+                  ) : null}
+                  <li className="flex items-center gap-2">
+                    <Globe className="size-4 shrink-0" aria-hidden="true" />
+                    <label className="sr-only" htmlFor="b-tz">Times shown in</label>
+                    <select
+                      id="b-tz"
+                      value={viewerTz}
+                      onChange={(e) => {
+                        setViewerTz(e.target.value);
+                        setActiveDay(null);
+                        setSelectedSlot(null);
+                        setMonthKey(null);
+                      }}
+                      className="min-w-0 max-w-full truncate rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
-                      {formatTimeInTz(s.startAt, viewerTz)}
-                    </button>
-                  );
-                })}
-              </div>
+                      <option value={viewerTz}>{viewerTz}</option>
+                      {pageTz !== viewerTz && <option value={pageTz}>{pageTz}</option>}
+                    </select>
+                  </li>
+                </ul>
+                {page.description ? (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{page.description}</p>
+                ) : null}
+              </section>
 
-              {/* Day strip — small dots so the visitor knows other days
-                  carry slots too. */}
-              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                {slotsByDay.map((d) => (
-                  <button
-                    key={d.dateKey}
-                    type="button"
-                    onClick={() => {
-                      setActiveDay(d.dateKey);
-                      setSelectedSlot(null);
-                    }}
-                    aria-pressed={d.dateKey === activeDay}
-                    className={`rounded-full border px-3 py-1 text-xs transition ${
-                      d.dateKey === activeDay
-                        ? "tenant-soft border-transparent font-medium"
-                        : "border-input bg-background text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {formatDateHeadingInTz(d.dateKey, viewerTz)}
-                  </button>
-                ))}
-              </div>
+              {/* ── Month calendar ── */}
+              <section className="border-b p-6 tenant-divider md:border-b-0" aria-label="Choose a day">
+                {loading ? (
+                  <div className="flex h-full min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading available times…
+                  </div>
+                ) : loadError ? (
+                  <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 text-sm text-rose-700">
+                    {loadError}
+                  </div>
+                ) : slotsByDay.length === 0 || !shownMonth ? (
+                  <p className="flex min-h-56 items-center justify-center text-center text-sm text-muted-foreground">
+                    No times available in the next {page.visibleDays} days. Try again soon.
+                  </p>
+                ) : (
+                  <MonthGrid
+                    monthKey={shownMonth}
+                    available={availableDays}
+                    activeDay={activeDay}
+                    todayKey={todayKey}
+                    onPick={pickDay}
+                    onPrev={monthIdx > 0 ? () => setMonthKey(months[monthIdx - 1]) : undefined}
+                    onNext={monthIdx >= 0 && monthIdx < months.length - 1 ? () => setMonthKey(months[monthIdx + 1]) : undefined}
+                  />
+                )}
+              </section>
+
+              {/* ── Times for the chosen day ── */}
+              <section className="flex flex-col gap-2 p-6 tenant-divider md:border-l md:px-[1.125rem]" aria-label="Choose a time">
+                {activeDay && !loading && !loadError ? (
+                  <>
+                    <h2 className="mb-1.5 text-sm font-semibold">{formatShortDayInTz(activeDay, viewerTz)}</h2>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-col">
+                      {activeDaySlots.map((s) => {
+                        const isSelected = selectedSlot?.startAt === s.startAt;
+                        return isSelected ? (
+                          <div key={s.startAt} className="col-span-2 flex gap-1.5 sm:col-span-3">
+                            <button
+                              type="button"
+                              aria-pressed="true"
+                              onClick={() => setSelectedSlot(null)}
+                              className="tenant-choice tenant-choice-picked min-h-11 flex-1 rounded-lg px-2 text-sm font-semibold tabular-nums"
+                            >
+                              {formatTimeInTz(s.startAt, viewerTz)}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => intakeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                              className="tenant-button min-h-11 flex-1 rounded-lg border px-2 text-sm font-semibold"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            key={s.startAt}
+                            type="button"
+                            aria-pressed="false"
+                            onClick={() => setSelectedSlot(s)}
+                            className="tenant-choice min-h-11 rounded-lg px-2 text-sm font-semibold tabular-nums transition"
+                          >
+                            {formatTimeInTz(s.startAt, viewerTz)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Pick a day to see times.</p>
+                )}
+              </section>
             </div>
-          )}
-        </section>
 
-        {/* ── Intake form (revealed after slot pick) ────────── */}
-        {selectedSlot && !confirmation && (
-          <IntakeFormSection
-            subAccountId={subAccountId}
-            slug={page.slug}
-            slot={selectedSlot}
-            viewerTz={viewerTz}
-            page={page}
-            onConfirmed={(c) => setConfirmation(c)}
-          />
+            {/* ── Intake form (revealed after a time is picked) ── */}
+            {selectedSlot ? (
+              <div ref={intakeRef} className="scroll-mt-6 border-t p-6 sm:p-8 tenant-divider">
+                <IntakeFormSection
+                  subAccountId={subAccountId}
+                  slug={page.slug}
+                  slot={selectedSlot}
+                  viewerTz={viewerTz}
+                  page={page}
+                  onConfirmed={(c) => setConfirmation(c)}
+                />
+              </div>
+            ) : null}
+          </>
         )}
-
-        {confirmation && (
-          <ConfirmationPanel
-            confirmation={confirmation}
-            page={page}
-          />
-        )}
-
       </article>
 
-      <footer className="mx-auto mt-6 flex max-w-3xl justify-center">
+      <footer className="mx-auto mt-auto flex justify-center pt-10">
         <PoweredByMagnetix />
       </footer>
     </main>
+  );
+}
+
+/** Month grid — available days tinted, the chosen day filled, today outlined. */
+function MonthGrid({
+  monthKey,
+  available,
+  activeDay,
+  todayKey,
+  onPick,
+  onPrev,
+  onNext,
+}: {
+  monthKey: string;
+  available: Set<string>;
+  activeDay: string | null;
+  todayKey: string | null;
+  onPick: (dayKey: string) => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+}) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1));
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = first.getUTCDay();
+  const title = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone: "UTC" }).format(first);
+  const cells: (string | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, "0")}`),
+  ];
+  const weekdays = Array.from({ length: 7 }, (_, i) =>
+    new Intl.DateTimeFormat(undefined, { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2023, 0, 1 + i))),
+  );
+  const navBtn =
+    "inline-flex size-8 items-center justify-center rounded-lg border border-input bg-background text-muted-foreground transition hover:text-foreground disabled:opacity-40";
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center gap-2">
+        <h2 className="text-section font-semibold">{title}</h2>
+        <span className="flex-1" />
+        <button type="button" className={navBtn} onClick={onPrev} disabled={!onPrev} aria-label="Previous month">
+          <ChevronLeft className="size-4" />
+        </button>
+        <button type="button" className={navBtn} onClick={onNext} disabled={!onNext} aria-label="Next month">
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 text-center text-sm">
+        {weekdays.map((w) => (
+          <span key={w} className="pb-1 text-micro font-semibold tracking-wide text-muted-foreground uppercase">
+            {w}
+          </span>
+        ))}
+        {cells.map((key, i) => {
+          if (!key) return <span key={`pad-${i}`} />;
+          const day = Number(key.slice(8));
+          const isAvailable = available.has(key);
+          const isActive = key === activeDay;
+          const isToday = key === todayKey;
+          const label = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(
+            new Date(Date.UTC(y, m - 1, day)),
+          );
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={!isAvailable}
+              aria-pressed={isAvailable ? isActive : undefined}
+              aria-label={isAvailable ? `${label} — times available` : `${label} — unavailable`}
+              onClick={() => onPick(key)}
+              className={[
+                "flex h-10 items-center justify-center rounded-[10px] tabular-nums transition",
+                isActive
+                  ? "tenant-button font-semibold"
+                  : isAvailable
+                    ? "tenant-soft font-semibold hover:brightness-95"
+                    : "cursor-default text-muted-foreground/70",
+                isToday && !isActive ? "tenant-today" : "",
+              ].join(" ")}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
