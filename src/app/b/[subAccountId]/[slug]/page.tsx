@@ -44,9 +44,10 @@ export default async function PublicBookingPage({ params }: PageProps) {
   // hardcoded fallback last. Keep it serialisable — server-to-client
   // boundary requires plain JSON.
   const branding = {
-    name: sub.name ?? "Schedule a meeting",
+    name: page.brandName || sub.name || "Schedule a meeting",
     logoUrl: page.logoUrl ?? sub.logoUrl ?? null,
     accentColor: page.accentColor ?? null,
+    displayFont: page.displayFont ?? null,
   };
 
   // Strip the Firestore Timestamp fields from the page before handing

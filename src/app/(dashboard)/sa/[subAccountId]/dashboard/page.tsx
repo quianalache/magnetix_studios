@@ -49,7 +49,6 @@ import { MetricCard } from "@/components/system/metric-card";
 import { EmptyState } from "@/components/system/empty-state";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 
 // Pipeline stages draw from the categorical chart palette; custom stages
 // rotate through it so every stage gets a distinct, on-system color.
@@ -380,7 +379,6 @@ export default function DashboardPage() {
         icon={BarChart3}
         title="Dashboard"
         description="Your hub for leads, bookings and sales."
-        actions={!isEmpty ? <NewDealDialog contacts={contacts} /> : undefined}
       />
 
       <MomentHero

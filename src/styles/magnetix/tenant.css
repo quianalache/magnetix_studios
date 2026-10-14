@@ -47,8 +47,8 @@
 .tenant-surface.tenant-wash,
 .tenant-surface .tenant-wash {
   background:
-    radial-gradient(55% 40% at 0% 0%, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 70%),
-    radial-gradient(50% 40% at 100% 100%, color-mix(in srgb, var(--brand-primary) 7%, transparent), transparent 70%),
+    radial-gradient(55% 40% at 0% 0%, color-mix(in srgb, var(--brand-primary) 14%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 100% 100%, color-mix(in srgb, var(--brand-primary) 6%, rgb(243 234 217 / 0.9)), transparent 70%),
     color-mix(in srgb, var(--brand-primary) 3%, #f8f8f7);
 }
 
@@ -116,7 +116,7 @@
 /* Booking layout pieces (visual-parity pass, 2026-10-14). */
 .tenant-surface .tenant-display {
   font-family: var(--brand-display-font);
-  font-weight: 600;
+  font-weight: var(--brand-display-weight, 600);
   letter-spacing: -0.01em;
   color: color-mix(in srgb, var(--brand-primary-text) 35%, #111827);
 }

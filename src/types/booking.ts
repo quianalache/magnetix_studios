@@ -122,6 +122,17 @@ export interface BookingPage {
   logoUrl: string | null;
   /** Hex string. Overrides brand on the public page. */
   accentColor: string | null;
+  /**
+   * Business name in the public page's header lockup. null/absent = the
+   * sub-account's name (approved Section 4.8 tenant controls, 2026-10-14).
+   */
+  brandName?: string | null;
+  /**
+   * Display font for the page title + lockup — one of the curated
+   * TENANT_DISPLAY_FONTS keys (src/lib/brand/tenant-brand.ts). null/absent =
+   * the system sans. Never a free-form font name.
+   */
+  displayFont?: BookingDisplayFont | null;
 
   // ── Meeting link ──────────────────────────────────────────────
   /**
@@ -211,6 +222,10 @@ export interface BookingPage {
  * Mutable subset used by the editor + admin CRUD API. Tenancy + lifecycle
  * timestamps are server-stamped, not client-controlled.
  */
+/** Curated booking display fonts — mirrors TENANT_DISPLAY_FONTS keys. */
+export const BOOKING_DISPLAY_FONTS = ["system", "serif", "dm-serif-display"] as const;
+export type BookingDisplayFont = (typeof BOOKING_DISPLAY_FONTS)[number];
+
 export type BookingPageFormData = Pick<
   BookingPage,
   | "slug"
@@ -228,6 +243,8 @@ export type BookingPageFormData = Pick<
   | "hosts"
   | "logoUrl"
   | "accentColor"
+  | "brandName"
+  | "displayFont"
   | "meetingUrl"
   | "confirmationMessage"
   | "redirectUrl"

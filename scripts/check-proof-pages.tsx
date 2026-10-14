@@ -54,6 +54,7 @@ check("tenant.css: no CRM tokens leak into tenant surfaces", !/--ds-|plum|violet
 // Pages use the system shell.
 const dash = src("src/app/(dashboard)/sa/[subAccountId]/dashboard/page.tsx");
 check("Dashboard: 'Where your leads are' removed (no LeadsMap)", !dash.includes("LeadsMap") && !dash.includes("Where your leads are"));
+check("Dashboard: no New Deal action in the header (owner review 2026-10-14)", !dash.includes("NewDealDialog"));
 check("Dashboard: fills the content width like Section 4.1", dash.includes('<PageShell width="wide">'));
 check("Dashboard: greeting/date use the viewer's clock after mount (React #418)", /useState<Date \| null>\(null\)/.test(dash) && !/const hour = new Date\(\)\.getHours\(\)/.test(dash));
 check("Dashboard: Audience growth uses real contact dates only", dash.includes("function AudienceGrowth") && dash.includes("toDate(c.createdAt)"));
@@ -73,6 +74,12 @@ for (const c of ["BrandingSection", "SalesPageSection", "AppIconSection", "Statu
 }
 check("Settings: old ?tab= links + OAuth returns resolve to a section", saSettings.includes('params.has("meta")') && saSettings.includes('params.has("gcal")') && saSettings.includes('params.has("stripeconnect")') && saSettings.includes("LEGACY_TAB"));
 const ws = src("src/components/system/settings-workspace.tsx");
+check("Settings nav: group labels use the approved 10px tracked regular-weight label, links stay regular", ws.includes("text-overline font-normal tracking-[0.16em] text-ink-tertiary uppercase") && ws.includes('role="group"'));
+for (const f of ["crm-resources", "resource-library", "affiliate-library"]) {
+  const t = src(`src/components/assets/${f}.tsx`);
+  check(`Assets ${f}: header row = approved 10.5px #736D8F single-line labels`, t.includes("bg-table-head text-left text-th font-semibold tracking-[0.08em] whitespace-nowrap text-table-head-foreground uppercase"));
+}
+check("Assets header colour token = approved ink-3", src("src/styles/magnetix/semantic.css").includes("--ds-table-head-fg: var(--color-ink-3);"));
 check("SettingsWorkspace: 210px column from 1280px, 720px content, compact picker below 1024px", ws.includes("xl:grid-cols-[13.125rem_minmax(0,45rem)]") && ws.includes("lg:hidden") && ws.includes('aria-label="Unsaved changes"'));
 check("Agency Assistant: shared Switch, no hand-rolled switch button", src("src/components/agency/agency-assistant-section.tsx").includes("<Switch") && !src("src/components/agency/agency-assistant-section.tsx").includes('role="switch"'));
 

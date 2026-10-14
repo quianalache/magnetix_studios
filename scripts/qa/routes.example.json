@@ -12,6 +12,7 @@
     { "key": "sa-settings", "path": "/sa/{sa}/dashboard/settings", "mode": "shell", "tabBar": true },
     { "key": "sa-settings-messaging", "path": "/sa/{sa}/dashboard/settings?section=sending-preferences", "mode": "shell", "tabBar": true },
     { "key": "sa-assets-media", "path": "/sa/{sa}/assets?tab=media", "mode": "shell", "tabBar": true },
+    { "key": "sa-booking-editor", "path": "/sa/{sa}/booking/{bookingSlug}", "mode": "shell", "tabBar": true },
     { "key": "sa-forms", "path": "/sa/{sa}/forms", "mode": "shell", "tabBar": true },
     { "key": "sa-products", "path": "/sa/{sa}/products", "mode": "shell", "tabBar": true },
     { "key": "ed-content-sets", "path": "/sa/{sa}/energetic-decoder?tab=content", "mode": "shell", "tabBar": true },

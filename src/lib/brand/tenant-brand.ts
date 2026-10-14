@@ -26,6 +26,18 @@ export const TENANT_DISPLAY_FONTS = {
 } as const;
 export type TenantDisplayFont = keyof typeof TENANT_DISPLAY_FONTS;
 
+/** Quick-pick accents for tenant appearance editors — any hex is allowed; these are just starting points. */
+export const TENANT_ACCENT_SWATCHES = [
+  { name: "Plum", hex: "#3D1652" },
+  { name: "Forest", hex: "#2F5D50" },
+  { name: "Clay", hex: "#A9472B" },
+  { name: "Ocean", hex: "#1D5F8A" },
+  { name: "Rose", hex: "#B83268" },
+  { name: "Ink", hex: "#1F2937" },
+] as const;
+/** What a native colour picker shows before any accent is chosen. */
+export const TENANT_ACCENT_PICKER_DEFAULT = "#5B5BD6";
+
 export interface TenantBrand {
   name: string;
   logoUrl?: string | null;
@@ -99,7 +111,11 @@ export function tenantBrandStyle(brand: TenantBrand): CSSProperties {
     vars["--brand-secondary"] = secondary;
     vars["--brand-on-secondary"] = readableOn(secondary);
   }
-  if (brand.displayFont) vars["--brand-display-font"] = TENANT_DISPLAY_FONTS[brand.displayFont];
+  if (brand.displayFont && brand.displayFont in TENANT_DISPLAY_FONTS) {
+    vars["--brand-display-font"] = TENANT_DISPLAY_FONTS[brand.displayFont];
+    // The serif display faces ship a single regular weight; the sans title is semibold.
+    vars["--brand-display-weight"] = brand.displayFont === "system" ? "600" : "400";
+  }
   if (brand.buttonShape) vars["--brand-radius"] = RADIUS[brand.buttonShape];
   return vars as CSSProperties;
 }

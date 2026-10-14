@@ -151,9 +151,10 @@
   --ds-tag-gray-bg: #f3f1f7;
   --ds-tag-gray-fg: var(--color-ink-2);
 
-  /* Table header row (approved index table: dark-plum labels on a faint wash). */
+  /* Table header row — exact approved index table (Section 4.2): muted
+     violet-gray 10.5px labels on a faint lavender-white wash. */
   --ds-table-head-bg: #fcfbfe;
-  --ds-table-head-fg: #4b3e6e;
+  --ds-table-head-fg: var(--color-ink-3);
 
   /* Switch track (approved toggle: soft grey-lilac off, violet on). */
   --ds-switch-off: #dcd6e6;

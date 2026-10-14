@@ -226,8 +226,12 @@ export function SettingsWorkspace({
 
           <nav aria-label={`${title} sections`} className="mt-4 hidden lg:block">
             {groups.map((g, gi) => (
-              <div key={g.label} className={gi === 0 ? "" : "mt-4"}>
-                <p className="px-2.5 pb-1.5 text-micro font-semibold tracking-[0.16em] text-ink-tertiary uppercase">
+              <div key={g.label} role="group" aria-labelledby={`settings-group-${gi}`} className={gi === 0 ? "" : "mt-5"}>
+                {/* Approved Section 4.4 group label: 10px, regular weight,
+                    widely tracked, lighter than the links below it — the
+                    contrast in size/weight/colour is what makes it read as a
+                    heading and the links as its children. */}
+                <p id={`settings-group-${gi}`} className="px-2.5 pb-1.5 text-overline font-normal tracking-[0.16em] text-ink-tertiary uppercase">
                   {g.label}
                 </p>
                 <ul className="flex flex-col gap-0.5">

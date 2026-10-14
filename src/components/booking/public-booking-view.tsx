@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { BookingPage, IntakeField } from "@/types/booking";
 import { readAttributionFromBrowser } from "@/lib/attribution";
-import { tenantBrandStyle } from "@/lib/brand/tenant-brand";
+import { tenantBrandStyle, type TenantDisplayFont } from "@/lib/brand/tenant-brand";
 import { PoweredByMagnetix } from "@/components/brand/powered-by-magnetix";
 import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 
@@ -37,6 +37,8 @@ interface Branding {
   name: string;
   logoUrl: string | null;
   accentColor: string | null;
+  /** Curated display font key (TENANT_DISPLAY_FONTS); null = system sans. */
+  displayFont?: TenantDisplayFont | null;
 }
 
 interface Props {
@@ -190,6 +192,7 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
     name: branding.name,
     logoUrl: branding.logoUrl,
     primary: branding.accentColor,
+    displayFont: branding.displayFont ?? null,
   });
   const initials = branding.name
     .split(/\s+/)

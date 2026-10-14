@@ -558,15 +558,15 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
             <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-table-head text-left text-micro font-semibold tracking-[0.08em] text-table-head-foreground uppercase">
-                  <th className="px-4 py-3 font-semibold">Program</th>
-                  <th className="px-3 py-3 font-semibold">Category</th>
-                  <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 font-semibold">Commission Type</th>
-                  <th className="px-3 py-3 font-semibold">Payout Structure</th>
-                  <th className="px-3 py-3 font-semibold">Cookie Window</th>
-                  <th className="px-3 py-3 font-semibold">Last Updated</th>
-                  <th className="w-12 px-3 py-3" aria-label="Actions" />
+                <tr className="border-b border-border bg-table-head text-left text-th font-semibold tracking-[0.08em] whitespace-nowrap text-table-head-foreground uppercase">
+                  <th className="px-4 py-2.5 font-semibold">Program</th>
+                  <th className="px-3 py-2.5 font-semibold">Category</th>
+                  <th className="px-3 py-2.5 font-semibold">Status</th>
+                  <th className="px-3 py-2.5 font-semibold">Commission Type</th>
+                  <th className="px-3 py-2.5 font-semibold">Payout Structure</th>
+                  <th className="px-3 py-2.5 font-semibold">Cookie Window</th>
+                  <th className="px-3 py-2.5 font-semibold">Last Updated</th>
+                  <th className="w-12 px-3 py-2.5" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>

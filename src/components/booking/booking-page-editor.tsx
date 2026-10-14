@@ -22,6 +22,13 @@ import type { SubAccountMemberDoc } from "@/types/tenancy";
 import { TerritorySelectField } from "@/components/settings/territory-select-field";
 import { WorkingHoursGrid } from "@/components/booking/working-hours-grid";
 import { IntakeFieldBuilder } from "@/components/booking/intake-field-builder";
+import { BookingAppearancePreview } from "@/components/booking/booking-appearance-preview";
+import {
+  TENANT_ACCENT_PICKER_DEFAULT,
+  TENANT_ACCENT_SWATCHES,
+  TENANT_DISPLAY_FONTS,
+  type TenantDisplayFont,
+} from "@/lib/brand/tenant-brand";
 import { BookingHelpDialog } from "@/components/booking/booking-help-dialog";
 import { TeamBookingHelpDialog } from "@/components/booking/team-booking-help-dialog";
 import {
@@ -96,6 +103,12 @@ function allTimezones(): string[] {
   return COMMON_TIMEZONES;
 }
 
+const DISPLAY_FONT_CHOICES: { key: TenantDisplayFont; label: string }[] = [
+  { key: "system", label: "Modern sans" },
+  { key: "serif", label: "Classic serif" },
+  { key: "dm-serif-display", label: "Editorial serif" },
+];
+
 export function BookingPageEditor({ mode, initial }: Props) {
   const router = useRouter();
   const { subAccountId, subAccount, saPath } = useSubAccount();
@@ -120,6 +133,8 @@ export function BookingPageEditor({ mode, initial }: Props) {
         hosts: initial.hosts ?? [],
         logoUrl: initial.logoUrl,
         accentColor: initial.accentColor,
+        brandName: initial.brandName ?? null,
+        displayFont: initial.displayFont ?? null,
         meetingUrl: initial.meetingUrl ?? null,
         confirmationMessage: initial.confirmationMessage,
         redirectUrl: initial.redirectUrl ?? null,
@@ -817,44 +832,137 @@ export function BookingPageEditor({ mode, initial }: Props) {
         </Section>
       )}
 
-      {/* ── Visual ─────────────────────────────────────────────── */}
+      {/* ── Appearance (approved Section 4.8 tenant controls) ───────
+          The tenant controls branding — logo + name, ONE accent colour,
+          a display font from a curated list. The background wash is
+          derived from the accent automatically. Magnetix keeps the
+          structure, spacing, type scale and booking UX. */}
       <Section
-        title="Visual"
-        description="Override the sub-account's branding for this page. Leave blank to inherit."
+        title="Appearance"
+        description="Brand this page as your own. Your logo, name, one accent colour and a display font — the soft background wash follows your accent."
       >
-        <Field
-          label="Logo URL"
-          htmlFor="logoUrl"
-          hint="Public HTTPS URL. Falls back to the sub-account logo."
-        >
-          <Input
-            id="logoUrl"
-            value={form.logoUrl ?? ""}
-            onChange={(e) =>
-              set("logoUrl", e.target.value.length > 0 ? e.target.value : null)
-            }
-            placeholder="https://…"
-            type="url"
-          />
-        </Field>
-        <Field
-          label="Accent color"
-          htmlFor="accentColor"
-          hint="Hex like #5B5BD6."
-        >
-          <Input
-            id="accentColor"
-            value={form.accentColor ?? ""}
-            onChange={(e) =>
-              set(
-                "accentColor",
-                e.target.value.length > 0 ? e.target.value : null,
-              )
-            }
-            placeholder="#5B5BD6"
-            className="w-32"
-          />
-        </Field>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <div className="space-y-5">
+            <Field
+              label="Logo URL"
+              htmlFor="logoUrl"
+              hint={subAccount?.logoUrl ? "Leave blank to use your workspace logo." : "Public HTTPS URL. Leave blank to show your business name instead."}
+            >
+              <Input
+                id="logoUrl"
+                value={form.logoUrl ?? ""}
+                onChange={(e) =>
+                  set("logoUrl", e.target.value.length > 0 ? e.target.value : null)
+                }
+                placeholder="https://…"
+                type="url"
+              />
+            </Field>
+
+            <Field
+              label="Business name"
+              htmlFor="brandName"
+              hint="Shown in the page header. Leave blank to use your workspace name."
+            >
+              <Input
+                id="brandName"
+                value={form.brandName ?? ""}
+                onChange={(e) => set("brandName", e.target.value.length > 0 ? e.target.value : null)}
+                placeholder={subAccount?.name ?? "Your business"}
+                maxLength={80}
+              />
+            </Field>
+
+            <Field
+              label="Accent colour"
+              htmlFor="accentColor"
+              hint="Colours the selected day, available days, the chosen time and the Book / Next buttons. Button text switches to light or dark automatically so it stays readable."
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="color"
+                  aria-label="Pick accent colour"
+                  value={/^#[0-9a-fA-F]{6}$/.test(form.accentColor ?? "") ? (form.accentColor as string) : TENANT_ACCENT_PICKER_DEFAULT}
+                  onChange={(e) => set("accentColor", e.target.value.toUpperCase())}
+                  className="h-(--ds-control-md) w-11 cursor-pointer rounded-control border border-input bg-background p-1"
+                />
+                <Input
+                  id="accentColor"
+                  value={form.accentColor ?? ""}
+                  onChange={(e) =>
+                    set("accentColor", e.target.value.length > 0 ? e.target.value : null)
+                  }
+                  placeholder="#5B5BD6"
+                  className="w-28"
+                  aria-invalid={!!form.accentColor && !/^#[0-9a-fA-F]{6}$/.test(form.accentColor) || undefined}
+                />
+                {form.accentColor ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => set("accentColor", null)}>
+                    Use neutral
+                  </Button>
+                ) : null}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Suggested accent colours">
+                {TENANT_ACCENT_SWATCHES.map((sw) => (
+                  <button
+                    key={sw.hex}
+                    type="button"
+                    title={sw.name}
+                    aria-label={`Use ${sw.name}`}
+                    aria-pressed={form.accentColor?.toUpperCase() === sw.hex}
+                    onClick={() => set("accentColor", sw.hex)}
+                    className="size-6 rounded-full border border-black/10 outline-none ring-offset-2 aria-pressed:ring-2 aria-pressed:ring-ring focus-visible:ring-2 focus-visible:ring-ring"
+                    style={{ background: sw.hex }}
+                  />
+                ))}
+              </div>
+            </Field>
+
+            <div className="space-y-1.5">
+              <Label id="displayFont-label">Display font</Label>
+              <div role="radiogroup" aria-labelledby="displayFont-label" className="grid grid-cols-3 gap-2">
+                {DISPLAY_FONT_CHOICES.map((f) => {
+                  const on = (form.displayFont ?? "system") === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => set("displayFont", f.key === "system" ? null : f.key)}
+                      className={`flex flex-col items-center gap-1 rounded-control border px-2 py-2.5 text-center transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                        on ? "border-violet-ds-300 bg-accent text-accent-foreground" : "border-input bg-background hover:bg-muted"
+                      }`}
+                    >
+                      <span className="text-title-md leading-none" style={{ fontFamily: TENANT_DISPLAY_FONTS[f.key], fontWeight: f.key === "system" ? 600 : 400 }}>
+                        Aa
+                      </span>
+                      <span className="text-caption">{f.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">Used for your name and the page title. Body text stays the clean system font.</p>
+            </div>
+
+            <p className="rounded-control border border-dashed px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Background wash</span> — a soft tint made from your accent
+              colour, applied automatically. No accent = a neutral wash.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 lg:sticky lg:top-4 lg:self-start">
+            <p className="text-xs font-medium text-muted-foreground">Live preview</p>
+            <BookingAppearancePreview
+              name={form.brandName || subAccount?.name || "Your business"}
+              logoUrl={form.logoUrl || subAccount?.logoUrl || null}
+              accentColor={/^#[0-9a-fA-F]{6}$/.test(form.accentColor ?? "") ? form.accentColor : null}
+              displayFont={form.displayFont ?? null}
+              pageTitle={form.name}
+              durationMinutes={form.durationMinutes}
+            />
+          </div>
+        </div>
       </Section>
 
       {/* ── Submit + delete ────────────────────────────────────── */}

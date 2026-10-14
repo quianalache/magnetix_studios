@@ -11,6 +11,7 @@ import {
   type IntakeField,
   type WorkingHour,
 } from "@/types/booking";
+import { BOOKING_DISPLAY_FONTS, type BookingDisplayFont } from "@/types/booking";
 
 /**
  * Server-side validation + normalisation for the booking-page CRUD
@@ -484,6 +485,24 @@ export function validateAccentColor(input: unknown): Validated<string | null> {
   return { ok: true, value: input.trim().toUpperCase() };
 }
 
+export function validateBrandName(input: unknown): Validated<string | null> {
+  if (input == null) return { ok: true, value: null };
+  if (typeof input !== "string") return { ok: false, error: "Business name must be text." };
+  const v = input.trim();
+  if (!v) return { ok: true, value: null };
+  if (v.length > 80) return { ok: false, error: "Business name must be 80 characters or fewer." };
+  return { ok: true, value: v };
+}
+
+/** Only the curated fonts — never a free-form font family. */
+export function validateDisplayFont(input: unknown): Validated<BookingDisplayFont | null> {
+  if (input == null || input === "" || input === "system") return { ok: true, value: input === "system" ? "system" : null };
+  if (typeof input !== "string" || !(BOOKING_DISPLAY_FONTS as readonly string[]).includes(input)) {
+    return { ok: false, error: "Pick a display font from the list." };
+  }
+  return { ok: true, value: input as BookingDisplayFont };
+}
+
 export function validateLogoUrl(input: unknown): Validated<string | null> {
   if (input == null || input === "") return { ok: true, value: null };
   if (typeof input !== "string") {
@@ -644,6 +663,10 @@ export function validateBookingPageFormData(
   if (!logoUrl.ok) return logoUrl;
   const accentColor = validateAccentColor(b.accentColor);
   if (!accentColor.ok) return accentColor;
+  const brandName = validateBrandName(b.brandName);
+  if (!brandName.ok) return brandName;
+  const displayFont = validateDisplayFont(b.displayFont);
+  if (!displayFont.ok) return displayFont;
 
   const meetingUrl = validateMeetingUrl(b.meetingUrl);
   if (!meetingUrl.ok) return meetingUrl;
@@ -687,6 +710,8 @@ export function validateBookingPageFormData(
       hosts: hosts.value,
       logoUrl: logoUrl.value,
       accentColor: accentColor.value,
+      brandName: brandName.value,
+      displayFont: displayFont.value,
       meetingUrl: meetingUrl.value,
       confirmationMessage: confirmationMessage.value,
       redirectUrl: redirectUrl.value,

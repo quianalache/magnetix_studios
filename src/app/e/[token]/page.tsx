@@ -66,7 +66,7 @@ export default async function PublicEventPage({ params }: PageProps) {
   if (!startAt || !endAt) notFound();
 
   const branding = {
-    name: sub.name ?? "Booking",
+    name: page?.brandName || sub.name || "Booking",
     logoUrl: page?.logoUrl ?? sub.logoUrl ?? null,
     accentColor: page?.accentColor ?? null,
   };

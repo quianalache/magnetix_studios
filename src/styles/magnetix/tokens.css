@@ -89,6 +89,12 @@
   --text-caption--line-height: 1.4;
   --text-micro: 0.6875rem;
   --text-micro--line-height: 1.3;
+  /* 10px letter-spaced group label (approved Settings nav / sidebar section labels). */
+  --text-overline: 0.625rem;
+  --text-overline--line-height: 1.3;
+  /* 10.5px table column labels (approved index table header). */
+  --text-th: 0.65625rem;
+  --text-th--line-height: 1.3;
 
   /* Shape + depth. */
   --radius-control: 0.625rem;

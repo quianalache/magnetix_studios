@@ -245,15 +245,15 @@ export function CrmResources() {
             <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-table-head text-left text-micro font-semibold tracking-[0.08em] text-table-head-foreground uppercase">
-                  <th className="px-4 py-3 font-semibold">Resource</th>
-                  <th className="px-3 py-3 font-semibold">Type</th>
-                  <th className="px-3 py-3 font-semibold">Source Module</th>
-                  <th className="px-3 py-3 font-semibold">Access / Delivery</th>
-                  <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 font-semibold">Last Updated</th>
-                  <th className="px-3 py-3 font-semibold">Updated By</th>
-                  <th className="px-3 py-3" aria-label="Actions" />
+                <tr className="border-b border-border bg-table-head text-left text-th font-semibold tracking-[0.08em] whitespace-nowrap text-table-head-foreground uppercase">
+                  <th className="px-4 py-2.5 font-semibold">Resource</th>
+                  <th className="px-3 py-2.5 font-semibold">Type</th>
+                  <th className="px-3 py-2.5 font-semibold">Source Module</th>
+                  <th className="px-3 py-2.5 font-semibold">Access / Delivery</th>
+                  <th className="px-3 py-2.5 font-semibold">Status</th>
+                  <th className="px-3 py-2.5 font-semibold">Last Updated</th>
+                  <th className="px-3 py-2.5 font-semibold">Updated By</th>
+                  <th className="px-3 py-2.5" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>

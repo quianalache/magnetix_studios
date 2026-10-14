@@ -127,6 +127,8 @@ export async function POST(
     hosts: source.hosts ?? [],
     logoUrl: source.logoUrl ?? null,
     accentColor: source.accentColor ?? null,
+    brandName: source.brandName ?? null,
+    displayFont: source.displayFont ?? null,
     meetingUrl: source.meetingUrl ?? null,
     confirmationMessage: source.confirmationMessage ?? "",
     redirectUrl: source.redirectUrl ?? null,
