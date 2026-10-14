@@ -113,8 +113,13 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
   // Email defaults to masked in the dropdown header so screenshares don't
   // leak the operator's address. Per-session toggle.
   const [emailShown, setEmailShown] = useState(false);
-  const isMac =
-    typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+  // Platform is only knowable in the browser — detect it after mount.
+  // Reading navigator during render gave "Ctrl" on the server and "⌘" on a
+  // Mac, a text mismatch on every CRM page (production React error #418).
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    setIsMac(/Mac/.test(navigator.platform));
+  }, []);
 
   // MyMagnetix staff<->person bridge (2026-08-15) — only render the
   // "Switch to MyMagnetix" control for a confirmed dual-role human (this
