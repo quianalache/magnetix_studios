@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState, useEffect, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, StickyNote } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,8 @@ import { GoogleGIcon } from "@/components/brand/google-g-icon";
 import { AddNoteInput } from "@/components/contacts/add-note-input";
 import { WhatsappTemplateSender } from "@/components/contacts/whatsapp-template-sender";
 import { segmentInfo } from "@/lib/comms/sms-segments";
-import { cn } from "@/lib/utils";
+import { OptionSelect } from "@/components/system/option-select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DEFAULT_REVIEW_SMS_TEMPLATE } from "@/lib/reviews/constants";
 import type { Contact } from "@/types/contacts";
 import type { ConversationChannel } from "@/types/conversations";
@@ -205,27 +206,21 @@ function Composer({
   }
 
   return (
-    <div className="bg-card border-t px-4 py-3">
-      <div className="mb-3 flex gap-1" aria-label="Message type">
-        {(["reply", "note"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={tab === value}
-            onClick={() => setTab(value)}
-            className={cn(
-              "focus-visible:outline-primary h-8 rounded-md px-3 text-xs font-medium",
-              tab === value
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {value === "reply" ? "Reply" : "Internal Note"}
-          </button>
-        ))}
+    <div className="border-t border-border bg-card px-3 py-3 sm:px-4">
+      <div className="mb-2.5 flex items-center justify-between gap-2" aria-label="Message type">
+        <SegmentedControl
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "reply", label: "Reply" },
+            { value: "note", label: "Internal Note" },
+          ]}
+          className="p-0.5"
+        />
       </div>
-      <div hidden={tab !== "note"}>
-        <p className="text-muted-foreground mb-2 text-xs">
+      <div hidden={tab !== "note"} className="rounded-card border border-gold-300/60 bg-tint-gold p-2.5">
+        <p className="mb-2 flex items-center gap-1.5 text-caption font-medium text-tag-gold-fg">
+          <StickyNote className="size-3.5" aria-hidden="true" />
           Internal notes are saved to this contact and are never sent.
         </p>
         <AddNoteInput contactId={contact.id} />
@@ -239,7 +234,7 @@ function Composer({
             placeholder="Subject (optional — defaults to a reply to the last email)"
             maxLength={200}
             disabled={disabled}
-            className="mb-2 h-10 text-sm"
+            className="mb-2"
           />
         )}
         <Textarea
@@ -260,19 +255,19 @@ function Composer({
           }
           rows={2}
           disabled={disabled}
-          className="min-h-20 resize-none px-3 py-2 text-sm"
+          className="min-h-20 resize-none px-3 py-2 text-body-sm"
         />
         {(reason || notice) && (
           <p
             id={`${id}-status`}
             role="status"
-            className="text-muted-foreground mt-2 text-xs"
+            className="mt-2 text-caption text-muted-foreground"
           >
             {reason || notice}
           </p>
         )}
         {channel === "sms" && body.length > 0 && (
-          <p className="text-muted-foreground mt-1 text-[11px]">
+          <p className="mt-1 text-micro text-ink-tertiary">
             {smsInfo.length} chars · {smsInfo.segments} segment
             {smsInfo.segments === 1 ? "" : "s"}
             {smsInfo.encoding === "UCS-2" && " · Unicode"}
@@ -282,7 +277,7 @@ function Composer({
           <button
             type="button"
             onClick={() => setTemplateMode(true)}
-            className="text-primary inline-flex h-7 items-center text-xs underline"
+            className="inline-flex h-7 items-center text-caption font-medium text-link underline-offset-2 hover:underline"
           >
             Send an approved WhatsApp template
           </button>
@@ -307,29 +302,22 @@ function Composer({
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <label
               htmlFor={`${id}-channel`}
-              className="text-muted-foreground text-xs"
+              className="text-caption text-muted-foreground"
             >
               Send via
             </label>
-            <select
+            <OptionSelect
               id={`${id}-channel`}
+              size="sm"
+              className="w-auto max-w-[min(16rem,60vw)]"
               value={channel}
               disabled={sending || loading}
-              onChange={(e) =>
-                setChannel(e.target.value as ConversationChannel)
-              }
-              className="bg-background focus-visible:outline-primary h-8 max-w-full rounded-md border px-2 text-sm sm:max-w-64"
-            >
-              {(Object.keys(LABEL) as ConversationChannel[]).map((ch) => {
+              onChange={(next) => next && setChannel(next)}
+              options={(Object.keys(LABEL) as ConversationChannel[]).map((ch) => {
                 const unavailable = channelReason(ch);
-                return (
-                  <option key={ch} value={ch} disabled={!!unavailable}>
-                    {LABEL[ch]}
-                    {unavailable ? ` — ${unavailable}` : ""}
-                  </option>
-                );
+                return { value: ch, label: `${LABEL[ch]}${unavailable ? ` — ${unavailable}` : ""}`, disabled: !!unavailable };
               })}
-            </select>
+            />
             <Button
               type="submit"
               size="sm"

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Search, MessagesSquare } from "lucide-react";
+import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -14,7 +14,10 @@ import { markConversationRead, subscribeToConversation, subscribeToConversations
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SearchField } from "@/components/system/search-field";
+import { OptionSelect } from "@/components/system/option-select";
+import { StatusPill } from "@/components/system/status-pill";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConversationList } from "./conversation-list";
 import { ConversationThread } from "./conversation-thread";
@@ -25,6 +28,10 @@ import { ConversationContactPanel } from "./conversation-contact-panel";
 import { CHANNEL_LABELS, ChannelBadge, ContactInitials } from "./channel-badge";
 import type { Contact } from "@/types/contacts";
 import type { ConversationChannel, ConversationDoc } from "@/types/conversations";
+
+/** Workspace panes: white system cards. The Contact-profile embed sits inside a card already, so it drops the shadow. */
+const PANE = "overflow-hidden rounded-card border border-border bg-card shadow-card";
+const EMBED_PANE = "overflow-hidden rounded-card border border-border bg-card";
 
 export type ChannelAvailability = { channel: ConversationChannel; available: boolean; reason?: string; notice?: string };
 type Capabilities = { channels: ChannelAvailability[]; aiAvailable: boolean; aiReason?: string; members: { uid: string; name: string }[] };
@@ -71,15 +78,33 @@ export function ConversationWorkspace() {
   const unreadCount = rows.filter(c => c.unreadCount > 0).length;
 
   return <section aria-label="Conversations workspace" className="relative flex h-full min-h-0 w-full min-w-0 gap-2 lg:gap-3">
-    <aside aria-label="Conversation list" className={cn("flex w-full shrink-0 flex-col overflow-hidden rounded-2xl border bg-card md:w-[280px] xl:w-[320px] 2xl:w-[360px]", contactId && "hidden md:flex")}>
-      <div className="space-y-3 p-4"><div><h1 className="text-xl font-bold tracking-tight text-primary">Conversations</h1><p className="mt-0.5 text-xs text-muted-foreground">All your messages in one place.</p></div>
-        <div className="flex gap-2">{[false, true].map(value => <button key={String(value)} type="button" aria-pressed={unread === value} onClick={() => setUnread(value)} className={cn("min-h-10 rounded-full border px-4 text-xs font-medium", unread === value ? "border-primary bg-primary text-primary-foreground" : "text-primary hover:bg-primary/5")}>{value ? "Unread" : "All"}{loaded ? " (" + (value ? unreadCount : rows.length) + ")" : ""}</button>)}</div>
-        <div className="relative"><Search aria-hidden="true" className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label="Search conversations by name or phone" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or phone…" className="h-10 rounded-xl pl-9" /></div>
-        <select aria-label="Filter conversations by channel" value={channel} onChange={e => setChannel(e.target.value as typeof channel)} className="h-10 w-full rounded-xl border bg-background px-3 text-xs text-foreground"><option value="all">All channels</option>{Object.entries(CHANNEL_LABELS).map(([id, label]) => <option key={id} value={id}>{id === "messenger" ? "Facebook Messenger" : label}</option>)}</select>
+    <aside aria-label="Conversation list" className={cn(PANE, "flex w-full shrink-0 flex-col md:w-[280px] xl:w-[320px] 2xl:w-[360px]", contactId && "hidden md:flex")}>
+      <div className="space-y-3 border-b border-border p-4">
+        <div>
+          <h1 className="text-title-md font-semibold tracking-tight text-foreground">Conversations</h1>
+          <p className="mt-0.5 text-caption text-muted-foreground">All your messages in one place.</p>
+        </div>
+        <SegmentedControl
+          value={unread ? "unread" : "all"}
+          onChange={(v) => setUnread(v === "unread")}
+          options={[
+            { value: "all", label: "All" + (loaded ? " (" + rows.length + ")" : "") },
+            { value: "unread", label: "Unread" + (loaded ? " (" + unreadCount + ")" : "") },
+          ]}
+          className="w-full [&>button]:flex-1"
+        />
+        <SearchField value={search} onChange={setSearch} placeholder="Search by name or phone…" aria-label="Search conversations by name or phone" />
+        <OptionSelect
+          aria-label="Filter conversations by channel"
+          value={channel === "all" ? null : channel}
+          onChange={(next) => setChannel(next ?? "all")}
+          noneLabel="All channels"
+          options={(Object.keys(CHANNEL_LABELS) as ConversationChannel[]).map((id) => ({ value: id, label: id === "messenger" ? "Facebook Messenger" : CHANNEL_LABELS[id] }))}
+        />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{!loaded ? <p role={error ? "alert" : "status"} className="p-5 text-sm text-muted-foreground">{error || "Loading conversations…"}</p> : <ConversationList conversations={visible} basePath={saPath("/conversations")} selectedId={contactId} filtered={!!search || unread || channel !== "all"} />}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{!loaded ? <p role={error ? "alert" : "status"} className={cn("p-5 text-body-sm", error ? "text-status-danger-fg" : "text-muted-foreground")}>{error || "Loading conversations…"}</p> : <ConversationList conversations={visible} basePath={saPath("/conversations")} selectedId={contactId} filtered={!!search || unread || channel !== "all"} />}</div>
     </aside>
-    {contactId ? <ActiveConversation key={subAccountId + ":" + contactId} contactId={contactId} /> : <div className="hidden min-w-0 flex-1 flex-col items-center justify-center rounded-2xl border bg-card p-8 text-center md:flex"><MessagesSquare className="mb-4 size-10 text-primary/40" /><h2 className="font-semibold">Select a conversation</h2><p className="mt-2 text-sm text-muted-foreground">Your message history and contact details will appear here.</p></div>}
+    {contactId ? <ActiveConversation key={subAccountId + ":" + contactId} contactId={contactId} /> : <div className={cn(PANE, "hidden min-w-0 flex-1 flex-col items-center justify-center p-8 text-center md:flex")}><span className="mb-4 flex size-12 items-center justify-center rounded-chip bg-tint-violet text-link" aria-hidden="true"><MessagesSquare className="size-6" /></span><h2 className="text-section font-semibold">Select a conversation</h2><p className="mt-1.5 max-w-xs text-body-sm text-muted-foreground">Your message history and contact details will appear here.</p></div>}
   </section>;
 }
 
@@ -106,8 +131,10 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
   const refreshCapabilities = useCallback(() => setRefresh(n => n + 1), []);
 
   useEffect(() => {
-    const mobile = window.matchMedia("(max-width: 767px)").matches;
-    if (mobile) {
+    // The context pane is a third column only at ≥1280px; below that it's an
+    // overlay (sheet-like), so it starts closed instead of covering the thread.
+    const narrow = window.matchMedia("(max-width: 1279px)").matches;
+    if (narrow) {
       setDetailsOpen(false);
       return;
     }
@@ -176,15 +203,15 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
     setDetailsOpen(prev => { try { localStorage.setItem("ls.convo.detailsPanel", prev ? "0" : "1"); } catch {} return !prev; });
   }
 
-  if (error) return <div className="min-w-0 flex-1 rounded-2xl border bg-card p-6">{!embedded && <Link href={saPath("/conversations")} className="text-primary">← Conversations</Link>}<p role="alert" className={cn("text-sm", !embedded && "mt-4")}>{error}</p></div>;
-  if (!contact) return <div role="status" className="flex min-w-0 flex-1 items-center justify-center rounded-2xl border bg-card">Loading conversation…</div>;
+  if (error) return <div className={cn(embedded ? EMBED_PANE : PANE, "min-w-0 flex-1 p-6")}>{!embedded && <Link href={saPath("/conversations")} className="inline-flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" aria-hidden="true" />Conversations</Link>}<p role="alert" className={cn("text-body-sm text-status-danger-fg", !embedded && "mt-4")}>{error}</p></div>;
+  if (!contact) return <div role="status" className={cn(embedded ? EMBED_PANE : PANE, "flex min-h-40 min-w-0 flex-1 items-center justify-center text-body-sm text-muted-foreground")}>Loading conversation…</div>;
   const draftAvailability = capabilities?.channels.find(c => c.channel === conversation?.pendingDraft?.channel);
   return <>
-    <article aria-label="Active conversation" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card">
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-3 lg:px-4">
-        {embedded ? <div className="flex min-w-0 items-center gap-2">{conversation ? <ChannelBadge channel={conversation.lastChannel} /> : <span className="text-xs text-muted-foreground">No messages yet</span>}</div> : <div className="flex min-w-0 items-center gap-2"><Link href={saPath("/conversations")} aria-label="Back to conversations" className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"><ArrowLeft className="size-4" /></Link><ContactInitials name={contact.name || contact.phone || "?"} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{contact.name || "Unnamed contact"}</h2><p className="truncate text-xs text-muted-foreground">{contact.phone || contact.email}</p></div></div>}
+    <article aria-label="Active conversation" className={cn(embedded ? EMBED_PANE : PANE, "flex min-h-0 min-w-0 flex-1 flex-col")}>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 lg:px-4">
+        {embedded ? <div className="flex min-w-0 items-center gap-2">{conversation ? <ChannelBadge channel={conversation.lastChannel} /> : <span className="text-caption text-muted-foreground">No messages yet</span>}</div> : <div className="flex min-w-0 items-center gap-2"><Link href={saPath("/conversations")} aria-label="Back to conversations" className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"><ArrowLeft className="size-4" /></Link><ContactInitials name={contact.name || contact.phone || "?"} /><div className="min-w-0"><h2 className="truncate text-body-sm font-semibold text-foreground">{contact.name || "Unnamed contact"}</h2><p className="truncate text-caption text-muted-foreground">{contact.phone || contact.email}</p></div></div>}
         <div className="flex shrink-0 items-center gap-1">{!embedded && conversation && <span className="hidden lg:inline-flex"><ChannelBadge channel={conversation.lastChannel} /></span>}
-          {embedded ? <Button render={<Link href={saPath("/conversations/" + contactId)} />} variant="ghost" size="sm" className="min-h-10 gap-1 px-2 text-xs">Open in Conversations<ExternalLink className="size-3" /></Button> : <>
+          {embedded ? <Button render={<Link href={saPath("/conversations/" + contactId)} />} variant="ghost" size="sm" className="min-h-10 gap-1 px-2 text-caption">Open in Conversations<ExternalLink className="size-3" /></Button> : <>
           <Button variant="ghost" size="icon" className="size-10" aria-label={detailsOpen ? "Hide contact details" : "Show contact details"} onClick={toggleDetails}><PanelRight className="size-4" /></Button></>}
           <DropdownMenu><DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-10" aria-label="Conversation options" />}><MoreHorizontal className="size-5" /></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={() => setTheme(theme === "native" ? "standard" : "native")}>Channel Styling: {theme === "native" ? "On" : "Off"}</DropdownMenuItem>
@@ -192,13 +219,30 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
           </DropdownMenuContent></DropdownMenu>
         </div>
       </header>
-      {conversation && <><div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-xs"><span className="capitalize text-muted-foreground">{conversation.status || "open"}</span><label className="flex items-center gap-2">Assigned to<select aria-label="Assign conversation" disabled={saving || !capabilities} value={conversation.assigneeUid || ""} onChange={e => void manage({ assigneeUid: e.target.value || null })} className="h-10 max-w-44 rounded-lg border bg-background px-2 text-xs"><option value="">Unassigned</option>{conversation.assigneeUid && !capabilities?.members.some(m => m.uid === conversation.assigneeUid) && <option value={conversation.assigneeUid}>Unavailable member</option>}{capabilities?.members.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}</select></label></div>
+      {conversation && <><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2 text-caption">
+        <StatusPill tone={(conversation.status || "open") === "open" ? "info" : "neutral"} className="capitalize">{conversation.status || "open"}</StatusPill>
+        <span className="flex items-center gap-2 text-muted-foreground">Assigned to
+          <OptionSelect
+            aria-label="Assign conversation"
+            size="sm"
+            className="w-44"
+            disabled={saving || !capabilities}
+            value={conversation.assigneeUid || null}
+            onChange={(next) => void manage({ assigneeUid: next })}
+            noneLabel="Unassigned"
+            options={[
+              ...(conversation.assigneeUid && !capabilities?.members.some(m => m.uid === conversation.assigneeUid) ? [{ value: conversation.assigneeUid, label: "Unavailable member" }] : []),
+              ...(capabilities?.members.map(m => ({ value: m.uid, label: m.name })) ?? []),
+            ]}
+          />
+        </span>
+      </div>
       <ConversationAiControls conversation={conversation} available={capabilities?.aiAvailable ?? false} unavailableReason={capabilities?.aiReason || capabilityError || "Checking AI availability…"} /></>}
       <ConversationThread key={contactId} contactId={contactId} theme={theme} />
       {conversation?.pendingDraft && <ConversationDraftCard key={conversation.pendingDraft.body} contact={contact} draft={conversation.pendingDraft} disabledReason={draftAvailability?.available ? undefined : draftAvailability?.reason || "Channel availability has not been confirmed."} onSent={refreshCapabilities} />}
-      {capabilityError && <p role="alert" className="px-4 py-2 text-xs text-destructive">{capabilityError} <button type="button" onClick={refreshCapabilities} className="underline">Retry</button></p>}
+      {capabilityError && <p role="alert" className="border-t border-border px-4 py-2 text-caption text-status-danger-fg">{capabilityError} <button type="button" onClick={refreshCapabilities} className="font-medium underline">Retry</button></p>}
       <ConversationComposer key={contactId} contact={contact} availability={capabilities?.channels ?? []} defaultChannel={conversation?.lastChannel ?? "sms"} loading={!capabilities} onSent={refreshCapabilities} />
     </article>
-    {!embedded && detailsOpen && <aside aria-label="Contact information" className="absolute inset-y-0 right-0 z-10 flex min-h-0 w-[min(320px,calc(100%-3rem))] shrink-0 overflow-hidden rounded-2xl border bg-card shadow-xl md:static md:w-[300px] md:shadow-none"><ConversationContactPanel contact={contact} availability={capabilities?.channels ?? []} onClose={toggleDetails} /></aside>}
+    {!embedded && detailsOpen && <aside aria-label="Contact information" className="absolute inset-y-0 right-0 z-10 flex min-h-0 w-[min(320px,calc(100%-3rem))] shrink-0 overflow-hidden rounded-card border border-border bg-card shadow-pop xl:static xl:w-[300px] xl:shadow-card"><ConversationContactPanel contact={contact} availability={capabilities?.channels ?? []} onClose={toggleDetails} /></aside>}
   </>;
 }

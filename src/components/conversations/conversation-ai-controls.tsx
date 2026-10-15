@@ -84,13 +84,13 @@ function AiControls({
     mode !== "off" && !!pausedUntil && pausedUntil.getTime() > Date.now();
 
   return (
-    <div className="bg-muted/30 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2">
       <div className="flex items-center gap-2">
         <Bot className="text-muted-foreground h-3.5 w-3.5" />
-        <span className="text-muted-foreground text-[11px] font-medium">
+        <span className="text-caption font-medium text-muted-foreground">
           AI replies
         </span>
-        <div className="bg-background flex gap-0.5 rounded-md border p-0.5">
+        <div className="flex gap-0.5 rounded-control border border-border bg-background p-0.5">
           {MODES.map((m) => (
             <button
               key={m.value}
@@ -100,10 +100,10 @@ function AiControls({
               disabled={busy || (!available && m.value !== "off")}
               onClick={() => update(m.value)}
               className={cn(
-                "h-7 rounded px-2 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                "h-7 rounded-lg px-2.5 text-caption font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                 mode === m.value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted"
+                  ? "bg-accent font-semibold text-accent-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               {m.label}
@@ -117,14 +117,14 @@ function AiControls({
           onClick={() => update("resume")}
           disabled={busy || !available}
           title={!available ? reason : "Resume AI replies"}
-          className="bg-primary/10 text-primary hover:bg-primary/20 flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-7 items-center gap-1 rounded-control bg-status-warning-bg px-2.5 text-caption font-medium text-status-warning-fg transition-colors hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Pause className="h-3 w-3" />
           Bot paused — Resume
         </button>
       )}
       {!available && (
-        <p role="status" className="text-muted-foreground w-full text-[11px]">
+        <p role="status" className="w-full text-micro text-ink-tertiary">
           {reason}
         </p>
       )}

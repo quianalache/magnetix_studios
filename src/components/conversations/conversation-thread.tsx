@@ -2,11 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { StickyNote } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { subscribeToNotes } from "@/lib/firestore/contacts";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { CHANNEL_TONE } from "./channel-badge";
 import type { MessageDoc } from "@/types/messages";
 import type { ConversationChannel } from "@/types/conversations";
 import type { ConversationTheme } from "@/hooks/use-conversation-theme";
@@ -24,13 +26,7 @@ const CHANNEL_LABEL: Record<ConversationChannel, string> = {
   email: "Email",
 };
 
-const CHANNEL_CHIP: Record<ConversationChannel, string> = {
-  sms: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  whatsapp: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  messenger: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  instagram: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
-  email: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-};
+const CHANNEL_CHIP: Record<ConversationChannel, string> = CHANNEL_TONE;
 
 /** Meta rows carry their own channel discriminator on the doc. */
 type MetaMessageDoc = MessageDoc & { channel?: ConversationChannel };
@@ -172,12 +168,15 @@ function ContactThread({
         followLatestRef.current =
           element.scrollHeight - element.scrollTop - element.clientHeight < 80;
       }}
-      className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-violet-50/30 px-4 py-6 sm:px-6 dark:bg-violet-950/10"
+      // `relative` contains the bubbles' sr-only labels — without a positioned
+      // ancestor they anchored to <body> and stretched the page (Contact
+      // profile embed). Near-white canvas so white incoming bubbles read.
+      className="relative min-h-0 flex-1 space-y-4 overflow-y-auto bg-background px-4 py-5 sm:px-6"
     >
       {failedSources.length > 0 && (
         <p
           role="status"
-          className="border-destructive/30 bg-background text-destructive rounded-xl border px-4 py-3 text-sm"
+          className="rounded-control border border-status-danger-dot/30 bg-status-danger-bg px-4 py-3 text-body-sm text-status-danger-fg"
         >
           Could not load{" "}
           {failedSources.map((source) => source.label).join(", ")}.
@@ -191,8 +190,8 @@ function ContactThread({
       ) : !hydrated && merged.length === 0 ? (
         <div role="status" className="space-y-4">
           <span className="sr-only">Loading messages and notes…</span>
-          <div className="h-16 w-2/3 animate-pulse rounded-2xl bg-violet-100 dark:bg-violet-950" />
-          <div className="ml-auto h-16 w-3/4 animate-pulse rounded-2xl bg-violet-200 dark:bg-violet-900" />
+          <div className="h-16 w-2/3 animate-pulse rounded-card bg-muted" />
+          <div className="ml-auto h-16 w-3/4 animate-pulse rounded-card bg-muted" />
         </div>
       ) : merged.length === 0 ? (
         <div className="flex h-full min-h-[150px] items-center justify-center text-center">
@@ -210,7 +209,7 @@ function ContactThread({
                 dayLabel(merged[index - 1].createdAt)) && (
               <div className="flex items-center gap-3 py-3">
                 <div className="bg-border h-px flex-1" />
-                <p className="bg-background text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium">
+                <p className="rounded-chip border border-border bg-card px-3 py-1 text-caption font-medium text-muted-foreground">
                   {dayLabel(m.createdAt)}
                 </p>
                 <div className="bg-border h-px flex-1" />
@@ -232,10 +231,15 @@ function ContactThread({
 function InternalNote({ note }: { note: Note }) {
   const ts = messageDate(note.createdAt);
   return (
-    <div className="mx-auto w-full max-w-[92%] rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="font-semibold">Internal note</span>
-        <time dateTime={ts?.toISOString()} title={ts?.toLocaleString()}>
+    // Approved treatment: internal notes are warm gold — unmistakably not a
+    // customer-facing message.
+    <div className="mx-auto w-full max-w-[92%] rounded-card border border-gold-300/70 bg-tint-gold px-4 py-3 text-body-sm text-foreground">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-caption">
+        <span className="flex items-center gap-1.5 font-semibold text-tag-gold-fg">
+          <StickyNote className="size-3.5" aria-hidden="true" />
+          Internal note · not sent
+        </span>
+        <time dateTime={ts?.toISOString()} title={ts?.toLocaleString()} className="text-ink-tertiary">
           {ts ? ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "Time unavailable"}
         </time>
       </div>
@@ -277,10 +281,10 @@ function bubbleClasses(
       ? "rounded-br-sm bg-[#007aff] text-white"
       : "rounded-bl-sm bg-[#e9e9eb] text-black dark:bg-[#3b3b3d] dark:text-white";
   }
-  // Standard / brand
+  // Standard (approved): outgoing plum, incoming white with a border.
   return isOutbound
-    ? "bg-violet-700 text-white dark:bg-violet-600"
-    : "bg-violet-100 text-violet-950 dark:bg-violet-950 dark:text-violet-100";
+    ? "rounded-br-md bg-primary text-primary-foreground"
+    : "rounded-bl-md border border-border bg-card text-foreground";
 }
 
 function ChannelBubble({
@@ -302,7 +306,7 @@ function ChannelBubble({
     >
       <div
         className={cn(
-          "min-w-0 rounded-2xl px-4 py-3 text-sm leading-relaxed [overflow-wrap:anywhere] shadow-sm",
+          "min-w-0 rounded-card px-4 py-2.5 text-body-sm leading-relaxed [overflow-wrap:anywhere]",
           isEmail ? "max-w-[95%] sm:max-w-[88%]" : "max-w-[88%] sm:max-w-[78%]",
           bubbleClasses(message.channel, isOutbound, theme),
           message.status === "failed" && "ring-destructive ring-2"
@@ -313,10 +317,10 @@ function ChannelBubble({
         )}
         <p className="break-words whitespace-pre-wrap">{message.body}</p>
       </div>
-      <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-caption text-ink-tertiary">
         <span
           className={cn(
-            "rounded-full px-2 py-0.5 font-medium",
+            "rounded-chip px-2 py-0.5 font-medium",
             CHANNEL_CHIP[message.channel] ?? CHANNEL_CHIP.sms
           )}
         >
@@ -333,7 +337,7 @@ function ChannelBubble({
         </time>
         {isOutbound && message.status === "queued" && <span>· Queued</span>}
         {message.status === "failed" && (
-          <span className="text-destructive font-medium">· Failed to send</span>
+          <span className="font-medium text-status-danger-fg">· Failed to send</span>
         )}
       </div>
     </div>

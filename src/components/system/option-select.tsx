@@ -25,7 +25,8 @@ export function OptionSelect<T extends string>({
   id?: string;
   value: T | null;
   onChange: (value: T | null) => void;
-  options: readonly { value: T; label: string }[];
+  /** `disabled` options stay visible but can't be picked (e.g. an unavailable channel). */
+  options: readonly { value: T; label: string; disabled?: boolean }[];
   /** Label of the empty choice; omit when a value is always required. */
   noneLabel?: string;
   disabled?: boolean;
@@ -53,7 +54,7 @@ export function OptionSelect<T extends string>({
       <SelectContent>
         {noneLabel !== undefined ? <SelectItem value={NONE}>{noneLabel}</SelectItem> : null}
         {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
+          <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}
           </SelectItem>
         ))}

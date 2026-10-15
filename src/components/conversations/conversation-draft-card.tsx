@@ -137,8 +137,8 @@ function DraftCard({ contact, draft, disabledReason, onSent }: DraftCardProps) {
   }
 
   return (
-    <div className="border-primary/20 bg-primary/5 border-t px-4 py-3">
-      <div className="text-primary mb-1.5 flex items-center gap-1.5 text-xs font-medium">
+    <div className="border-t border-violet-ds-300/60 bg-tint-violet px-4 py-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-caption font-semibold text-link">
         <Sparkles className="h-3.5 w-3.5" />
         AI suggested reply · {LABEL[draft.channel]} · edit before sending
       </div>
@@ -148,10 +148,10 @@ function DraftCard({ contact, draft, disabledReason, onSent }: DraftCardProps) {
         disabled={!!busy || sent}
         onChange={(e) => setBody(e.target.value)}
         rows={3}
-        className="bg-background resize-none text-sm"
+        className="resize-none bg-card text-body-sm"
       />
       {(reason || sent) && (
-        <p role="status" className="text-muted-foreground mt-2 text-xs">
+        <p role="status" className="mt-2 text-caption text-muted-foreground">
           {sent ? "Reply sent." : reason}
         </p>
       )}
