@@ -522,7 +522,7 @@ export function BroadcastComposer({
             <ArrowLeft className="h-3 w-3" /> Broadcasts
           </a>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-title-lg font-semibold tracking-tight text-foreground">
               {existingBroadcastId ? "Edit draft" : "New broadcast"}
             </h1>
             <SaveStateIndicator state={saveState} />

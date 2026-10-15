@@ -17,6 +17,9 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Lock } from "lucide-react";
+import { PageShell } from "@/components/system/page-shell";
+import { EmptyState } from "@/components/system/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -352,9 +355,9 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
   if (authLoading) return null;
   if (!isOwner) {
     return (
-      <div className="mx-auto max-w-2xl p-8 text-center text-sm text-muted-foreground">
-        Communications is managed by the agency owner.
-      </div>
+      <PageShell width="data">
+        <EmptyState icon={Lock} title="Owner only" description="Communications is managed by the agency owner." />
+      </PageShell>
     );
   }
   // `agencyId` resolves from the same auth claims `agencyRole` already did,
@@ -391,7 +394,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
             <ArrowLeft className="h-3 w-3" /> Broadcasts
           </Link>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-title-lg font-semibold tracking-tight text-foreground">
               {existingCommunicationId ? "Edit draft" : "New communication"}
             </h1>
             <SaveStateIndicator state={saveState} />

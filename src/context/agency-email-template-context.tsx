@@ -2,7 +2,20 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { EmailTemplateContext } from "@/context/email-template-context";
-import type { EmailTemplateSummary } from "@/lib/email/template-library";
+import type { EmailTemplateSummary, LoadedTemplate } from "@/lib/email/template-library";
+import type { BroadcastContent } from "@/types/broadcast-content";
+
+/** Agency templates load through the owner-only agency API — never the
+ *  tenant client-Firestore loader (which can't see `agencies/**`). */
+async function loadAgencyTemplate(summary: EmailTemplateSummary): Promise<LoadedTemplate | null> {
+  const res = await fetch(`/api/agency/email-templates/${encodeURIComponent(summary.id)}`, { cache: "no-store" });
+  if (!res.ok) return null;
+  const data = (await res.json().catch(() => ({}))) as {
+    template?: { name: string; subject: string; preheader: string | null; content: BroadcastContent };
+  };
+  if (!data.template) return null;
+  return { source: "visual", ...data.template };
+}
 
 /**
  * Agency-scope sibling of EmailTemplateProvider — fetch-based instead of a
@@ -33,5 +46,9 @@ export function AgencyEmailTemplateProvider({ children }: { children: ReactNode 
     };
   }, []);
 
-  return <EmailTemplateContext.Provider value={{ templates, loading }}>{children}</EmailTemplateContext.Provider>;
+  return (
+    <EmailTemplateContext.Provider value={{ templates, loading, loadTemplate: loadAgencyTemplate }}>
+      {children}
+    </EmailTemplateContext.Provider>
+  );
 }

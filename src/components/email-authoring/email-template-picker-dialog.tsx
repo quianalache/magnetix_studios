@@ -45,7 +45,7 @@ export function EmailTemplatePickerDialog({
   subAccountId: string;
   onPick: (picked: PickedEmailTemplate) => void;
 }) {
-  const { templates, loading } = useEmailTemplateContext();
+  const { templates, loading, loadTemplate } = useEmailTemplateContext();
   const [query, setQuery] = useState("");
   const [pickingId, setPickingId] = useState<string | null>(null);
 
@@ -64,7 +64,9 @@ export function EmailTemplatePickerDialog({
   async function pick(summary: EmailTemplateSummary) {
     setPickingId(summary.id);
     try {
-      const loaded = await loadEmailTemplate(summary.id, summary.source);
+      const loaded = loadTemplate
+        ? await loadTemplate(summary)
+        : await loadEmailTemplate(summary.id, summary.source);
       if (!loaded) return;
       onPick({
         id: summary.id,

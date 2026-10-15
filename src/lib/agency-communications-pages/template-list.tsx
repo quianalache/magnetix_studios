@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ArrowLeft, FileText, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
-import { formatRelativeTime } from "@/lib/format";
 import type { EmailTemplateSummary } from "@/lib/email/template-library";
 import { Lock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,7 +14,8 @@ import { PageShell } from "@/components/system/page-shell";
 import { PageHeader } from "@/components/system/page-header";
 import { SearchField } from "@/components/system/search-field";
 import { EmptyState as SystemEmptyState } from "@/components/system/empty-state";
-import { EmailTemplatePreview } from "@/components/broadcasts/email-template-preview";
+import { DeleteTemplateDialog, RenameTemplateDialog, TemplateLibraryCard } from "@/components/email-authoring/template-library-card";
+import type { BroadcastContent } from "@/types/broadcast-content";
 
 /** Agency Email Template Library — the agency-scope sibling of the tenant
  *  Email Template Library, fetch-based against /api/agency/email-templates. */
@@ -24,15 +25,66 @@ export default function AgencyEmailTemplateLibraryPage() {
   const [templates, setTemplates] = useState<EmailTemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [renaming, setRenaming] = useState<EmailTemplateSummary | null>(null);
+  const [deleting, setDeleting] = useState<EmailTemplateSummary | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOwner) return;
-    fetch("/api/agency/email-templates")
+  const load = useCallback(() => {
+    fetch("/api/agency/email-templates", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { templates?: EmailTemplateSummary[] } | null) => setTemplates(d?.templates ?? []))
       .catch(() => setTemplates([]))
       .finally(() => setLoading(false));
-  }, [isOwner]);
+  }, []);
+
+  useEffect(() => {
+    if (isOwner) load();
+  }, [isOwner, load]);
+
+  // Card actions (parity with the sub-account library) — all through the
+  // existing owner-only, agency-scoped /api/agency/email-templates routes.
+  async function loadFull(id: string): Promise<FullTemplate> {
+    const res = await fetch(`/api/agency/email-templates/${id}`, { cache: "no-store" });
+    const data = (await res.json().catch(() => ({}))) as { template?: FullTemplate };
+    if (!res.ok || !data.template) throw new Error("load failed");
+    return data.template;
+  }
+
+  async function handleRename(t: EmailTemplateSummary, name: string) {
+    const full = await loadFull(t.id);
+    const res = await fetch(`/api/agency/email-templates/${t.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, subject: full.subject, preheader: full.preheader ?? null, content: full.content }),
+    });
+    if (!res.ok) throw new Error("rename failed");
+    load();
+  }
+
+  async function handleDuplicate(t: EmailTemplateSummary) {
+    setDuplicatingId(t.id);
+    try {
+      const full = await loadFull(t.id);
+      const res = await fetch("/api/agency/email-templates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: `${full.name} (copy)`.trim(), subject: full.subject, preheader: full.preheader ?? null, content: full.content }),
+      });
+      if (!res.ok) throw new Error("duplicate failed");
+      toast.success("Template duplicated");
+      load();
+    } catch {
+      toast.error("Couldn't duplicate this template.");
+    } finally {
+      setDuplicatingId(null);
+    }
+  }
+
+  async function handleDelete(t: EmailTemplateSummary) {
+    const res = await fetch(`/api/agency/email-templates/${t.id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("delete failed");
+    load();
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -99,21 +151,28 @@ export default function AgencyEmailTemplateLibraryPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => (
-            <Link
+            <TemplateLibraryCard
               key={t.id}
+              template={t}
               href={`/agency/communications/templates/${t.id}`}
-              className="flex flex-col overflow-hidden rounded-card border border-border bg-card shadow-card outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <EmailTemplatePreview blockCount={t.blockCount} />
-              <div className="min-w-0 flex-1 space-y-1 p-3">
-                <p className="truncate text-body-sm font-semibold text-foreground">{t.name}</p>
-                <p className="truncate text-caption text-muted-foreground">{t.subject || "(no subject)"}</p>
-                <p className="text-caption text-ink-tertiary">Updated {formatRelativeTime(new Date(t.updatedAtMs))}</p>
-              </div>
-            </Link>
+              duplicating={duplicatingId === t.id}
+              onDuplicate={() => handleDuplicate(t)}
+              onRename={() => setRenaming(t)}
+              onDelete={() => setDeleting(t)}
+            />
           ))}
         </div>
       )}
+
+      <RenameTemplateDialog template={renaming} onOpenChange={(open) => !open && setRenaming(null)} onRename={handleRename} />
+      <DeleteTemplateDialog
+        template={deleting}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        onDelete={handleDelete}
+        description="will be removed. Broadcasts that already copied it are unaffected."
+      />
     </PageShell>
   );
 }
+
+type FullTemplate = { name: string; subject: string; preheader: string | null; content: BroadcastContent };

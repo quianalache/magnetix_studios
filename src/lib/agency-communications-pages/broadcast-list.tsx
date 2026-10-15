@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime, toDate } from "@/lib/format";
 import type { AgencyCommunicationDoc } from "@/types/agency-communications";
+import { agencyAudienceLabel, type AgencyAudienceNames } from "@/lib/agency-communications/audience-label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell } from "@/components/system/page-shell";
 import { PageHeader } from "@/components/system/page-header";
@@ -23,6 +24,7 @@ export default function AgencyBroadcastsListPage() {
   const [communications, setCommunications] = useState<AgencyCommunicationDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [names, setNames] = useState<AgencyAudienceNames | null>(null);
   const { confirm, dialog } = useConfirm();
 
   function refresh() {
@@ -38,15 +40,35 @@ export default function AgencyBroadcastsListPage() {
   }
 
   useEffect(() => {
-    if (isOwner) refresh();
+    if (!isOwner) return;
+    refresh();
+    fetch("/api/agency/communications/audience/options", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: AgencyAudienceNames | null) => setNames(d))
+      .catch(() => setNames(null));
   }, [isOwner]);
+
+  // The tenant list is live (onSnapshot); the agency owner has no
+  // client-readable Firestore path here, so refresh while anything is
+  // still in flight (and when the tab regains focus) instead.
+  const inFlight = communications.some((c) => c.status === "queued" || c.status === "sending");
+  useEffect(() => {
+    if (!isOwner) return;
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const timer = inFlight ? window.setInterval(refresh, 4000) : null;
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      if (timer) window.clearInterval(timer);
+    };
+  }, [isOwner, inFlight]);
 
   if (authLoading) return null;
   if (!isOwner) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
+      <PageShell width="data">
         <SystemEmptyState icon={Lock} title="Owner only" description="Communications is managed by the agency owner." />
-      </div>
+      </PageShell>
     );
   }
 
@@ -135,7 +157,8 @@ export default function AgencyBroadcastsListPage() {
                       status={c.status}
                       meta={
                         <>
-                          {formatRelativeTime(c.createdAt)} · by {c.createdBy?.displayName || c.createdBy?.email || "—"}
+                          {agencyAudienceLabel(c.audienceSources, names)} · {formatRelativeTime(c.createdAt)} · by{" "}
+                          {c.createdBy?.displayName || c.createdBy?.email || "—"}
                         </>
                       }
                       totals={c.totals}

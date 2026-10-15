@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { metaAppConfigured } from "@/lib/comms/meta";
 import { emailIsConfigured } from "@/lib/comms/resend";
 import { smsIsConfigured } from "@/lib/comms/twilio";
+import { qstashIsConfigured } from "@/lib/automations/qstash";
 
 /**
  * Reports which OPTIONAL deployment-level integrations have their env vars
@@ -30,5 +31,8 @@ export async function GET(request: Request) {
     // dedicated Twilio (checked client-side from twilioConfig), so the builder
     // ORs this with the per-sub-account config.
     smsConfigured: smsIsConfigured(),
+    // QSTASH_* present — bulk email (tenant Broadcasts + Agency
+    // Communications) fans out through the queue; without it a send 503s.
+    queueConfigured: qstashIsConfigured(),
   });
 }

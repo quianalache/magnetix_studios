@@ -185,7 +185,7 @@ export function EmailTemplateEditor({
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-3xl py-16 text-center text-sm text-muted-foreground">
+      <div role="status" className="mx-auto w-full max-w-3xl py-16 text-center text-body-sm text-muted-foreground">
         Loading template…
       </div>
     );
@@ -199,10 +199,11 @@ export function EmailTemplateEditor({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Untitled email template"
-            className="h-auto border-none px-0 text-xl font-semibold shadow-none focus-visible:ring-0"
+            aria-label="Template name"
+            className="h-auto border-none px-0 text-title-lg font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-title-lg"
           />
           {templateId && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {source === "legacy"
                 ? "Originally a simple template — now editable here like any other."
                 : "Email Template"}
@@ -252,7 +253,7 @@ export function EmailTemplateEditor({
         </div>
       </div>
 
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         Type personalization tags like <code>{"{{contact.firstName}}"}</code>{" "}
         directly into text, button labels, or alt text — or use &quot;Insert
         personalization&quot; next to Subject/Preheader.

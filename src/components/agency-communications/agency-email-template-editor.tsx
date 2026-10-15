@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, Loader2, Save, Trash2 } from "lucide-react";
+import { Copy, Loader2, Lock, Save, Trash2 } from "lucide-react";
+import { PageShell } from "@/components/system/page-shell";
+import { EmptyState } from "@/components/system/empty-state";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,7 +138,8 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
     if (!templateId) return;
     setDeleting(true);
     try {
-      await fetch(`/api/agency/email-templates/${templateId}`, { method: "DELETE" });
+      const res = await fetch(`/api/agency/email-templates/${templateId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
       toast.success("Template deleted");
       router.push("/agency/communications/templates");
     } catch {
@@ -147,7 +150,11 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
 
   if (authLoading) return null;
   if (!isOwner) {
-    return <div className="mx-auto max-w-2xl p-8 text-center text-sm text-muted-foreground">Communications is managed by the agency owner.</div>;
+    return (
+      <PageShell width="data">
+        <EmptyState icon={Lock} title="Owner only" description="Communications is managed by the agency owner." />
+      </PageShell>
+    );
   }
   // `agencyId` resolves from the same auth claims `agencyRole` already did,
   // so this should never actually be true once `isOwner` is — but the
@@ -156,10 +163,10 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
   // treats a still-unresolved agencyId as an extension of the loading
   // state rather than constructing an invalid scope object.
   if (!agencyId) {
-    return <div className="mx-auto w-full max-w-3xl py-16 text-center text-sm text-muted-foreground">Loading template…</div>;
+    return <div role="status" className="mx-auto w-full max-w-3xl py-16 text-center text-body-sm text-muted-foreground">Loading template…</div>;
   }
   if (loading) {
-    return <div className="mx-auto w-full max-w-3xl py-16 text-center text-sm text-muted-foreground">Loading template…</div>;
+    return <div role="status" className="mx-auto w-full max-w-3xl py-16 text-center text-body-sm text-muted-foreground">Loading template…</div>;
   }
 
   return (
@@ -170,9 +177,10 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Untitled email template"
-            className="h-auto border-none px-0 text-xl font-semibold shadow-none focus-visible:ring-0"
+            aria-label="Template name"
+            className="h-auto border-none px-0 text-title-lg font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-title-lg"
           />
-          {templateId && <p className="text-xs text-muted-foreground">Magnetix Email Template</p>}
+          {templateId && <p className="text-caption text-muted-foreground">Magnetix Email Template</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {templateId && (

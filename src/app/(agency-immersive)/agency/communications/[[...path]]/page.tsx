@@ -11,6 +11,13 @@ import NewAgencyEmailTemplatePage from "@/lib/agency-communications-pages/templa
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Every Agency Communications page renders inside the normal CRM chrome —
+ * same as its sub-account sibling (Broadcasts, composer, Email Templates and
+ * the template editor all live inside the dashboard layout there). Before
+ * the parity pass only the hub + the two lists did; detail, composer and the
+ * template editor rendered bare, with no sidebar/header.
+ */
 function DashboardPage({ children }: { children: React.ReactNode }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
@@ -29,22 +36,22 @@ export default async function AgencyCommunicationsPage({
     return <DashboardPage><AgencyBroadcastsListPage /></DashboardPage>;
   }
   if (path.length === 2 && path[0] === "broadcasts" && path[1] === "new") {
-    return <NewAgencyBroadcastPage />;
+    return <DashboardPage><NewAgencyBroadcastPage /></DashboardPage>;
   }
   if (path.length === 2 && path[0] === "broadcasts") {
-    return <AgencyBroadcastDetailPage params={Promise.resolve({ id: path[1] })} />;
+    return <DashboardPage><AgencyBroadcastDetailPage params={Promise.resolve({ id: path[1] })} /></DashboardPage>;
   }
   if (path.length === 3 && path[0] === "broadcasts" && path[2] === "edit") {
-    return <EditAgencyBroadcastPage params={Promise.resolve({ id: path[1] })} />;
+    return <DashboardPage><EditAgencyBroadcastPage params={Promise.resolve({ id: path[1] })} /></DashboardPage>;
   }
   if (path.length === 1 && path[0] === "templates") {
     return <DashboardPage><AgencyEmailTemplateLibraryPage /></DashboardPage>;
   }
   if (path.length === 2 && path[0] === "templates" && path[1] === "new") {
-    return <NewAgencyEmailTemplatePage />;
+    return <DashboardPage><NewAgencyEmailTemplatePage /></DashboardPage>;
   }
   if (path.length === 2 && path[0] === "templates") {
-    return <AgencyEmailTemplatePage params={Promise.resolve({ id: path[1] })} />;
+    return <DashboardPage><AgencyEmailTemplatePage params={Promise.resolve({ id: path[1] })} /></DashboardPage>;
   }
   notFound();
 }

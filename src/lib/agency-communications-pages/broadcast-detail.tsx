@@ -7,6 +7,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatContactDate, formatRelativeTime } from "@/lib/format";
 
 import type { AgencyCommunicationDoc, AgencyCommunicationSendDoc } from "@/types/agency-communications";
+import { agencyAudienceLabel, type AgencyAudienceNames } from "@/lib/agency-communications/audience-label";
+import { Lock } from "lucide-react";
+import { EmptyState } from "@/components/system/empty-state";
 import { PageShell } from "@/components/system/page-shell";
 import { useConfirm } from "@/components/system/confirm-dialog";
 import {
@@ -33,7 +36,16 @@ export default function AgencyBroadcastDetailPage({ params }: { params: Promise<
   const [sends, setSends] = useState<AgencyCommunicationSendDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [names, setNames] = useState<AgencyAudienceNames | null>(null);
   const { confirm, dialog } = useConfirm();
+
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch("/api/agency/communications/audience/options", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: AgencyAudienceNames | null) => setNames(d))
+      .catch(() => setNames(null));
+  }, [isOwner]);
 
   useEffect(() => {
     if (!isOwner) return;
@@ -41,6 +53,9 @@ export default function AgencyBroadcastDetailPage({ params }: { params: Promise<
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     async function poll() {
+      // Status of THIS fetch — reading component state here would be the
+      // stale first-render value (null), which kept polling forever.
+      let status: AgencyCommunicationDoc["status"] | undefined;
       try {
         const [commRes, sendsRes] = await Promise.all([
           fetch(`/api/agency/communications/${id}`),
@@ -50,13 +65,13 @@ export default function AgencyBroadcastDetailPage({ params }: { params: Promise<
         const commData = commRes.ok ? ((await commRes.json()) as { communication?: AgencyCommunicationDoc }) : null;
         const sendsData = sendsRes.ok ? ((await sendsRes.json()) as { sends?: AgencyCommunicationSendDoc[] }) : null;
         setCommunication(commData?.communication ?? null);
+        status = commData?.communication?.status;
         setSends(sendsData?.sends ?? []);
       } catch {
         // Best-effort — keep the last good state, try again next tick.
       } finally {
         if (!cancelled) setLoading(false);
       }
-      const status = communication?.status;
       const stillLive = !status || status === "queued" || status === "sending" || status === "draft";
       if (!cancelled && stillLive) timer = setTimeout(poll, POLL_MS);
     }
@@ -65,12 +80,15 @@ export default function AgencyBroadcastDetailPage({ params }: { params: Promise<
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isOwner]);
 
   if (authLoading) return null;
   if (!isOwner) {
-    return <div className="mx-auto max-w-2xl p-8 text-center text-sm text-muted-foreground">Communications is managed by the agency owner.</div>;
+    return (
+      <PageShell width="data">
+        <EmptyState icon={Lock} title="Owner only" description="Communications is managed by the agency owner." />
+      </PageShell>
+    );
   }
   if (loading) {
     return (
@@ -137,7 +155,7 @@ export default function AgencyBroadcastDetailPage({ params }: { params: Promise<
         title={communication.subject || "(untitled communication)"}
         meta={
           <>
-            sent {formatRelativeTime(communication.createdAt)} by{" "}
+            {agencyAudienceLabel(communication.audienceSources, names)} · sent {formatRelativeTime(communication.createdAt)} by{" "}
             {communication.createdBy?.displayName || communication.createdBy?.email || "—"}
           </>
         }
@@ -149,7 +167,8 @@ export default function AgencyBroadcastDetailPage({ params }: { params: Promise<
         cancelledNote={
           communication.status === "cancelled" ? (
             <>
-              Cancelled{communication.cancelledBy ? ` by ${communication.cancelledBy.displayName}` : ""}. Any rows still
+              Cancelled{communication.cancelledBy ? ` by ${communication.cancelledBy.displayName}` : ""}
+              {communication.cancelledAt ? ` ${formatRelativeTime(communication.cancelledAt)}` : ""}. Any rows still
               shown as &quot;Queued&quot; below will settle to &quot;Cancelled&quot; on their own.
             </>
           ) : null

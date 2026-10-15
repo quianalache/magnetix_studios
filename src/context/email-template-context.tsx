@@ -10,11 +10,19 @@ import {
 import {
   subscribeToEmailTemplates,
   type EmailTemplateSummary,
+  type LoadedTemplate,
 } from "@/lib/email/template-library";
 
 export interface EmailTemplateContextValue {
   templates: EmailTemplateSummary[];
   loading: boolean;
+  /**
+   * Loads one template's full content. Absent = the tenant loader
+   * (`loadEmailTemplate`, client Firestore). Agency Communications supplies
+   * its owner-only fetch here — its templates live under `agencies/{id}`,
+   * which the tenant loader can't (and must not) read.
+   */
+  loadTemplate?: (summary: EmailTemplateSummary) => Promise<LoadedTemplate | null>;
 }
 
 /** Exported so agency-email-template-context.tsx can feed this same
