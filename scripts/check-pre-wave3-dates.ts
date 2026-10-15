@@ -20,31 +20,41 @@ console.log("My Tasks buckets");
 const now = new Date(2026, 9, 15, 10, 0, 0); // Thu 15 Oct 2026, 10:00 local
 const today = dayStart(now);
 const at = (y: number, mo: number, d: number, h = 12) => new Date(y, mo, d, h, 0, 0);
-const cases: Record<string, { completed: boolean; dueAt: Date | null }> = {
-  A_dueYesterday: { completed: false, dueAt: at(2026, 9, 14) },
-  B_dueToday: { completed: false, dueAt: at(2026, 9, 15, 18) },
-  B2_dueTodayEarlier: { completed: false, dueAt: at(2026, 9, 15, 8) },
-  C_dueTomorrow: { completed: false, dueAt: at(2026, 9, 16) },
-  C2_dueNextYear: { completed: false, dueAt: at(2027, 0, 5) },
-  D_noDueDate: { completed: false, dueAt: null },
-  E_completedFuture: { completed: true, dueAt: at(2026, 9, 20) },
+type Case = { completed: boolean; dueAt: Date | null; autoRollover?: boolean };
+const cases: Record<string, Case> = {
+  todayRolloverOn: { completed: false, dueAt: at(2026, 9, 15, 18), autoRollover: true },
+  todayRolloverOff: { completed: false, dueAt: at(2026, 9, 15, 8), autoRollover: false },
+  yesterdayRolloverOn: { completed: false, dueAt: at(2026, 9, 14), autoRollover: true },
+  yesterdayRolloverOff: { completed: false, dueAt: at(2026, 9, 14), autoRollover: false },
+  yesterdayRolloverUnset: { completed: false, dueAt: at(2026, 9, 14) },
+  future: { completed: false, dueAt: at(2026, 9, 16) },
+  futureFar: { completed: false, dueAt: at(2027, 0, 5), autoRollover: true },
+  noDueDate: { completed: false, dueAt: null, autoRollover: true },
+  completedFuture: { completed: true, dueAt: at(2026, 9, 20), autoRollover: true },
+  completedPast: { completed: true, dueAt: at(2026, 9, 10), autoRollover: true },
 };
 const buckets: MyTaskBucket[] = ["today", "overdue", "upcoming", "done"];
-const where = (name: string) =>
-  buckets.filter((b) => inStatusBucket(b, taskStatus(cases[name] as never, now.getTime(), today)));
+const where = (name: string) => {
+  const c = cases[name];
+  return buckets.filter((b) => inStatusBucket(b, taskStatus(c as never, now.getTime(), today), c));
+};
 
-check("A. due yesterday → Overdue (and the legacy Due-today list, which has always included overdue)", () =>
-  assert.deepEqual(where("A_dueYesterday"), ["today", "overdue"]));
-check("B. due today → Due today only", () => {
-  assert.deepEqual(where("B_dueToday"), ["today"]);
-  assert.deepEqual(where("B2_dueTodayEarlier"), ["today"]);
+check("due today + rollover ON → Due today only", () => assert.deepEqual(where("todayRolloverOn"), ["today"]));
+check("due today + rollover OFF → Due today only", () => assert.deepEqual(where("todayRolloverOff"), ["today"]));
+check("yesterday + rollover ON → Due today AND Overdue (rollover keeps it in today's work)", () =>
+  assert.deepEqual(where("yesterdayRolloverOn"), ["today", "overdue"]));
+check("yesterday + rollover OFF → Overdue ONLY (not Due today)", () => assert.deepEqual(where("yesterdayRolloverOff"), ["overdue"]));
+check("yesterday + rollover unset (legacy) → Overdue ONLY (rollover is OFF unless enabled)", () =>
+  assert.deepEqual(where("yesterdayRolloverUnset"), ["overdue"]));
+check("future due date → Upcoming only", () => {
+  assert.deepEqual(where("future"), ["upcoming"]);
+  assert.deepEqual(where("futureFar"), ["upcoming"]);
 });
-check("C. due tomorrow / later → Upcoming only", () => {
-  assert.deepEqual(where("C_dueTomorrow"), ["upcoming"]);
-  assert.deepEqual(where("C2_dueNextYear"), ["upcoming"]);
+check("no due date → none of Due today / Overdue / Upcoming", () => assert.deepEqual(where("noDueDate"), []));
+check("completed → Completed only", () => {
+  assert.deepEqual(where("completedFuture"), ["done"]);
+  assert.deepEqual(where("completedPast"), ["done"]);
 });
-check("D. no due date → NOT Upcoming (in no status bucket)", () => assert.deepEqual(where("D_noDueDate"), []));
-check("E. completed future-dated → Completed only, NOT Upcoming", () => assert.deepEqual(where("E_completedFuture"), ["done"]));
 
 // ── 2. Decoder date-only formatting across timezones ──────────────────
 console.log("Decoder birth dates");

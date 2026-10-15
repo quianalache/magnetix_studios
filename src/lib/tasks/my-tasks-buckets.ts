@@ -6,7 +6,8 @@ import type { Task } from "@/types/tasks";
  * testable (scripts/check-my-tasks-buckets.ts).
  *
  *   overdue  — open, due on a day before today
- *   today    — open, due today
+ *   today    — open, due today (the Due today LIST also takes overdue tasks
+ *              whose Auto rollover is ON — see inStatusBucket)
  *   upcoming — open, with a real due date AFTER today (pre-Wave-3 cleanup,
  *              2026-10-15: undated tasks are NOT upcoming)
  *   no_date  — open, no due date (only in All open / All tasks)
@@ -31,12 +32,22 @@ export function taskStatus(t: Pick<Task, "completed" | "dueAt">, now: number, to
   return "upcoming";
 }
 
-/** Whether a task's status belongs in a status filter's list. */
-export function inStatusBucket(filter: MyTaskBucket, status: MyTaskStatus): boolean {
+/**
+ * Whether a task's status belongs in a status filter's list.
+ *
+ * Due today = due today, OR past due with Auto rollover ON (those are moved to
+ * today by the rollover sweep and belong in today's work even before the next
+ * sweep / when the viewer's day differs from the sub-account's). A past-due
+ * task with rollover OFF is Overdue only.
+ */
+export function inStatusBucket(
+  filter: MyTaskBucket,
+  status: MyTaskStatus,
+  task?: { autoRollover?: boolean | null },
+): boolean {
   switch (filter) {
     case "today":
-      // Legacy "Today" view included overdue work, so keep that.
-      return status === "today" || status === "overdue";
+      return status === "today" || (status === "overdue" && task?.autoRollover === true);
     case "overdue":
       return status === "overdue";
     case "upcoming":

@@ -325,7 +325,7 @@ export default function MyTasksPage() {
         case "overdue":
         case "upcoming":
         case "done":
-          if (!inStatusBucket(statusFilter, status)) return false;
+          if (!inStatusBucket(statusFilter, status, t)) return false;
           break;
       }
       if (!q) return true;
