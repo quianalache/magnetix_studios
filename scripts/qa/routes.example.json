@@ -20,6 +20,7 @@
     { "key": "sa-pipeline", "path": "/sa/{sa}/pipeline", "mode": "shell", "tabBar": true },
     { "key": "sa-community", "path": "/sa/{sa}/community", "mode": "shell", "tabBar": true },
     { "key": "fu-contact-decoder", "path": "/sa/{sa}/contacts/2IciPp3MZb6n0wSvFuVq", "mode": "shell", "tabBar": true },
+    { "key": "fu-contact-ethan", "path": "/sa/{sa}/contacts/MqMsaibSj91L9cybiH0w", "mode": "shell", "tabBar": true },
     { "key": "fu-legacy-reading", "path": "/sa/{sa}/energetic-decoder?tab=readings&profileId=MAUFKd5d4HxaKbl8kfqx", "mode": "shell", "tabBar": true },
     { "key": "w2-contacts", "path": "/sa/{sa}/contacts", "mode": "shell", "tabBar": true },
     { "key": "w2-contact", "path": "/sa/{sa}/contacts/{contactId}", "mode": "shell", "tabBar": true },

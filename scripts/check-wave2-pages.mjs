@@ -132,5 +132,12 @@ check("Decoder card: hidden when there is no data", /people\.length === 0\) retu
 check("Decoder card: only real facts (filters empty values)", /\.filter\(\(f\): f is \[string, string\] => !!f\[1\]\)/.test(card));
 check("calendar rail: aqua / blush / lavender accents", /bg-tag-aqua-fg\/60/.test(cal) && /bg-tag-pink-fg\/50/.test(cal) && /bg-tag-violet-fg\/45/.test(cal));
 
+// Wave 2 closure (2026-10-15): no dead rail affordances; warm Decoder card.
+check("calendar: Upcoming Deadlines → View all links to My Tasks (Upcoming)", /saPath\("\/projects\/tasks\?filter=upcoming"\)/.test(cal));
+check("calendar: no inert 'View all' / 'Edit' text spans in the rail", !/<span className="shrink-0 text-caption font-medium text-link">(View all|Edit)<\/span>/.test(cal));
+const tasksPage = src(`${SA}/projects/tasks/page.tsx`);
+check("my tasks: ?filter= only selects an EXISTING status filter", /requested in FILTER_LABELS/.test(tasksPage));
+check("Decoder card: warm gold tint (the profile's one tinted card)", /bg-tint-gold/.test(card) && /bg-tag-gold-bg/.test(card));
+
 console.log(`\nWave 2 page contract: ${pass} passed, ${fail} failed.`);
 process.exit(fail ? 1 : 0);

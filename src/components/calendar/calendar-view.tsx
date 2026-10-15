@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -767,7 +768,13 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
             <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-pink-bg text-tag-pink-fg" aria-hidden="true"><CalendarClock className="size-4" /></span>
             <h3 className="truncate text-section font-semibold">Upcoming Deadlines</h3>
           </div>
-          <span className="shrink-0 text-caption font-medium text-link">View all</span>
+          {/* Opens Projects → My Tasks with its existing "Upcoming" filter. */}
+          <Link
+            href={subAccount ? subAccount.saPath("/projects/tasks?filter=upcoming") : "/projects/tasks?filter=upcoming"}
+            className="shrink-0 rounded-sm text-caption font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            View all
+          </Link>
         </div>
         <div className="space-y-2 p-4">
           {upcomingDeadlines.length === 0 && (
@@ -791,7 +798,6 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
             <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true"><Clock3 className="size-4" /></span>
             <h3 className="truncate text-section font-semibold">Today&apos;s Time Blocks</h3>
           </div>
-          <span className="shrink-0 text-caption font-medium text-link">Edit</span>
         </div>
         <div className="space-y-2 p-4">
           {todaysTimeBlocks.map((block) => {

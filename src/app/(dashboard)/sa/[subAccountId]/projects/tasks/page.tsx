@@ -170,6 +170,19 @@ export default function MyTasksPage() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // `?filter=<status>` deep link (Calendar → Upcoming Deadlines → View all)
+  // selects one of the existing status filters, then drops the param so a
+  // later filter change isn't undone by a refresh. Unknown values are ignored.
+  useEffect(() => {
+    const requested = searchParams.get("filter");
+    if (!requested || !(requested in FILTER_LABELS)) return;
+    setStatusFilter(requested as StatusFilter);
+    const next = new URLSearchParams(searchParams);
+    next.delete("filter");
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router]);
+
   // `?task=<id>` deep link (Task Detail → Copy link).
   useEffect(() => {
     const id = searchParams.get("task");

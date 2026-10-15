@@ -56,11 +56,15 @@ export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
   return (
     <section
       aria-label="Energetic Decoding"
-      className="relative overflow-hidden rounded-card border border-border bg-card p-4 shadow-card"
+      // The profile's ONE warm-tinted card (Visual Direction 2, §4.3 contact
+      // detail): the system's cream gold tint (same surface as <Card
+      // variant="tint" tint="gold">) with a restrained gold accent.
+      className="relative overflow-hidden rounded-card border border-gold-300/45 bg-tint-gold p-4 shadow-card"
     >
+      <span className="absolute inset-x-0 top-0 h-1 bg-gold-300/70" aria-hidden="true" />
       <Motif kind="constellation" size="corner" placement="top-right" hideBelow="sm" className="top-2 right-2 opacity-70" />
       <div className="mb-3 flex items-center gap-2.5 pr-10">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-gold-bg text-tag-gold-fg" aria-hidden="true">
           <Orbit className="size-4" />
         </span>
         <div className="min-w-0">
@@ -74,10 +78,10 @@ export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
       {people === null ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading Energetic Decoding">
           <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-14 w-full rounded-control" />
+          <Skeleton className="h-14 w-full rounded-control bg-gold-50" />
         </div>
       ) : (
-        <div className="divide-y divide-border-subtle">
+        <div className="divide-y divide-gold-300/35">
           {people.map((p) => {
             const facts = [
               ["Type", p.energyType],
@@ -95,7 +99,7 @@ export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-body-sm font-semibold text-foreground">{p.name}</span>
                   {p.relationshipLabel ? (
-                    <Tag color="gray" className="shrink-0 px-1.5 text-micro">
+                    <Tag color="gold" className="shrink-0 px-1.5 text-micro">
                       {p.relationshipLabel}
                     </Tag>
                   ) : null}
@@ -119,7 +123,7 @@ export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
                 {p.latestReadingId || p.kind === "profile" ? (
                   <Link
                     href={href}
-                    className="mt-2 inline-flex items-center gap-1 text-caption font-medium text-link hover:underline"
+                    className="mt-2 inline-flex items-center gap-1 text-caption font-semibold text-tag-gold-fg hover:underline"
                   >
                     {p.latestReadingId ? "View reading" : "Open in Energetic Decoder"}
                     <ArrowRight className="size-3" aria-hidden="true" />
