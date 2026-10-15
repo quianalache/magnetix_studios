@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Pause } from "lucide-react";
+import { AlertCircle, Bot, ChevronDown, Pause } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { toDate } from "@/lib/format";
@@ -8,7 +8,16 @@ import {
   resumeBot,
   setConversationBotMode,
 } from "@/lib/firestore/conversations";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type {
   ConversationBotMode,
   ConversationDoc,
@@ -21,9 +30,11 @@ const MODES: { value: ConversationBotMode; label: string; hint: string }[] = [
 ];
 
 /**
- * Per-conversation AI controls shown under the inbox detail header: the mode
- * toggle (Auto / Suggest / Off) plus a "bot paused" indicator + Resume when a
- * human took over recently.
+ * Per-conversation AI replies control (approved Wave 3 layout): a compact
+ * "AI replies: Auto ▾" button in the thread header. The dropdown holds the
+ * same mode choice (Auto / Suggest / Off), the "bot paused — Resume" action
+ * when a human took over recently, and — only when AI isn't available for
+ * this conversation — the reason. Same writes and gating as before.
  */
 interface AiControlsProps {
   conversation: ConversationDoc;
@@ -82,52 +93,75 @@ function AiControls({
   const pausedUntil = toDate(conversation.botPausedUntil);
   const paused =
     mode !== "off" && !!pausedUntil && pausedUntil.getTime() > Date.now();
+  const modeLabel = MODES.find((m) => m.value === mode)?.label ?? "Auto";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2">
-      <div className="flex items-center gap-2">
-        <Bot className="text-muted-foreground h-3.5 w-3.5" />
-        <span className="text-caption font-medium text-muted-foreground">
-          AI replies
-        </span>
-        <div className="flex gap-0.5 rounded-control border border-border bg-background p-0.5">
-          {MODES.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              title={!available && m.value !== "off" ? reason : m.hint}
-              aria-pressed={mode === m.value}
-              disabled={busy || (!available && m.value !== "off")}
-              onClick={() => update(m.value)}
-              className={cn(
-                "h-7 rounded-lg px-2.5 text-caption font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                mode === m.value
-                  ? "bg-accent font-semibold text-accent-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {paused && (
-        <button
-          type="button"
-          onClick={() => update("resume")}
-          disabled={busy || !available}
-          title={!available ? reason : "Resume AI replies"}
-          className="flex h-7 items-center gap-1 rounded-control bg-status-warning-bg px-2.5 text-caption font-medium text-status-warning-fg transition-colors hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`AI replies: ${modeLabel}${paused ? " (paused)" : ""}${available ? "" : " — unavailable"}`}
+            title={available ? "AI replies for this conversation" : reason}
+            className="h-8 gap-1.5 px-2 text-caption font-medium @lg/convo:px-2.5"
+          />
+        }
+      >
+        <Bot className="size-3.5 text-link" aria-hidden="true" />
+        <span className="hidden text-muted-foreground @lg/convo:inline">AI replies:</span>
+        <span className="text-foreground">{modeLabel}</span>
+        {paused && (
+          <span className="rounded-chip bg-status-warning-bg px-1.5 text-micro font-semibold text-status-warning-fg">
+            Paused
+          </span>
+        )}
+        {!available && (
+          <AlertCircle className="hidden size-3.5 text-ink-tertiary @md/convo:block" aria-hidden="true" />
+        )}
+        <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        {!available && (
+          <p
+            role="status"
+            className="mx-1 mt-1 mb-1.5 rounded-md bg-surface-sunken px-2 py-1.5 text-caption text-muted-foreground"
+          >
+            {reason}
+          </p>
+        )}
+        <DropdownMenuRadioGroup
+          value={mode}
+          onValueChange={(next) => void update(next as ConversationBotMode)}
         >
-          <Pause className="h-3 w-3" />
-          Bot paused — Resume
-        </button>
-      )}
-      {!available && (
-        <p role="status" className="w-full text-micro text-ink-tertiary">
-          {reason}
-        </p>
-      )}
-    </div>
+          {MODES.map((m) => (
+            <DropdownMenuRadioItem
+              key={m.value}
+              value={m.value}
+              disabled={busy || (!available && m.value !== "off")}
+              className="items-start py-1.5"
+            >
+              <span className="flex flex-col">
+                <span className="font-medium">{m.label}</span>
+                <span className="text-caption text-muted-foreground">{m.hint}</span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {paused && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={busy || !available}
+              onClick={() => void update("resume")}
+              className="text-status-warning-fg"
+            >
+              <Pause className="size-3.5" aria-hidden="true" />
+              Bot paused — Resume
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

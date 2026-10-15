@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState, useEffect, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, Send, StickyNote } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,8 +11,8 @@ import { GoogleGIcon } from "@/components/brand/google-g-icon";
 import { AddNoteInput } from "@/components/contacts/add-note-input";
 import { WhatsappTemplateSender } from "@/components/contacts/whatsapp-template-sender";
 import { segmentInfo } from "@/lib/comms/sms-segments";
+import { cn } from "@/lib/utils";
 import { OptionSelect } from "@/components/system/option-select";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DEFAULT_REVIEW_SMS_TEMPLATE } from "@/lib/reviews/constants";
 import type { Contact } from "@/types/contacts";
 import type { ConversationChannel } from "@/types/conversations";
@@ -31,6 +31,10 @@ const LABEL: Record<ConversationChannel, string> = {
  * the snapshot listener in ConversationThread surfaces the new row.
  * Defaults to the channel the contact last used; the operator can switch
  * when more than one is available.
+ *
+ * Approved Wave 3 layout: the history tab drives `mode` — Conversation shows
+ * the reply composer, Internal Notes shows the note composer. Both stay
+ * mounted (only hidden), so switching tabs never loses a draft.
  */
 export interface ConversationComposerProps {
   contact: Contact;
@@ -43,6 +47,10 @@ export interface ConversationComposerProps {
   defaultChannel: ConversationChannel;
   onSent?: () => void;
   loading?: boolean;
+  /** Which composer is shown; follows the Conversation / Internal Notes tab. */
+  mode?: "reply" | "note";
+  /** Called after an internal note saves (the Notes view refreshes). */
+  onNoteSaved?: () => void;
 }
 
 export function ConversationComposer(props: ConversationComposerProps) {
@@ -56,6 +64,8 @@ function Composer({
   defaultChannel,
   onSent,
   loading = false,
+  mode = "reply",
+  onNoteSaved,
 }: ConversationComposerProps) {
   const { subAccount } = useSubAccount();
   const id = useId();
@@ -67,7 +77,7 @@ function Composer({
       active.current = false;
     };
   }, []);
-  const [tab, setTab] = useState<"reply" | "note">("reply");
+  const tab = mode;
   const [channel, setChannel] = useState<ConversationChannel>(defaultChannel);
   const [body, setBody] = useState("");
   // Optional explicit subject for email — blank keeps the route's own
@@ -206,24 +216,15 @@ function Composer({
   }
 
   return (
-    <div className="border-t border-border bg-card px-3 py-3 sm:px-4">
-      <div className="mb-2.5 flex items-center justify-between gap-2" aria-label="Message type">
-        <SegmentedControl
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "reply", label: "Reply" },
-            { value: "note", label: "Internal Note" },
-          ]}
-          className="p-0.5"
-        />
-      </div>
-      <div hidden={tab !== "note"} className="rounded-card border border-gold-300/60 bg-tint-gold p-2.5">
-        <p className="mb-2 flex items-center gap-1.5 text-caption font-medium text-tag-gold-fg">
-          <StickyNote className="size-3.5" aria-hidden="true" />
-          Internal notes are saved to this contact and are never sent.
-        </p>
-        <AddNoteInput contactId={contact.id} />
+    <div
+      className={cn(
+        "shrink-0 border-t px-3 py-2.5 sm:px-4",
+        // Note mode: a subtle gold distinction on the same one surface.
+        tab === "note" ? "border-gold-300/70 bg-tint-gold" : "border-border bg-card",
+      )}
+    >
+      <div hidden={tab !== "note"}>
+        <AddNoteInput contactId={contact.id} variant="compact" onSaved={onNoteSaved} />
       </div>
       <form hidden={tab !== "reply" || (templateMode && templatesAllowed)} onSubmit={handleSubmit}>
         {channel === "email" && (
@@ -255,7 +256,7 @@ function Composer({
           }
           rows={2}
           disabled={disabled}
-          className="min-h-20 resize-none px-3 py-2 text-body-sm"
+          className="min-h-16 resize-none px-3 py-2 text-body-sm"
         />
         {(reason || notice) && (
           <p

@@ -2,21 +2,19 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { StickyNote } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
-import { subscribeToNotes } from "@/lib/firestore/contacts";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CHANNEL_TONE } from "./channel-badge";
 import type { MessageDoc } from "@/types/messages";
 import type { ConversationChannel } from "@/types/conversations";
 import type { ConversationTheme } from "@/hooks/use-conversation-theme";
-import type { Note } from "@/types/contacts";
 
 type ChannelMessage = MessageDoc & { channel: ConversationChannel };
-// A view-only discriminator; notes retain their existing stored schema.
-type TimelineEntry = ChannelMessage | (Note & { channel: "note" });
+// Internal notes are deliberately NOT part of this timeline (approved Wave 3
+// layout): they live in the separate "Internal Notes" view.
+type TimelineEntry = ChannelMessage;
 
 const CHANNEL_LABEL: Record<ConversationChannel, string> = {
   sms: "SMS",
@@ -40,7 +38,6 @@ const SOURCES = [
     label: "Messenger / Instagram messages",
   },
   { collection: "emailMessages", channel: "email", label: "Email messages" },
-  { collection: "notes", channel: "note", label: "internal notes" },
 ] as const;
 
 type SourceState = {
@@ -52,8 +49,9 @@ type SourceState = {
 /**
  * The merged conversation timeline. Subscribes to the contact's SMS
  * (`messages`), WhatsApp (`whatsappMessages`), and BETA Meta (`metaMessages`,
- * Messenger + Instagram), email (`emailMessages`), and existing internal notes.
- * Renders one time-ordered stream without moving data or changing permissions.
+ * Messenger + Instagram) and email (`emailMessages`) messages. Renders one
+ * time-ordered stream without moving data or changing permissions. Internal
+ * notes are shown in their own view, never mixed into the customer thread.
  */
 export function ConversationThread({
   contactId,
@@ -90,17 +88,6 @@ function ContactThread({
         );
       };
       const onError = () => update({ messages: [], ready: true, failed: true });
-      if (source.collection === "notes") {
-        // Existing contact-scoped reader: no new model, query scope, or writes.
-        return safeSubscribe(
-          () => subscribeToNotes(contactId, (notes) => update({
-            messages: notes.map((note) => ({ ...note, channel: "note" as const })),
-            ready: true,
-            failed: false,
-          }), onError),
-          onError
-        );
-      }
       return safeSubscribe(
         () =>
           onSnapshot(
@@ -189,7 +176,7 @@ function ContactThread({
         </p>
       ) : !hydrated && merged.length === 0 ? (
         <div role="status" className="space-y-4">
-          <span className="sr-only">Loading messages and notes…</span>
+          <span className="sr-only">Loading messages…</span>
           <div className="h-16 w-2/3 animate-pulse rounded-card bg-muted" />
           <div className="ml-auto h-16 w-3/4 animate-pulse rounded-card bg-muted" />
         </div>
@@ -198,7 +185,7 @@ function ContactThread({
           <p className="text-muted-foreground text-sm">
             {failedSources.length
               ? "Conversation history is unavailable for the sources listed above."
-              : "No messages or notes yet. Reply below to start the conversation."}
+              : "No messages yet. Reply below to start the conversation."}
           </p>
         </div>
       ) : (
@@ -215,35 +202,15 @@ function ContactThread({
                 <div className="bg-border h-px flex-1" />
               </div>
             )}
-            {m.channel === "note" ? <InternalNote note={m} /> : <ChannelBubble message={m} theme={theme} />}
+            <ChannelBubble message={m} theme={theme} />
           </Fragment>
         ))
       )}
       {contactId && !hydrated && merged.length > 0 && (
         <p role="status" className="text-muted-foreground text-center text-xs">
-          Loading remaining messages and notes…
+          Loading remaining messages…
         </p>
       )}
-    </div>
-  );
-}
-
-function InternalNote({ note }: { note: Note }) {
-  const ts = messageDate(note.createdAt);
-  return (
-    // Approved treatment: internal notes are warm gold — unmistakably not a
-    // customer-facing message.
-    <div className="mx-auto w-full max-w-[92%] rounded-card border border-gold-300/70 bg-tint-gold px-4 py-3 text-body-sm text-foreground">
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-caption">
-        <span className="flex items-center gap-1.5 font-semibold text-tag-gold-fg">
-          <StickyNote className="size-3.5" aria-hidden="true" />
-          Internal note · not sent
-        </span>
-        <time dateTime={ts?.toISOString()} title={ts?.toLocaleString()} className="text-ink-tertiary">
-          {ts ? ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "Time unavailable"}
-        </time>
-      </div>
-      <p className="whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{note.content}</p>
     </div>
   );
 }

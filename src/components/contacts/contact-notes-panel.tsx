@@ -2,13 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertCircle, Loader2, Pencil, RotateCw, StickyNote, Trash2 } from "lucide-react";
+import { AlertCircle, Loader2, MoreHorizontal, Pencil, RotateCw, StickyNote, Trash2 } from "lucide-react";
 import { useContactFeedHead } from "@/hooks/use-contact-feed-head";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AddNoteInput } from "@/components/contacts/add-note-input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -28,13 +34,24 @@ import type { ContactNoteView, ContactNotesPage } from "@/types/contact-feed";
  * is shown from the sub-account's team-member names; editing keeps the
  * original author + creation time and marks the note "edited". Only the
  * author can edit; the author or a workspace admin can delete (confirmed).
+ *
+ * `variant="internal"` is the Conversations → Internal Notes view (approved
+ * Wave 3 layout): the same records, fetch, edit and delete, presented as
+ * warm gold cards with the actions in a ⋯ menu. The note composer lives in
+ * the conversation's own composer there, so this variant renders no input;
+ * `refreshKey` changes (from the live notes snapshot) reload the list.
  */
 export function ContactNotesPanel({
   contactId,
   focusNoteId,
   notesUrl,
+  variant = "default",
+  refreshKey,
 }: {
   contactId: string;
+  variant?: "default" | "internal";
+  /** Reload (quietly) whenever this changes — e.g. a note was just saved. */
+  refreshKey?: string;
   /** Scroll to + highlight this note (from an Activity "View in Notes"). */
   focusNoteId?: string | null;
   /**
@@ -88,6 +105,15 @@ export function ContactNotesPanel({
   useEffect(() => {
     if (headVersion > 0 && !editingId) void loadFirst(true);
   }, [headVersion, loadFirst, editingId]);
+
+  const lastRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === lastRefreshKey.current) return;
+    lastRefreshKey.current = refreshKey;
+    if (!editingId) void loadFirst(true);
+  }, [refreshKey, loadFirst, editingId]);
+
+  const internal = variant === "internal";
 
   useEffect(() => {
     if (!focusNoteId || loading) return;
@@ -164,11 +190,13 @@ export function ContactNotesPanel({
 
   return (
     <div className="space-y-4">
-      <AddNoteInput
-        contactId={contactId}
-        postUrl={notesUrl}
-        onSaved={() => void loadFirst(true)}
-      />
+      {!internal && (
+        <AddNoteInput
+          contactId={contactId}
+          postUrl={notesUrl}
+          onSaved={() => void loadFirst(true)}
+        />
+      )}
 
       {loading ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading notes">
@@ -184,6 +212,16 @@ export function ContactNotesPanel({
             <RotateCw className="mr-1 h-3 w-3" /> Retry
           </Button>
         </div>
+      ) : notes.length === 0 && internal ? (
+        <div className="flex min-h-[150px] flex-col items-center justify-center text-center">
+          <span className="mb-3 flex size-10 items-center justify-center rounded-chip bg-tag-gold-bg text-tag-gold-fg" aria-hidden="true">
+            <StickyNote className="size-5" />
+          </span>
+          <p className="text-body-sm font-medium">No internal notes yet</p>
+          <p className="mt-0.5 max-w-xs text-caption text-muted-foreground">
+            Notes are for your team only — they&rsquo;re never sent to the contact.
+          </p>
+        </div>
       ) : notes.length === 0 ? (
         <div className="rounded-card border border-dashed border-border-strong bg-card p-8 text-center">
           <StickyNote className="mx-auto h-6 w-6 text-muted-foreground" />
@@ -197,6 +235,102 @@ export function ContactNotesPanel({
           {notes.map((note) => {
             const created = note.createdAt ? new Date(note.createdAt) : null;
             const editing = editingId === note.id;
+            if (internal) {
+              return (
+                <li
+                  key={note.id}
+                  id={`note-${note.id}`}
+                  className={cn(
+                    "rounded-card border border-gold-300/70 bg-tint-gold p-4",
+                    focusNoteId === note.id && "ring-2 ring-primary/40",
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-gold-bg text-tag-gold-fg" aria-hidden="true">
+                      <StickyNote className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 text-caption text-muted-foreground">
+                          <span className="text-body-sm font-semibold text-foreground">
+                            {note.authorName ?? "Team member"}
+                          </span>
+                          {created && (
+                            <>
+                              {" · "}
+                              <time dateTime={note.createdAt ?? undefined} title={created.toLocaleString()}>
+                                {created.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                              </time>
+                            </>
+                          )}
+                          {note.updatedAt && (
+                            <span title={`Edited ${new Date(note.updatedAt).toLocaleString()}`}>
+                              {" · edited"}
+                            </span>
+                          )}
+                        </p>
+                        {!editing && (note.canEdit || note.canDelete) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="-mt-1 -mr-1 size-8 shrink-0 text-muted-foreground"
+                                  aria-label="Note actions"
+                                />
+                              }
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              {note.canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingId(note.id);
+                                    setDraft(note.content);
+                                  }}
+                                >
+                                  <Pencil className="size-3.5" /> Edit note
+                                </DropdownMenuItem>
+                              )}
+                              {note.canDelete && (
+                                <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(note)}>
+                                  <Trash2 className="size-3.5" /> Delete note
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                      {editing ? (
+                        <div className="mt-2 space-y-2">
+                          <Textarea
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            className="min-h-20 bg-card"
+                            aria-label="Edit note"
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setEditingId(null)} disabled={saving}>
+                              Cancel
+                            </Button>
+                            <Button size="sm" onClick={() => saveEdit(note)} disabled={saving || !draft.trim()}>
+                              {saving ? "Saving…" : "Save changes"}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-1 whitespace-pre-wrap text-body-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">
+                          {note.content}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              );
+            }
             return (
               <li
                 key={note.id}
@@ -297,7 +431,7 @@ export function ContactNotesPanel({
             <DialogDescription>
               {notesUrl
                 ? "It will be removed for everyone. This can’t be undone."
-                : "It will be removed for everyone, including from the contact’s conversation view. This can’t be undone."}
+                : "It will be removed for everyone, including from the conversation’s Internal Notes. This can’t be undone."}
             </DialogDescription>
           </DialogHeader>
           {confirmDelete && (

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
+import { Loader2, Pencil, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DictateButton } from "@/components/ui/dictate-button";
@@ -13,12 +13,19 @@ export function AddNoteInput({
   contactId,
   postUrl,
   onSaved,
+  variant = "card",
 }: {
   contactId: string;
   /** Post to this notes endpoint instead of the contact's (Deal Details). */
   postUrl?: string;
   /** Called after a note is saved (the Notes tab refreshes its list). */
   onSaved?: () => void;
+  /**
+   * `compact` = the Conversations composer's note mode (approved Wave 3
+   * layout): no card, a subtle gold label, internal-only helper text. Same
+   * save path and payload as the card.
+   */
+  variant?: "card" | "compact";
 }) {
   const { user } = useAuth();
   const [content, setContent] = useState("");
@@ -50,6 +57,37 @@ export function AddNoteInput({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (variant === "compact") {
+    return (
+      <form onSubmit={handleSubmit} aria-label="Add internal note">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-caption font-semibold text-tag-gold-fg">
+            <StickyNote className="size-3.5" aria-hidden="true" />
+            Add internal note
+          </span>
+          <DictateButton value={content} onChange={setContent} />
+        </div>
+        <Textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          aria-label="Internal note"
+          placeholder="Write a note for your team…"
+          rows={2}
+          className="min-h-16 resize-none border-gold-300/70 bg-card px-3 py-2 text-body-sm focus-visible:border-gold-600/60 focus-visible:ring-gold-300/40"
+        />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-caption text-muted-foreground">
+            Visible to your team only — never sent to the contact.
+          </p>
+          <Button type="submit" size="sm" className="ml-auto h-8" disabled={saving || !content.trim()}>
+            {saving && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+            {saving ? "Saving…" : "Save Note"}
+          </Button>
+        </div>
+      </form>
+    );
   }
 
   return (

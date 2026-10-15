@@ -41,7 +41,7 @@ for (const f of files) {
 const thread = src(`${C}/conversation-thread.tsx`);
 check("thread: approved outgoing bubble = plum", /\? "rounded-br-md bg-primary text-primary-foreground"/.test(thread));
 check("thread: approved incoming bubble = white with border", /: "rounded-bl-md border border-border bg-card text-foreground"/.test(thread));
-check("thread: internal note = gold, labelled not sent", /bg-tint-gold/.test(thread) && /Internal note · not sent/.test(thread));
+check("thread: internal notes are NOT merged into the customer timeline", !/subscribeToNotes|collection: "notes"|InternalNote/.test(thread));
 check("thread: scroll box is positioned (sr-only labels can't stretch the page)", /className="relative min-h-0 flex-1 space-y-4 overflow-y-auto/.test(thread));
 check("thread: near-white canvas (no lavender wash)", /overflow-y-auto bg-background/.test(thread));
 check("thread: optional native channel styling preserved", /theme === "native"/.test(thread) && /#d9fdd3/.test(thread) && /#0084ff/.test(thread));
@@ -59,8 +59,23 @@ check("workspace: no decorative motif", !/<Motif|MomentHero|motif=/.test(ws));
 
 const composer = src(`${C}/conversation-composer.tsx`);
 check("composer: Send via = OptionSelect keeping disabled channels + reasons", /<OptionSelect\s+id=\{`\$\{id\}-channel`\}/.test(composer) && /disabled: !!unavailable/.test(composer));
-check("composer: Reply / Internal Note segmented control", /<SegmentedControl/.test(composer) && /label: "Internal Note"/.test(composer));
-check("composer: note mode is gold", /tab !== "note"\} className="rounded-card border border-gold-300\/60 bg-tint-gold/.test(composer));
+check("composer: mode follows the history tab (no separate Reply/Note toggle)", /mode = "reply"/.test(composer) && !/<SegmentedControl/.test(composer));
+check("composer: both forms stay mounted (hidden, never unmounted) so drafts survive", /<div hidden=\{tab !== "note"\}>/.test(composer) && /<form hidden=\{tab !== "reply"/.test(composer));
+check("composer: note mode = subtle gold on the same surface (no nested gold card)", /tab === "note" \? "border-gold-300\/70 bg-tint-gold"/.test(composer) && /variant="compact"/.test(composer));
+
+// Approved layout (2026-10-15): AI control in the header, history tabs, notes view.
+const ai = src(`${C}/conversation-ai-controls.tsx`);
+check("AI: compact header dropdown (Auto / Suggest / Off), no permanent row", /<DropdownMenuRadioGroup/.test(ai) && /AI replies:/.test(ai) && !/border-b border-border bg-card px-4 py-2/.test(ai));
+check("AI: same writes (setConversationBotMode / resumeBot)", /setConversationBotMode\(/.test(ai) && /resumeBot\(/.test(ai));
+check("AI: unavailable reason only inside the popover", /\{!available && \(\s*<p\s+role="status"/.test(ai));
+check("workspace: Conversation | Internal Notes (N) tabs", /<TabsList variant="underline" aria-label="Conversation history"/.test(ws) && /Internal Notes\{notes \? ` \(\$\{notes\.length\}\)` : ""\}/.test(ws));
+check("workspace: notes count from the existing notes feed", /subscribeToNotes\(contactId/.test(ws));
+check("workspace: Internal Notes view reuses the existing notes panel", /<ContactNotesPanel contactId=\{contactId\} variant="internal"/.test(ws));
+check("workspace: AI control lives in the header", /<header[\s\S]*<ConversationAiControls[\s\S]*<\/header>/.test(ws));
+check("workspace: composer mode follows the tab", /mode=\{view === "notes" \? "note" : "reply"\}/.test(ws));
+const notesPanel = src("src/components/contacts/contact-notes-panel.tsx");
+check("notes panel: internal variant = gold cards with ⋯ actions (existing edit/delete)", /bg-tint-gold/.test(notesPanel) && /aria-label="Note actions"/.test(notesPanel));
+check("notes panel: default (profile) variant keeps its own composer", /\{!internal && \(\s*<AddNoteInput/.test(notesPanel));
 
 const opt = src("src/components/system/option-select.tsx");
 check("OptionSelect supports disabled options", /disabled=\{o\.disabled\}/.test(opt));

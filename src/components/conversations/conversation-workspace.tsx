@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, MessagesSquare } from "lucide-react";
+import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, MessagesSquare, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import { useConversationTheme } from "@/hooks/use-conversation-theme";
-import { subscribeToContacts, subscribeToContact } from "@/lib/firestore/contacts";
+import { subscribeToContacts, subscribeToContact, subscribeToNotes } from "@/lib/firestore/contacts";
 import { markConversationRead, subscribeToConversation, subscribeToConversations } from "@/lib/firestore/conversations";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ import { SearchField } from "@/components/system/search-field";
 import { OptionSelect } from "@/components/system/option-select";
 import { StatusPill } from "@/components/system/status-pill";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContactNotesPanel } from "@/components/contacts/contact-notes-panel";
 import { ConversationList } from "./conversation-list";
 import { ConversationThread } from "./conversation-thread";
 import { ConversationComposer } from "./conversation-composer";
@@ -26,7 +28,7 @@ import { ConversationAiControls } from "./conversation-ai-controls";
 import { ConversationDraftCard } from "./conversation-draft-card";
 import { ConversationContactPanel } from "./conversation-contact-panel";
 import { CHANNEL_LABELS, ChannelBadge, ContactInitials } from "./channel-badge";
-import type { Contact } from "@/types/contacts";
+import type { Contact, Note } from "@/types/contacts";
 import type { ConversationChannel, ConversationDoc } from "@/types/conversations";
 
 /** Workspace panes: white system cards. The Contact-profile embed sits inside a card already, so it drops the shadow. */
@@ -109,8 +111,12 @@ export function ConversationWorkspace() {
 }
 
 /**
- * One contact's conversation: header controls, status/assignment, AI
- * controls, the merged thread, the pending AI draft and the composer.
+ * One contact's conversation (approved Wave 3 layout): a compact header
+ * (identity, Open/Closed, channel, the "AI replies" dropdown, details toggle,
+ * ⋯), then two separate history views — Conversation (the default: the
+ * merged customer thread + pending AI draft) and Internal Notes (N) (the
+ * contact's existing notes, never mixed into the thread) — with Assigned to
+ * on the tab strip, and one composer whose mode follows the tab.
  * `embedded` renders it inside the Contact profile's Conversations tab
  * (Contacts redesign) — same data, same availability checks and same
  * send routes; it only drops the workspace chrome (back link, contact
@@ -129,6 +135,20 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
   const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const refreshCapabilities = useCallback(() => setRefresh(n => n + 1), []);
+  const [view, setView] = useState<"conversation" | "notes">("conversation");
+  const [notesOpened, setNotesOpened] = useState(false);
+  const [notes, setNotes] = useState<Note[] | null>(null);
+  const [notesSaved, setNotesSaved] = useState(0);
+  const onNoteSaved = useCallback(() => setNotesSaved(n => n + 1), []);
+
+  // The Internal Notes count comes from the contact's existing notes (the
+  // same client-readable feed the thread used before) — no new field.
+  useEffect(() => {
+    if (!user || authLoading) return;
+    const fail = () => setNotes(null);
+    const off = safeSubscribe(() => subscribeToNotes(contactId, setNotes, fail), fail);
+    return () => { off?.(); };
+  }, [contactId, user, authLoading]);
 
   useEffect(() => {
     // The context pane is a third column only at ≥1280px; below that it's an
@@ -206,12 +226,14 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
   if (error) return <div className={cn(embedded ? EMBED_PANE : PANE, "min-w-0 flex-1 p-6")}>{!embedded && <Link href={saPath("/conversations")} className="inline-flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" aria-hidden="true" />Conversations</Link>}<p role="alert" className={cn("text-body-sm text-status-danger-fg", !embedded && "mt-4")}>{error}</p></div>;
   if (!contact) return <div role="status" className={cn(embedded ? EMBED_PANE : PANE, "flex min-h-40 min-w-0 flex-1 items-center justify-center text-body-sm text-muted-foreground")}>Loading conversation…</div>;
   const draftAvailability = capabilities?.channels.find(c => c.channel === conversation?.pendingDraft?.channel);
+  const statusPill = conversation ? <StatusPill tone={(conversation.status || "open") === "open" ? "info" : "neutral"} className="shrink-0 py-0 text-micro capitalize">{conversation.status || "open"}</StatusPill> : null;
   return <>
-    <article aria-label="Active conversation" className={cn(embedded ? EMBED_PANE : PANE, "flex min-h-0 min-w-0 flex-1 flex-col")}>
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 lg:px-4">
-        {embedded ? <div className="flex min-w-0 items-center gap-2">{conversation ? <ChannelBadge channel={conversation.lastChannel} /> : <span className="text-caption text-muted-foreground">No messages yet</span>}</div> : <div className="flex min-w-0 items-center gap-2"><Link href={saPath("/conversations")} aria-label="Back to conversations" className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"><ArrowLeft className="size-4" /></Link><ContactInitials name={contact.name || contact.phone || "?"} /><div className="min-w-0"><h2 className="truncate text-body-sm font-semibold text-foreground">{contact.name || "Unnamed contact"}</h2><p className="truncate text-caption text-muted-foreground">{contact.phone || contact.email}</p></div></div>}
-        <div className="flex shrink-0 items-center gap-1">{!embedded && conversation && <span className="hidden lg:inline-flex"><ChannelBadge channel={conversation.lastChannel} /></span>}
-          {embedded ? <Button render={<Link href={saPath("/conversations/" + contactId)} />} variant="ghost" size="sm" className="min-h-10 gap-1 px-2 text-caption">Open in Conversations<ExternalLink className="size-3" /></Button> : <>
+    <article aria-label="Active conversation" className={cn(embedded ? EMBED_PANE : PANE, "@container/convo flex min-h-0 min-w-0 flex-1 flex-col")}>
+      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 lg:px-4">
+        {embedded ? <div className="flex min-w-0 flex-1 items-center gap-2">{conversation ? <ChannelBadge channel={conversation.lastChannel} /> : <span className="text-caption text-muted-foreground">No messages yet</span>}{statusPill}</div> : <div className="flex min-w-0 flex-1 items-center gap-2"><Link href={saPath("/conversations")} aria-label="Back to conversations" className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"><ArrowLeft className="size-4" /></Link><span className="hidden @sm/convo:flex"><ContactInitials name={contact.name || contact.phone || "?"} /></span><div className="min-w-0"><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-body-sm font-semibold text-foreground">{contact.name || "Unnamed contact"}</h2><span className="hidden @lg/convo:inline-flex">{statusPill}</span></div><div className="flex min-w-0 items-center gap-1.5"><span className="@lg/convo:hidden">{statusPill}</span><p className="truncate text-caption text-muted-foreground">{contact.phone || contact.email}</p></div></div></div>}
+        <div className="flex shrink-0 items-center gap-1">{!embedded && conversation && <span className="mr-1 hidden @lg/convo:inline-flex"><ChannelBadge channel={conversation.lastChannel} /></span>}
+          {conversation && <ConversationAiControls conversation={conversation} available={capabilities?.aiAvailable ?? false} unavailableReason={capabilities?.aiReason || capabilityError || "Checking AI availability…"} />}
+          {embedded ? <Button render={<Link href={saPath("/conversations/" + contactId)} />} variant="ghost" size="sm" className="min-h-10 gap-1 px-2 text-caption"><span className="hidden @lg/convo:inline">Open in Conversations</span><span className="@lg/convo:hidden">Open</span><ExternalLink className="size-3" /></Button> : <>
           <Button variant="ghost" size="icon" className="size-10" aria-label={detailsOpen ? "Hide contact details" : "Show contact details"} onClick={toggleDetails}><PanelRight className="size-4" /></Button></>}
           <DropdownMenu><DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-10" aria-label="Conversation options" />}><MoreHorizontal className="size-5" /></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={() => setTheme(theme === "native" ? "standard" : "native")}>Channel Styling: {theme === "native" ? "On" : "Off"}</DropdownMenuItem>
@@ -219,13 +241,18 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
           </DropdownMenuContent></DropdownMenu>
         </div>
       </header>
-      {conversation && <><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2 text-caption">
-        <StatusPill tone={(conversation.status || "open") === "open" ? "info" : "neutral"} className="capitalize">{conversation.status || "open"}</StatusPill>
-        <span className="flex items-center gap-2 text-muted-foreground">Assigned to
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-3 border-b border-border px-3 lg:px-4">
+        <Tabs value={view} onValueChange={(next) => { const v = next as "conversation" | "notes"; setView(v); if (v === "notes") setNotesOpened(true); }}>
+          <TabsList variant="underline" aria-label="Conversation history" className="border-b-0">
+            <TabsTrigger value="conversation" className="text-body-sm">Conversation</TabsTrigger>
+            <TabsTrigger value="notes" className="text-body-sm">Internal Notes{notes ? ` (${notes.length})` : ""}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {conversation && <span className="ml-auto flex items-center gap-2 self-center py-1.5 text-caption text-muted-foreground"><UserRound className="size-3.5 @lg/convo:hidden" aria-hidden="true" /><span className="hidden @lg/convo:inline">Assigned to</span>
           <OptionSelect
             aria-label="Assign conversation"
             size="sm"
-            className="w-44"
+            className="w-36 @lg/convo:w-40"
             disabled={saving || !capabilities}
             value={conversation.assigneeUid || null}
             onChange={(next) => void manage({ assigneeUid: next })}
@@ -235,13 +262,17 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
               ...(capabilities?.members.map(m => ({ value: m.uid, label: m.name })) ?? []),
             ]}
           />
-        </span>
+        </span>}
       </div>
-      <ConversationAiControls conversation={conversation} available={capabilities?.aiAvailable ?? false} unavailableReason={capabilities?.aiReason || capabilityError || "Checking AI availability…"} /></>}
-      <ConversationThread key={contactId} contactId={contactId} theme={theme} />
-      {conversation?.pendingDraft && <ConversationDraftCard key={conversation.pendingDraft.body} contact={contact} draft={conversation.pendingDraft} disabledReason={draftAvailability?.available ? undefined : draftAvailability?.reason || "Channel availability has not been confirmed."} onSent={refreshCapabilities} />}
+      <div hidden={view !== "conversation"} className="flex min-h-0 flex-1 flex-col [&[hidden]]:hidden">
+        <ConversationThread key={contactId} contactId={contactId} theme={theme} />
+        {conversation?.pendingDraft && <ConversationDraftCard key={conversation.pendingDraft.body} contact={contact} draft={conversation.pendingDraft} disabledReason={draftAvailability?.available ? undefined : draftAvailability?.reason || "Channel availability has not been confirmed."} onSent={refreshCapabilities} />}
+      </div>
+      {notesOpened && <div hidden={view !== "notes"} role="region" aria-label="Internal notes" className="relative min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 sm:px-6 [&[hidden]]:hidden">
+        <ContactNotesPanel contactId={contactId} variant="internal" refreshKey={notesSaved + ":" + (notes?.length ?? 0) + ":" + (notes?.[0]?.id ?? "")} />
+      </div>}
       {capabilityError && <p role="alert" className="border-t border-border px-4 py-2 text-caption text-status-danger-fg">{capabilityError} <button type="button" onClick={refreshCapabilities} className="font-medium underline">Retry</button></p>}
-      <ConversationComposer key={contactId} contact={contact} availability={capabilities?.channels ?? []} defaultChannel={conversation?.lastChannel ?? "sms"} loading={!capabilities} onSent={refreshCapabilities} />
+      <ConversationComposer key={contactId} contact={contact} availability={capabilities?.channels ?? []} defaultChannel={conversation?.lastChannel ?? "sms"} loading={!capabilities} onSent={refreshCapabilities} mode={view === "notes" ? "note" : "reply"} onNoteSaved={onNoteSaved} />
     </article>
     {!embedded && detailsOpen && <aside aria-label="Contact information" className="absolute inset-y-0 right-0 z-10 flex min-h-0 w-[min(320px,calc(100%-3rem))] shrink-0 overflow-hidden rounded-card border border-border bg-card shadow-pop xl:static xl:w-[300px] xl:shadow-card"><ConversationContactPanel contact={contact} availability={capabilities?.channels ?? []} onClose={toggleDetails} /></aside>}
   </>;
