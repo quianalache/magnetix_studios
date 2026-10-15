@@ -20,6 +20,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectGroupLabel,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import {
   MAX_STAGES_PER_PIPELINE,
@@ -235,7 +244,7 @@ export function ManageStagesDialog({
           <ol className="space-y-2">
             {active.map((s, i) => (
               <li key={s.key} className="flex items-center gap-1.5">
-                <span className="text-muted-foreground w-5 shrink-0 text-right text-xs tabular-nums">
+                <span className="text-muted-foreground w-5 shrink-0 text-right text-caption tabular-nums">
                   {i + 1}
                 </span>
                 <Input
@@ -245,7 +254,7 @@ export function ManageStagesDialog({
                   onChange={(e) => update(s.key, { name: e.target.value })}
                 />
                 <span
-                  className="text-muted-foreground w-10 shrink-0 text-center text-xs tabular-nums"
+                  className="text-muted-foreground w-10 shrink-0 text-center text-caption tabular-nums"
                   title="Deals in this stage"
                 >
                   {s.id ? (counts[s.id] ?? 0) : "new"}
@@ -319,7 +328,7 @@ export function ManageStagesDialog({
 
           {archived.length > 0 && (
             <div className="space-y-2 border-t pt-3">
-              <p className="text-muted-foreground text-xs font-medium">
+              <p className="text-muted-foreground text-caption font-medium">
                 Archived
               </p>
               {archived.map((s) => (
@@ -456,23 +465,31 @@ function ReassignDialog({
             other stage change.
           </DialogDescription>
         </DialogHeader>
-        <select
-          aria-label="Destination stage"
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          className="border-input [&_option]:bg-background [&_option]:text-foreground h-10 w-full rounded-lg border bg-transparent px-2.5 text-sm"
+        <Select
+          value={target || null}
+          onValueChange={(v) => setTarget(typeof v === "string" ? v : "")}
+          items={Object.fromEntries(
+            options.flatMap(({ pipeline: p, stages }) =>
+              stages.map((s) => [`${p.id}::${s.id}`, options.length > 1 ? `${p.name} · ${s.name}` : s.name]),
+            ),
+          )}
         >
-          <option value="">Choose a destination stage…</option>
-          {options.map(({ pipeline: p, stages }) => (
-            <optgroup key={p.id} label={p.name}>
-              {stages.map((s) => (
-                <option key={s.id} value={`${p.id}::${s.id}`}>
-                  {s.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Destination stage">
+            <SelectValue placeholder="Choose a destination stage…" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(({ pipeline: p, stages }) => (
+              <SelectGroup key={p.id}>
+                <SelectGroupLabel>{p.name}</SelectGroupLabel>
+                {stages.map((s) => (
+                  <SelectItem key={s.id} value={`${p.id}::${s.id}`}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={moving}>
             Cancel

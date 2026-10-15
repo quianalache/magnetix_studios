@@ -9,7 +9,8 @@ import { subscribeToDealsForContact } from "@/lib/firestore/deals";
 import { formatCurrency, daysSince } from "@/lib/format";
 import type { Deal } from "@/types/deals";
 import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
-import { dealPipelineId } from "@/types/pipelines";
+import { activeStages, dealPipelineId } from "@/types/pipelines";
+import { StageLabel } from "@/components/pipeline/stage-label";
 import type { Contact } from "@/types/contacts";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ export function ContactDeals({
 }) {
   const { user } = useAuth();
   const { subAccountId, agencyId, saPath } = useSubAccount();
-  const { stageFor, pipelineNameFor, hasMultiplePipelines } = usePipelineLabels();
+  const { stageFor, pipelineNameFor, hasMultiplePipelines, pipelines } = usePipelineLabels();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -79,6 +80,8 @@ export function ContactDeals({
         <ul className="space-y-2">
           {deals.slice(0, MAX_SHOWN).map((deal) => {
             const stage = stageFor(deal);
+            const dealPipeline = pipelines.find((p) => p.id === dealPipelineId(deal));
+            const stageIndex = dealPipeline ? activeStages(dealPipeline).findIndex((s) => s.id === deal.stageId) : -1;
             const days = daysSince(deal.stageChangedAt);
             return (
               <li
@@ -98,9 +101,9 @@ export function ContactDeals({
                 </div>
                 <Link
                   href={saPath(`/pipeline/${dealPipelineId(deal)}`)}
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-medium transition-opacity hover:opacity-80 ${stage.tone}`}
+                  className="max-w-[45%] shrink-0 rounded-full border border-border bg-card px-2 py-0.5 text-micro font-medium text-foreground transition-colors hover:border-violet-ds-300"
                 >
-                  {stage.label}
+                  <StageLabel stageId={stage.id} label={stage.label} index={Math.max(0, stageIndex)} className="max-w-full" />
                 </Link>
               </li>
             );

@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OptionSelect } from "@/components/system/option-select";
 import { useSubAccount } from "@/context/sub-account-context";
 import { ContactPicker } from "@/components/quotes/contact-picker";
 import { CustomFieldInputs } from "@/components/custom-fields/custom-field-inputs";
@@ -29,6 +30,8 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Contact } from "@/types/contacts";
 import type { CustomFieldDef, CustomFieldValue } from "@/types/custom-fields";
 import { GLOBAL_TERRITORY_ID, type TerritoryDoc } from "@/types";
+
+const CURRENCIES = ["USD", "AUD", "EUR", "GBP", "CAD"];
 
 interface EditDealDialogProps {
   deal: Deal | null;
@@ -216,7 +219,7 @@ export function EditDealDialog({
               aria-invalid={!!errors.title}
             />
             {errors.title && (
-              <p className="text-xs text-destructive">{errors.title}</p>
+              <p className="text-caption text-destructive">{errors.title}</p>
             )}
           </div>
 
@@ -235,69 +238,54 @@ export function EditDealDialog({
                 aria-invalid={!!errors.value}
               />
               {errors.value && (
-                <p className="text-xs text-destructive">{errors.value}</p>
+                <p className="text-caption text-destructive">{errors.value}</p>
               )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-deal-currency">Currency</Label>
-              <select
+              <OptionSelect
                 id="edit-deal-currency"
+                className="w-28"
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="flex h-8 w-24 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-              >
-                {["USD", "AUD", "EUR", "GBP", "CAD"].map((c) => (
-                  <option key={c} value={c} className="bg-background text-foreground">
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => v && setCurrency(v)}
+                options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="edit-deal-pipeline">Pipeline</Label>
-              <select
+              <OptionSelect
                 id="edit-deal-pipeline"
-                value={pipelineId}
+                value={pipelineId || null}
                 disabled={!pipelines}
-                onChange={(e) => {
-                  setPipelineId(e.target.value);
+                onChange={(v) => {
+                  if (!v) return;
+                  setPipelineId(v);
                   // Moving pipelines needs an explicit destination stage.
-                  setStageId(deal && e.target.value === dealPipelineId(deal) ? deal.stageId : "");
+                  setStageId(deal && v === dealPipelineId(deal) ? deal.stageId : "");
                 }}
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-              >
-                {pipelines && !pipeline && pipelineId && (
-                  <option value={pipelineId}>Current pipeline (archived)</option>
-                )}
-                {(pipelines ?? []).map((p) => (
-                  <option key={p.id} value={p.id} className="bg-background text-foreground">
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  ...(pipelines && !pipeline && pipelineId
+                    ? [{ value: pipelineId, label: "Current pipeline (archived)" }]
+                    : []),
+                  ...(pipelines ?? []).map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-deal-stage">Stage</Label>
-              <select
+              <OptionSelect
                 id="edit-deal-stage"
-                value={stageId}
-                onChange={(e) => setStageId(e.target.value as PipelineStageId)}
+                value={stageId || null}
+                onChange={(v) => v && setStageId(v as PipelineStageId)}
                 aria-invalid={!!errors.stageId}
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-              >
-                {!stageId && <option value="">Choose a stage…</option>}
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-background text-foreground">
-                    {s.name}
-                    {s.archived ? " (archived)" : ""}
-                  </option>
-                ))}
-              </select>
+                placeholder="Choose a stage…"
+                options={stages.map((s) => ({ value: s.id, label: `${s.name}${s.archived ? " (archived)" : ""}` }))}
+              />
               {errors.stageId && (
-                <p className="text-xs text-destructive">{errors.stageId}</p>
+                <p className="text-caption text-destructive">{errors.stageId}</p>
               )}
             </div>
           </div>
@@ -325,18 +313,12 @@ export function EditDealDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="edit-deal-priority">Priority</Label>
-            <select
+            <OptionSelect
               id="edit-deal-priority"
               value={priority}
-              onChange={(e) => setPriority(e.target.value as DealPriority)}
-              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-            >
-              {DEAL_PRIORITIES.map((p) => (
-                <option key={p.id} value={p.id} className="bg-background text-foreground">
-                  {p.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => v && setPriority(v as DealPriority)}
+              options={DEAL_PRIORITIES.map((p) => ({ value: p.id, label: p.label }))}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -353,21 +335,21 @@ export function EditDealDialog({
                 territoryLabel={contactTerritoryLabel}
               />
             ) : (
-              <div className="flex h-9 items-center rounded-lg border bg-muted/40 px-3 text-sm">
+              <div className="flex h-9 items-center rounded-control border border-border bg-surface-sunken px-3 text-body-sm">
                 {selectedContact?.name || selectedContact?.email || "Contact"}
               </div>
             )}
             {errors.contactId && (
-              <p className="text-xs text-destructive">{errors.contactId}</p>
+              <p className="text-caption text-destructive">{errors.contactId}</p>
             )}
           </div>
 
           {scopingOn && (
             <div className="space-y-1.5">
               <Label>Territory</Label>
-              <div className="flex h-9 items-center gap-2 rounded-lg border bg-muted/40 px-3 text-sm">
+              <div className="flex h-9 items-center gap-2 rounded-control border border-border bg-surface-sunken px-3 text-body-sm">
                 <span className="font-medium">{territoryLabel}</span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   · inherited from the contact
                 </span>
               </div>
@@ -375,8 +357,8 @@ export function EditDealDialog({
           )}
 
           {cfDefs.length > 0 && (
-            <div className="space-y-4 border-t pt-4">
-              <p className="text-xs font-medium text-muted-foreground">
+            <div className="space-y-4 border-t border-border pt-4">
+              <p className="text-overline font-semibold tracking-[0.12em] text-ink-tertiary uppercase">
                 Custom fields
               </p>
               <CustomFieldInputs

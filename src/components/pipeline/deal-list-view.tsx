@@ -1,19 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatRelativeTime } from "@/lib/format";
-import { getPriority, type PipelineStage } from "@/types/deals";
-import type { BoardDeal, DealSort, DealSortField } from "@/types/pipeline-board";
+import type { PipelineStage } from "@/types/deals";
+import { DEAL_LIST_PAGE_SIZE, type BoardDeal, type DealSort, type DealSortField } from "@/types/pipeline-board";
 import { useSubAccount } from "@/context/sub-account-context";
-import { Button } from "@/components/ui/button";
+import {
+  DataTableShell,
+  DATA_TABLE_HEAD_ROW,
+  DATA_TABLE_ROW,
+  DATA_TABLE_TD,
+  DATA_TABLE_TH,
+} from "@/components/system/data-table";
+import { Pagination } from "@/components/system/pagination";
+import { OptionSelect } from "@/components/system/option-select";
+import { EmptyState } from "@/components/system/empty-state";
+import { DealPriorityTag } from "@/components/pipeline/deal-priority";
+import { StageLabel } from "@/components/pipeline/stage-label";
 
 /**
  * List view of one pipeline (Multiple Pipelines, 2026-09-25). Rows come
  * from the same server query + filter model as the Board; sorting and
  * paging are server-side. Clicking a row opens the deal; the contact name
- * still links to the Contact profile.
+ * still links to the Contact profile. Wave 4: the approved index-table
+ * frame (plum heading band, pagination inside the card).
  */
 
 const COLUMNS: { field: DealSortField | null; label: string; className?: string }[] = [
@@ -25,6 +37,15 @@ const COLUMNS: { field: DealSortField | null; label: string; className?: string 
   { field: "priority", label: "Priority" },
   { field: "expectedCloseDate", label: "Expected close" },
   { field: "updatedAt", label: "Updated" },
+];
+
+const PHONE_SORTS = [
+  { value: "updatedAt:desc", label: "Recently updated" },
+  { value: "value:desc", label: "Value, high to low" },
+  { value: "value:asc", label: "Value, low to high" },
+  { value: "expectedCloseDate:asc", label: "Closing soonest" },
+  { value: "stage:asc", label: "Stage order" },
+  { value: "title:asc", label: "Title A–Z" },
 ];
 
 function formatDay(ymd: string | null | undefined): string {
@@ -44,6 +65,7 @@ export function DealListView({
   onPage,
   onOpenDeal,
   loading,
+  filtered = false,
 }: {
   rows: BoardDeal[];
   stages: PipelineStage[];
@@ -55,9 +77,14 @@ export function DealListView({
   onPage: (page: number) => void;
   onOpenDeal: (deal: BoardDeal) => void;
   loading: boolean;
+  /** A search/filter is active (changes the empty-state wording). */
+  filtered?: boolean;
 }) {
   const { saPath } = useSubAccount();
-  const stageLabel = (id: string) => stages.find((s) => s.id === id)?.label ?? id;
+  const stageOf = (id: string) => {
+    const index = stages.findIndex((s) => s.id === id);
+    return <StageLabel stageId={id} label={stages[index]?.label ?? id} index={Math.max(0, index)} />;
+  };
   const headerClick = (field: DealSortField) =>
     onSort(
       sort.field === field
@@ -70,135 +97,127 @@ export function DealListView({
       <Link
         href={saPath(`/contacts/${d.contact.id}`)}
         onClick={(e) => e.stopPropagation()}
-        className="hover:text-primary hover:underline"
+        className="hover:text-link hover:underline"
       >
         {d.contact.name || d.contact.email || "Contact"}
       </Link>
     ) : (
-      <span className="italic text-muted-foreground/60">Unknown</span>
+      <span className="text-ink-tertiary italic">Unknown</span>
     );
 
+  const pagination =
+    pageCount > 1 ? (
+      <Pagination
+        page={page}
+        pageSize={DEAL_LIST_PAGE_SIZE}
+        total={total}
+        onPageChange={onPage}
+        itemLabel={total === 1 ? "deal" : "deals"}
+      />
+    ) : null;
+
+  if (rows.length === 0 && !loading) {
+    return (
+      <EmptyState
+        compact
+        icon={Briefcase}
+        title={filtered ? "No deals match these filters" : "No deals in this pipeline yet"}
+        description={filtered ? "Try another search or clear the filters." : "Add a deal to start tracking it here."}
+      />
+    );
+  }
+
   return (
-    <div className={cn("space-y-3", loading && "opacity-60")}>
+    <div className={cn("min-w-0 space-y-3 transition-opacity", loading && "opacity-60")}>
       {/* Desktop table */}
-      <div className="hidden overflow-x-auto rounded-2xl border md:block">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-            <tr>
-              {COLUMNS.map((c) => (
-                <th key={c.label} className={cn("px-3 py-2.5 font-medium", c.className)}>
-                  {c.field ? (
-                    <button
-                      type="button"
-                      onClick={() => headerClick(c.field!)}
-                      className="inline-flex items-center gap-1 hover:text-foreground"
-                      aria-label={`Sort by ${c.label}`}
-                    >
-                      {c.label}
-                      {sort.field === c.field ? (
-                        sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                      ) : (
-                        <ArrowUpDown className="h-3 w-3 opacity-40" />
-                      )}
-                    </button>
-                  ) : (
-                    c.label
-                  )}
-                </th>
-              ))}
+      <DataTableShell className="hidden md:block" minWidth="56rem" footer={pagination}>
+        <thead>
+          <tr className={DATA_TABLE_HEAD_ROW}>
+            {COLUMNS.map((c) => (
+              <th key={c.label} className={cn(DATA_TABLE_TH, c.className)}>
+                {c.field ? (
+                  <button
+                    type="button"
+                    onClick={() => headerClick(c.field!)}
+                    className="inline-flex items-center gap-1 uppercase hover:text-white"
+                    aria-label={`Sort by ${c.label}`}
+                  >
+                    {c.label}
+                    {sort.field === c.field ? (
+                      sort.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                    ) : (
+                      <ArrowUpDown className="size-3 opacity-50" />
+                    )}
+                  </button>
+                ) : (
+                  c.label
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((d) => (
+            <tr
+              key={d.id}
+              onClick={() => onOpenDeal(d)}
+              onKeyDown={(e) => e.key === "Enter" && onOpenDeal(d)}
+              tabIndex={0}
+              className={cn(DATA_TABLE_ROW, "cursor-pointer focus-visible:bg-tint-violet focus-visible:outline-none")}
+            >
+              <td className={cn(DATA_TABLE_TD, "max-w-[16rem] truncate font-semibold text-foreground")}>{d.title}</td>
+              <td className={cn(DATA_TABLE_TD, "max-w-[12rem] truncate")}>{contactLink(d)}</td>
+              <td className={DATA_TABLE_TD}>{stageOf(d.stageId)}</td>
+              <td className={cn(DATA_TABLE_TD, "text-right font-semibold tabular-nums")}>{formatCurrency(d.value, d.currency)}</td>
+              <td className={cn(DATA_TABLE_TD, "text-muted-foreground")}>{d.currency}</td>
+              <td className={DATA_TABLE_TD}>
+                <DealPriorityTag priority={d.priority} />
+              </td>
+              <td className={cn(DATA_TABLE_TD, "whitespace-nowrap text-muted-foreground")}>{formatDay(d.expectedCloseDate)}</td>
+              <td className={cn(DATA_TABLE_TD, "whitespace-nowrap text-muted-foreground")}>
+                {d.updatedAt ? formatRelativeTime(d.updatedAt as unknown as Date) : "—"}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((d) => {
-              const p = getPriority(d.priority);
-              return (
-                <tr
-                  key={d.id}
-                  onClick={() => onOpenDeal(d)}
-                  onKeyDown={(e) => e.key === "Enter" && onOpenDeal(d)}
-                  tabIndex={0}
-                  className="cursor-pointer border-t hover:bg-muted/30 focus:bg-muted/30 focus:outline-none"
-                >
-                  <td className="max-w-[16rem] truncate px-3 py-2.5 font-medium">{d.title}</td>
-                  <td className="max-w-[12rem] truncate px-3 py-2.5">{contactLink(d)}</td>
-                  <td className="px-3 py-2.5">{stageLabel(d.stageId)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(d.value, d.currency)}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{d.currency}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase", p.badge)}>{p.label}</span>
-                  </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{formatDay(d.expectedCloseDate)}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">
-                    {d.updatedAt ? formatRelativeTime(d.updatedAt as unknown as Date) : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </DataTableShell>
 
       {/* Phone cards */}
       <div className="space-y-2 md:hidden">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          Sort
-          <select
-            value={`${sort.field}:${sort.dir}`}
-            onChange={(e) => {
-              const [field, dir] = e.target.value.split(":");
-              onSort({ field: field as DealSortField, dir: dir as "asc" | "desc" });
-            }}
-            className="h-9 flex-1 rounded-lg border bg-transparent px-2 text-sm text-foreground [&_option]:bg-background"
-          >
-            <option value="updatedAt:desc">Recently updated</option>
-            <option value="value:desc">Value, high to low</option>
-            <option value="value:asc">Value, low to high</option>
-            <option value="expectedCloseDate:asc">Closing soonest</option>
-            <option value="stage:asc">Stage order</option>
-            <option value="title:asc">Title A–Z</option>
-          </select>
-        </label>
-        {rows.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            onClick={() => onOpenDeal(d)}
-            className="w-full rounded-xl border bg-card p-3 text-left text-sm"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span className="font-semibold">{d.title}</span>
-              <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(d.value, d.currency)}</span>
-            </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-              <span>{stageLabel(d.stageId)}</span>
-              <span>{contactLink(d)}</span>
-              {d.expectedCloseDate && <span>Closes {formatDay(d.expectedCloseDate)}</span>}
-            </div>
-          </button>
-        ))}
+        <OptionSelect
+          aria-label="Sort deals"
+          value={`${sort.field}:${sort.dir}`}
+          onChange={(v) => {
+            if (!v) return;
+            const [field, dir] = v.split(":");
+            onSort({ field: field as DealSortField, dir: dir as "asc" | "desc" });
+          }}
+          options={PHONE_SORTS}
+          className="w-full"
+        />
+        <ul className="overflow-hidden rounded-card border border-border bg-card shadow-card">
+          {rows.map((d) => (
+            <li key={d.id} className="border-b border-border-subtle last:border-b-0">
+              <button
+                type="button"
+                onClick={() => onOpenDeal(d)}
+                className="w-full p-3 text-left text-body-sm outline-none hover:bg-tint-violet focus-visible:bg-tint-violet"
+              >
+                <span className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 font-semibold text-foreground">{d.title}</span>
+                  <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(d.value, d.currency)}</span>
+                </span>
+                <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
+                  {stageOf(d.stageId)}
+                  <span>{contactLink(d)}</span>
+                  {d.expectedCloseDate && <span>Closes {formatDay(d.expectedCloseDate)}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {pagination}
       </div>
-
-      {rows.length === 0 && !loading && (
-        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No deals match.
-        </p>
-      )}
-
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {total} {total === 1 ? "deal" : "deals"} · page {page} of {pageCount}
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

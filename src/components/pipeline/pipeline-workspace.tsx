@@ -5,12 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
-  Archive,
   ChevronDown,
   GitBranch,
-  LayoutGrid,
-  List,
+  MoreHorizontal,
   Plus,
+  SearchX,
   Settings2,
   SlidersHorizontal,
 } from "lucide-react";
@@ -39,6 +38,12 @@ import {
   type PipelineStats,
 } from "@/types/pipeline-board";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert } from "@/components/ui/alert";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +55,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PipelineBoard, type BoardColumnState } from "@/components/pipeline/pipeline-board";
 import { DealListView } from "@/components/pipeline/deal-list-view";
-import { DealFilterBar } from "@/components/pipeline/deal-filter-bar";
+import { activeDealFilterCount, DealFilterBar } from "@/components/pipeline/deal-filter-bar";
 import { CurrencyTotalsText } from "@/components/pipeline/currency-totals";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { DealDetailsPanel } from "@/components/pipeline/deal-details-panel";
@@ -356,169 +361,181 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
 
   if (notFound) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-dashed p-10 text-center">
-        <GitBranch className="mx-auto h-8 w-8 text-muted-foreground" />
-        <p className="mt-3 font-semibold">Pipeline not found</p>
-        <p className="mt-1 text-sm text-muted-foreground">It may have been removed, or it belongs to another workspace.</p>
-        <Button className="mt-4" render={<Link href={saPath("/pipeline")} />}>
-          All pipelines
-        </Button>
-      </div>
+      <PageShell width="full">
+        <EmptyState
+          icon={GitBranch}
+          title="Pipeline not found"
+          description="It may have been removed, or it belongs to another workspace."
+          action={<Button render={<Link href={saPath("/pipeline")} />}>All pipelines</Button>}
+          className="mx-auto w-full max-w-lg"
+        />
+      </PageShell>
     );
   }
 
   const archived = pipeline?.status === "archived";
+  const boardFiltered = activeDealFilterCount(filters) > 0 || !!filters.search.trim();
   const activePipelines = pipelines.filter((p) => p.status === "active");
 
-  return (
-    <div className="space-y-5">
-      <Link
-        href={saPath("/pipeline")}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+  const switcher = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="-mx-1 flex max-w-full items-center gap-1 rounded-md px-1 text-left outline-none hover:text-link focus-visible:ring-3 focus-visible:ring-ring/50"
+            aria-label="Switch pipeline"
+          />
+        }
       >
-        <ArrowLeft className="h-4 w-4" /> All Pipelines
-      </Link>
+        <span className="truncate">{pipeline?.name ?? "Pipeline"}</span>
+        <ChevronDown className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-caption">Switch pipeline</DropdownMenuLabel>
+          {activePipelines.map((p) => (
+            <DropdownMenuItem key={p.id} render={<Link href={saPath(`/pipeline/${p.id}${view === "list" ? "?view=list" : ""}`)} />}>
+              <span className={cn("truncate", p.id === pipelineId && "font-semibold text-link")}>{p.name}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem render={<Link href={saPath("/pipeline")} />}>View all pipelines</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <GitBranch className="h-6 w-6" />
-          </div>
-          <div className="min-w-0">
+  const summary = (
+    <>
+      {pipeline?.description && <span className="block">{pipeline.description}</span>}
+      {stats ? (
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-2">
+          <span>
+            <span className="font-semibold text-foreground tabular-nums">{stats.openCount}</span> open{" "}
+            {stats.openCount === 1 ? "deal" : "deals"}
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            <CurrencyTotalsText totals={stats.openValue} className="font-semibold text-foreground tabular-nums" /> open value
+          </span>
+          <span aria-hidden>·</span>
+          <span>{stats.winRate === null ? "No closed deals yet" : `${stats.winRate}% win rate`}</span>
+        </span>
+      ) : (
+        // PageHeader renders the description inside a <p> — inline placeholder only.
+        <span aria-hidden="true" className="mt-1 block h-4 w-64 max-w-full animate-pulse rounded-md bg-muted" />
+      )}
+    </>
+  );
+
+  return (
+    <PageShell width="full" className="gap-4">
+      <PageHeader
+        breadcrumbs={
+          <Link href={saPath("/pipeline")} className="inline-flex items-center gap-1.5 font-medium hover:text-foreground">
+            <ArrowLeft className="size-3.5" aria-hidden="true" /> All Pipelines
+          </Link>
+        }
+        title={switcher}
+        description={summary}
+        icon={GitBranch}
+        actions={
+          <>
+            <SegmentedControl
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "board", label: "Board" },
+                { value: "list", label: "List" },
+              ]}
+            />
+            {isAdmin && pipeline && (
+              <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setManageOpen(true)}>
+                <Settings2 className="size-4" aria-hidden="true" /> Manage Stages
+              </Button>
+            )}
+            <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setCardsOpen(true)}>
+              <SlidersHorizontal className="size-4" aria-hidden="true" /> Customize Cards
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={
-                  <button
-                    type="button"
-                    className="flex max-w-full items-center gap-1.5 text-left text-2xl font-bold tracking-tight hover:text-primary"
-                    aria-label="Switch pipeline"
-                  />
-                }
+                render={<Button variant="outline" size="icon" className="sm:hidden" aria-label="Pipeline options" />}
               >
-                <span className="truncate">{pipeline?.name ?? "Pipeline"}</span>
-                <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <MoreHorizontal className="size-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-xs">Switch pipeline</DropdownMenuLabel>
-                  {activePipelines.map((p) => (
-                    <DropdownMenuItem key={p.id} render={<Link href={saPath(`/pipeline/${p.id}${view === "list" ? "?view=list" : ""}`)} />}>
-                      <span className={cn("truncate", p.id === pipelineId && "font-semibold text-primary")}>{p.name}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem render={<Link href={saPath("/pipeline")} />}>View all pipelines</DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-48">
+                {isAdmin && pipeline && (
+                  <DropdownMenuItem onClick={() => setManageOpen(true)}>
+                    <Settings2 className="size-4" /> Manage Stages
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setCardsOpen(true)}>
+                  <SlidersHorizontal className="size-4" /> Customize Cards
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {pipeline?.description && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{pipeline.description}</p>
+            {!archived && (
+              <Button
+                onClick={() => {
+                  setNewDealStage(null);
+                  setNewDealOpen(true);
+                }}
+              >
+                <Plus className="size-4" aria-hidden="true" /> New Deal
+              </Button>
             )}
-            {stats && (
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                <span>
-                  {stats.openCount} open {stats.openCount === 1 ? "deal" : "deals"}
-                </span>
-                <span aria-hidden>·</span>
-                <span>
-                  <CurrencyTotalsText totals={stats.openValue} className="font-medium text-foreground" /> open value
-                </span>
-                <span aria-hidden>·</span>
-                <span>{stats.winRate === null ? "No closed deals yet" : `${stats.winRate}% win rate`}</span>
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          <div className="flex items-center gap-1 rounded-lg border p-1" role="group" aria-label="View">
-            <button
-              type="button"
-              aria-pressed={view === "board"}
-              onClick={() => setView("board")}
-              className={cn(
-                "flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium",
-                view === "board" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              <LayoutGrid className="h-4 w-4" /> Board
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
-              className={cn(
-                "flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium",
-                view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              <List className="h-4 w-4" /> List
-            </button>
-          </div>
-          {isAdmin && pipeline && (
-            <Button variant="outline" onClick={() => setManageOpen(true)}>
-              <Settings2 className="mr-1.5 h-4 w-4" /> Manage Stages
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setCardsOpen(true)}>
-            <SlidersHorizontal className="mr-1.5 h-4 w-4" /> Customize Cards
-          </Button>
-          {!archived && (
-            <Button
-              onClick={() => {
-                setNewDealStage(null);
-                setNewDealOpen(true);
-              }}
-            >
-              <Plus className="mr-1.5 h-4 w-4" /> New Deal
-            </Button>
-          )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {archived && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
-          <Archive className="h-4 w-4 shrink-0 text-amber-600" />
+        <Alert tone="warning">
           This pipeline is archived. Its deals stay viewable; restore it from All Pipelines to add or move deals.
-        </div>
+        </Alert>
       )}
 
-      <div className="border-t pt-4">
-        <DealFilterBar
-          filters={filters}
-          onChange={setFilters}
-          stages={stages}
-          countries={countries}
-          territories={territories}
-          showTerritoryFilter={scopingOn && isAdmin}
-        />
-      </div>
+      <DealFilterBar
+        filters={filters}
+        onChange={setFilters}
+        stages={stages}
+        countries={countries}
+        territories={territories}
+        showTerritoryFilter={scopingOn && isAdmin}
+      />
 
       {loading && !pipeline ? (
-        <div className="flex gap-3 overflow-hidden">
+        <div className="flex gap-3 overflow-hidden" aria-busy="true" aria-label="Loading pipeline">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-96 w-72 shrink-0 animate-pulse rounded-2xl border bg-muted/30" />
+            <Skeleton key={i} className="h-96 w-72 shrink-0 rounded-card" />
           ))}
         </div>
       ) : view === "board" ? (
-        <PipelineBoard
-          stages={stages}
-          columns={columns}
-          territories={territories}
-          collapsed={collapsed}
-          cardFields={cardFields}
-          readOnly={archived}
-          onToggleCollapse={toggleCollapse}
-          onLoadMore={loadMore}
-          loadingMore={loadingMore}
-          onOpenDeal={setOpenDeal}
-          onAddDeal={(stageId) => {
-            setNewDealStage(stageId);
-            setNewDealOpen(true);
-          }}
-          onMoveDeal={moveDeal}
-          onCompletedChange={() => void loadBoard(true)}
-        />
+        <>
+          {boardFiltered && [...columns.values()].every((c) => c.count === 0) && (
+            <Alert tone="neutral" icon={SearchX}>
+              No deals match these filters. Try another search or clear the filters.
+            </Alert>
+          )}
+          <PipelineBoard
+            stages={stages}
+            columns={columns}
+            territories={territories}
+            collapsed={collapsed}
+            cardFields={cardFields}
+            readOnly={archived}
+            onToggleCollapse={toggleCollapse}
+            onLoadMore={loadMore}
+            loadingMore={loadingMore}
+            onOpenDeal={setOpenDeal}
+            onAddDeal={(stageId) => {
+              setNewDealStage(stageId);
+              setNewDealOpen(true);
+            }}
+            onMoveDeal={moveDeal}
+            onCompletedChange={() => void loadBoard(true)}
+          />
+        </>
       ) : (
         <DealListView
           rows={list.rows}
@@ -534,6 +551,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
           onPage={setPage}
           onOpenDeal={setOpenDeal}
           loading={loading}
+          filtered={boardFiltered}
         />
       )}
 
@@ -577,6 +595,6 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
         onChange={setCardFields}
         onReset={resetCardFields}
       />
-    </div>
+    </PageShell>
   );
 }

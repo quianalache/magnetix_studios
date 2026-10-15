@@ -15,10 +15,12 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency, daysSince } from "@/lib/format";
-import { getPriority, type Deal } from "@/types/deals";
+import type { Deal } from "@/types/deals";
 import { DEFAULT_CARD_FIELDS, type CardFieldKey } from "@/types/pipeline-cards";
 import type { DealNextActivity } from "@/types/pipeline-board";
 import { useSubAccount } from "@/context/sub-account-context";
+import { Tag } from "@/components/system/status-pill";
+import { DealPriorityTag } from "@/components/pipeline/deal-priority";
 
 /** The contact bits a card needs — a full Contact or the board's summary. */
 export interface DealCardContact {
@@ -118,7 +120,6 @@ export function DealCard({
 
   const days = daysSince(deal.stageChangedAt);
   const daysLabel = days === 0 ? "today" : `${days}d in stage`;
-  const priority = getPriority(deal.priority);
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
@@ -129,10 +130,11 @@ export function DealCard({
       tabIndex={onOpen && !overlay ? 0 : undefined}
       aria-label={onOpen && !overlay ? `Open deal ${deal.title}` : undefined}
       className={cn(
-        "group relative rounded-xl border bg-card p-3 text-sm shadow-sm transition-all",
-        !overlay && "cursor-pointer hover:border-primary/40 hover:shadow-md",
-        dragging && "opacity-40",
-        overlay && "rotate-1 scale-[1.02] cursor-grabbing shadow-lg ring-2 ring-primary/40",
+        "group relative shrink-0 rounded-control border border-border bg-card px-3 py-2.5 text-body-sm shadow-card transition-[border-color,box-shadow,opacity] outline-none",
+        !overlay && "cursor-pointer hover:border-violet-ds-300 focus-visible:ring-3 focus-visible:ring-ring/50",
+        // Source card while dragging: a faded, dashed placeholder.
+        dragging && "border-dashed border-violet-ds-300 opacity-40 shadow-none",
+        overlay && "rotate-1 cursor-grabbing border-violet-ds-300 shadow-pop ring-2 ring-ring/40",
       )}
       {...attributes}
       {...listeners}
@@ -146,31 +148,22 @@ export function DealCard({
       }
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="pr-1 font-semibold leading-snug">{deal.title}</p>
-        {show("priority") && (
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-              priority.badge,
-            )}
-          >
-            {priority.label}
-          </span>
-        )}
+        <p className="min-w-0 pr-1 leading-snug font-semibold [overflow-wrap:anywhere] text-foreground">{deal.title}</p>
+        {show("priority") && <DealPriorityTag priority={deal.priority} className="mt-px shrink-0" />}
       </div>
 
       {show("value") && (
-        <p className="mt-1 font-semibold tabular-nums">{formatCurrency(deal.value, deal.currency)}</p>
+        <p className="mt-0.5 font-semibold text-foreground tabular-nums">{formatCurrency(deal.value, deal.currency)}</p>
       )}
 
-      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <div className="mt-1.5 space-y-0.5 text-caption text-muted-foreground [&_svg]:text-ink-tertiary">
         {show("contact") && (
           <div className="flex items-center gap-1.5">
-            <User className="h-3.5 w-3.5 shrink-0" />
+            <User className="size-3.5 shrink-0" aria-hidden="true" />
             {contact ? (
               <Link
                 href={saPath(`/contacts/${contact.id}`)}
-                className="min-w-0 truncate hover:text-primary hover:underline"
+                className="min-w-0 truncate hover:text-link hover:underline"
                 onClick={stop}
                 onPointerDown={stop}
                 onKeyDown={stop}
@@ -178,25 +171,25 @@ export function DealCard({
                 {contact.name || contact.email || "Contact"}
               </Link>
             ) : (
-              <span className="italic text-muted-foreground/60">Unknown contact</span>
+              <span className="text-ink-tertiary italic">Unknown contact</span>
             )}
           </div>
         )}
         {show("company") && contact?.company && (
           <div className="flex items-center gap-1.5">
-            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">{contact.company}</span>
           </div>
         )}
         {show("expectedCloseDate") && deal.expectedCloseDate && (
           <div className="flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
             <span>Closes {formatDay(deal.expectedCloseDate)}</span>
           </div>
         )}
         {show("nextTask") && deal.nextTask && (
           <div className="flex items-center gap-1.5">
-            <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+            <CheckSquare className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">
               {deal.nextTask.title}
               {deal.nextTask.at && ` · ${formatDay(deal.nextTask.at.slice(0, 10))}`}
@@ -205,7 +198,7 @@ export function DealCard({
         )}
         {show("nextAppointment") && deal.nextAppointment && (
           <div className="flex items-center gap-1.5">
-            <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+            <CalendarClock className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">
               {deal.nextAppointment.title}
               {deal.nextAppointment.at && ` · ${formatWhen(deal.nextAppointment.at)}`}
@@ -214,18 +207,17 @@ export function DealCard({
         )}
         {show("timeInStage") && (
           <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <Clock className="size-3.5 shrink-0" aria-hidden="true" />
             <span>{daysLabel}</span>
           </div>
         )}
       </div>
 
       {scopingOn && territoryName && (
-        <span
-          className="mt-2 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground"
-          title={`Territory: ${territoryName}`}
-        >
-          {territoryName}
+        <span className="mt-1.5 inline-block" title={`Territory: ${territoryName}`}>
+          <Tag color="gray" className="px-1.5 py-0 text-micro">
+            {territoryName}
+          </Tag>
         </span>
       )}
 
@@ -237,9 +229,9 @@ export function DealCard({
             e.stopPropagation();
             onMoveRequest();
           }}
-          className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors active:bg-muted md:hidden"
+          className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-control border border-border px-2 py-1.5 text-caption font-medium text-link transition-colors active:bg-tint-violet md:hidden"
         >
-          <ArrowRightLeft className="h-3.5 w-3.5" />
+          <ArrowRightLeft className="size-3.5" aria-hidden="true" />
           Move stage
         </button>
       )}
@@ -256,19 +248,19 @@ export function DealCard({
               : "Mark the job as delivered (can trigger a Google review request)"
           }
           className={cn(
-            "mt-2 flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+            "mt-2 flex w-full items-center gap-2 rounded-control border px-2 py-1.5 text-caption font-medium transition-colors",
             completed
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-              : "border-dashed text-muted-foreground hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400",
+              ? "border-status-success-dot/40 bg-status-success-bg text-status-success-fg"
+              : "border-dashed border-border-strong/60 text-muted-foreground hover:border-status-success-dot/50 hover:text-status-success-fg",
           )}
         >
           <span
             className={cn(
-              "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-              completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/40",
+              "flex size-4 shrink-0 items-center justify-center rounded border",
+              completed ? "border-status-success-dot bg-status-success-dot text-white" : "border-border-strong",
             )}
           >
-            {completed && <Check className="h-3 w-3" />}
+            {completed && <Check className="size-3" aria-hidden="true" />}
           </span>
           {completed ? "Completed" : "Mark completed"}
         </button>

@@ -48,11 +48,11 @@ export function CustomizeCardsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1">
-          <div className="flex min-h-10 items-center gap-3 rounded-lg px-2 text-sm text-muted-foreground">
-            <span className="flex h-5 w-5 items-center justify-center rounded border border-primary bg-primary text-primary-foreground opacity-60">
-              <Check className="h-3.5 w-3.5" />
+          <div className="flex min-h-10 items-center gap-3 rounded-control px-2 text-body-sm text-muted-foreground">
+            <span className="flex size-5 items-center justify-center rounded border border-primary bg-primary text-primary-foreground opacity-60">
+              <Check className="size-3.5" aria-hidden="true" />
             </span>
-            Deal title <span className="text-xs">(always shown)</span>
+            Deal title <span className="text-caption">(always shown)</span>
           </div>
           {CARD_FIELDS.map((f) => {
             const on = fields.includes(f.key);
@@ -63,19 +63,19 @@ export function CustomizeCardsDialog({
                 role="checkbox"
                 aria-checked={on}
                 onClick={() => toggle(f.key)}
-                className="flex min-h-10 w-full items-center gap-3 rounded-lg px-2 text-left text-sm hover:bg-muted"
+                className="flex min-h-10 w-full items-center gap-3 rounded-control px-2 text-left text-body-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <span
                   className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
-                    on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+                    "flex size-5 shrink-0 items-center justify-center rounded border",
+                    on ? "border-primary bg-primary text-primary-foreground" : "border-border-strong",
                   )}
                 >
-                  {on && <Check className="h-3.5 w-3.5" />}
+                  {on && <Check className="size-3.5" aria-hidden="true" />}
                 </span>
                 <span className="min-w-0">
                   <span className="block">{f.label}</span>
-                  {f.hint && <span className="block text-xs text-muted-foreground">{f.hint}</span>}
+                  {f.hint && <span className="block text-caption text-muted-foreground">{f.hint}</span>}
                 </span>
               </button>
             );

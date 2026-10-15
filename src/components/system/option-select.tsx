@@ -20,7 +20,9 @@ export function OptionSelect<T extends string>({
   disabled,
   size,
   className,
+  placeholder,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
 }: {
   id?: string;
   value: T | null;
@@ -32,7 +34,10 @@ export function OptionSelect<T extends string>({
   disabled?: boolean;
   size?: "sm" | "default";
   className?: string;
+  /** Shown when nothing is selected and there is no `noneLabel` (e.g. "Choose a stage…"). */
+  placeholder?: string;
   "aria-label"?: string;
+  "aria-invalid"?: boolean;
 }) {
   const items: Record<string, string> = {
     ...(noneLabel !== undefined ? { [NONE]: noneLabel } : {}),
@@ -48,8 +53,8 @@ export function OptionSelect<T extends string>({
       items={items}
       disabled={disabled}
     >
-      <SelectTrigger id={id} size={size} aria-label={ariaLabel} className={className}>
-        <SelectValue />
+      <SelectTrigger id={id} size={size} aria-label={ariaLabel} aria-invalid={ariaInvalid || undefined} className={className}>
+        <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
         {noneLabel !== undefined ? <SelectItem value={NONE}>{noneLabel}</SelectItem> : null}

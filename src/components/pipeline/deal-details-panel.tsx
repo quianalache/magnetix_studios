@@ -7,7 +7,6 @@ import {
   Building2,
   CalendarClock,
   CalendarPlus,
-  Check,
   CheckSquare,
   DollarSign,
   ExternalLink,
@@ -25,6 +24,9 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { OptionSelect } from "@/components/system/option-select";
+import { StatusPill } from "@/components/system/status-pill";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -98,8 +100,10 @@ function formatRange(start: string | null, end: string | null): string {
   return end ? `${day} · ${t(s)} – ${t(new Date(end))}` : `${day} · ${t(s)}`;
 }
 
-const selectClass =
-  "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_option]:bg-background [&_option]:text-foreground";
+/** Approved record/detail surfaces (Wave 4): white cards on the near-white sheet canvas. */
+const PANEL = "rounded-card border border-border bg-card p-4 shadow-card";
+const FIELD_LABEL = "mb-1 block text-caption font-medium text-muted-foreground";
+const SECTION_TITLE = "flex items-center gap-2 text-section font-semibold text-foreground";
 
 export function DealDetailsPanel({
   dealId,
@@ -274,11 +278,11 @@ export function DealDetailsPanel({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-5xl">
+        <SheetContent className="overflow-y-auto bg-background p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-5xl">
           <SheetTitle className="sr-only">{deal?.title ?? "Deal details"}</SheetTitle>
           <SheetDescription className="sr-only">Deal details, activity, notes, next steps and appointments.</SheetDescription>
           {!deal ? (
-            <div className="p-8 text-sm text-muted-foreground">
+            <div role="status" className="p-8 text-body-sm text-muted-foreground">
               {loadError ?? "Loading…"}
             </div>
           ) : (
@@ -286,12 +290,12 @@ export function DealDetailsPanel({
               {/* Header */}
               <div className="flex flex-col gap-3 pr-8 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <DollarSign className="h-6 w-6" />
-                  </div>
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true">
+                    <DollarSign className="size-5" />
+                  </span>
                   <div className="min-w-0">
-                    <h2 className="break-words text-xl font-bold leading-tight sm:text-2xl">{deal.title}</h2>
-                    <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted-foreground">
+                    <h2 className="text-title-lg leading-tight font-semibold tracking-tight break-words text-foreground">{deal.title}</h2>
+                    <p className="mt-1 flex flex-wrap gap-x-2 text-body-sm text-muted-foreground">
                       {contact?.name && <span>{contact.name}</span>}
                       {contact?.company && (
                         <>
@@ -311,26 +315,26 @@ export function DealDetailsPanel({
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="More deal actions" />}>
-                      <MoreHorizontal className="h-4 w-4" />
+                      <MoreHorizontal className="size-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
                       <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                        <Pencil className="mr-2 h-4 w-4" /> Edit deal
+                        <Pencil className="size-4" /> Edit deal
                       </DropdownMenuItem>
                       {canDelete && (
-                        <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete deal
+                        <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                          <Trash2 className="size-4" /> Delete deal
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                   {deal.stageId === "won" ? (
-                    <span className="inline-flex h-9 items-center gap-1 rounded-lg bg-emerald-500/10 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                      <Check className="h-4 w-4" /> Won
-                    </span>
+                    <StatusPill tone="success" className="h-8 px-3">
+                      Won
+                    </StatusPill>
                   ) : (
                     <Button
-                      variant="secondary"
+                      variant="outline"
                       disabled={saving || archivedPipeline}
                       onClick={() => patch({ stageId: "won" }, "Marked as won")}
                     >
@@ -338,16 +342,15 @@ export function DealDetailsPanel({
                     </Button>
                   )}
                   {deal.stageId === "lost" ? (
-                    <span
-                      className="inline-flex h-9 items-center rounded-lg bg-rose-500/10 px-3 text-sm font-medium text-rose-700 dark:text-rose-400"
-                      title={deal.lostReason ?? undefined}
-                    >
-                      Lost{deal.lostReason ? ` · ${deal.lostReason}` : ""}
+                    <span title={deal.lostReason ?? undefined} className="max-w-full">
+                      <StatusPill tone="danger" className="h-8 max-w-full truncate px-3">
+                        Lost{deal.lostReason ? ` · ${deal.lostReason}` : ""}
+                      </StatusPill>
                     </span>
                   ) : (
                     <Button
-                      variant="secondary"
-                      className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 dark:text-rose-300"
+                      variant="outline"
+                      className="text-status-danger-fg hover:bg-status-danger-bg hover:text-status-danger-fg"
                       disabled={saving || archivedPipeline}
                       onClick={() => setLostOpen(true)}
                     >
@@ -358,105 +361,84 @@ export function DealDetailsPanel({
               </div>
 
               {archivedPipeline && (
-                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+                <Alert tone="warning">
                   This deal&apos;s pipeline is archived — restore the pipeline to move or close the deal.
-                </p>
+                </Alert>
               )}
 
               {/* Key fields */}
-              <div className="grid gap-4 rounded-2xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className={cn(PANEL, "grid gap-4 sm:grid-cols-2 lg:grid-cols-5")}>
                 <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Value</p>
-                  <p className="text-xl font-bold tabular-nums">{formatCurrency(deal.value, deal.currency)}</p>
-                  <p className="text-xs text-muted-foreground">{deal.currency}</p>
+                  <p className={FIELD_LABEL}>Value</p>
+                  <p className="text-title-md font-semibold text-foreground tabular-nums">{formatCurrency(deal.value, deal.currency)}</p>
+                  <p className="text-caption text-muted-foreground">{deal.currency}</p>
                 </div>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Pipeline</span>
-                  <select
-                    className={selectClass}
-                    value={movePipelineId ?? pipeline?.id ?? ""}
+                <div>
+                  <span className={FIELD_LABEL}>Pipeline</span>
+                  <OptionSelect
+                    aria-label="Pipeline"
+                    value={movePipelineId ?? pipeline?.id ?? null}
                     disabled={saving || pipelines.length === 0}
-                    onChange={(e) =>
-                      setMovePipelineId(e.target.value === pipeline?.id ? null : e.target.value)
-                    }
-                  >
-                    {pipeline && !pipelines.some((p) => p.id === pipeline.id) && (
-                      <option value={pipeline.id}>{pipeline.name}</option>
-                    )}
-                    {pipelines.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                    {movingTo ? `Stage in ${movingTo.name}` : "Stage"}
-                  </span>
+                    onChange={(v) => v && setMovePipelineId(v === pipeline?.id ? null : v)}
+                    options={[
+                      ...(pipeline && !pipelines.some((p) => p.id === pipeline.id)
+                        ? [{ value: pipeline.id, label: pipeline.name }]
+                        : []),
+                      ...pipelines.map((p) => ({ value: p.id, label: p.name })),
+                    ]}
+                  />
+                </div>
+                <div>
+                  <span className={FIELD_LABEL}>{movingTo ? `Stage in ${movingTo.name}` : "Stage"}</span>
                   {movingTo ? (
-                    <select
-                      className={cn(selectClass, "border-primary/50")}
-                      value=""
+                    <OptionSelect
+                      aria-label={`Stage in ${movingTo.name}`}
+                      className="border-violet-ds-300 ring-3 ring-ring/20"
+                      value={null}
+                      placeholder="Choose a stage…"
                       disabled={saving}
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        void patch(
-                          { pipelineId: movingTo.id, stageId: e.target.value },
-                          `Moved to ${movingTo.name}`,
-                        ).then(() => setMovePipelineId(null));
+                      onChange={(v) => {
+                        if (!v) return;
+                        void patch({ pipelineId: movingTo.id, stageId: v }, `Moved to ${movingTo.name}`).then(() =>
+                          setMovePipelineId(null),
+                        );
                       }}
-                    >
-                      <option value="">Choose a stage…</option>
-                      {activeStages(movingTo).map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={activeStages(movingTo).map((s) => ({ value: s.id, label: s.name }))}
+                    />
                   ) : (
-                    <select
-                      className={selectClass}
+                    <OptionSelect
+                      aria-label="Stage"
                       value={deal.stageId}
                       disabled={saving || archivedPipeline}
-                      onChange={(e) => {
-                        if (e.target.value === "lost") setLostOpen(true);
-                        else void patch({ stageId: e.target.value }, "Stage updated");
+                      onChange={(v) => {
+                        if (!v || v === deal.stageId) return;
+                        if (v === "lost") setLostOpen(true);
+                        else void patch({ stageId: v }, "Stage updated");
                       }}
-                    >
-                      {!findStage(pipeline ?? { stages: [] }, deal.stageId) && (
-                        <option value={deal.stageId}>{deal.stageId}</option>
-                      )}
-                      {stageList.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                          {s.archived ? " (archived)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        ...(!findStage(pipeline ?? { stages: [] }, deal.stageId)
+                          ? [{ value: deal.stageId, label: deal.stageId }]
+                          : []),
+                        ...stageList.map((s) => ({ value: s.id, label: `${s.name}${s.archived ? " (archived)" : ""}` })),
+                      ]}
+                    />
                   )}
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Priority</span>
-                  <select
-                    className={selectClass}
+                </div>
+                <div>
+                  <span className={FIELD_LABEL}>Priority</span>
+                  <OptionSelect
+                    aria-label="Priority"
                     value={deal.priority}
                     disabled={saving}
-                    onChange={(e) => void patch({ priority: e.target.value as DealPriority }, "Priority updated")}
-                  >
-                    {DEAL_PRIORITIES.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => v && v !== deal.priority && void patch({ priority: v as DealPriority }, "Priority updated")}
+                    options={DEAL_PRIORITIES.map((p) => ({ value: p.id, label: p.label }))}
+                  />
                   {priority && <span className="sr-only">{priority.label}</span>}
-                </label>
+                </div>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Expected closing date</span>
+                  <span className={FIELD_LABEL}>Expected closing date</span>
                   <Input
                     type="date"
-                    className="h-9"
                     value={deal.expectedCloseDate ?? ""}
                     disabled={saving}
                     onChange={(e) => void patch({ expectedCloseDate: e.target.value || null }, "Closing date updated")}
@@ -466,58 +448,58 @@ export function DealDetailsPanel({
 
               {/* Contact + company */}
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border bg-card p-4">
+                <div className={PANEL}>
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold">Contact</h3>
+                    <h3 className={SECTION_TITLE}>Contact</h3>
                     {contact && (
-                      <Button variant="secondary" size="sm" render={<Link href={saPath(`/contacts/${contact.id}`)} />}>
+                      <Button variant="outline" size="sm" render={<Link href={saPath(`/contacts/${contact.id}`)} />}>
                         View Contact
                       </Button>
                     )}
                   </div>
                   {contact ? (
-                    <div className="space-y-1 text-sm">
+                    <div className="space-y-1 text-body-sm">
                       <Link
                         href={saPath(`/contacts/${contact.id}`)}
-                        className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                        className="inline-flex items-center gap-1 font-semibold text-link hover:underline"
                       >
                         {contact.name || contact.email || "Contact"}
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <ExternalLink className="size-3.5" aria-hidden="true" />
                       </Link>
                       {contact.email && (
-                        <p className="flex items-center gap-1.5 text-muted-foreground">
-                          <Mail className="h-3.5 w-3.5" /> {contact.email}
+                        <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                          <Mail className="size-3.5 shrink-0" aria-hidden="true" /> <span className="truncate">{contact.email}</span>
                         </p>
                       )}
                       {contact.phone && (
                         <p className="flex items-center gap-1.5 text-muted-foreground">
-                          <Phone className="h-3.5 w-3.5" /> {contact.phone}
+                          <Phone className="size-3.5 shrink-0" aria-hidden="true" /> {contact.phone}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm italic text-muted-foreground">No contact linked.</p>
+                    <p className="text-body-sm text-muted-foreground italic">No contact linked.</p>
                   )}
                 </div>
-                <div className="rounded-2xl border bg-card p-4">
-                  <h3 className="mb-2 text-sm font-semibold">Company</h3>
+                <div className={PANEL}>
+                  <h3 className={cn(SECTION_TITLE, "mb-2")}>Company</h3>
                   {contact?.company ? (
-                    <p className="flex items-center gap-2 text-sm font-semibold">
-                      <Building2 className="h-4 w-4 text-muted-foreground" /> {contact.company}
+                    <p className="flex items-center gap-2 text-body-sm font-semibold">
+                      <Building2 className="size-4 text-muted-foreground" aria-hidden="true" /> {contact.company}
                     </p>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No company on the contact.</p>
+                    <p className="text-body-sm text-muted-foreground">No company on the contact.</p>
                   )}
                 </div>
               </div>
 
               {/* Description */}
-              <div className="rounded-2xl border bg-card p-4">
+              <div className={PANEL}>
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Deal Description</h3>
+                  <h3 className={SECTION_TITLE}>Deal Description</h3>
                   {descDraft === null && (
-                    <Button variant="secondary" size="sm" onClick={() => setDescDraft(deal.description ?? "")}>
-                      <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                    <Button variant="outline" size="sm" onClick={() => setDescDraft(deal.description ?? "")}>
+                      <Pencil className="size-3.5" aria-hidden="true" /> Edit
                     </Button>
                   )}
                 </div>
@@ -549,16 +531,16 @@ export function DealDetailsPanel({
                     </div>
                   </div>
                 ) : deal.description ? (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{deal.description}</p>
+                  <p className="text-body-sm leading-relaxed whitespace-pre-wrap">{deal.description}</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No description yet.</p>
+                  <p className="text-body-sm text-muted-foreground">No description yet.</p>
                 )}
               </div>
 
               {/* Center tabs + right rail */}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-                <div className="min-w-0 rounded-2xl border bg-card p-4">
-                  <div role="tablist" aria-label="Deal feed" className="mb-4 flex gap-6 border-b">
+                <div className={cn(PANEL, "min-w-0")}>
+                  <div role="tablist" aria-label="Deal feed" className="mb-4 flex gap-6 border-b border-border">
                     {(["activity", "notes"] as const).map((t) => (
                       <button
                         key={t}
@@ -567,8 +549,10 @@ export function DealDetailsPanel({
                         aria-selected={tab === t}
                         onClick={() => setTab(t)}
                         className={cn(
-                          "-mb-px border-b-2 pb-2 text-sm font-semibold capitalize",
-                          tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground",
+                          "-mb-px border-b-2 pb-2.5 text-body-sm capitalize outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                          tab === t
+                            ? "border-primary font-semibold text-foreground"
+                            : "border-transparent font-medium text-muted-foreground hover:text-foreground",
                         )}
                       >
                         {t}
@@ -577,29 +561,27 @@ export function DealDetailsPanel({
                   </div>
                   {tab === "activity" ? (
                     activity === null ? (
-                      <div className="h-24 animate-pulse rounded-xl bg-muted/40" />
+                      <div className="h-24 animate-pulse rounded-control bg-muted" aria-busy="true" aria-label="Loading activity" />
                     ) : activity.length === 0 ? (
-                      <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        No activity for this deal yet.
-                      </p>
+                      <p className="py-6 text-center text-body-sm text-muted-foreground">No activity for this deal yet.</p>
                     ) : (
                       <ul className="space-y-3">
                         {activity.map((item) => {
                           const v = activityVisuals(item.type, item.meta);
                           return (
                             <li key={item.id} className="flex gap-3">
-                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                              <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-sunken">
                                 {v.icon}
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                                  <p className="text-sm font-medium">{v.label}</p>
-                                  <time className="text-xs text-muted-foreground" dateTime={item.createdAt}>
+                                  <p className="text-body-sm font-medium text-foreground">{v.label}</p>
+                                  <time className="text-caption text-muted-foreground" dateTime={item.createdAt}>
                                     {formatRelativeTime(new Date(item.createdAt))}
                                   </time>
                                 </div>
-                                {item.content && <p className="break-words text-sm text-muted-foreground">{item.content}</p>}
-                                {item.actorName && <p className="text-xs text-muted-foreground">by {item.actorName}</p>}
+                                {item.content && <p className="text-body-sm break-words text-muted-foreground">{item.content}</p>}
+                                {item.actorName && <p className="text-caption text-muted-foreground">by {item.actorName}</p>}
                               </div>
                             </li>
                           );
@@ -612,29 +594,32 @@ export function DealDetailsPanel({
                 </div>
 
                 <div className="space-y-4">
-                  <section className="rounded-2xl border bg-card p-4" aria-label="Next steps">
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                      <CheckSquare className="h-4 w-4 text-muted-foreground" /> Next Steps
+                  <section className={PANEL} aria-label="Next steps">
+                    <h3 className={cn(SECTION_TITLE, "mb-3")}>
+                      <span className="flex size-7 items-center justify-center rounded-chip bg-tag-blue-bg text-tag-blue-fg" aria-hidden="true">
+                        <CheckSquare className="size-4" />
+                      </span>
+                      Next Steps
                     </h3>
                     {!relatedLoaded ? (
-                      <div className="h-16 animate-pulse rounded-lg bg-muted/40" />
+                      <div className="h-16 animate-pulse rounded-control bg-muted" />
                     ) : openTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No open tasks for this deal.</p>
+                      <p className="text-body-sm text-muted-foreground">No open tasks for this deal.</p>
                     ) : (
                       <ul className="space-y-2">
                         {openTasks.map((t) => (
-                          <li key={t.id} className="flex items-start gap-2 text-sm">
+                          <li key={t.id} className="flex items-start gap-2 text-body-sm">
                             <button
                               type="button"
                               aria-label={`Complete "${t.title}"`}
                               onClick={() => void completeTask(t)}
-                              className="mt-0.5 h-4 w-4 shrink-0 rounded border border-muted-foreground/40 hover:border-primary"
+                              className="mt-0.5 size-4 shrink-0 rounded border border-border-strong outline-none hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50"
                             />
                             <span className="min-w-0 flex-1 break-words">{t.title}</span>
                             {t.dueAt && (
                               <span
                                 className={cn(
-                                  "shrink-0 text-xs",
+                                  "shrink-0 text-caption",
                                   Date.parse(t.dueAt) < Date.now() ? "text-destructive" : "text-muted-foreground",
                                 )}
                               >
@@ -646,38 +631,41 @@ export function DealDetailsPanel({
                       </ul>
                     )}
                     <div className="mt-3 flex flex-col gap-2">
-                      <Button variant="secondary" size="sm" onClick={() => setTaskOpen(true)}>
-                        <Plus className="mr-1 h-4 w-4" /> Add Task
+                      <Button variant="outline" size="sm" onClick={() => setTaskOpen(true)}>
+                        <Plus className="size-4" aria-hidden="true" /> Add Task
                       </Button>
-                      <Link href={saPath("/projects/tasks")} className="text-center text-xs text-muted-foreground hover:text-primary hover:underline">
+                      <Link href={saPath("/projects/tasks")} className="text-center text-caption text-link hover:underline">
                         Open Tasks
                       </Link>
                     </div>
                   </section>
 
-                  <section className="rounded-2xl border bg-card p-4" aria-label="Upcoming appointment">
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                      <CalendarClock className="h-4 w-4 text-muted-foreground" /> Upcoming Appointment
+                  <section className={PANEL} aria-label="Upcoming appointment">
+                    <h3 className={cn(SECTION_TITLE, "mb-3")}>
+                      <span className="flex size-7 items-center justify-center rounded-chip bg-tag-aqua-bg text-tag-aqua-fg" aria-hidden="true">
+                        <CalendarClock className="size-4" />
+                      </span>
+                      Upcoming Appointment
                     </h3>
                     {!relatedLoaded ? (
-                      <div className="h-16 animate-pulse rounded-lg bg-muted/40" />
+                      <div className="h-16 animate-pulse rounded-control bg-muted" />
                     ) : nextAppointment ? (
-                      <div className="text-sm">
-                        <p className="font-semibold">{nextAppointment.title}</p>
+                      <div className="text-body-sm">
+                        <p className="font-semibold text-foreground">{nextAppointment.title}</p>
                         <p className="text-muted-foreground">{formatRange(nextAppointment.startAt, nextAppointment.endAt)}</p>
                         {nextAppointment.location && <p className="text-muted-foreground">{nextAppointment.location}</p>}
                         {upcoming.length > 1 && (
-                          <p className="mt-1 text-xs text-muted-foreground">+{upcoming.length - 1} more scheduled</p>
+                          <p className="mt-1 text-caption text-muted-foreground">+{upcoming.length - 1} more scheduled</p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No upcoming appointment for this deal.</p>
+                      <p className="text-body-sm text-muted-foreground">No upcoming appointment for this deal.</p>
                     )}
                     <div className="mt-3 flex flex-col gap-2">
-                      <Button variant="secondary" size="sm" onClick={() => setEventOpen(true)}>
-                        <CalendarPlus className="mr-1 h-4 w-4" /> Schedule
+                      <Button variant="outline" size="sm" onClick={() => setEventOpen(true)}>
+                        <CalendarPlus className="size-4" aria-hidden="true" /> Schedule
                       </Button>
-                      <Link href={saPath("/calendar")} className="text-center text-xs text-muted-foreground hover:text-primary hover:underline">
+                      <Link href={saPath("/calendar")} className="text-center text-caption text-link hover:underline">
                         View in Calendar
                       </Link>
                     </div>
@@ -685,8 +673,8 @@ export function DealDetailsPanel({
                 </div>
               </div>
               {loadError && (
-                <p className="flex items-center gap-2 text-xs text-destructive">
-                  <AlertCircle className="h-3.5 w-3.5" /> {loadError}
+                <p role="alert" className="flex items-center gap-2 text-caption text-destructive">
+                  <AlertCircle className="size-3.5" aria-hidden="true" /> {loadError}
                 </p>
               )}
             </div>

@@ -144,7 +144,7 @@ export function PipelineFormDialog({
               <ol className="space-y-2">
                 {stageNames.map((s, i) => (
                   <li key={i} className="flex items-center gap-1.5">
-                    <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                    <span className="w-5 shrink-0 text-right text-caption tabular-nums text-muted-foreground">
                       {i + 1}
                     </span>
                     <Input
@@ -199,7 +199,7 @@ export function PipelineFormDialog({
               >
                 <Plus className="mr-1 h-4 w-4" /> Add stage
               </Button>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 Followed by <strong>Won</strong> and <strong>Lost</strong>.
               </p>
             </div>

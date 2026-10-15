@@ -13,9 +13,9 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { ChevronsLeftRight, ChevronsRightLeft, FileText, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronsLeftRight, ChevronsRightLeft, MoreHorizontal, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { stageColor } from "@/lib/pipelines/stage-color";
 import type { PipelineStage } from "@/types/deals";
 import { GLOBAL_TERRITORY_ID, type TerritoryDoc } from "@/types";
 import type { BoardDeal, CurrencyTotals } from "@/types/pipeline-board";
@@ -44,6 +44,12 @@ import {
  * stage age, contact links, territory labels and the Won "completed" tick.
  * Changed per the approved spec: a single click opens the deal (was a
  * double-click editor); columns can be collapsed.
+ *
+ * Wave 4 (Visual Direction 2): quiet near-white columns with a thin border
+ * and a stage-identity accent line (the Dashboard's stage colors), compact
+ * white cards, Royal Violet drop target. On md+ each column's cards scroll
+ * inside the column so every stage header stays in view; the board itself
+ * scrolls sideways inside its own strip (never the page).
  */
 
 export interface BoardColumnState {
@@ -143,13 +149,18 @@ export function PipelineBoard({
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDeal(null)}
       >
-        <div className="flex snap-x gap-3 overflow-x-auto rounded-2xl bg-[#fbf9ff] p-2 pb-3 dark:bg-slate-950">
-          {stages.map((stage) => {
+        <div
+          role="region"
+          aria-label="Pipeline board"
+          className="relative -mx-1 flex snap-x items-start gap-3 overflow-x-auto px-1 pb-3"
+        >
+          {stages.map((stage, index) => {
             const col = columns.get(stage.id) ?? { count: 0, totals: {}, deals: [] };
             return collapsed.has(stage.id) ? (
               <CollapsedColumn
                 key={stage.id}
                 stage={stage}
+                accent={stageColor(stage.id, index)}
                 count={col.count}
                 onExpand={() => onToggleCollapse(stage.id)}
               />
@@ -157,6 +168,7 @@ export function PipelineBoard({
               <Column
                 key={stage.id}
                 stage={stage}
+                accent={stageColor(stage.id, index)}
                 column={col}
                 readOnly={readOnly}
                 activeId={activeDeal?.id}
@@ -212,19 +224,9 @@ export function PipelineBoard({
   );
 }
 
-function stageHeaderTone(stage: PipelineStage): string {
-  if (stage.terminal === "won") return "bg-emerald-500/10 dark:bg-emerald-950/50";
-  if (stage.terminal === "lost") return "bg-rose-500/10 dark:bg-rose-950/50";
-  const id = stage.id.toLowerCase();
-  if (id.includes("new")) return "bg-[#f1e3ff] dark:bg-purple-950/50";
-  if (id.includes("contact")) return "bg-[#e4edff] dark:bg-blue-950/50";
-  if (id.includes("qualif")) return "bg-[#eee8ff] dark:bg-violet-950/50";
-  if (id.includes("proposal") || id.includes("offer")) return "bg-[#fff0dc] dark:bg-orange-950/50";
-  return "bg-primary/5 dark:bg-primary/15";
-}
-
 function Column({
   stage,
+  accent,
   column,
   readOnly,
   activeId,
@@ -239,6 +241,8 @@ function Column({
   onCompletedChange,
 }: {
   stage: PipelineStage;
+  /** Stage identity color (CSS color). */
+  accent: string;
   column: BoardColumnState;
   readOnly: boolean;
   activeId?: string;
@@ -259,62 +263,65 @@ function Column({
     <section
       ref={setNodeRef}
       aria-label={`${stage.label}, ${column.count} deals`}
+      data-drop-over={isOver ? "true" : undefined}
       className={cn(
-        "flex w-[82vw] max-w-[18rem] shrink-0 snap-start flex-col rounded-2xl border border-[#eadff2] bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-900 sm:w-72",
-        isOver && "border-primary/60 bg-primary/5 ring-2 ring-primary/20",
+        "flex w-[82vw] max-w-[18rem] shrink-0 snap-start flex-col overflow-hidden rounded-card border border-border bg-surface-sunken transition-colors sm:w-72",
+        isOver && "border-violet-ds-300 bg-tint-violet ring-2 ring-ring/30",
       )}
     >
-      <header className={cn("rounded-t-2xl px-3 pb-2 pt-3", stageHeaderTone(stage))}>
+      <header className="border-t-[3px] bg-card px-3 pt-2 pb-2.5" style={{ borderTopColor: accent }}>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="truncate text-sm font-semibold">{stage.label}</h3>
+          <h3 className="flex min-w-0 items-center gap-2 text-body-sm font-semibold text-foreground">
+            <span className="truncate">{stage.label}</span>
+            <span className="shrink-0 rounded-full bg-surface-sunken px-1.5 text-micro leading-5 font-semibold text-muted-foreground tabular-nums">
+              {column.count}
+            </span>
+          </h3>
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" className="size-11 md:size-8" aria-label={`${stage.label} options`} />}
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="-mr-1.5 size-11 text-muted-foreground md:size-8"
+                  aria-label={`${stage.label} options`}
+                />
+              }
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={onCollapse}>
-                <ChevronsRightLeft className="mr-2 h-4 w-4" /> Collapse column
+                <ChevronsRightLeft className="size-4" /> Collapse column
               </DropdownMenuItem>
               {!readOnly && (
                 <DropdownMenuItem onClick={onAdd}>
-                  <Plus className="mr-2 h-4 w-4" /> Add deal here
+                  <Plus className="size-4" /> Add deal here
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            {column.count} {column.count === 1 ? "deal" : "deals"}
-          </span>
-          <CurrencyTotalsText totals={column.totals} className="truncate font-semibold tabular-nums text-foreground" />
-        </div>
+        <p className="text-caption text-muted-foreground">
+          <span className="sr-only">{column.count} {column.count === 1 ? "deal" : "deals"} · </span>
+          <CurrencyTotalsText totals={column.totals} className="font-semibold text-foreground tabular-nums" />
+        </p>
       </header>
 
-      <div className="flex flex-1 flex-col gap-2 p-2">
+      <div className="relative flex flex-1 flex-col gap-2 border-t border-border p-2 md:max-h-[calc(100dvh-21rem)] md:min-h-48 md:overflow-y-auto">
         {!readOnly && (
           <button
             type="button"
             onClick={onAdd}
-            className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-background/70 text-xs font-medium text-primary transition-colors hover:bg-background md:min-h-9"
+            className="flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-control border border-dashed border-border-strong/60 text-caption font-medium text-link transition-colors outline-none hover:border-violet-ds-300 hover:bg-card focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8"
           >
-            <Plus className="h-3.5 w-3.5" /> Add deal
+            <Plus className="size-3.5" aria-hidden="true" /> Add deal
           </button>
         )}
         {column.deals.length === 0 ? (
-          <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-center text-xs text-muted-foreground">
-            <FileText className="h-5 w-5" />
-            {readOnly ? (
-              "No deals"
-            ) : (
-              <>
-                <span>Drop deals here</span>
-                <span className="text-[11px]">or drag from another stage</span>
-              </>
-            )}
-          </div>
+          <p className="rounded-control px-3 py-6 text-center text-caption text-ink-tertiary">
+            {readOnly ? "No deals" : isOver ? "Release to move here" : "No deals · drop one here"}
+          </p>
         ) : (
           column.deals.map((deal) => (
             <DraggableDeal
@@ -331,7 +338,7 @@ function Column({
           ))
         )}
         {remaining > 0 && (
-          <Button variant="ghost" size="sm" onClick={onLoadMore} disabled={loadingMore}>
+          <Button variant="ghost" size="sm" className="shrink-0 text-link" onClick={onLoadMore} disabled={loadingMore}>
             {loadingMore ? "Loading…" : `Load ${Math.min(remaining, 25)} more of ${remaining}`}
           </Button>
         )}
@@ -342,10 +349,12 @@ function Column({
 
 function CollapsedColumn({
   stage,
+  accent,
   count,
   onExpand,
 }: {
   stage: PipelineStage;
+  accent: string;
   count: number;
   onExpand: () => void;
 }) {
@@ -356,15 +365,15 @@ function CollapsedColumn({
       type="button"
       onClick={onExpand}
       aria-label={`Expand ${stage.label} (${count} deals)`}
+      style={{ borderTopColor: accent }}
       className={cn(
-        "flex min-h-11 w-12 shrink-0 flex-col items-center gap-3 rounded-2xl border py-3 transition-colors hover:bg-muted/40 md:min-h-0",
-        stageHeaderTone(stage),
-        isOver && "ring-2 ring-primary/30",
+        "flex min-h-11 w-11 shrink-0 flex-col items-center gap-3 rounded-card border border-t-[3px] border-border bg-card py-3 transition-colors outline-none hover:bg-surface-sunken focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-0",
+        isOver && "border-violet-ds-300 bg-tint-violet ring-2 ring-ring/30",
       )}
     >
-      <ChevronsLeftRight className="h-4 w-4 text-muted-foreground" />
-      <span className="text-xs font-semibold tabular-nums">{count}</span>
-      <span className="text-xs font-semibold [writing-mode:vertical-rl]">{stage.label}</span>
+      <ChevronsLeftRight className="size-4 text-muted-foreground" aria-hidden="true" />
+      <span className="rounded-full bg-surface-sunken px-1.5 text-micro leading-5 font-semibold text-muted-foreground tabular-nums">{count}</span>
+      <span className="text-caption font-semibold text-foreground [writing-mode:vertical-rl]">{stage.label}</span>
     </button>
   );
 }
@@ -388,11 +397,14 @@ function DraggableDeal({
   onMoveRequest: () => void;
   onCompletedChange: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  // The DragOverlay is what follows the pointer; the source card stays in
+  // place as a faded placeholder (no transform), so its column doesn't show
+  // a gap and the two copies never overlap. Drop detection uses the active
+  // rect + pointer delta, not this element's style, so moves are unchanged.
+  const { attributes, listeners, setNodeRef } = useDraggable({
     id: deal.id,
     disabled: readOnly,
   });
-  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
   return (
     <DealCard
       deal={deal}
@@ -401,7 +413,6 @@ function DraggableDeal({
       territoryName={territoryName}
       dragging={dragging}
       setNodeRef={setNodeRef}
-      style={style}
       listeners={listeners as unknown as React.HTMLAttributes<HTMLElement>}
       attributes={attributes as unknown as React.HTMLAttributes<HTMLElement>}
       onOpen={onOpen}

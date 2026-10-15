@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Filter, Search, X } from "lucide-react";
+import { Check, ChevronDown, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEAL_PRIORITIES, type PipelineStage } from "@/types/deals";
 import type { TerritoryDoc } from "@/types";
@@ -10,6 +10,8 @@ import {
 } from "@/types/pipeline-board";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FilterBar } from "@/components/system/filter-bar";
+import { SearchField } from "@/components/system/search-field";
 import {
   Popover,
   PopoverContent,
@@ -63,18 +65,17 @@ export function DealFilterBar({
   };
 
   return (
-    <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-      <div className="relative md:w-72">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
+    <FilterBar
+      search={
+        <SearchField
           value={filters.search}
-          onChange={(e) => onChange({ ...filters, search: e.target.value })}
+          onChange={(search) => onChange({ ...filters, search })}
           placeholder="Search deals, contacts, or companies…"
           aria-label="Search deals"
-          className="h-10 pl-9"
         />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
+      }
+      filters={
+        <>
         <ChecklistPopover
           label="Stages"
           allLabel="All stages"
@@ -99,19 +100,19 @@ export function DealFilterBar({
             render={
               <Button
                 variant="outline"
-                className={cn("h-10 gap-1.5", moreCount > 0 && "border-primary/40 text-primary")}
+                className={cn("gap-1.5", moreCount > 0 && ACTIVE_FILTER)}
               />
             }
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="size-4" aria-hidden="true" />
             More filters
             {moreCount > 0 && (
-              <span className="rounded-full bg-primary/10 px-1.5 text-[11px]">{moreCount}</span>
+              <span className="rounded-full bg-card px-1.5 text-micro font-semibold">{moreCount}</span>
             )}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-72 space-y-4 p-4">
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Value</p>
+              <p className="text-caption font-medium text-muted-foreground">Value</p>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -122,7 +123,7 @@ export function DealFilterBar({
                   onChange={(e) => onChange({ ...filters, minValue: numberOrNull(e.target.value) })}
                   className="h-9"
                 />
-                <span className="text-xs text-muted-foreground">to</span>
+                <span className="text-caption text-muted-foreground">to</span>
                 <Input
                   type="number"
                   inputMode="decimal"
@@ -152,19 +153,23 @@ export function DealFilterBar({
             )}
           </PopoverContent>
         </Popover>
-        {(activeDealFilterCount(filters) > 0 || filters.search) && (
-          <Button
-            variant="ghost"
-            className="h-10 gap-1 text-muted-foreground"
-            onClick={() => onChange(EMPTY_DEAL_FILTERS)}
-          >
-            <X className="h-4 w-4" /> Clear
-          </Button>
-        )}
-      </div>
-    </div>
+          {(activeDealFilterCount(filters) > 0 || filters.search) && (
+            <Button
+              variant="ghost"
+              className="gap-1 text-muted-foreground"
+              onClick={() => onChange(EMPTY_DEAL_FILTERS)}
+            >
+              <X className="size-4" aria-hidden="true" /> Clear
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 }
+
+/** Selected-filter state: Royal Violet selection, same as the system selects. */
+const ACTIVE_FILTER = "border-violet-ds-300 bg-accent text-accent-foreground hover:bg-accent";
 
 function ChecklistPopover({
   label,
@@ -191,12 +196,12 @@ function ChecklistPopover({
         render={
           <Button
             variant="outline"
-            className={cn("h-10 gap-1.5", selected.length > 0 && "border-primary/40 text-primary")}
+            className={cn("gap-1.5", selected.length > 0 && ACTIVE_FILTER)}
           />
         }
       >
         {text}
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className="size-4 opacity-70" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-60 p-2">
         <CheckList title={label} options={options} selected={selected} onToggle={onToggle} />
@@ -220,9 +225,9 @@ function CheckList({
 }) {
   return (
     <div className="space-y-1">
-      <p className="px-1 text-xs font-medium text-muted-foreground">{title}</p>
+      <p className="px-1 text-caption font-medium text-muted-foreground">{title}</p>
       {options.length === 0 ? (
-        <p className="px-1 text-xs text-muted-foreground">{empty}</p>
+        <p className="px-1 text-caption text-muted-foreground">{empty}</p>
       ) : (
         <div className="max-h-60 overflow-y-auto">
           {options.map((o) => {
@@ -234,10 +239,13 @@ function CheckList({
                 role="menuitemcheckbox"
                 aria-checked={on}
                 onClick={() => onToggle(o.value)}
-                className="flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                className={cn(
+                  "flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-body-sm hover:bg-muted",
+                  on && "font-medium text-foreground",
+                )}
               >
                 <span className="truncate">{o.label}</span>
-                {on && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                {on && <Check className="size-4 shrink-0 text-link" aria-hidden="true" />}
               </button>
             );
           })}

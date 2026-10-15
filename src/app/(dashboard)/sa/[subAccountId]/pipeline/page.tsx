@@ -8,8 +8,6 @@ import { PipelinesOverview } from "@/components/pipeline/pipelines-overview";
  */
 export default function PipelinesPage() {
   return (
-    <div className="momentum-scope rounded-2xl">
-      <PipelinesOverview />
-    </div>
+    <PipelinesOverview />
   );
 }

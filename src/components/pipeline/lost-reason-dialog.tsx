@@ -76,10 +76,11 @@ export function LostReasonDialog({
                 key={p}
                 type="button"
                 onClick={() => setPreset(preset === p ? null : p)}
-                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                aria-pressed={preset === p}
+                className={`rounded-full border px-3 py-1 text-caption font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
                   preset === p
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-muted"
+                    ? "border-violet-ds-300 bg-accent text-accent-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {p}

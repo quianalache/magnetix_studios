@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StageLabel } from "@/components/pipeline/stage-label";
 import { formatCurrency } from "@/lib/format";
 import type { Deal, PipelineStage, PipelineStageId } from "@/types/deals";
 import {
@@ -33,14 +34,14 @@ export function MoveStageSheet({
     <Sheet open={!!deal} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="bottom" className="pb-[env(safe-area-inset-bottom)]">
         <SheetHeader>
-          <SheetTitle className="truncate text-left text-sm">
+          <SheetTitle className="truncate text-left text-body-sm">
             {deal
               ? `Move "${deal.title}" · ${formatCurrency(deal.value, deal.currency)}`
               : "Move deal"}
           </SheetTitle>
         </SheetHeader>
         <div className="space-y-1 px-4 pb-4">
-          {stages.map((stage) => {
+          {stages.map((stage, index) => {
             const current = deal?.stageId === stage.id;
             return (
               <button
@@ -48,22 +49,16 @@ export function MoveStageSheet({
                 type="button"
                 disabled={current}
                 onClick={() => onMove(stage.id)}
+                aria-current={current ? "true" : undefined}
                 className={cn(
-                  "flex min-h-11 w-full items-center justify-between rounded-lg border px-3 text-sm transition-colors active:bg-muted",
+                  "flex min-h-11 w-full items-center justify-between gap-2 rounded-control border px-3 text-body-sm transition-colors active:bg-tint-violet",
                   current
-                    ? "cursor-default border-primary/40 bg-primary/5"
-                    : "hover:bg-muted/50",
+                    ? "cursor-default border-violet-ds-300 bg-accent font-semibold text-accent-foreground"
+                    : "border-border hover:bg-surface-sunken",
                 )}
               >
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    stage.tone,
-                  )}
-                >
-                  {stage.label}
-                </span>
-                {current && <Check className="h-4 w-4 text-primary" />}
+                <StageLabel stageId={stage.id} label={stage.label} index={index} />
+                {current && <Check className="size-4 shrink-0 text-link" aria-hidden="true" />}
               </button>
             );
           })}

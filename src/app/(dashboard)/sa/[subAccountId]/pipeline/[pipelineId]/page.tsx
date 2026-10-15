@@ -11,10 +11,8 @@ export default function PipelinePage({
 }) {
   const { pipelineId } = use(params);
   return (
-    <div className="momentum-scope rounded-2xl">
-      <Suspense fallback={null}>
-        <PipelineWorkspace key={pipelineId} pipelineId={pipelineId} />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <PipelineWorkspace key={pipelineId} pipelineId={pipelineId} />
+    </Suspense>
   );
 }
