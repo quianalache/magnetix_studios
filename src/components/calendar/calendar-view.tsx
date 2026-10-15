@@ -377,7 +377,10 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
             bg-background, only the outer rounded card wrapper itself
             carries the tint (and gets fully covered by its children). */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3.5 sm:px-5 sm:py-4">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-aqua-bg text-tag-aqua-fg" aria-hidden="true">
+              <CalendarDays className="size-4" />
+            </span>
             <h2 className="truncate text-title-md font-semibold tracking-tight text-foreground">{title}</h2>
             <Tag color="gray" className="shrink-0">
               {events.length} events
@@ -713,57 +716,104 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
       </div>
 
       <div className="space-y-4">
-      <aside className="rounded-card border border-border bg-card p-5 shadow-card">
-        <div className="mb-4 flex items-start justify-between gap-2 border-b border-border pb-4">
-          <div>
-            <p className="text-base font-semibold text-foreground">{selectedDate.toLocaleDateString("en-US", { weekday: "long" })}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+      {/* Right rail (Wave 2 follow-up): white cards, one restrained accent each —
+          aqua = the day, blush = deadlines, lavender = time blocks. */}
+      <aside className="relative overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <span className="absolute inset-x-0 top-0 h-1 bg-tag-aqua-fg/60" aria-hidden="true" />
+        <div className="flex items-center gap-3 border-b border-border px-5 pt-5 pb-4">
+          <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-chip bg-tag-aqua-bg text-tag-aqua-fg" aria-hidden="true">
+            <span className="text-overline leading-none font-semibold uppercase">{selectedDate.toLocaleDateString("en-US", { month: "short" })}</span>
+            <span className="text-section leading-none font-bold">{selectedDate.getDate()}</span>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-section font-semibold text-foreground">{selectedDate.toLocaleDateString("en-US", { weekday: "long" })}</p>
+            <p className="text-caption text-muted-foreground">
+              {selectedDayItems.length === 0 ? "Nothing scheduled" : `${selectedDayItems.length} item${selectedDayItems.length === 1 ? "" : "s"}`}
+            </p>
           </div>
-          <CalendarDays className="h-5 w-5 text-primary" aria-hidden />
+          {selectedDate.getTime() === today.getTime() && <Tag color="aqua" className="shrink-0">Today</Tag>}
         </div>
-        <div className="space-y-2">
-          {selectedDayItems.length === 0 && <p className="rounded-control border border-dashed border-border-strong bg-surface-sunken p-5 text-center text-sm text-muted-foreground">Nothing scheduled</p>}
+        <div className="space-y-2 p-4">
+          {selectedDayItems.length === 0 && (
+            <div className="flex flex-col items-center gap-2 rounded-control bg-tag-aqua-bg/50 px-4 py-6 text-center">
+              <CalendarDays className="size-5 text-tag-aqua-fg" aria-hidden="true" />
+              <p className="text-body-sm text-muted-foreground">A clear day.</p>
+              <Button size="sm" variant="outline" onClick={() => openNew(selectedDate)}>
+                <Plus className="size-3.5" />
+                New event
+              </Button>
+            </div>
+          )}
           {selectedDayItems.map((item) => {
+            const row = "flex w-full items-start gap-2.5 rounded-control border border-border border-l-[3px] bg-card p-3 text-left transition-colors hover:bg-tint-violet";
             if (item.kind === "routine") {
-              return <button key={`side-routine-${item.entry.routineId}-${item.entry.date}`} type="button" onClick={(e) => openRoutine(item.entry, e)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><Repeat className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.entry.name}</span><span className="text-caption text-muted-foreground">Routine · {item.entry.done}/{item.entry.total} complete</span></span></button>;
+              const hex = routineHex(item.entry.color);
+              return <button key={`side-routine-${item.entry.routineId}-${item.entry.date}`} type="button" onClick={(e) => openRoutine(item.entry, e)} className={row} style={{ borderLeftColor: hex }}><Repeat className="mt-0.5 size-4 shrink-0" style={{ color: hex }} /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.entry.name}</span><span className="text-caption text-muted-foreground">Routine · {item.entry.done}/{item.entry.total} complete</span></span></button>;
             }
             if (item.kind === "task") {
-              return <button key={`side-task-${item.task.id}`} type="button" onClick={(e) => openTask(item.task, e)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.task.title}</span><span className="text-caption text-muted-foreground">Task</span></span></button>;
+              return <button key={`side-task-${item.task.id}`} type="button" onClick={(e) => openTask(item.task, e)} className={cn(row, "border-l-ink-tertiary")}><Check className="mt-0.5 size-4 shrink-0 text-ink-secondary" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.task.title}</span><span className="text-caption text-muted-foreground">Task</span></span></button>;
             }
             if (item.kind === "event") {
-              return <button key={`side-event-${item.event.id}`} type="button" onClick={(e) => openEventDetail(item.event, e)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-tag-violet-fg" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.event.title}</span><span className="text-caption text-muted-foreground">{toDate(item.event.startAt) ? formatTime(toDate(item.event.startAt)!) : "Event"}</span></span></button>;
+              return <button key={`side-event-${item.event.id}`} type="button" onClick={(e) => openEventDetail(item.event, e)} className={cn(row, "border-l-tag-violet-fg")}><CalendarDays className="mt-0.5 size-4 shrink-0 text-tag-violet-fg" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.event.title}</span><span className="text-caption text-muted-foreground">{toDate(item.event.startAt) ? formatTime(toDate(item.event.startAt)!) : "Event"}</span></span></button>;
             }
-            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => setDetailGoogleEvent(item.event)} className="flex w-full items-start gap-2 rounded-control border border-border bg-card p-3 text-left transition-colors hover:border-primary/30 hover:bg-tint-violet"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-tag-blue-fg" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.event.title}</span><span className="text-caption text-muted-foreground">Calendar item</span></span></button>;
+            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => setDetailGoogleEvent(item.event)} className={cn(row, "border-l-tag-blue-fg")}><CalendarDays className="mt-0.5 size-4 shrink-0 text-tag-blue-fg" /><span className="min-w-0"><span className="block truncate text-body-sm font-medium">{item.event.title}</span><span className="text-caption text-muted-foreground">Calendar item</span></span></button>;
           })}
         </div>
       </aside>
-      <section className="rounded-card border border-border bg-card shadow-card">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-primary" /><h3 className="text-section font-semibold">Upcoming Deadlines</h3></div>
-          <span className="text-xs font-medium text-primary">View all</span>
+      <section className="relative overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <span className="absolute inset-x-0 top-0 h-1 bg-tag-pink-fg/50" aria-hidden="true" />
+        <div className="flex items-center justify-between gap-2 border-b border-border px-5 pt-5 pb-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-pink-bg text-tag-pink-fg" aria-hidden="true"><CalendarClock className="size-4" /></span>
+            <h3 className="truncate text-section font-semibold">Upcoming Deadlines</h3>
+          </div>
+          <span className="shrink-0 text-caption font-medium text-link">View all</span>
         </div>
         <div className="space-y-2 p-4">
-          {upcomingDeadlines.length === 0 && <p className="rounded-control border border-dashed border-border-strong bg-surface-sunken p-4 text-center text-sm text-muted-foreground">No upcoming deadlines.</p>}
+          {upcomingDeadlines.length === 0 && (
+            <div className="flex items-center gap-2.5 rounded-control bg-tag-pink-bg/40 px-3 py-3">
+              <Check className="size-4 shrink-0 text-tag-pink-fg" aria-hidden="true" />
+              <p className="text-body-sm text-muted-foreground">No upcoming deadlines — you&apos;re clear.</p>
+            </div>
+          )}
           {upcomingDeadlines.map(({ task, due }) => (
-            <button key={task.id} type="button" onClick={(e) => openTask(task, e)} className="flex w-full items-center justify-between gap-2 rounded-control border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/40">
-              <span className="truncate text-sm font-medium">{task.title}</span>
-              <span className="shrink-0 rounded-chip bg-tag-violet-bg px-2 py-0.5 text-caption font-medium text-tag-violet-fg">{formatShortDate(due)}</span>
+            <button key={task.id} type="button" onClick={(e) => openTask(task, e)} className="flex w-full items-center justify-between gap-2 rounded-control border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-tint-violet">
+              <span className="truncate text-body-sm font-medium">{task.title}</span>
+              <span className="shrink-0 rounded-chip bg-tag-gold-bg px-2 py-0.5 text-caption font-semibold text-tag-gold-fg">{formatShortDate(due)}</span>
             </button>
           ))}
         </div>
       </section>
-      <section className="rounded-card border border-border bg-card shadow-card">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" /><h3 className="text-section font-semibold">Today&apos;s Time Blocks</h3></div>
-          <span className="text-xs font-medium text-primary">Edit</span>
+      <section className="relative overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <span className="absolute inset-x-0 top-0 h-1 bg-tag-violet-fg/45" aria-hidden="true" />
+        <div className="flex items-center justify-between gap-2 border-b border-border px-5 pt-5 pb-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true"><Clock3 className="size-4" /></span>
+            <h3 className="truncate text-section font-semibold">Today&apos;s Time Blocks</h3>
+          </div>
+          <span className="shrink-0 text-caption font-medium text-link">Edit</span>
         </div>
         <div className="space-y-2 p-4">
-          {todaysTimeBlocks.map((block) => (
-            <div key={block.value} className="flex items-start gap-3">
-              <div className="w-14 pt-2 text-xs font-medium text-muted-foreground">{block.label}</div>
-              <div className="min-h-[36px] flex-1 rounded-control border border-border bg-surface-sunken p-2 text-caption text-foreground">{block.titles.length > 0 ? block.titles.join(", ") : <span className="text-muted-foreground">Nothing scheduled</span>}</div>
-            </div>
-          ))}
+          {todaysTimeBlocks.map((block) => {
+            const cue = { am: "bg-tag-gold-fg", midday: "bg-tag-aqua-fg", pm: "bg-tag-violet-fg", anytime: "bg-ink-tertiary" }[block.value as string] ?? "bg-ink-tertiary";
+            const filled = block.titles.length > 0;
+            return (
+              <div key={block.value} className="flex items-start gap-3">
+                <div className="flex w-16 shrink-0 items-center gap-1.5 pt-2 text-caption font-medium text-ink-secondary">
+                  <span className={cn("size-1.5 rounded-full", cue)} aria-hidden="true" />
+                  {block.label}
+                </div>
+                <div
+                  className={cn(
+                    "min-h-9 flex-1 rounded-control px-2.5 py-2 text-caption",
+                    filled ? "border border-violet-ds-300/60 bg-tint-violet font-medium text-foreground" : "border border-dashed border-border text-ink-tertiary",
+                  )}
+                >
+                  {filled ? block.titles.join(", ") : "Nothing scheduled"}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
       </div>

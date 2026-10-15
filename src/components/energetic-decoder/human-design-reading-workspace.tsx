@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -12,8 +12,13 @@ import {
   Trash2,
   Download,
   History,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSubAccount } from "@/context/sub-account-context";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { LinkReadingContactDialog } from "@/components/energetic-decoder/link-reading-contact-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -196,6 +201,28 @@ export function HumanDesignReadingWorkspace({
     { key: "reports", label: "Reports", onClick: onShowReports, active: showReports },
   ];
 
+  // Legacy reading → contact repair: ask the server whether this reading's
+  // contact still resolves (a missing doc can't be read client-side).
+  const { isAdmin } = useSubAccount();
+  const [contactBroken, setContactBroken] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkedContactId, setLinkedContactId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setContactBroken(false);
+    setLinkedContactId(null);
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${reading.id}/contact`)
+      .then((r) => r.json())
+      .then((d: { broken?: boolean }) => {
+        if (!cancelled) setContactBroken(d.broken === true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [subAccountId, reading.id]);
+  const contactHref = `/sa/${subAccountId}/contacts/${linkedContactId ?? reading.contactId}`;
+
   const tabStripRef = useRef<HTMLDivElement>(null);
   useActiveTabVisible(tabStripRef, navItems.find((n) => n.active)?.key);
 
@@ -207,6 +234,31 @@ export function HumanDesignReadingWorkspace({
 
   return (
     <div className="min-w-0 space-y-4" data-reading-workspace>
+      {/* Legacy repair (Wave 2 follow-up): only when this reading's contact no
+          longer exists. Never shown for a healthy link. */}
+      {contactBroken && (
+        <Alert tone="warning" title="This reading's contact no longer exists">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>It was created before its contact was removed, so &ldquo;View contact&rdquo; can&apos;t open it. Link their current contact — the reading itself won&apos;t change.</span>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setLinkOpen(true)}>
+                <Link2 className="size-4" />
+                Link contact
+              </Button>
+            )}
+          </div>
+        </Alert>
+      )}
+      <LinkReadingContactDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        readingId={reading.id}
+        readingName={reading.name}
+        onLinked={(id) => {
+          setLinkedContactId(id);
+          setContactBroken(false);
+        }}
+      />
       {/* Breadcrumb / back */}
       <div className="flex items-center gap-2">
         <button
@@ -343,10 +395,17 @@ export function HumanDesignReadingWorkspace({
                 </>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem render={<Link href={`/sa/${subAccountId}/contacts/${reading.contactId}`} />}>
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                View contact
-              </DropdownMenuItem>
+              {contactBroken ? (
+                <DropdownMenuItem disabled={!isAdmin} onClick={() => setLinkOpen(true)}>
+                  <Link2 className="mr-2 h-3.5 w-3.5" />
+                  Link contact
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem render={<Link href={contactHref} />}>
+                  <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                  View contact
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"

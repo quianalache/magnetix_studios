@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, Loader2, MapPin, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useConfirm } from "@/components/system/confirm-dialog";
+import { DecoderContactPicker } from "@/components/energetic-decoder/contact-picker";
 import type { Contact } from "@/types/contacts";
 import type { EnergeticProfile } from "@/types/energetic-profile";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
@@ -62,11 +64,6 @@ function displayName(c: Contact): string {
   return c.name || c.email || c.phone || "(unnamed contact)";
 }
 
-function contactSubtitle(c: Contact): string {
-  if (c.name && c.email) return c.email;
-  if (c.name && c.phone) return c.phone;
-  return "";
-}
 
 export interface NewReadingDialogOpenRequest {
   contact: Contact;
@@ -101,7 +98,6 @@ export function NewReadingDialog({
   const [step, setStep] = useState<Step>("who");
 
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [contactSearch, setContactSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   const [profiles, setProfiles] = useState<EnergeticProfile[]>([]);
@@ -144,6 +140,7 @@ export function NewReadingDialog({
   // cascade) while any Reading still references this Profile; that block
   // message is already plain practitioner language.
   const [deletingProfile, setDeletingProfile] = useState(false);
+  const { confirm: confirmDialog, dialog: confirmElement } = useConfirm();
 
   useEffect(() => {
     if (!open || !agencyId || !subAccountId) return;
@@ -197,7 +194,6 @@ export function NewReadingDialog({
 
   function resetAll() {
     setStep("who");
-    setContactSearch("");
     setSelectedContact(null);
     setProfiles([]);
     setSelectedProfile(null);
@@ -345,7 +341,7 @@ export function NewReadingDialog({
    */
   async function deleteProfile() {
     if (!selectedProfile) return;
-    if (!window.confirm(`Delete the profile "${selectedProfile.name}"? This can't be undone.`)) return;
+    if (!(await confirmDialog({ title: `Delete the profile "${selectedProfile.name}"?`, description: "This can't be undone.", confirmLabel: "Delete profile", tone: "danger" }))) return;
     setDeletingProfile(true);
     try {
       const res = await fetch(
@@ -490,19 +486,6 @@ export function NewReadingDialog({
     }
   }
 
-  const filteredContacts = useMemo(() => {
-    const term = contactSearch.trim().toLowerCase();
-    const sorted = [...contacts].sort((a, b) =>
-      displayName(a).localeCompare(displayName(b), undefined, { sensitivity: "base" }),
-    );
-    if (!term) return sorted;
-    return sorted.filter((c) => {
-      const n = (c.name ?? "").toLowerCase();
-      const e = (c.email ?? "").toLowerCase();
-      const p = (c.phone ?? "").toLowerCase();
-      return n.includes(term) || e.includes(term) || p.includes(term);
-    });
-  }, [contacts, contactSearch]);
 
   function birthDataFields(withEmail: boolean, withRelationshipLabel = false) {
     return (
@@ -592,9 +575,9 @@ export function NewReadingDialog({
         <Plus className="h-3.5 w-3.5" />
         New reading
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg [&>*]:min-w-0">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-title-md font-semibold tracking-tight">
             {step === "who" && "New reading — who is this for?"}
             {step === "profile-list" && `${selectedContact ? displayName(selectedContact) : "Contact"}'s profiles`}
             {step === "confirm-profile" && "Confirm"}
@@ -602,56 +585,33 @@ export function NewReadingDialog({
             {step === "new-profile-form" && `New profile for ${selectedContact ? displayName(selectedContact) : "this contact"}`}
             {step === "new-person-form" && "New person"}
           </DialogTitle>
+          {step === "who" && (
+            <DialogDescription>Pick the person this chart is for. Readings stay linked to their contact.</DialogDescription>
+          )}
         </DialogHeader>
 
         {step === "who" && (
-          <div className="space-y-3">
+          <div className="flex min-w-0 flex-col gap-4">
             <button
               type="button"
               onClick={startNewPersonForm}
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3.5 py-2.5 text-left text-sm font-semibold text-primary hover:bg-primary/5"
+              className="flex w-full min-w-0 items-center gap-3 rounded-control border border-dashed border-violet-ds-300 bg-card px-3 py-2.5 text-left transition-colors hover:bg-tint-violet focus-visible:bg-tint-violet focus-visible:outline-none"
             >
-              <UserPlus className="h-4 w-4" />
-              New person (new contact)
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true">
+                <UserPlus className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-body-sm font-semibold text-foreground">New person (new contact)</span>
+                <span className="block text-caption text-muted-foreground">Add someone who isn’t in your contacts yet</span>
+              </span>
             </button>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={contactSearch}
-                onChange={(e) => setContactSearch(e.target.value)}
-                placeholder="Search existing contacts…"
-                className="pl-8"
-                autoFocus
-              />
-            </div>
-            <div className="max-h-72 overflow-y-auto rounded-lg border">
-              {profilesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredContacts.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-8 text-center">
-                  <Users className="h-5 w-5 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">No contacts match.</p>
-                </div>
-              ) : (
-                filteredContacts.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => void pickContact(c)}
-                    className="flex w-full items-center justify-between gap-3 border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{displayName(c)}</p>
-                      {contactSubtitle(c) && (
-                        <p className="truncate text-[11px] text-muted-foreground">{contactSubtitle(c)}</p>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
+            <DecoderContactPicker
+              contacts={contacts}
+              onPick={(c) => void pickContact(c)}
+              busyId={profilesLoading ? selectedContact?.id ?? null : null}
+              disabled={profilesLoading}
+              label="Or choose an existing contact"
+            />
           </div>
         )}
 
@@ -693,7 +653,7 @@ export function NewReadingDialog({
             <button
               type="button"
               onClick={startNewProfileForm}
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3.5 py-2.5 text-left text-sm font-semibold text-primary hover:bg-primary/5"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-violet-ds-300 px-3.5 py-2.5 text-left text-body-sm font-semibold text-link hover:bg-tint-violet"
             >
               <UserPlus className="h-4 w-4" />
               Add another profile for {displayName(selectedContact)}
@@ -732,7 +692,7 @@ export function NewReadingDialog({
                   type="button"
                   onClick={() => startEditProfile()}
                   title="Edit this profile's information"
-                  className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                  className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-micro font-medium text-muted-foreground hover:border-primary hover:text-primary"
                 >
                   <Pencil className="h-3 w-3" />
                   Edit
@@ -742,7 +702,7 @@ export function NewReadingDialog({
                   onClick={() => void deleteProfile()}
                   disabled={deletingProfile}
                   title="Delete this profile"
-                  className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-destructive hover:text-destructive disabled:opacity-50"
+                  className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-micro font-medium text-muted-foreground hover:border-destructive hover:text-destructive disabled:opacity-50"
                 >
                   {deletingProfile ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                   Delete
@@ -750,7 +710,7 @@ export function NewReadingDialog({
               </div>
             </div>
             {justEdited && (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <p className="rounded-lg border border-status-warning-dot/40 bg-status-warning-bg px-3 py-2 text-xs text-status-warning-fg">
                 {justEditedCalcRelevant
                   ? `This profile now has the corrected information. Any readings already generated for ${selectedProfile.name} still show what they were created with — they don't change on their own. Use "Generate Updated Reading" below for a new reading with the corrected details.`
                   : `This profile now has the corrected information.`}
@@ -823,6 +783,7 @@ export function NewReadingDialog({
           </form>
         )}
       </DialogContent>
+      {confirmElement}
     </Dialog>
   );
 }

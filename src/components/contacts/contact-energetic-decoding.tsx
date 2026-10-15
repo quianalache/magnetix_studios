@@ -2,102 +2,134 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ArrowRight, Orbit } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tag } from "@/components/system/status-pill";
+import { Motif } from "@/components/brand/motif";
 import type { Contact } from "@/types/contacts";
-import type { EnergeticProfile } from "@/types/energetic-profile";
+
+/** One linked person, as returned by GET …/energetic-decoder/contact-summary. */
+interface DecoderPerson {
+  kind: "profile" | "reading";
+  id: string;
+  name: string;
+  relationshipLabel: string | null;
+  latestReadingId: string | null;
+  energyType: string | null;
+  authority: string | null;
+  hdProfile: string | null;
+  sunSign: string | null;
+}
 
 /**
- * Decision Brief Decision 9 (approved 2026-08-11, behavior/IA only — exact
- * UI still open) — the Contact page does NOT rebuild the Energetic
- * Decoder experience; it stays a relationship hub with a contextual quick
- * link into the real source record. "Contacts reference Energetic
- * Decoder records; they do not duplicate the Energetic Decoder
- * experience."
- *
- * Replaces `ContactEnergeticReadings` (removed this pass) — that card
- * queried `energeticDecoderReadings` directly from the client via
- * `onSnapshot`, was correctly wired in and querying the right
- * `contactId`, and still rendered nothing; root cause was never
- * diagnosed, and per Decision 2's redirect it was never going to be
- * patched in place. This is the actual replacement Decision 2 pointed to,
- * not a repair of the old component.
- *
- * Deliberately thin, per the approved behavior: lists each Energetic
- * Profile tied to this Contact (Decision 7 — a Contact may have more than
- * one, e.g. a parent Contact booking for their kids) with a "View Chart"
- * link. That link deep-links straight into that Profile's own row on the
- * Readings tab (`?tab=readings&profileId=`) — never the generic Energetic
- * Decoder landing page, the one explicit requirement in Decision 9.
- * Report quick-links are explicitly out of scope here (Decision 9 calls
- * them "secondary... not approved to build") — chart-only, on purpose.
- *
- * Reuses the exact `GET .../profiles?contactId=` endpoint the New Reading
- * dialog (Task 4) and the Readings tab (Task 8) already call — no new
- * server logic. Doesn't also fetch each Profile's Readings for a count —
- * the readings endpoint has no `contactId` filter, so that would mean
- * pulling the whole sub-account's reading list on every Contact page
- * load; Decision 9's approved behavior only calls for a name and a View
- * Chart link, not a reading count here.
+ * Contact profile → Energetic Decoding (Decision 9: the Contact page links
+ * into the Decoder, it never rebuilds it). Wave 2 follow-up (2026-10-15):
+ * the approved card now shows each linked person's real chart facts from
+ * their latest reading — Type, Authority, Profile, Sun sign — and only the
+ * ones that reading actually calculated (nothing derived or guessed), with a
+ * "View reading" deep link. A contact with no Decoder data shows no card.
  */
 export function ContactEnergeticDecoding({ contact }: { contact: Contact }) {
   const { subAccountId, saPath } = useSubAccount();
-  const [profiles, setProfiles] = useState<EnergeticProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [people, setPeople] = useState<DecoderPerson[] | null>(null);
 
   useEffect(() => {
     if (!subAccountId) return;
-    setLoading(true);
-    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/profiles?contactId=${contact.id}`)
+    let cancelled = false;
+    setPeople(null);
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/contact-summary?contactId=${encodeURIComponent(contact.id)}`)
       .then((r) => r.json())
-      .then((d: { ok?: boolean; profiles?: EnergeticProfile[] }) => setProfiles(d.profiles ?? []))
-      .catch(() => setProfiles([]))
-      .finally(() => setLoading(false));
+      .then((d: { people?: DecoderPerson[] }) => {
+        if (!cancelled) setPeople(d.people ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setPeople([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [contact.id, subAccountId]);
 
-  // No Profiles and we're done loading — skip the card entirely, same
-  // convention as Submitted Forms (and the component this replaces)
-  // rather than an empty-state box on every contact. Decision 9 leaves
-  // the zero-Profile case genuinely open; not showing the section is the
-  // established default elsewhere on this page.
-  if (!loading && profiles.length === 0) return null;
+  if (people !== null && people.length === 0) return null;
 
   return (
-    <div className="rounded-card border border-border bg-card shadow-card p-4">
-      <div className="mb-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Energetic Decoding
-        </p>
-        <p className="mt-0.5 text-sm font-semibold">
-          {loading ? "…" : `${profiles.length} profile${profiles.length === 1 ? "" : "s"}`}
-        </p>
+    <section
+      aria-label="Energetic Decoding"
+      className="relative overflow-hidden rounded-card border border-border bg-card p-4 shadow-card"
+    >
+      <Motif kind="constellation" size="corner" placement="top-right" hideBelow="sm" className="top-2 right-2 opacity-70" />
+      <div className="mb-3 flex items-center gap-2.5 pr-10">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true">
+          <Orbit className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-section font-semibold">Energetic Decoding</h2>
+          {people && people.length > 1 ? (
+            <p className="text-caption text-muted-foreground">{people.length} people on this contact</p>
+          ) : null}
+        </div>
       </div>
-      <div className="divide-y">
-        {profiles.map((p) => (
-          <div key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-            <div className="min-w-0">
-              <span className="flex items-center gap-1.5">
-                <span className="truncate font-medium">{p.name}</span>
-                {p.relationshipLabel && (
-                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-overline font-medium text-muted-foreground">
-                    {p.relationshipLabel}
-                  </span>
+
+      {people === null ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Loading Energetic Decoding">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-14 w-full rounded-control" />
+        </div>
+      ) : (
+        <div className="divide-y divide-border-subtle">
+          {people.map((p) => {
+            const facts = [
+              ["Type", p.energyType],
+              ["Authority", p.authority],
+              ["Profile", p.hdProfile],
+              ["Sun", p.sunSign],
+            ].filter((f): f is [string, string] => !!f[1]);
+            const href = saPath(
+              p.kind === "profile"
+                ? `/energetic-decoder?tab=readings&profileId=${p.id}`
+                : `/energetic-decoder?tab=readings&readingId=${p.id}`,
+            );
+            return (
+              <div key={`${p.kind}-${p.id}`} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-body-sm font-semibold text-foreground">{p.name}</span>
+                  {p.relationshipLabel ? (
+                    <Tag color="gray" className="shrink-0 px-1.5 text-micro">
+                      {p.relationshipLabel}
+                    </Tag>
+                  ) : null}
+                </div>
+                {facts.length > 0 ? (
+                  <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {facts.map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="text-overline font-semibold tracking-[0.12em] text-ink-tertiary uppercase">{label}</dt>
+                        <dd className="truncate text-caption font-medium text-foreground" title={value}>
+                          {value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    {p.latestReadingId ? "Chart details aren't available for this reading." : "No reading yet."}
+                  </p>
                 )}
-              </span>
-              <p className="truncate text-xs text-muted-foreground">
-                {p.birthPlace} · born {p.birthDate}
-              </p>
-            </div>
-            <Link
-              href={saPath(`/energetic-decoder?tab=readings&profileId=${p.id}`)}
-              className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              View Chart
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          </div>
-        ))}
-      </div>
-    </div>
+                {p.latestReadingId || p.kind === "profile" ? (
+                  <Link
+                    href={href}
+                    className="mt-2 inline-flex items-center gap-1 text-caption font-medium text-link hover:underline"
+                  >
+                    {p.latestReadingId ? "View reading" : "Open in Energetic Decoder"}
+                    <ArrowRight className="size-3" aria-hidden="true" />
+                  </Link>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

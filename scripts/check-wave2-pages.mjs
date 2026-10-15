@@ -115,5 +115,22 @@ check("projects: Dashboard planet never reused", CLEAN.every((f) => !/kind="plan
 const opt = src("src/components/system/option-select.tsx");
 check("OptionSelect maps the none choice to null", /onChange\(next === NONE \? null/.test(opt));
 
+// Wave 2 follow-up (2026-10-15): legacy reading repair, New Reading dialog, Decoder card, calendar rail.
+const repair = src("src/lib/server/reading-contact-repair-service.ts");
+check("repair: refuses to change a healthy link (409)", /status: 409/.test(repair) && /already linked to an existing contact/.test(repair));
+check("repair: new contact must be in the same sub-account", /nextContact\.get\("subAccountId"\) !== subAccountId/.test(repair));
+check("repair: writes only contactId (reading + matching profile)", (repair.match(/tx\.update\(/g) || []).length === 2 && !/tx\.set\(/.test(repair));
+check("repair: POST is admin-only", /requireSubAccountAdmin/.test(src("src/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/contact/route.ts")));
+const nrd = src("src/components/energetic-decoder/new-reading-dialog.tsx");
+check("New Reading: keeps both options (new person + existing contact)", /New person \(new contact\)/.test(nrd) && /<DecoderContactPicker/.test(nrd));
+check("New Reading: dialog children can't widen the dialog", /\[&>\*\]:min-w-0/.test(nrd));
+check("New Reading: no window.confirm", !nrd.includes("window.confirm"));
+const picker = src("src/components/energetic-decoder/contact-picker.tsx");
+check("contact picker: contained scroll + truncating rows + SearchField", /overflow-y-auto/.test(picker) && /truncate/.test(picker) && /<SearchField/.test(picker));
+const card = src("src/components/contacts/contact-energetic-decoding.tsx");
+check("Decoder card: hidden when there is no data", /people\.length === 0\) return null/.test(card));
+check("Decoder card: only real facts (filters empty values)", /\.filter\(\(f\): f is \[string, string\] => !!f\[1\]\)/.test(card));
+check("calendar rail: aqua / blush / lavender accents", /bg-tag-aqua-fg\/60/.test(cal) && /bg-tag-pink-fg\/50/.test(cal) && /bg-tag-violet-fg\/45/.test(cal));
+
 console.log(`\nWave 2 page contract: ${pass} passed, ${fail} failed.`);
 process.exit(fail ? 1 : 0);
