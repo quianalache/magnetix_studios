@@ -15,6 +15,7 @@ import {
   Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateOnly } from "@/lib/energetic-decoder/date-only";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -295,7 +296,7 @@ export function HumanDesignReadingWorkspace({
           <div className="min-w-0">
             <p className="truncate text-lg font-bold">{reading.name}</p>
             <p className="text-sm text-muted-foreground">
-              {formatReadingDate(reading.birthDate)}
+              {formatDateOnly(reading.birthDate)}
               {reading.birthTime && <> · {formatBirthTime(reading.birthTime)}</>}
               {reading.birthPlace && <> · {reading.birthPlace}</>}
             </p>

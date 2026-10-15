@@ -27,6 +27,7 @@ import { DATA_TABLE_HEAD_ROW } from "@/components/system/data-table";
 import { SearchField } from "@/components/system/search-field";
 import { OptionSelect } from "@/components/system/option-select";
 import { EmptyState } from "@/components/system/empty-state";
+import { dayStart, inStatusBucket, taskStatus, type MyTaskStatus } from "@/lib/tasks/my-tasks-buckets";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -75,7 +76,7 @@ type StatusFilter =
   | "upcoming"
   | "done"
   | "all";
-type TaskStatus = "overdue" | "today" | "upcoming" | "no_date" | "done";
+type TaskStatus = MyTaskStatus;
 type SortKey = "due" | "created" | "title";
 type ViewMode = "list" | "grid";
 
@@ -97,23 +98,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   created: "Recently created",
   title: "Title",
 };
-
-function dayStart(d: Date): number {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x.getTime();
-}
-
-/** Same bucketing rules the Tasks page has always used. */
-function taskStatus(t: Task, now: number, today: number): TaskStatus {
-  if (t.completed) return "done";
-  const d = toDate(t.dueAt);
-  if (!d) return "no_date";
-  const day = dayStart(d);
-  if (d.getTime() < now && day < today) return "overdue";
-  if (day === today) return "today";
-  return "upcoming";
-}
 
 function relativeDue(d: Date, today: number): string {
   const diff = Math.round((dayStart(d) - today) / 86_400_000);
@@ -321,7 +305,7 @@ export default function MyTasksPage() {
       if (r.status === "overdue") c.overdue++;
       else if (r.status === "today") c.today++;
       else if (r.status === "done") c.done++;
-      else c.upcoming++; // upcoming + no due date, as before
+      else if (r.status === "upcoming") c.upcoming++; // undated tasks aren't counted as upcoming
     }
     return { withStatus: rows, counts: c, today: todayMs };
   }, [tasks, routineTasks, projectById]);
@@ -338,17 +322,10 @@ export default function MyTasksPage() {
             return false;
           break;
         case "today":
-          // Legacy "Today" view included overdue work, so keep that.
-          if (status !== "today" && status !== "overdue") return false;
-          break;
         case "overdue":
-          if (status !== "overdue") return false;
-          break;
         case "upcoming":
-          if (status !== "upcoming" && status !== "no_date") return false;
-          break;
         case "done":
-          if (status !== "done") return false;
+          if (!inStatusBucket(statusFilter, status)) return false;
           break;
       }
       if (!q) return true;
@@ -453,7 +430,7 @@ export default function MyTasksPage() {
             tone="bg-tag-violet-bg text-tag-violet-fg"
             value={loading ? "–" : counts.upcoming}
             label="Upcoming"
-            hint="Later or no due date"
+            hint="Due after today"
           />
         </MetricButton>
         <MetricButton onClick={() => setStatusFilter("done")}>
