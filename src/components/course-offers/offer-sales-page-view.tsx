@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { BookOpen, CalendarDays, FolderKanban, Package } from "lucide-react";
 import {
   CourseBlockView,
   themeBtnStyle,
@@ -11,6 +11,7 @@ import type { CourseTheme } from "@/types/course-theme";
 import type { CourseOffer } from "@/types/course-offers";
 import type { Member } from "@/types/community";
 import { startLearningHref } from "@/lib/standalone-courses/course-navigation";
+import { BuyCard, CheckoutFrame, CheckoutHeader, SalesChip, SalesMedia, SalesSection, StickyBuyBar } from "@/components/public/public-checkout-shell";
 
 type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
 type OfferSalesOffer = Pick<
@@ -42,6 +43,12 @@ export interface OfferIncludedCourse {
  * instructor concepts that don't map onto a multi-course bundle); checkout
  * uses `EnrollOfferModal` (the Offer's own signup+Stripe flow) instead of
  * the course `EnrollModal`.
+ *
+ * Public-surfaces v2 (2026-10-16): rendered on PublicCheckoutShell — the
+ * offer's own theme stays the only brand source (button color = accent,
+ * fonts, header colors, hero, background). Real media replaces letter
+ * placeholders; phones get a sticky price + purchase bar. No "Powered by"
+ * on paid pages (owner decision).
  */
 export function OfferSalesPageView({
   saId,
@@ -57,6 +64,7 @@ export function OfferSalesPageView({
   firstCourseId,
   crossSellTargets,
   interactive,
+  businessName,
 }: {
   saId: string;
   offerId: string;
@@ -72,6 +80,8 @@ export function OfferSalesPageView({
   firstCourseId: string | null;
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
   interactive: boolean;
+  /** The selling business (sub-account or agency name). Falls back to the offer title (theme-editor preview). */
+  businessName?: string | null;
 }) {
   // No Category Block for an Offer (no curriculum — see DEFAULT_OFFER_THEME);
   // filtered defensively same as sidebar below, in case a template that had
@@ -83,64 +93,61 @@ export function OfferSalesPageView({
     .filter((b) => !isCoreSidebarBlock(b))
     .sort((a, b) => a.order - b.order);
 
-  const pageStyle = {
-    fontFamily: `"${theme.fonts.primary.family}", sans-serif`,
-    "--font-secondary": `"${theme.fonts.secondary.family}", sans-serif`,
-  } as CSSProperties;
-
   const typeLabel =
     offer.type === "free"
       ? "Free"
       : offer.type === "recurring"
         ? "Recurring"
         : "One-time";
+  const seller = businessName?.trim() || offer.title;
+  // The offer's own image, else the first included course's cover — real media before any placeholder.
+  const heroImage = offer.thumbnailUrl || includedCourses.find((c) => c.coverUrl)?.coverUrl || null;
+  const includedCount = includedCourses.length + (offer.booking ? 1 : 0) + offer.projectTemplates.length;
+
+  /** The purchase action — rendered in the buy card and again in the phone sticky bar. */
+  const purchaseAction = alreadyPurchased ? (
+    <a
+      href={firstCourseId ? startLearningHref(`/course/${saId}/${firstCourseId}/classroom`) : `/portal/${saId}`}
+      className="tenant-button inline-flex w-full items-center justify-center gap-2 border px-4 py-3 text-sm font-semibold"
+    >
+      {firstCourseId ? "Continue learning" : "Open portal"}
+    </a>
+  ) : interactive ? (
+    <EnrollOfferModal
+      saId={saId}
+      offerId={offerId}
+      agencyScope={agencyScope}
+      type={offer.type}
+      priceLabel={priceLabel}
+      brand={theme.hero.buttonColor}
+      member={member}
+      checkoutSettings={offer.checkoutSettings}
+    />
+  ) : (
+    <button type="button" disabled className="tenant-button inline-flex w-full items-center justify-center gap-2 border px-4 py-3 text-sm font-semibold">
+      {offer.type === "free" ? "Enroll Now" : `Enroll Now — ${priceLabel}`}
+    </button>
+  );
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5]" style={pageStyle}>
-      {theme.background.imageUrl && (
-        <div
-          className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center"
-          style={{
-            backgroundImage: `url(${theme.background.imageUrl})`,
-            opacity: theme.background.transparency / 100,
-          }}
-        />
-      )}
+    <CheckoutFrame theme={theme} businessName={seller}>
       {offer.showRecentPurchasePopup === true && (
-        <RecentPurchasePopup
-          saId={saId}
-          offerId={offerId}
-          productName={offer.title}
-        />
+        <RecentPurchasePopup saId={saId} offerId={offerId} productName={offer.title} />
       )}
-      <div className="relative z-10">
-        <header
-          className="border-b border-[#E4E4E4]"
-          style={{ backgroundColor: theme.header.background }}
-        >
-          <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-            <span
-              className="text-sm font-semibold"
-              style={{
-                fontFamily: "var(--font-secondary)",
-                color: theme.header.iconColor,
-              }}
+      <CheckoutHeader
+        theme={theme}
+        businessName={seller}
+        right={
+          member ? (
+            <div
+              className="tenant-mark flex size-8 items-center justify-center rounded-full text-xs font-semibold"
+              title={member.email}
             >
-              {offer.title}
-            </span>
-            {member ? (
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
-                style={{ backgroundColor: theme.hero.buttonColor }}
-                title={member.email}
-              >
-                {(
-                  member.displayName?.charAt(0) || member.email.charAt(0)
-                ).toUpperCase()}
-              </div>
-            ) : null}
-          </div>
-        </header>
+              {(member.displayName?.charAt(0) || member.email.charAt(0)).toUpperCase()}
+            </div>
+          ) : null
+        }
+      />
 
         {theme.hero.visible && (
           <div
@@ -212,204 +219,104 @@ export function OfferSalesPageView({
           </div>
         )}
 
-        <div className="px-4 py-10">
-          <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-[1fr_340px]">
+        <div className="px-4 py-8 sm:py-12">
+          <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[minmax(0,1fr)_360px] md:gap-10">
             {/* Left — the sales column */}
-            <div className="space-y-5">
-              <div className="space-y-1">
+            <div className="min-w-0 space-y-6">
+              <div className="space-y-3">
+                <SalesChip icon={Package}>{offer.type === "free" ? "Free offer" : "Offer"}</SalesChip>
+                {/* When Hero is visible it already shows the title — avoid rendering it twice. */}
                 {!theme.hero.visible && (
-                  <h1
-                    className="text-3xl font-semibold tracking-tight text-[#202124]"
-                    style={{ fontFamily: "var(--font-secondary)" }}
-                  >
+                  <h1 className="public-ink text-4xl leading-tight font-semibold tracking-tight text-balance sm:text-5xl" style={{ fontFamily: "var(--font-secondary)" }}>
                     {offer.title}
                   </h1>
                 )}
-                <div className="flex items-center gap-3 text-sm text-[#909090]">
-                  <span>{priceLabel}</span>
-                </div>
+                <p className="public-body text-sm">
+                  {priceLabel}
+                  {priceLabel ? " · " : ""}
+                  {typeLabel}
+                </p>
               </div>
 
-              {descriptionHtml && (
-                <div>
-                  <h2 className="mb-2 text-lg font-semibold text-[#202124]">
-                    About this offer
-                  </h2>
-                  <div
-                    className="prose prose-sm prose-headings:text-[#202124] prose-p:text-[#3a3a44] prose-li:text-[#3a3a44] prose-strong:text-[#202124] max-w-none leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-                  />
+              {/* Phones: real media right away (only when there is some); the full buy card follows the content. */}
+              {heroImage && (
+                <div className="tenant-card overflow-hidden md:hidden">
+                  <SalesMedia src={heroImage} icon={Package} className="aspect-video" />
                 </div>
               )}
 
-              {(includedCourses.length > 0 ||
-                offer.booking ||
-                offer.projectTemplates.length > 0) && (
-                <div>
-                  <h2 className="mb-2 text-lg font-semibold text-[#202124]">
-                    What&apos;s included
-                  </h2>
-                  <div className="space-y-2">
+              {descriptionHtml && (
+                <SalesSection title="About this offer">
+                  <div
+                    className="prose prose-sm max-w-none px-5 py-4 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+                  />
+                </SalesSection>
+              )}
+
+              {includedCount > 0 && (
+                <SalesSection title="What's included" aside={`${includedCount} ${includedCount === 1 ? "item" : "items"}`}>
+                  <ul className="public-line divide-y">
                     {includedCourses.map((c) => (
-                      <div
-                        key={c.id}
-                        className="flex items-center gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3"
-                      >
-                        {c.coverUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={c.coverUrl}
-                            alt=""
-                            className="h-12 w-20 shrink-0 rounded-md object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-sm font-semibold text-[#909090]">
-                            {c.title.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <span className="text-sm font-medium text-[#202124]">
-                          {c.title}
-                        </span>
-                      </div>
+                      <li key={c.id} className="flex items-center gap-3.5 px-5 py-3.5">
+                        <SalesMedia src={c.coverUrl} icon={BookOpen} className="h-12 w-20 shrink-0 rounded-md" />
+                        <span className="public-ink text-sm font-medium">{c.title}</span>
+                      </li>
                     ))}
                     {offer.booking && (
-                      <div className="flex items-center gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3">
-                        <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-sm font-semibold text-[#909090]">
-                          {offer.booking.sessionCount}×
-                        </div>
-                        <span className="text-sm font-medium text-[#202124]">
-                          {offer.booking.sessionCount}{" "}
-                          {offer.booking.sessionCount === 1
-                            ? "session"
-                            : "sessions"}{" "}
-                          with {offer.booking.bookingPageName}
+                      <li className="flex items-center gap-3.5 px-5 py-3.5">
+                        <SalesMedia src={null} icon={CalendarDays} className="h-12 w-20 shrink-0 rounded-md" />
+                        <span className="public-ink text-sm font-medium">
+                          {offer.booking.sessionCount} {offer.booking.sessionCount === 1 ? "session" : "sessions"} with {offer.booking.bookingPageName}
                         </span>
-                      </div>
+                      </li>
                     )}
                     {offer.projectTemplates.map((projectTemplate) => (
-                      <div
-                        key={projectTemplate.templateId}
-                        className="flex items-center gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3"
-                      >
-                        <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-sm font-semibold text-[#909090]">
-                          Project
-                        </div>
-                        <span className="text-sm font-medium text-[#202124]">
-                          {projectTemplate.templateTitle}
-                        </span>
-                      </div>
+                      <li key={projectTemplate.templateId} className="flex items-center gap-3.5 px-5 py-3.5">
+                        <SalesMedia src={null} icon={FolderKanban} className="h-12 w-20 shrink-0 rounded-md" />
+                        <span className="public-ink text-sm font-medium">{projectTemplate.templateTitle}</span>
+                      </li>
                     ))}
-                  </div>
-                </div>
+                  </ul>
+                </SalesSection>
               )}
 
               {bodyBlocks.map((block) => (
-                <CourseBlockView
-                  key={block.id}
-                  block={block}
-                  saId={saId}
-                  crossSellTargets={crossSellTargets}
-                />
+                <CourseBlockView key={block.id} block={block} saId={saId} crossSellTargets={crossSellTargets} />
               ))}
             </div>
 
             {/* Right — the buy card */}
-            <aside className="h-fit space-y-4 rounded-xl border border-[#E4E4E4] bg-white p-5 shadow-sm md:sticky md:top-10">
-              {offer.thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={offer.thumbnailUrl}
-                  alt=""
-                  className="aspect-video w-full rounded-lg object-cover"
-                />
-              ) : (
-                <div
-                  className="flex aspect-video w-full items-center justify-center rounded-lg text-lg font-semibold text-white"
-                  style={{ backgroundColor: theme.hero.buttonColor }}
-                >
-                  {offer.title.charAt(0)}
-                </div>
-              )}
-              <h2 className="text-lg font-semibold text-[#202124]">
-                {offer.title}
-              </h2>
-
-              <div className="grid grid-cols-1 gap-2 text-center">
-                <div className="rounded-lg bg-[#F8F7F5] py-2">
-                  <div className="text-base font-semibold text-[#202124]">
-                    {priceLabel}
-                  </div>
-                  <div className="text-[11px] tracking-wide text-[#909090] uppercase">
-                    {typeLabel}
-                  </div>
-                </div>
-              </div>
-
+            <BuyCard
+              media={<SalesMedia src={heroImage} icon={Package} className="aspect-video max-md:hidden" />}
+              title={offer.title}
+              price={priceLabel}
+              priceNote={typeLabel}
+              secure={offer.type !== "free" && !alreadyPurchased}
+            >
               {sidebarBlocks.map((block) => (
-                <CourseBlockView
-                  key={block.id}
-                  block={block}
-                  saId={saId}
-                  crossSellTargets={crossSellTargets}
-                />
+                <CourseBlockView key={block.id} block={block} saId={saId} crossSellTargets={crossSellTargets} />
               ))}
-
               <div id="enroll" className="space-y-2">
-                {alreadyPurchased ? (
-                  <>
-                    <a
-                      href={
-                        firstCourseId
-                          ? startLearningHref(`/course/${saId}/${firstCourseId}/classroom`)
-                          : `/portal/${saId}`
-                      }
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold text-white"
-                      style={{ backgroundColor: theme.hero.buttonColor }}
-                    >
-                      {firstCourseId ? "Continue learning" : "Open portal"}
-                    </a>
-                    {offer.booking && (
-                      <a
-                        href={`/b/${saId}/${offer.booking.bookingPageSlug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-3 text-sm font-semibold text-[#202124]"
-                      >
-                        Book your session
-                        {offer.booking.sessionCount > 1
-                          ? `s (${offer.booking.sessionCount} included)`
-                          : ""}
-                      </a>
-                    )}
-                  </>
-                ) : interactive ? (
-                  <EnrollOfferModal
-                    saId={saId}
-                    offerId={offerId}
-                    agencyScope={agencyScope}
-                    type={offer.type}
-                    priceLabel={priceLabel}
-                    brand={theme.hero.buttonColor}
-                    member={member}
-                    checkoutSettings={offer.checkoutSettings}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold text-white"
-                    style={{ backgroundColor: theme.hero.buttonColor }}
+                {purchaseAction}
+                {alreadyPurchased && offer.booking && (
+                  <a
+                    href={`/b/${saId}/${offer.booking.bookingPageSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="public-button-secondary inline-flex w-full items-center justify-center gap-2 border px-4 py-3 text-sm font-semibold"
                   >
-                    {offer.type === "free"
-                      ? "Enroll Now"
-                      : `Enroll Now — ${priceLabel}`}
-                  </button>
+                    Book your session
+                    {offer.booking.sessionCount > 1 ? `s (${offer.booking.sessionCount} included)` : ""}
+                  </a>
                 )}
               </div>
-            </aside>
+            </BuyCard>
           </div>
         </div>
-      </div>
-    </div>
+      <StickyBuyBar price={priceLabel} priceNote={typeLabel}>
+        {purchaseAction}
+      </StickyBuyBar>
+    </CheckoutFrame>
   );
 }

@@ -7,6 +7,8 @@ import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { OfferSalesPageView } from "@/components/course-offers/offer-sales-page-view";
 import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
+import type { Metadata } from "next";
+import { getSubAccountPublicName, publicTitle } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,18 @@ function formatPrice(cents: number | null, currency: string | null): string {
  * bones fixed layout. Existing single-course sales pages are untouched;
  * this is additive.
  */
+/** Browser title: offer · business — only for an offer this visitor may see (same access check as the page). */
+export async function generateMetadata({ params }: { params: Promise<{ saId: string; offerId: string }> }): Promise<Metadata> {
+  try {
+    const { saId, offerId } = await params;
+    const access = await requireOfferPageAccess(saId, offerId);
+    if (access.kind === "notFound") return {};
+    return { title: publicTitle(access.offer.title, await getSubAccountPublicName(saId)) };
+  } catch {
+    return {};
+  }
+}
+
 export default async function OfferPage({
   params,
 }: {
@@ -99,6 +113,7 @@ export default async function OfferPage({
         pageId={offerId}
       />
       <OfferSalesPageView
+        businessName={await getSubAccountPublicName(saId)}
         saId={saId}
         offerId={offerId}
         offer={{

@@ -4,6 +4,7 @@ import { getAgencyStandaloneCourse } from "@/lib/server/agency-standalone-course
 import { hasPaidAgencyCourseOffer } from "@/lib/server/agency-course-offer-purchase-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { OfferSalesPageView } from "@/components/course-offers/offer-sales-page-view";
+import { getAgencyPublicName } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ export default async function AgencyOfferPage({
 
   return (
     <OfferSalesPageView
+        businessName={await getAgencyPublicName(agencyId)}
       saId="agency"
       offerId={offerId}
       agencyScope

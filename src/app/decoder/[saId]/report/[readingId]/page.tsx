@@ -4,6 +4,8 @@ import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import type { Metadata } from "next";
+import { publicTitle } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,17 @@ export const dynamic = "force-dynamic";
  * saId via getReadingById so a reading can't be opened under the wrong
  * sub-account even if the ID were somehow guessed.
  */
+/** Browser title: a neutral label + business — the person's name stays out of the tab. */
+export async function generateMetadata({ params }: { params: Promise<{ saId: string }> }): Promise<Metadata> {
+  try {
+    const { saId } = await params;
+    const sub = (await getAdminDb().doc(`subAccounts/${saId}`).get()).data();
+    return sub ? { title: publicTitle("Energetic reading", sub.name as string | undefined) } : {};
+  } catch {
+    return {};
+  }
+}
+
 export default async function EnergeticDecoderReportPage({
   params,
 }: {
@@ -52,7 +65,10 @@ export default async function EnergeticDecoderReportPage({
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 px-4 py-10 sm:px-6"
+      // Public surface, kept plain on purpose (2026-10-16): the report body
+      // stays clean and readable — no brand wash over a reading.
+      className="tenant-surface public-plain min-h-screen px-4 py-10 sm:px-6"
+      data-public-shell="decoder-report"
       style={{ "--decoder-accent": theme.accent } as React.CSSProperties}
     >
       <div className="mx-auto w-full max-w-2xl">

@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
+import { CheckCircle2, Clock, Link2Off, RotateCcw } from "lucide-react";
+import { PublicAction, PublicStateShell } from "@/components/public/public-shell";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { verifyChargeToken } from "@/lib/billing/token";
 import { formatBillingPrice } from "@/lib/billing/status";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Payment status" };
 
 /**
  * Post-checkout landing for one-time charges — Stripe's success_url and
@@ -29,12 +34,14 @@ export default async function ChargeStatusPage({
   let description: string | null = null;
   let amountLabel: string | null = null;
   let paid = false;
+  let found = false;
 
   if (verified) {
     const snap = await getAdminDb()
       .doc(`billingCharges/${verified.chargeId}`)
       .get();
     if (snap.exists) {
+      found = true;
       const data = snap.data() ?? {};
       description = (data.description as string | undefined) ?? null;
       amountLabel = formatBillingPrice(
@@ -46,47 +53,49 @@ export default async function ChargeStatusPage({
   }
 
   const cancelled = query.cancelled === "1" && !paid;
+  const variant = { kind: "magnetix" } as const;
 
+  if (!found) {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={Link2Off}
+        tone="warning"
+        title="This payment link isn't valid"
+        description="Check that you opened the whole link from your email. If it still doesn't work, ask for a new payment link."
+      />
+    );
+  }
+  if (paid) {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={CheckCircle2}
+        tone="success"
+        title="Payment received"
+        description={`${description ? `“${description}”` : "Your payment"}${amountLabel && amountLabel !== "—" ? ` (${amountLabel})` : ""} has been paid in full. A receipt has been sent to the email you used at checkout. You're all done — you can close this page.`}
+      />
+    );
+  }
+  if (cancelled) {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={RotateCcw}
+        tone="brand"
+        title="Checkout not completed"
+        description="No charge was made. You can pick up where you left off whenever you're ready."
+        action={<PublicAction href={`/pay/charge/${token}`}>Retry payment</PublicAction>}
+      />
+    );
+  }
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md rounded-xl border bg-card p-8 text-center shadow-sm">
-        {paid ? (
-          <>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl dark:bg-emerald-900/40">
-              ✓
-            </div>
-            <h1 className="text-xl font-semibold">Payment received</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {description ? `“${description}”` : "Your payment"}
-              {amountLabel && amountLabel !== "—" ? ` (${amountLabel})` : ""} has
-              been paid in full. A receipt has been sent to the email you used
-              at checkout. You&apos;re all done — you can close this page.
-            </p>
-          </>
-        ) : cancelled ? (
-          <>
-            <h1 className="text-xl font-semibold">Checkout not completed</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              No charge was made. You can pick up where you left off whenever
-              you&apos;re ready.
-            </p>
-            <a
-              href={`/pay/charge/${token}`}
-              className="mt-6 inline-block rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Retry payment
-            </a>
-          </>
-        ) : (
-          <>
-            <h1 className="text-xl font-semibold">Processing payment…</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Confirming your payment — this usually takes a few seconds.
-              Refresh this page to see the updated status.
-            </p>
-          </>
-        )}
-      </div>
-    </div>
+    <PublicStateShell
+      variant={variant}
+      icon={Clock}
+      tone="brand"
+      title="Processing payment…"
+      description="Confirming your payment — this usually takes a few seconds. Refresh this page to see the updated status."
+    />
   );
 }

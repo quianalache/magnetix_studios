@@ -4,8 +4,22 @@ import type { LeadForm } from "@/types/forms";
 import { PublicForm } from "@/components/forms/public-form";
 import { appearanceStyle, cardStyle, resolveAppearance } from "@/lib/forms/appearance";
 import { CUSTOM_BRAND } from "@/config/landing";
+import type { Metadata } from "next";
+import { getSubAccountPublicName, publicTitle } from "@/lib/server/public-identity";
+import { initials } from "@/components/public/public-shell";
 
 export const dynamic = "force-dynamic";
+
+/** Browser title: the form's own name (2026-10-16 public surfaces). */
+export async function generateMetadata({ params }: { params: Promise<{ formId: string }> }): Promise<Metadata> {
+  try {
+    const { formId } = await params;
+    const form = (await getAdminDb().collection("forms").doc(formId).get()).data();
+    return form ? { title: publicTitle(form.name as string | undefined) } : {};
+  } catch {
+    return {};
+  }
+}
 
 export default async function PublicFormPage({
   params,
@@ -24,6 +38,10 @@ export default async function PublicFormPage({
   const form: LeadForm = { id: snap.id, ...data };
 
   const appearance = resolveAppearance(sp, form.settings);
+  // The business that owns the form (2026-10-16 public surfaces): the header
+  // names it instead of the platform. Forms have no logo field of their own,
+  // so it's a monogram in the form's own accent (--primary) + the name.
+  const businessName = await getSubAccountPublicName(form.subAccountId);
 
   // Operator preview, set only by the builder's own "Preview" link — never
   // present for a real visitor filling out the form. Surfaces a way back
@@ -63,10 +81,14 @@ export default async function PublicFormPage({
       <FormFrame appearance={appearance}>
         <div className="w-full max-w-lg">
           {!appearance.hideChrome && (
-            <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="inline-block h-4 w-4 rounded-sm bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
-              <span className="font-medium text-foreground">{CUSTOM_BRAND.name}</span>
-            </div>
+            businessName ? (
+              <div className="mb-6 flex items-center gap-2.5 text-sm" data-form-business>
+                <span className="inline-flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">
+                  {initials(businessName)}
+                </span>
+                <span className="font-medium text-foreground">{businessName}</span>
+              </div>
+            ) : null
           )}
           <div
             className="overflow-hidden rounded-2xl border bg-card p-6 sm:p-8"

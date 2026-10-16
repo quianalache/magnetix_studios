@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { PersonLoginForm } from "@/components/mymagnetix/person-login-form";
+import { PublicAuthShell } from "@/components/public/public-shell";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { MEMBER_SESSION_COOKIE } from "@/lib/community/member-auth";
 
@@ -22,6 +24,8 @@ const ERROR_MESSAGES: Record<string, string> = {
 function safeNext(next: string | undefined): string | null {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : null;
 }
+
+export const metadata: Metadata = { title: "Sign in · MyMagnetix" };
 
 export default async function MyMagnetixLoginPage({
   searchParams,
@@ -88,34 +92,27 @@ export default async function MyMagnetixLoginPage({
 
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? null) : null;
 
+  // MyMagnetix is Magnetix-owned (it spans every business), so it uses the
+  // Magnetix variant of the shared public sign-in shell (2026-10-16). The
+  // MyMagnetix accent on the form is unchanged.
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-6 py-16">
-      <div className="w-full max-w-[320px] text-center">
-        <div
-          className="mx-auto mb-3.5 flex h-12 w-12 items-center justify-center rounded-[13px] text-[18px] font-bold text-white"
-          style={{ background: "#5E2574" }}
-        >
-          MM
-        </div>
-        <h1 className="font-serif text-[18px] font-semibold text-balance text-[#202124]">
-          {destination ? "Welcome to MyMagnetix" : "Sign in to MyMagnetix"}
-        </h1>
-        <p className="mt-1.5 mb-5 text-[12px] leading-relaxed text-[#909090]">
-          {destination
-            ? "Confirm your email to continue — we'll take you straight to what you clicked."
-            : "One account for everything you’re part of across Magnetix — courses, communities, and every business you work with."}
-        </p>
-        {errorMessage && (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-left text-[12px] text-red-600">
+    <PublicAuthShell
+      variant={{ kind: "magnetix" }}
+      title={destination ? "Welcome to MyMagnetix" : "Sign in to MyMagnetix"}
+      description={
+        destination
+          ? "Confirm your email to continue — we'll take you straight to what you clicked."
+          : "One account for everything you’re part of across Magnetix — courses, communities, and every business you work with."
+      }
+      notice={
+        errorMessage ? (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-left text-sm text-red-600" role="alert">
             {errorMessage}
           </div>
-        )}
-        <PersonLoginForm
-          accentColor="#5E2574"
-          next={destination}
-          initialEmail={prefillEmail}
-        />
-      </div>
-    </div>
+        ) : null
+      }
+    >
+      <PersonLoginForm accentColor="#5E2574" next={destination} initialEmail={prefillEmail} />
+    </PublicAuthShell>
   );
 }

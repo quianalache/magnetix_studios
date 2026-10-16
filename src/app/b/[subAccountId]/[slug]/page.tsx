@@ -4,6 +4,8 @@ import { PublicBookingView } from "@/components/booking/public-booking-view";
 import { resolveBookingLogo } from "@/lib/brand/workspace-logo";
 import type { BookingPage } from "@/types/booking";
 import type { SubAccountDoc } from "@/types";
+import type { Metadata } from "next";
+import { publicTitle } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,20 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ subAccountId: string; slug: string }>;
+}
+
+/** Browser title: the booking page's own name and brand (2026-10-16 public surfaces). */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  try {
+    const { subAccountId, slug } = await params;
+    const db = getAdminDb();
+    const [pageSnap, subSnap] = await Promise.all([db.doc(`subAccounts/${subAccountId}/bookingPages/${slug}`).get(), db.doc(`subAccounts/${subAccountId}`).get()]);
+    const page = pageSnap.data() as BookingPage | undefined;
+    if (!page || page.status !== "published") return {};
+    return { title: publicTitle(page.name, page.brandName || (subSnap.data()?.name as string | undefined)) };
+  } catch {
+    return {};
+  }
 }
 
 export default async function PublicBookingPage({ params }: PageProps) {

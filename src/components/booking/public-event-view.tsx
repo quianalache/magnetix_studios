@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { EventStatus } from "@/types/events";
+import { PoweredByMagnetix } from "@/components/brand/powered-by-magnetix";
 
 /**
  * Public-facing event-management surface. Shows the attendee a summary
@@ -443,8 +444,10 @@ export function PublicEventView(props: Props) {
           </section>
         )}
 
-        <footer className="border-t pt-4 text-center text-[11px] text-muted-foreground">
-          Powered by {props.branding.name}
+        {/* The platform credit, same as the booking page (2026-10-16 audit: it
+            used to read "Powered by {business}"). */}
+        <footer className="border-t pt-4">
+          <PoweredByMagnetix />
         </footer>
       </article>
     </main>

@@ -1,8 +1,12 @@
-import Link from "next/link";
+import type { Metadata } from "next";
+import { CheckCircle2, Clock, Link2Off, RotateCcw } from "lucide-react";
+import { PublicAction, PublicStateShell } from "@/components/public/public-shell";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { verifyCheckoutToken } from "@/lib/billing/token";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Payment status" };
 
 /**
  * Post-checkout landing for the public /pay flow (Client Billing v1) —
@@ -29,12 +33,14 @@ export default async function PayStatusPage({
   let workspaceName: string | null = null;
   let planName: string | null = null;
   let active = false;
+  let found = false;
 
   if (verified) {
     const snap = await getAdminDb()
       .doc(`subAccounts/${verified.subAccountId}`)
       .get();
     if (snap.exists) {
+      found = true;
       const data = snap.data() ?? {};
       workspaceName = (data.name as string | undefined) ?? null;
       const billing = data.billing as
@@ -46,60 +52,55 @@ export default async function PayStatusPage({
   }
 
   const cancelled = query.cancelled === "1" && !active;
+  const variant = { kind: "magnetix" } as const;
 
+  // A link that doesn't verify (or no longer points at a workspace) never
+  // claims a payment happened (2026-10-16 audit: it used to say
+  // "Payment received").
+  if (!found) {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={Link2Off}
+        tone="warning"
+        title="This payment link isn't valid"
+        description="Check that you opened the whole link from your email. If it still doesn't work, ask for a new payment link."
+        action={<PublicAction href="/login">Log in</PublicAction>}
+      />
+    );
+  }
+  if (active) {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={CheckCircle2}
+        tone="success"
+        title={workspaceName ? `${workspaceName} is active` : "Subscription active"}
+        description={`${planName ? `Your ${planName} subscription is live. ` : ""}You're all set — log in to your workspace to get started.`}
+        action={<PublicAction href="/login">Log in</PublicAction>}
+      />
+    );
+  }
+  if (cancelled) {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={RotateCcw}
+        tone="brand"
+        title="Checkout not completed"
+        description="No charge was made. You can pick up where you left off whenever you're ready."
+        action={<PublicAction href={`/pay/${token}`}>Retry payment</PublicAction>}
+      />
+    );
+  }
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md rounded-xl border bg-card p-8 text-center shadow-sm">
-        {active ? (
-          <>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl dark:bg-emerald-900/40">
-              ✓
-            </div>
-            <h1 className="text-xl font-semibold">
-              {workspaceName ? `${workspaceName} is active` : "Subscription active"}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {planName ? `Your ${planName} subscription is live. ` : ""}
-              You&apos;re all set — log in to your workspace to get started.
-            </p>
-            <Link
-              href="/login"
-              className="mt-6 inline-block rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Log in
-            </Link>
-          </>
-        ) : cancelled ? (
-          <>
-            <h1 className="text-xl font-semibold">Checkout not completed</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              No charge was made. You can pick up where you left off whenever
-              you&apos;re ready.
-            </p>
-            <a
-              href={`/pay/${token}`}
-              className="mt-6 inline-block rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Retry payment
-            </a>
-          </>
-        ) : (
-          <>
-            <h1 className="text-xl font-semibold">Payment received</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              We&apos;re activating your workspace — this usually takes a few
-              seconds. Refresh this page, or log in and you&apos;ll be up and
-              running shortly.
-            </p>
-            <Link
-              href="/login"
-              className="mt-6 inline-block rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Log in
-            </Link>
-          </>
-        )}
-      </div>
-    </div>
+    <PublicStateShell
+      variant={variant}
+      icon={Clock}
+      tone="brand"
+      title="Payment received"
+      description="We're activating your workspace — this usually takes a few seconds. Refresh this page, or log in and you'll be up and running shortly."
+      action={<PublicAction href="/login">Log in</PublicAction>}
+    />
   );
 }

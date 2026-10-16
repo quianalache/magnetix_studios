@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Clock, VideoOff } from "lucide-react";
+import { PublicStateShell } from "@/components/public/public-shell";
 import { resolveReplay } from "@/lib/server/assets/media-share-service";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +28,24 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
 export default async function ReplayPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const result = await resolveReplay(token);
+  // Errors use the public state card. The resolver deliberately returns no
+  // tenant data for a failed link, so it's the Magnetix variant.
+  if (!result.ok) {
+    const m = MESSAGES[result.reason];
+    return (
+      <PublicStateShell
+        variant={{ kind: "magnetix" }}
+        icon={result.reason === "processing" ? Clock : VideoOff}
+        tone={result.reason === "processing" ? "brand" : "warning"}
+        title={m.title}
+        description={m.body}
+      />
+    );
+  }
   return (
     <main className="flex min-h-dvh items-center justify-center bg-neutral-950 px-4 py-10 text-neutral-100">
       <div className="w-full max-w-4xl">
-        {result.ok ? (
-          <>
+        <>
             <div className="mb-4 flex flex-col gap-1">
               {result.brandName && <p className="text-xs font-medium tracking-wide text-neutral-400 uppercase">{result.brandName}</p>}
               <h1 className="text-2xl font-semibold text-balance">{result.title}</h1>
@@ -44,13 +59,7 @@ export default async function ReplayPage({ params }: { params: Promise<{ token: 
                 allowFullScreen
               />
             </div>
-          </>
-        ) : (
-          <div className="mx-auto max-w-md rounded-2xl bg-neutral-900 p-8 text-center ring-1 ring-white/10">
-            <h1 className="text-lg font-semibold">{MESSAGES[result.reason].title}</h1>
-            <p className="mt-2 text-sm text-neutral-400">{MESSAGES[result.reason].body}</p>
-          </div>
-        )}
+        </>
       </div>
     </main>
   );

@@ -1,4 +1,5 @@
 import { PortalLoginForm } from "./[saId]/login/login-form";
+import { PublicAuthShell } from "@/components/public/public-shell";
 import type { PortalBranding } from "@/types/portal-branding";
 
 /**
@@ -25,16 +26,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   error: "Something went wrong signing you in. Request a new link below.",
 };
 
-function initials(name: string): string {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((w) => w[0] ?? "")
-      .join("") || "?"
-  ).toUpperCase();
-}
 
 export function PortalLoginView({
   saId,
@@ -50,44 +41,34 @@ export function PortalLoginView({
   const errorMessage = errorCode ? (ERROR_MESSAGES[errorCode] ?? null) : null;
   const displayName = branding.portalName || fallbackName;
 
+  // Tenant variant of the shared public sign-in shell (2026-10-16). Every
+  // value comes from the existing portal branding — name, logo, accent,
+  // welcome message, support email — with the sub-account name as the
+  // existing fallback. No "Powered by" (it never had one).
   return (
-    <div
-      className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-6 py-16"
-      style={{ ["--portal-accent" as string]: branding.accentColor }}
-    >
-      <div className="w-full max-w-[300px] text-center">
-        <div
-          className="mx-auto mb-3.5 flex h-12 w-12 items-center justify-center overflow-hidden rounded-[13px] text-[18px] font-bold text-white"
-          style={{ background: branding.logoUrl ? undefined : "var(--portal-accent)" }}
-        >
-          {branding.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={branding.logoUrl} alt={displayName} className="h-full w-full object-cover" />
-          ) : (
-            initials(displayName)
-          )}
-        </div>
-        <h1 className="font-serif text-[18px] font-semibold text-balance text-[#202124]">
-          Sign in to {displayName}
-        </h1>
-        <p className="mb-5 mt-1.5 text-[12px] leading-relaxed text-[#909090]">
-          {branding.welcomeMessage}
-        </p>
-        {errorMessage && (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-left text-[12px] text-red-600">
+    <PublicAuthShell
+      variant={{ kind: "tenant", brand: { name: displayName, logoUrl: branding.logoUrl, primary: branding.accentColor } }}
+      title={`Sign in to ${displayName}`}
+      description={branding.welcomeMessage}
+      notice={
+        errorMessage ? (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-left text-sm text-red-600" role="alert">
             {errorMessage}
           </div>
-        )}
-        <PortalLoginForm saId={saId} accentColor={branding.accentColor} />
-        {branding.supportEmail && (
-          <p className="mt-3.5 text-[10.5px] leading-relaxed text-[#909090]">
+        ) : null
+      }
+      footerNote={
+        branding.supportEmail ? (
+          <>
             Need help?{" "}
-            <a href={`mailto:${branding.supportEmail}`} className="font-semibold" style={{ color: "var(--portal-accent)" }}>
+            <a href={`mailto:${branding.supportEmail}`} className="tenant-text font-semibold">
               {branding.supportEmail}
             </a>
-          </p>
-        )}
-      </div>
-    </div>
+          </>
+        ) : null
+      }
+    >
+      <PortalLoginForm saId={saId} accentColor={branding.accentColor} />
+    </PublicAuthShell>
   );
 }

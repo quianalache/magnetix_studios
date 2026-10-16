@@ -12,6 +12,8 @@ import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { CourseSalesPageView } from "@/components/standalone-courses/course-sales-page-view";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
+import type { Metadata } from "next";
+import { getSubAccountPublicName, publicTitle } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,18 @@ function formatPrice(cents: number | null, currency: string | null): string {
  * booking page and the community group About page. Gated: a disabled
  * sub-account or an unpublished course both 404.
  */
+/** Browser title: course · business — only for a course this visitor may see (same access check as the page). */
+export async function generateMetadata({ params }: { params: Promise<{ saId: string; courseId: string }> }): Promise<Metadata> {
+  try {
+    const { saId, courseId } = await params;
+    const access = await requireCoursePageAccess(saId, courseId);
+    if (access.kind === "notFound") return {};
+    return { title: publicTitle(access.course.title, await getSubAccountPublicName(saId)) };
+  } catch {
+    return {};
+  }
+}
+
 export default async function CourseSalesPage({
   params,
 }: {
@@ -109,6 +123,7 @@ export default async function CourseSalesPage({
 
   return (
     <CourseSalesPageView
+        businessName={await getSubAccountPublicName(saId)}
       saId={saId}
       courseId={courseId}
       course={{

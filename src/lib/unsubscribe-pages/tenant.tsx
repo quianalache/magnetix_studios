@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { PublicStateShell } from "@/components/public/public-shell";
 
 /**
  * Public unsubscribe confirmation page. The page POSTs to /api/u/[token]
@@ -38,48 +39,26 @@ export default function UnsubscribePage({ token }: { token: string }) {
     })();
   }, [token]);
 
+  // One public state card for every result (2026-10-16). The token carries
+  // no business identity to the client, so this is the Magnetix variant.
+  const variant = { kind: "magnetix" } as const;
+  if (status === "loading") {
+    return <PublicStateShell variant={variant} icon={Loader2} tone="brand" title="Working on it…" description="Hold on while we update your preferences." />;
+  }
+  if (status === "ok") {
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={CheckCircle2}
+        tone="success"
+        title="You're unsubscribed"
+        description="We won't send you any more marketing emails from this workspace. You'll still receive messages tied to things you've booked or purchased, like confirmations and reminders. If this was a mistake, reply to a previous email and we'll add you back manually."
+      />
+    );
+  }
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
-        {status === "loading" && (
-          <>
-            <div className="mx-auto mb-4 h-10 w-10 animate-pulse rounded-full bg-muted" />
-            <h1 className="text-lg font-semibold">Working on it…</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Hold on while we update your preferences.
-            </p>
-          </>
-        )}
-        {status === "ok" && (
-          <>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <h1 className="text-lg font-semibold">You&apos;re unsubscribed</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              We won&apos;t send you any more marketing emails from this
-              workspace. You&apos;ll still receive messages tied to things
-              you&apos;ve booked or purchased, like confirmations and
-              reminders. If this was a mistake, reply to a previous email and
-              we&apos;ll add you back manually.
-            </p>
-          </>
-        )}
-        {status === "error" && (
-          <>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-            <h1 className="text-lg font-semibold">Something went wrong</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {errorMessage}
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Reply to a previous email and we&apos;ll opt you out manually.
-            </p>
-          </>
-        )}
-      </div>
-    </main>
+    <PublicStateShell variant={variant} icon={AlertTriangle} tone="error" title="Something went wrong" description={errorMessage}>
+      <p className="public-faint text-xs">Reply to a previous email and we&apos;ll opt you out manually.</p>
+    </PublicStateShell>
   );
 }

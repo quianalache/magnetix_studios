@@ -133,3 +133,52 @@
 .tenant-surface .tenant-today {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-primary-text) 25%, #ffffff);
 }
+
+/* ── Public shells (Tenant / Public Surfaces, Visual Direction 2, 2026-10-16) ──
+ * PublicAuthShell, PublicStateShell and PublicCheckoutShell are the same
+ * tenant surface. A business-owned page sets its own brand through
+ * tenantBrandStyle(); a Magnetix-owned page (staff / MyMagnetix sign-in,
+ * resets, platform states) adds `.public-magnetix`, which is simply the
+ * Magnetix preset of the same variables plus the soft Magnetix cloud wash.
+ * No new brand source: each page family keeps feeding its own field.
+ */
+.tenant-surface.public-magnetix {
+  --brand-primary: #3d1652;
+  --brand-on-primary: #ffffff;
+  --brand-primary-text: #3d1652;
+  --brand-display-font: var(--font-dm-serif-display), Georgia, serif;
+  --brand-display-weight: 400;
+}
+.tenant-surface.public-magnetix.tenant-wash,
+.tenant-surface.public-magnetix .tenant-wash {
+  background:
+    radial-gradient(55% 45% at 12% 0%, #efe6fb, transparent 70%),
+    radial-gradient(50% 40% at 92% 2%, #fbe9f1, transparent 70%),
+    radial-gradient(70% 55% at 50% 110%, #f1ecfb, transparent 70%),
+    #fbf9fe;
+}
+/* Public text colors (outside the CRM scope the stock tokens are grey). */
+.tenant-surface .public-ink { color: #1f1b3a; }
+.tenant-surface .public-body { color: #5e5879; }
+.tenant-surface .public-faint { color: #736d8f; }
+.tenant-surface .public-line { border-color: color-mix(in srgb, var(--brand-primary) 10%, #ece7f4); }
+/* State icon chips — semantic tones, independent of the brand. */
+.tenant-surface .public-tone-warning { background: #fef2d3; color: #7a3d00; }
+.tenant-surface .public-tone-error { background: #fdecee; color: #9f1239; }
+.tenant-surface .public-tone-success { background: #dcf7ec; color: #0b5d45; }
+.tenant-surface .public-tone-brand { background: color-mix(in srgb, var(--brand-primary) 10%, #ffffff); color: var(--brand-primary-text); }
+/* Neutral media fallback (no thumbnail): a soft brand-tinted tile. */
+.tenant-surface .public-media-fallback {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-primary) 10%, #ffffff), color-mix(in srgb, var(--brand-primary) 4%, #f6f5f8));
+  color: var(--brand-primary-text);
+}
+/* Secondary button on a public card. */
+.tenant-surface .public-button-secondary {
+  background: #ffffff;
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 14%, #e0d9ec);
+  color: #1f1b3a;
+  border-radius: var(--brand-radius);
+}
+.tenant-surface .public-button-secondary:hover { background: color-mix(in srgb, var(--brand-primary) 5%, #ffffff); }
+/* A plain near-white public page (reading/report bodies that must stay clean; neutral checkout themes). */
+.tenant-surface.public-plain { background: #fbfafc; }

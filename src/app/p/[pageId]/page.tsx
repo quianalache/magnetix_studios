@@ -8,6 +8,8 @@ import { collectFormIds } from "@/lib/pages-funnels/v2/tree-utils";
 import { SectionTreeView } from "@/components/pages-funnels/renderer-v2/tree-view";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import type { Metadata } from "next";
+import { publicTitle } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,18 @@ export const dynamic = "force-dynamic";
  * that's a single atomic write, not two. V1 editing/persistence (Canvas,
  * SettingsPanel, Save Draft, Publish) remain entirely untouched by this.
  */
+/** Browser title: the published page's SEO title, else its name (2026-10-16 public surfaces). */
+export async function generateMetadata({ params }: { params: Promise<{ pageId: string }> }): Promise<Metadata> {
+  try {
+    const { pageId } = await params;
+    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as { status?: string; name?: string; seo?: { title?: string } } | undefined;
+    if (!page || page.status !== "published") return {};
+    return { title: publicTitle(page.seo?.title || page.name) };
+  } catch {
+    return {};
+  }
+}
+
 export default async function PublicPagePreview({
   params,
 }: {

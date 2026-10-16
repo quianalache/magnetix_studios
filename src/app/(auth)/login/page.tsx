@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
-import { LogoMark } from "@/components/brand/logo-mark";
+import { PublicAuthShell } from "@/components/public/public-shell";
 import { CUSTOM_BRAND } from "@/config/landing";
 import { getCurrentStaffUser } from "@/lib/auth/current-staff";
 
@@ -16,6 +16,8 @@ function safeRedirectTarget(value: string | undefined): string | null {
     ? value
     : null;
 }
+
+export const metadata: Metadata = { title: `Sign in · ${CUSTOM_BRAND.name}` };
 
 export default async function LoginPage({
   searchParams,
@@ -43,28 +45,16 @@ export default async function LoginPage({
     redirect(safeRedirectTarget(redirectParam) ?? "/gateway");
   }
 
+  // Magnetix-owned sign-in on the shared public shell (2026-10-16). The
+  // LoginForm draws its own card, so the shell provides the frame only.
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <LogoMark size={24} idSuffix="-login" />
-            <h1 className="text-2xl font-bold">{CUSTOM_BRAND.name}</h1>
-          </Link>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Welcome back. Sign in to your workspace.
-          </p>
-        </div>
-
-        {/* Suspense required because LoginForm reads ?email= via
-            useSearchParams to pre-fill from "you already have an account"
-            redirects out of the signup page. */}
-        <Suspense
-          fallback={<div className="bg-card h-[420px] rounded-xl border" />}
-        >
-          <LoginForm />
-        </Suspense>
-      </div>
-    </div>
+    <PublicAuthShell variant={{ kind: "magnetix" }} title="Welcome back" description="Sign in to your workspace." card={false}>
+      {/* Suspense required because LoginForm reads ?email= via
+          useSearchParams to pre-fill from "you already have an account"
+          redirects out of the signup page. */}
+      <Suspense fallback={<div className="bg-card h-[420px] rounded-xl border" />}>
+        <LoginForm />
+      </Suspense>
+    </PublicAuthShell>
   );
 }

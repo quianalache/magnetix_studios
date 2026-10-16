@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { PublicAuthShell } from "@/components/public/public-shell";
 import { PersonResetPasswordForm } from "@/components/mymagnetix/person-reset-password-form";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Set your password · MyMagnetix" };
 
 export default async function MyMagnetixPasswordResetPage({
   searchParams,
@@ -12,14 +16,12 @@ export default async function MyMagnetixPasswordResetPage({
   if (!token) notFound();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4 py-16">
-      <div className="w-full max-w-md rounded-xl border border-[#E4E4E4] bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight text-[#202124]">Set your MyMagnetix password</h1>
-        <p className="mt-2 text-sm text-[#909090]">
-          One password for MyMagnetix — separate from any individual business&rsquo;s Client Portal password.
-        </p>
-        <PersonResetPasswordForm token={token} />
-      </div>
-    </div>
+    <PublicAuthShell
+      variant={{ kind: "magnetix" }}
+      title="Set your MyMagnetix password"
+      description="One password for MyMagnetix — separate from any individual business’s Client Portal password."
+    >
+      <PersonResetPasswordForm token={token} />
+    </PublicAuthShell>
   );
 }

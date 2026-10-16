@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import UnsubscribePage from "@/lib/unsubscribe-pages/tenant";
 import AgencyUnsubscribePage from "@/lib/unsubscribe-pages/agency";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Email preferences" };
 
 export default async function UnsubscribeRoute({
   params,

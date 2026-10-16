@@ -36,8 +36,13 @@ export async function generateMetadata({
   try {
     const { saId, groupSlug } = await params;
     const group = await getGroupBySlug(saId, groupSlug);
-    if (!group?.faviconUrl) return {};
-    return { icons: { icon: group.faviconUrl } };
+    if (!group) return {};
+    // Browser title = the community's name, only for a published group
+    // (2026-10-16 public surfaces); the favicon behavior is unchanged.
+    return {
+      ...(group.status === "published" ? { title: group.name } : {}),
+      ...(group.faviconUrl ? { icons: { icon: group.faviconUrl } } : {}),
+    };
   } catch {
     return {};
   }

@@ -70,7 +70,7 @@ export default async function EnergeticDecoderReportDesignPage({
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 px-4 py-10 sm:px-6"
+      className="tenant-surface public-plain min-h-screen px-4 py-10 sm:px-6"
       style={{ "--decoder-accent": theme.accent } as React.CSSProperties}
     >
       <div className="mx-auto w-full max-w-2xl">

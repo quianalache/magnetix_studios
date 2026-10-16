@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { publicTitle } from "@/lib/server/public-identity";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { resolveSpaceIdentifier } from "@/lib/server/space-slug-service";
 import { resolvePortalBranding } from "@/types/portal-branding";
@@ -10,6 +12,19 @@ export const dynamic = "force-dynamic";
 interface PageProps {
   params: Promise<{ saId: string }>;
   searchParams: Promise<{ error?: string }>;
+}
+
+/** Browser title: "Sign in · {portal name}" from the existing portal branding. */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  try {
+    const resolved = await resolveSpaceIdentifier((await params).saId);
+    if (!resolved) return {};
+    const sub = (await getAdminDb().doc(`subAccounts/${resolved.subAccountId}`).get()).data() as SubAccountDoc | undefined;
+    if (!sub) return {};
+    return { title: publicTitle("Sign in", resolvePortalBranding(sub.portalBranding).portalName || sub.name) };
+  } catch {
+    return {};
+  }
 }
 
 export default async function PortalLoginPage({ params, searchParams }: PageProps) {

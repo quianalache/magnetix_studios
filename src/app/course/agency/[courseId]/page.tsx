@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/agency-standalone-course-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { CourseSalesPageView } from "@/components/standalone-courses/course-sales-page-view";
+import { getAgencyPublicName } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,7 @@ export default async function AgencyCourseSalesPage({
 
   return (
     <CourseSalesPageView
+        businessName={await getAgencyPublicName(agencyId)}
       saId="agency"
       courseId={courseId}
       agencyScope
