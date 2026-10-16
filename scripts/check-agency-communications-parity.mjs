@@ -71,5 +71,14 @@ for (const f of ["communications", "communication-by-id", "communication-cancel"
 // test-send renders the posted content to one address and reads no agency data — owner-only is the gate.
 check("api test-send: owner-only", /requireAgencyOwnerAny\(request\)/.test(src("src/lib/agency-communications-api/test-send.ts")));
 
+// Sub-account owners = each sub-account's Account Contact email (owner decision 2026-10-16).
+const aud = src("src/lib/server/agency-communications-audience-service.ts");
+const ownersFn = aud.slice(aud.indexOf("async function resolveSubAccountOwners("), aud.indexOf("async function resolveCommunityAudience("));
+check("owners audience: resolves the Account Contact email", /accountContact\?\.email/.test(ownersFn) && /isValidEmail\(email\)/.test(ownersFn));
+check("owners audience: never ownerUid / createdByUid / admin memberships / users docs", !/ownerUid|createdByUid|subAccountMembers|users\//.test(ownersFn.replace(/\/\*\*[\s\S]*?\*\//g, "")));
+check("owners audience: agency-scoped query + defensive agency check", /where\("agencyId", "==", agencyId\)/.test(ownersFn) && /sub\.agencyId !== agencyId/.test(ownersFn));
+const audPicker = src("src/components/agency-communications/agency-audience-picker.tsx");
+check("picker labels: All sub-account owners / Sub-account owners by plan", /All sub-account owners/.test(audPicker) && /Sub-account owners by plan/.test(audPicker));
+
 console.log(`\nAgency Communications parity contract: ${pass} passed, ${fail} failed.`);
 process.exit(fail ? 1 : 0);

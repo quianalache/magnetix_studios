@@ -6,7 +6,8 @@ import { listAgencyStandaloneCourses, getAgencyStandaloneCourse } from "@/lib/se
 import { listAgencyCourseOffers, getAgencyCourseOffer } from "@/lib/server/agency-course-offer-service";
 import { listPlansForAgency } from "@/lib/server/billing-service";
 import type { AgencyAudienceSource } from "@/types/agency-communications";
-import type { UserDoc } from "@/types/firebase";
+import type { SubAccountDoc } from "@/types/tenancy";
+import { isValidEmail } from "@/lib/csv";
 
 /**
  * Resolves the real, enumerable Agency audiences named in the reuse audit
@@ -18,53 +19,61 @@ import type { UserDoc } from "@/types/firebase";
  * Contact filter (per the standing instruction not to reuse the tenant
  * Contact condition builder here).
  *
- * No fabricated "Agency Customer" entity: a sub-account owner is resolved
- * via `users/{uid}`, a Community/Course/Offer recipient via `people/{id}`
- * — two genuinely different identity systems, never merged into a third.
+ * No fabricated "Agency Customer" entity: a sub-account owner is the
+ * sub-account's Account Contact (`subAccounts/{id}.accountContact.email`),
+ * a Community/Course/Offer recipient a `people/{id}` record — different
+ * sources, never merged into a third.
  */
 
 export interface ResolvedRecipient {
   email: string;
   name: string;
   sourceLabel: string;
-  identity: { kind: "person" | "staffUser"; id: string };
+  identity: { kind: "person" | "staffUser" | "accountContact"; id: string };
 }
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * "Sub-account owners" (owner decision, 2026-10-16): the owner of a
+ * sub-account, for Agency Communications, is its Account Contact —
+ * Sub-account Settings → Business Profile → Account Contact ("Primary point
+ * of contact at the client"), stored as `subAccounts/{id}.accountContact`.
+ * The recipient is that contact's email. Deliberately NOT `ownerUid` (no
+ * such field exists), NOT `createdByUid` (the provisioner), and NOT
+ * sub-account admin memberships (the agency owner holds an admin row in
+ * every sub-account it creates, so access ≠ ownership). Only this agency's
+ * sub-accounts are read; a missing/invalid email is skipped using the same
+ * rule the Account Contact form saves with; identical emails across
+ * sub-accounts collapse to one recipient in `resolveAgencyAudience`.
+ */
 async function resolveSubAccountOwners(agencyId: string, planIds?: string[]): Promise<ResolvedRecipient[]> {
-  const db = getAdminDb();
-  let query = db.collection("subAccounts").where("agencyId", "==", agencyId) as FirebaseFirestore.Query;
+  let query = getAdminDb().collection("subAccounts").where("agencyId", "==", agencyId) as FirebaseFirestore.Query;
   // Firestore `in` supports up to 10 values — the plan picker is a short,
   // owner-curated list in practice, well under that.
   if (planIds && planIds.length > 0) {
     query = query.where("billing.planId", "in", planIds.slice(0, 10));
   }
   const subsSnap = await query.get();
-  const ownerUids = Array.from(
-    new Set(
-      subsSnap.docs
-        .map((d) => d.data().ownerUid as string | undefined)
-        .filter((id): id is string => !!id),
-    ),
-  );
-  if (ownerUids.length === 0) return [];
-  const userSnaps = await Promise.all(ownerUids.map((uid) => db.doc(`users/${uid}`).get()));
   const label = planIds && planIds.length > 0 ? "Sub-account owners (selected plans)" : "Sub-account owners";
-  return userSnaps
-    .filter((s) => s.exists)
-    .map((s) => {
-      const u = s.data() as UserDoc;
-      return {
-        email: u.email,
-        name: u.displayName || u.email,
-        sourceLabel: label,
-        identity: { kind: "staffUser" as const, id: s.id },
-      };
-    })
-    .filter((r) => !!r.email);
+  const out: ResolvedRecipient[] = [];
+  for (const d of subsSnap.docs) {
+    const sub = d.data() as Pick<SubAccountDoc, "agencyId" | "name" | "accountContact">;
+    // Belt and braces: the query is agency-scoped, but never let another
+    // agency's Account Contact through even if a doc were mis-tagged.
+    if (sub.agencyId !== agencyId) continue;
+    const email = normalizeEmail(sub.accountContact?.email ?? "");
+    if (!email || !isValidEmail(email)) continue;
+    out.push({
+      email,
+      name: sub.accountContact?.name?.trim() || sub.name || email,
+      sourceLabel: label,
+      identity: { kind: "accountContact", id: d.id },
+    });
+  }
+  return out;
 }
 
 async function resolveCommunityAudience(agencyId: string, groupId: string): Promise<ResolvedRecipient[]> {

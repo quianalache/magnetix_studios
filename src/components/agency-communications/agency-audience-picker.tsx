@@ -94,11 +94,14 @@ export function AgencyAudiencePicker({
           <Checkbox checked={hasOwners} onCheckedChange={(v) => toggleOwners(v === true)} />
           All sub-account owners
         </label>
-        <p className="pl-6 text-xs text-muted-foreground">Every Magnetix Studios business owner.</p>
+        <p className="pl-6 text-xs text-muted-foreground">
+          The Account Contact on each sub-account (Settings → Business Profile).
+        </p>
       </section>
 
       <section className="space-y-1.5">
-        <p className="text-sm font-medium">Sub-accounts by plan</p>
+        <p className="text-sm font-medium">Sub-account owners by plan</p>
+        <p className="pl-1 text-xs text-muted-foreground">The Account Contact on each sub-account on the selected plans.</p>
         {options.plans.length === 0 ? (
           <p className="pl-1 text-xs text-muted-foreground">No plans created yet.</p>
         ) : (

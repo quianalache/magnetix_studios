@@ -74,8 +74,8 @@ export async function POST(request: Request) {
   const db = getAdminDb();
 
   const resolved = await resolveAgencyAudience(agencyId, audienceSources);
-  const recipients: { email: string; name: string; matchedSources: string[]; identity: { kind: "person" | "staffUser"; id: string } }[] = [];
-  const skipped: { email: string; name: string; matchedSources: string[]; identity: { kind: "person" | "staffUser"; id: string } }[] = [];
+  const recipients: { email: string; name: string; matchedSources: string[]; identity: { kind: "person" | "staffUser" | "accountContact"; id: string } }[] = [];
+  const skipped: { email: string; name: string; matchedSources: string[]; identity: { kind: "person" | "staffUser" | "accountContact"; id: string } }[] = [];
   for (const r of resolved) {
     const pref = await getAgencyRecipientPreference(agencyId, r.email);
     if (pref?.emailOptedOut) {

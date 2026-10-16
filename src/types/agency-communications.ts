@@ -126,7 +126,7 @@ export interface AgencyCommunicationSendDoc {
   matchedSources: string[];
   /** The underlying identity this recipient resolved from, for audit only
    *  — never used to re-derive access. */
-  identity: { kind: "person" | "staffUser"; id: string };
+  identity: { kind: "person" | "staffUser" | "accountContact"; id: string };
   status: AgencyCommunicationSendStatus;
   skippedReason: AgencyCommunicationSkipReason | null;
   resendMessageId: string | null;
