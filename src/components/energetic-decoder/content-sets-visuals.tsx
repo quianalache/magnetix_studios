@@ -214,13 +214,14 @@ export function CelestialDecoration({ className }: { className?: string }) {
   );
 }
 
-/** The approved editorial header (serif title + planet art). The Decoder's editorial index pages render it without a breadcrumb — the section tabs sit under it instead. */
+/** The approved editorial header (serif title + planet art). Every top-level Energetic Decoder tab renders it without a breadcrumb — the section tabs (and any page actions) sit under it. */
 export function PageHeader({ icon, iconTone = "violet", title, description, breadcrumb, aside }: { icon: Parameters<typeof IconTile>[0]["icon"]; iconTone?: TileTone; title: string; description?: string; breadcrumb?: ReactNode; aside?: ReactNode }) {
   return (
     <div className="relative">
       {/* The art only shows from lg up, with room reserved on the right, so the title and description never run under it (v2 responsive pass). */}
       <CelestialDecoration className="absolute -right-2 -top-4 hidden h-[200px] w-[300px] lg:block" />
-      <div className={cn("relative space-y-4", !aside && "lg:pr-60")}>
+      {/* Top-level tabs (no aside): one fixed header height from lg up, so the art stays inside the header — never behind the tab row or its actions — and every tab row lines up across the module. */}
+      <div className={cn("relative space-y-4", !aside && "lg:min-h-[164px] lg:pr-60")}>
         {breadcrumb}
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-3">

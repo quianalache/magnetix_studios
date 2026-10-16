@@ -80,14 +80,16 @@ export function EnergeticDecoderReportBuilderTab() {
   const shownDesigns = designs?.filter((d) => (!search.trim() || d.title.toLowerCase().includes(search.trim().toLowerCase())) && (statusFilter === null || (d.status ?? "draft") === statusFilter)) ?? null;
   const setName = (d: ReportDesign) => sets.find((s) => s.id === (d.contentSetId || "default"))?.name ?? "Default";
 
-  // v2 (2026-10-16): Content Sets' sibling — the same serif header with the
+  // v2 (2026-10-16): Content Sets' sibling. The page is titled "Report Builder"
+  // (the tab the user clicked); the records inside are report designs.
+  // — the same serif header with the
   // planet, the section tabs, and one toolbar card holding search, the status
   // filter, Create and the light table.
   return (
     <DecoderEditorialPage
       icon={LayoutTemplate}
-      title="Report Designs"
-      description="Compose multi-page reports on a freeform canvas. Each design uses one Content Set and keeps its own visual language."
+      title="Report Builder"
+      description="Compose multi-page report designs on a freeform canvas. Each design uses one Content Set and keeps its own visual language."
     >
       <div data-report-designs-library className="@container/rdlib min-w-0 rounded-2xl border bg-card p-4 shadow-card sm:p-5">
         <div className="mb-5 flex flex-wrap items-center gap-3">

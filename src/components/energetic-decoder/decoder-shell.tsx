@@ -4,7 +4,6 @@ import { createContext, useContext, useRef, type ReactNode } from "react";
 import { BookOpen, Home, LayoutTemplate, Palette, ScrollText, Share2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/system/page-shell";
-import { PageHeader } from "@/components/system/page-header";
 import { CS_SCOPE, PageHeader as EditorialHeader } from "@/components/energetic-decoder/content-sets-visuals";
 import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-decoder/tab-strip";
 
@@ -16,11 +15,11 @@ import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-dec
  * with the module's section tabs in the shared pill strip directly under it,
  * at the data width. The module identity is never reduced to an eyebrow.
  *
- *   DecoderIndexPage      operational index pages (Readings, Chart Designs,
- *                         Embeds): the system PageHeader.
- *   DecoderEditorialPage  editorial index pages (Home, Content Sets, Report
- *                         Designs): the approved Content Sets serif header
- *                         with its planet art — one motif per page.
+ *   Every top-level tab (Home, Readings, Report Builder, Content, Chart
+ *   Designs, Embeds) uses the same large editorial header — the approved
+ *   Content Sets serif title, icon tile, description and planet art — so the
+ *   module reads as one family (owner walkthrough, 2026-10-16).
+ *   DecoderIndexPage is the same page with its actions on the tab row.
  *
  * Record pages (a reading, a chart design, a report design) don't use the
  * section tabs; they lead with a breadcrumb and their own record header.
@@ -54,12 +53,12 @@ export function useDecoderNav(): DecoderNav | null {
  * Projects section nav). On a phone it scrolls sideways inside itself only
  * (TAB_STRIP_CLASS); the page never scrolls sideways.
  */
-export function DecoderSectionNav() {
+export function DecoderSectionNav({ actions }: { actions?: ReactNode }) {
   const nav = useDecoderNav();
   const tabStripRef = useRef<HTMLDivElement>(null);
   useActiveTabVisible(tabStripRef, nav?.tab);
   if (!nav) return null;
-  return (
+  const strip = (
     <nav aria-label="Energetic Decoder sections" className="-mx-1 min-w-0 px-1">
       <div
         ref={tabStripRef}
@@ -90,9 +89,26 @@ export function DecoderSectionNav() {
       </div>
     </nav>
   );
+  if (!actions) return strip;
+  // Page actions share the tab row, right-aligned, so every top-level header
+  // block is the same height and the tab rows line up across the module; on
+  // narrow screens they wrap under the tabs.
+  return (
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+      {strip}
+      <div className="flex max-w-full flex-wrap items-center gap-2" data-page-actions>
+        {actions}
+      </div>
+    </div>
+  );
 }
 
-/** Operational index page: system PageHeader → section tabs → content. */
+/**
+ * Top-level tab with page actions (Readings, Chart Designs, Embeds). Same
+ * large editorial header as every other top-level tab (owner walkthrough,
+ * 2026-10-16: one header hierarchy across the module); the actions sit on
+ * the tab row, right-aligned.
+ */
 export function DecoderIndexPage({
   title,
   description,
@@ -101,17 +117,15 @@ export function DecoderIndexPage({
   children,
 }: {
   title: string;
-  description?: ReactNode;
+  description?: string;
   icon: LucideIcon;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <PageShell width="data">
-      <PageHeader title={title} description={description} icon={icon} actions={actions} />
-      <DecoderSectionNav />
+    <DecoderEditorialPage icon={icon} title={title} description={description} actions={actions}>
       {children}
-    </PageShell>
+    </DecoderEditorialPage>
   );
 }
 
@@ -125,6 +139,7 @@ export function DecoderEditorialPage({
   description,
   icon,
   aside,
+  actions,
   className,
   children,
 }: {
@@ -132,13 +147,14 @@ export function DecoderEditorialPage({
   description?: string;
   icon: LucideIcon;
   aside?: ReactNode;
+  actions?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <PageShell width="data" className={cn(CS_SCOPE, className)}>
       <EditorialHeader icon={icon} title={title} description={description} aside={aside} />
-      <DecoderSectionNav />
+      <DecoderSectionNav actions={actions} />
       {children}
     </PageShell>
   );
