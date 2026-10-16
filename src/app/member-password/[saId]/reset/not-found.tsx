@@ -1,14 +1,12 @@
-import type { Metadata } from "next";
 import { KeyRound } from "lucide-react";
 import { PublicStateShell } from "@/components/public/public-shell";
-
-export const metadata: Metadata = { title: "Password link not valid" };
 
 /** A password link without a token (or for a workspace that no longer exists). */
 export default function PasswordLinkNotFound() {
   return (
     <PublicStateShell
       variant={{ kind: "magnetix" }}
+      documentTitle="Password link not valid"
       icon={KeyRound}
       tone="warning"
       title="This password link isn't valid"

@@ -1,14 +1,12 @@
-import type { Metadata } from "next";
 import { FileX2 } from "lucide-react";
 import { PublicStateShell } from "@/components/public/public-shell";
-
-export const metadata: Metadata = { title: "Form not available" };
 
 
 export default function FormNotFound() {
   return (
     <PublicStateShell
       variant={{ kind: "magnetix" }}
+      documentTitle="Form not available"
       icon={FileX2}
       tone="warning"
       title="This form isn't available"

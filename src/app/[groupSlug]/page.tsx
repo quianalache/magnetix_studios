@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getCommunityGate } from "@/lib/community/gate";
@@ -14,6 +15,18 @@ export const dynamic = "force-dynamic";
  * eligible; the existing About page remains the single renderer and keeps
  * its normal public/member access behavior.
  */
+/** Browser title: the community's name — same single-published-match rule as the page. */
+export async function generateMetadata({ params }: { params: Promise<{ groupSlug: string }> }): Promise<Metadata> {
+  try {
+    const { groupSlug } = await params;
+    const matches = await getAdminDb().collectionGroup("communityGroups").where("slug", "==", groupSlug).limit(20).get();
+    const published = matches.docs.filter((d) => d.data().status === "published");
+    return published.length === 1 ? { title: published[0].data().name as string } : {};
+  } catch {
+    return {};
+  }
+}
+
 export default async function RootCommunityPage({
   params,
 }: {

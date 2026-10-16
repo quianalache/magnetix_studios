@@ -178,9 +178,12 @@ export function PublicStateShell({
   description,
   action,
   poweredBy,
+  documentTitle,
   children,
 }: {
   variant: PublicVariant;
+  /** Browser tab title. Needed on not-found boundaries, where Next ignores a `metadata` export. */
+  documentTitle?: string;
   icon: LucideIcon;
   tone?: PublicStateTone;
   title: ReactNode;
@@ -193,6 +196,7 @@ export function PublicStateShell({
   const surface = publicSurfaceProps(variant, "flex min-h-dvh flex-col items-center justify-center gap-5 px-4 py-10");
   return (
     <div {...surface} data-public-shell="state" data-public-variant={variant.kind}>
+      {documentTitle && <title>{documentTitle}</title>}
       <Identity variant={variant} />
       <main className="tenant-card flex w-full max-w-[420px] flex-col items-center gap-3 p-7 text-center sm:p-8">
         <span className={cn("flex size-12 items-center justify-center rounded-full", `public-tone-${tone}`)}>
