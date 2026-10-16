@@ -9,7 +9,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANONICAL, GuardError, buildDeployCommand, classifyProjects, sanity, verifyLink, writeLink } from "./vercel-guard.mjs";
+import { CANONICAL, GuardError, buildDeployCommand, classifyProjects, sanity, storedLogin, vercelToken, verifyLink, writeLink } from "./vercel-guard.mjs";
 
 const GUARD = resolve(dirname(fileURLToPath(import.meta.url)), "vercel-guard.mjs");
 let passed = 0;
@@ -108,6 +108,18 @@ try {
   });
   await test("classifier: canonical disconnected is flagged", () => {
     assert.equal(classifyProjects([{ id: CANONICAL.projectId, name: CANONICAL.projectName, link: null }]).ok, false);
+  });
+  await test("expired CLI login: refuses with the refresh instruction (no re-login); valid login returns its token", async () => {
+    const saved = process.env.VERCEL_TOKEN;
+    delete process.env.VERCEL_TOKEN;
+    try {
+      assert.throws(() => vercelToken({ now: 2_000, login: { token: "t", expiresAt: 1_000 } }), (e) => e instanceof GuardError && /expired/.test(e.message) && /vercel@latest whoami/.test(e.message));
+      assert.equal(vercelToken({ now: 1_000, login: { token: "t", expiresAt: 2_000 } }), "t");
+      assert.equal(vercelToken({ now: 1_000, login: { token: "t", expiresAt: null } }), "t");
+      assert.equal(storedLogin([]), null);
+    } finally {
+      if (saved !== undefined) process.env.VERCEL_TOKEN = saved;
+    }
   });
   await test("sanity refuses without a token and on API errors (fail closed)", async () => {
     await assert.rejects(sanity({ token: null }), GuardError);

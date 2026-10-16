@@ -67,24 +67,45 @@ export function writeLink(dir, canonical = CANONICAL) {
   return file;
 }
 
-function vercelToken() {
-  if (process.env.VERCEL_TOKEN) return process.env.VERCEL_TOKEN;
-  const candidates = [
-    join(homedir(), "Library", "Application Support", "com.vercel.cli", "auth.json"),
-    join(homedir(), ".local", "share", "com.vercel.cli", "auth.json"),
-    join(homedir(), ".config", "com.vercel.cli", "auth.json"),
-  ];
+const REFRESH_HINT =
+  "Run `npx vercel@latest whoami` — the Vercel CLI renews its stored login from the saved refresh token (no browser sign-in needed) — then retry.";
+
+/**
+ * The Vercel CLI's stored login. Current CLIs (64.x) save a short-lived access
+ * token (`expiresAt`, about 8 hours) plus a refresh token; the CLI renews it
+ * automatically whenever it runs, but this guard only reads the file — so an
+ * expired login must be renewed by running the CLI once, not by `vercel login`.
+ */
+export function storedLogin(candidates = [
+  join(homedir(), "Library", "Application Support", "com.vercel.cli", "auth.json"),
+  join(homedir(), ".local", "share", "com.vercel.cli", "auth.json"),
+  join(homedir(), ".config", "com.vercel.cli", "auth.json"),
+]) {
   for (const f of candidates) {
     if (!existsSync(f)) continue;
     try {
-      const t = JSON.parse(readFileSync(f, "utf8")).token;
-      if (t) return t;
+      const d = JSON.parse(readFileSync(f, "utf8"));
+      if (d.token) {
+        const raw = typeof d.expiresAt === "number" ? d.expiresAt : null;
+        const expiresAt = raw == null ? null : raw < 1e12 ? raw * 1000 : raw;
+        return { token: d.token, expiresAt, file: f };
+      }
     } catch {
       /* try the next location */
     }
   }
   return null;
 }
+
+function vercelToken({ now = Date.now(), login = storedLogin() } = {}) {
+  if (process.env.VERCEL_TOKEN) return process.env.VERCEL_TOKEN;
+  if (!login) return null;
+  if (login.expiresAt != null && login.expiresAt <= now) {
+    throw new GuardError(`The Vercel CLI's stored login expired at ${new Date(login.expiresAt).toLocaleString()}. ${REFRESH_HINT}`);
+  }
+  return login.token;
+}
+export { vercelToken };
 
 /** Pure classification of a team's project list against the canonical repo. */
 export function classifyProjects(projects, canonical = CANONICAL) {
@@ -98,7 +119,10 @@ export function classifyProjects(projects, canonical = CANONICAL) {
 export async function sanity({ fetchImpl = fetch, token = vercelToken(), canonical = CANONICAL } = {}) {
   if (!token) throw new GuardError("No Vercel token (set VERCEL_TOKEN or sign in with the Vercel CLI) — can't verify the account, refusing.");
   const res = await fetchImpl(`https://api.vercel.com/v9/projects?limit=100&teamId=${canonical.orgId}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new GuardError(`Vercel API ${res.status} listing projects — refusing (re-run \`vercel login\` or set VERCEL_TOKEN).`);
+  if (!res.ok) {
+    const auth = res.status === 401 || res.status === 403;
+    throw new GuardError(`Vercel API ${res.status} listing projects — refusing.${auth ? ` The token was rejected (usually an expired CLI login). ${REFRESH_HINT}` : ""}`);
+  }
   const body = await res.json();
   const result = classifyProjects(body.projects ?? [], canonical);
   if (body.pagination?.next) result.truncated = true;
