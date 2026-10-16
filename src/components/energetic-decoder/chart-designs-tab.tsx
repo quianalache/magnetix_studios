@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Palette, Star, Trash2, Loader2 } from "lucide-react";
+import { DecoderIndexPage } from "@/components/energetic-decoder/decoder-shell";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +12,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import {
-  defaultEnergeticDecoderTheme,
-  type EnergeticDecoderTheme,
-} from "@/types/energetic-decoder";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { CenterKey } from "@/lib/energetics/human-design-data";
@@ -102,16 +99,29 @@ type HdStyleFilter = "all" | "humanDesign" | "mandala";
 /**
  * Unified Chart Designs (2026-10): the tab is the unified design library.
  * A workspace not yet converted by the one-time migration keeps the
- * per-system cards below (`LegacyChartDesignsPanel`) until it is. The Brand
- * card stays here until branding moves to Settings in a later batch.
+ * per-system cards below (`LegacyChartDesignsPanel`) until it is.
+ *
+ * v2 (2026-10-16, owner decision): the public-reading Brand card (accent
+ * colour + logo) is removed from the product UI and not relocated. The
+ * public reading/report pages still read `energeticDecoderTheme` exactly as
+ * before, so any saved value keeps rendering; with nothing saved they show
+ * the default violet and the business name. No data is migrated or deleted.
  */
 export function EnergeticDecoderChartDesignsTab() {
-  const { subAccountId, subAccount, isAdmin } = useSubAccount();
   return (
-    <div className="space-y-5">
-      <BrandCard subAccountId={subAccountId} isAdmin={isAdmin} savedTheme={subAccount?.energeticDecoderTheme} />
-      <ChartDesignLibrary legacyFallback={<LegacyChartDesignsPanel />} />
-    </div>
+    <ChartDesignLibrary
+      legacyFallback={<LegacyChartDesignsPanel />}
+      frame={(actions, body) => (
+        <DecoderIndexPage
+          icon={Palette}
+          title="Chart Designs"
+          description="Each Chart Design holds the look of every chart — Human Design, Mandala and Astrology. The Default is used wherever a profile hasn't been given another design."
+          actions={actions}
+        >
+          {body}
+        </DecoderIndexPage>
+      )}
+    />
   );
 }
 
@@ -829,66 +839,5 @@ function CardPreview({
       className="mx-auto w-full max-w-[220px]"
       colors={resolveAstrologyColors({ wheelAccentColor: fields.wheelAccentColor, backgroundColor: fields.backgroundColor })}
     />
-  );
-}
-
-/** Accent + logo — the general brand fields from the old theme-card.tsx, kept here since Chart Designs is their closest real home now that chartDefinedColor moved to per-design entities. */
-function BrandCard({
-  subAccountId,
-  isAdmin,
-  savedTheme,
-}: {
-  subAccountId: string;
-  isAdmin: boolean;
-  savedTheme?: Partial<EnergeticDecoderTheme> | null;
-}) {
-  const saved = { ...defaultEnergeticDecoderTheme(), ...(savedTheme ?? {}) };
-  const [accent, setAccent] = useState(saved.accent);
-  const [logoUrl, setLogoUrl] = useState(saved.logoUrl ?? "");
-  const [saving, setSaving] = useState(false);
-
-  if (!isAdmin) return null;
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/theme`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accent, logoUrl, chartDefinedColor: saved.chartDefinedColor }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success("Brand saved.");
-    } catch {
-      toast.error("Couldn't save.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="rounded-2xl border bg-card p-6">
-      <h2 className="mb-1 text-base font-semibold">Brand</h2>
-      <p className="mb-4 text-sm text-muted-foreground">Your accent color and logo on the public reading tool — your clients see your business, not ours.</p>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="ed-brand-accent">Accent color</Label>
-          <div className="flex items-center gap-2">
-            <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} className="h-9 w-9 shrink-0 cursor-pointer rounded-md border" aria-label="Accent color" />
-            <Input id="ed-brand-accent" value={accent} onChange={(e) => setAccent(e.target.value)} />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="ed-brand-logo">Logo URL</Label>
-          <Input id="ed-brand-logo" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
-        </div>
-      </div>
-      <div className="mt-4 flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-          Save brand
-        </Button>
-      </div>
-    </div>
   );
 }

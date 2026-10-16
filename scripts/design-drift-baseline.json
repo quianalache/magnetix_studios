@@ -1,13 +1,13 @@
 {
   "_comment": "Design-drift ratchet baseline — counts may only go DOWN. See scripts/check-design-drift.mjs.",
-  "updated": "2026-10-15",
+  "updated": "2026-10-16",
   "counts": {
     "hexInTsx": 1932,
-    "arbitraryFontSize": 1048,
-    "nativeSelect": 200,
-    "windowConfirm": 13,
-    "rawH1ClassName": 158,
-    "momentumScope": 27,
+    "arbitraryFontSize": 1047,
+    "nativeSelect": 194,
+    "windowConfirm": 12,
+    "rawH1ClassName": 157,
+    "momentumScope": 20,
     "brandTokenInCrm": 0,
     "legacyThemeClass": 5
   }

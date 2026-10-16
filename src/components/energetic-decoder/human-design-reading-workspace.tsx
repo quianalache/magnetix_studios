@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft,
+  ChevronRight,
   Copy,
   ExternalLink,
   Loader2,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateOnly } from "@/lib/energetic-decoder/date-only";
-import { useSubAccount } from "@/context/sub-account-context";
+import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { LinkReadingContactDialog } from "@/components/energetic-decoder/link-reading-contact-dialog";
@@ -38,6 +38,8 @@ import { HumanDesignSummary, SphereList } from "@/components/energetic-decoder/r
 import { AstrologyReadingView } from "@/components/energetic-decoder/astrology-reading-view";
 import { MandalaReadingView } from "@/components/energetic-decoder/mandala-reading-view";
 import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-decoder/tab-strip";
+import { useDecoderNav } from "@/components/energetic-decoder/decoder-shell";
+import { OptionSelect } from "@/components/system/option-select";
 import { FREQUENCY_COMING_SOON, FREQUENCY_COMING_SOON_LABEL } from "@/lib/energetics/frequency-availability";
 
 /**
@@ -204,7 +206,8 @@ export function HumanDesignReadingWorkspace({
 
   // Legacy reading → contact repair: ask the server whether this reading's
   // contact still resolves (a missing doc can't be read client-side).
-  const { isAdmin } = useSubAccount();
+  // Optional so the workspace also renders outside the provider (static UI checks); inside the app it's always set.
+  const isAdmin = useOptionalSubAccount()?.isAdmin ?? false;
   const [contactBroken, setContactBroken] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkedContactId, setLinkedContactId] = useState<string | null>(null);
@@ -226,6 +229,7 @@ export function HumanDesignReadingWorkspace({
 
   const tabStripRef = useRef<HTMLDivElement>(null);
   useActiveTabVisible(tabStripRef, navItems.find((n) => n.active)?.key);
+  const decoderNav = useDecoderNav();
 
   const reportDesignLinkFor = (reportId: string) => {
     const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: reading.id, reportId });
@@ -260,112 +264,93 @@ export function HumanDesignReadingWorkspace({
           setContactBroken(false);
         }}
       />
-      {/* Breadcrumb / back */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to Readings"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <p className="text-sm text-muted-foreground">
-          <button type="button" onClick={onBack} className="hover:text-foreground hover:underline">
-            Readings
+      {/* Record breadcrumb (v2): Energetic Decoder › Readings › person. */}
+      <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
+        {decoderNav ? (
+          <button type="button" onClick={() => decoderNav.selectTab("home")} className="hover:text-foreground hover:underline">
+            Energetic Decoder
           </button>
-          <span className="mx-1.5">/</span>
-          <span className="font-medium text-foreground">
-            {navItems.find((n) => n.active)?.label ?? "Reading"}
-          </span>
-        </p>
-      </div>
+        ) : (
+          <span>Energetic Decoder</span>
+        )}
+        <ChevronRight className="size-3.5" aria-hidden="true" />
+        <button type="button" onClick={onBack} aria-label="Back to Readings" className="hover:text-foreground hover:underline">
+          Readings
+        </button>
+        <ChevronRight className="size-3.5" aria-hidden="true" />
+        <span aria-current="page" className="min-w-0 truncate font-medium text-foreground">
+          {reading.name}
+        </span>
+      </nav>
 
-      {/* Person header */}
-      {/* Phones: identity on top, then the controls wrap underneath at full
-          width, so nothing can sit outside the screen. sm+: the controls sit
-          beside the identity when they fit; when they don't (tablet width
-          with "Reading from" + Chart Design + ⋮), the group is capped at the
-          header's width and wraps inside it (max-w-full, not shrink-0 — a
-          non-shrinking group overflowed the page by ~230px at 768). */}
-      <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border bg-card p-4" data-reading-header>
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+      {/* Person header — the record header: a white card, the name as the
+          page's one serif moment. Phones: identity on top, the controls
+          stack underneath at full width; sm+: they sit beside the identity
+          when they fit and wrap inside the card when they don't. */}
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-card border border-border bg-card p-4 shadow-card sm:p-5" data-reading-header>
+        <div className="flex min-w-0 flex-[1_1_26rem] items-center gap-3 sm:gap-4">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground sm:size-14">
             {reading.name.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-lg font-bold">{reading.name}</p>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="truncate font-display text-display-md leading-tight font-normal tracking-tight text-foreground">{reading.name}</h2>
+            <p className="mt-1 text-body-sm text-muted-foreground">
               {formatDateOnly(reading.birthDate)}
               {reading.birthTime && <> · {formatBirthTime(reading.birthTime)}</>}
               {reading.birthPlace && <> · {reading.birthPlace}</>}
             </p>
             {profile && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">{profile.type}</span>
-                {profile.profile && (
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">{profile.profile}</span>
-                )}
-                {profile.incarnationCross && (
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">{profile.incarnationCross}</span>
-                )}
+                <span className="rounded-md bg-tag-violet-bg px-2 py-0.5 text-caption font-medium text-tag-violet-fg">{profile.type}</span>
+                {profile.profile && <span className="rounded-md bg-muted px-2 py-0.5 text-caption font-medium text-muted-foreground tabular-nums">{profile.profile}</span>}
+                {profile.incarnationCross && <span className="rounded-md bg-tag-gold-bg px-2 py-0.5 text-caption font-medium text-tag-gold-fg">{profile.incarnationCross}</span>}
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:max-w-full">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:max-w-full sm:justify-end">
           {readingHistory.length > 1 && onSelectReading && (
-            <label className="flex min-w-0 basis-full items-center gap-1.5 rounded-lg border px-2.5 py-1.5 sm:basis-auto" data-reading-history>
-              <History className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Reading from</span>
-              <select
+            <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto" data-reading-history>
+              <History className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="shrink-0 whitespace-nowrap text-caption text-muted-foreground">Reading from</span>
+              <OptionSelect
                 value={reading.id}
-                onChange={(e) => onSelectReading(e.target.value)}
+                onChange={(v) => v && onSelectReading(v)}
+                options={readingHistory.map((r, i) => ({ value: r.id, label: `${readingHistoryLabel(r, readingHistory)}${i === 0 ? " (latest)" : ""}` }))}
                 aria-label="Reading from"
-                className="min-w-0 flex-1 truncate bg-transparent text-xs font-medium sm:flex-none"
-              >
-                {readingHistory.map((r, i) => (
-                  <option key={r.id} value={r.id}>
-                    {readingHistoryLabel(r, readingHistory)}
-                    {i === 0 ? " (latest)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+                size="sm"
+                className="min-w-0 flex-1 sm:w-52 sm:flex-none"
+              />
+            </div>
           )}
           {selectedProfile && (
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 sm:flex-none" data-chart-design-control>
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none" data-chart-design-control>
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                className="size-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: (hdStyleView === "mandala" ? mandalaDesign : hdDesign)?.chartDefinedColor || "#a1a1aa" }}
               />
-              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Chart Design:</span>
-              <select
-                value={(hdStyleView === "mandala" ? selectedProfile.mandalaChartDesignId : selectedProfile.hdChartDesignId) ?? ""}
-                onChange={(e) =>
-                  onSaveDesignOverride(selectedProfile, hdStyleView === "mandala" ? "mandala" : "humanDesign", e.target.value || null)
-                }
-                disabled={savingDesignFor === (hdStyleView === "mandala" ? "mandala" : "humanDesign")}
-                className="min-w-0 flex-1 truncate bg-transparent text-xs font-medium disabled:opacity-50 sm:flex-none"
-              >
-                <option value="">Default</option>
-                {chartDesigns
+              <span className="shrink-0 whitespace-nowrap text-caption text-muted-foreground">Chart design</span>
+              <OptionSelect
+                value={(hdStyleView === "mandala" ? selectedProfile.mandalaChartDesignId : selectedProfile.hdChartDesignId) ?? null}
+                onChange={(v) => onSaveDesignOverride(selectedProfile, hdStyleView === "mandala" ? "mandala" : "humanDesign", v)}
+                options={chartDesigns
                   .filter((d) => d.system === (hdStyleView === "mandala" ? "mandala" : "humanDesign"))
-                  .map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-              </select>
+                  .map((d) => ({ value: d.id, label: d.name }))}
+                noneLabel="Default"
+                aria-label="Chart design"
+                disabled={savingDesignFor === (hdStyleView === "mandala" ? "mandala" : "humanDesign")}
+                size="sm"
+                className="min-w-0 flex-1 sm:w-40 sm:flex-none"
+              />
               {savingDesignFor === (hdStyleView === "mandala" ? "mandala" : "humanDesign") && (
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
               )}
             </div>
           )}
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
+            <DropdownMenuTrigger className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground">
               <MoreVertical className="h-4 w-4" />
               <span className="sr-only">More Actions</span>
             </DropdownMenuTrigger>

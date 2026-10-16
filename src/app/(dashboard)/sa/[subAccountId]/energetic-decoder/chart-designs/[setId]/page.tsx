@@ -32,15 +32,15 @@ export default function ChartDesignEditorPage() {
 
   if (missing) {
     return (
-      <div className="momentum-scope mx-auto w-full max-w-[1500px] rounded-2xl text-center">
+      <div className="mx-auto w-full max-w-[1500px] rounded-card border border-border bg-card p-8 text-center shadow-card">
         <p className="text-sm text-muted-foreground">That chart design doesn&apos;t exist in this workspace.</p>
-        <Link href={saPath("/energetic-decoder?tab=chartDesigns")} className="mt-3 inline-block text-sm font-medium text-primary underline">
+        <Link href={saPath("/energetic-decoder?tab=chartDesigns")} className="mt-3 inline-block text-sm font-medium text-link underline">
           Back to Chart Designs
         </Link>
       </div>
     );
   }
-  if (!set) return <div className="mx-auto h-[640px] w-full max-w-[1500px] animate-pulse rounded-2xl bg-muted/20" />;
+  if (!set) return <div className="mx-auto h-[640px] w-full max-w-[1500px] animate-pulse rounded-card bg-muted" />;
 
   // Keyed by id so moving to a duplicate starts a fresh editor.
   return <ChartDesignEditor key={set.id} initial={set} />;

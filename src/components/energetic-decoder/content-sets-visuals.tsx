@@ -214,11 +214,13 @@ export function CelestialDecoration({ className }: { className?: string }) {
   );
 }
 
-export function PageHeader({ icon, iconTone = "violet", title, description, breadcrumb, aside }: { icon: Parameters<typeof IconTile>[0]["icon"]; iconTone?: TileTone; title: string; description?: string; breadcrumb: ReactNode; aside?: ReactNode }) {
+/** The approved editorial header (serif title + planet art). The Decoder's editorial index pages render it without a breadcrumb — the section tabs sit under it instead. */
+export function PageHeader({ icon, iconTone = "violet", title, description, breadcrumb, aside }: { icon: Parameters<typeof IconTile>[0]["icon"]; iconTone?: TileTone; title: string; description?: string; breadcrumb?: ReactNode; aside?: ReactNode }) {
   return (
     <div className="relative">
-      <CelestialDecoration className="absolute -right-2 -top-4 hidden h-[200px] w-[300px] md:block" />
-      <div className="relative space-y-4">
+      {/* The art only shows from lg up, with room reserved on the right, so the title and description never run under it (v2 responsive pass). */}
+      <CelestialDecoration className="absolute -right-2 -top-4 hidden h-[200px] w-[300px] lg:block" />
+      <div className={cn("relative space-y-4", !aside && "lg:pr-60")}>
         {breadcrumb}
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-3">

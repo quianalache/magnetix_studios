@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Eye, FileOutput, Loader2, Search, SlidersHorizontal } from "lucide-react";
+import { Download, Eye, FileOutput, Loader2, ScrollText, Search, SlidersHorizontal } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getContact } from "@/lib/firestore/contacts";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,9 @@ import type { GeneratedReport } from "@/types/generated-report";
 import { HumanDesignReadingWorkspace } from "@/components/energetic-decoder/human-design-reading-workspace";
 import { EnergeticDecoderReadingConfiguration } from "@/components/energetic-decoder/reading-configuration";
 import { NewReadingDialog, type NewReadingDialogOpenRequest } from "@/components/energetic-decoder/new-reading-dialog";
+import { DecoderIndexPage } from "@/components/energetic-decoder/decoder-shell";
+import { OptionSelect } from "@/components/system/option-select";
+import { PageShell } from "@/components/system/page-shell";
 import { ReadingsLibraryTable } from "@/components/energetic-decoder/readings-library-table";
 import { GeneratedReportsPanel } from "@/components/energetic-decoder/generated-reports-panel";
 import {
@@ -70,7 +73,12 @@ export function EnergeticDecoderReadingsTab() {
     // Keyed by the person (or, for a legacy reading with no Profile, that
     // reading) — switching between one person's snapshots via `readingId`
     // keeps the workspace mounted; opening a different person resets it.
-    return <ReadingWorkspaceView key={profileId ? `p:${profileId}` : `r:${readingId}`} profileId={profileId} readingId={readingId} />;
+    // A reading is a record page (v2): breadcrumb + record header, no section tabs, at the data width.
+    return (
+      <PageShell width="data">
+        <ReadingWorkspaceView key={profileId ? `p:${profileId}` : `r:${readingId}`} profileId={profileId} readingId={readingId} />
+      </PageShell>
+    );
   }
   return <ReadingsLibraryView />;
 }
@@ -204,34 +212,27 @@ function ReadingsLibraryView() {
     router.push(reading.profileId ? build({ profileId: reading.profileId }) : build({ readingId: reading.id }));
   }
 
+  const setSort = (next: ReadingsLibrarySort) => router.replace(build(libraryParams({ sort: next, page: 1 })), { scroll: false });
+
+  // v2 (2026-10-16): the standard operational page — header with Reading
+  // configuration + New reading on the right, the section tabs, a search /
+  // sort toolbar, then the light table.
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold">Readings</h2>
-          <p className="text-sm text-muted-foreground">Your saved client charts.</p>
-        </div>
-        {/* Phones: search on its own full-width line, then configuration + New reading. */}
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
-          <div className="relative w-full min-w-0 sm:w-72 sm:flex-none">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by name or contact…"
-              aria-label="Search readings by name or contact"
-              className="h-9 pl-8"
-            />
-          </div>
+    <DecoderIndexPage
+      icon={ScrollText}
+      title="Readings"
+      description="Your saved client charts — open one to see the chart, its tags and its reports."
+      actions={
+        <>
           <Dialog open={configOpen} onOpenChange={setConfigOpen}>
             <DialogTrigger
               title="Reading configuration — what new readings include"
               aria-label="Reading configuration"
               data-reading-configuration
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              render={<Button variant="outline" />}
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Reading configuration</span>
+              <SlidersHorizontal className="size-4" />
+              <span className="max-sm:hidden">Reading configuration</span>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
@@ -247,7 +248,28 @@ function ReadingsLibraryView() {
             onProfileUpdated={() => setReloadKey((k) => k + 1)}
             onProfileDeleted={() => setReloadKey((k) => k + 1)}
           />
+        </>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 basis-60 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by name or contact…"
+            aria-label="Search readings by name or contact"
+            className="pl-9"
+          />
         </div>
+        {data && <span className="text-caption text-muted-foreground tabular-nums max-sm:hidden">{data.total} {data.total === 1 ? "person" : "people"}</span>}
+        <OptionSelect
+          value={sort}
+          onChange={(v) => v && setSort(v)}
+          options={SORT_OPTIONS}
+          aria-label="Sort readings"
+          className="w-full sm:ml-auto sm:w-56"
+        />
       </div>
 
       <ReadingsLibraryTable
@@ -265,9 +287,15 @@ function ReadingsLibraryView() {
         onPage={(n) => router.push(build(libraryParams({ page: n })), { scroll: false })}
         busyRowId={busyRowId}
       />
-    </div>
+    </DecoderIndexPage>
   );
 }
+
+const SORT_OPTIONS: { value: ReadingsLibrarySort; label: string }[] = [
+  { value: "recent", label: "Sort: Most recent" },
+  { value: "name_asc", label: "Sort: Name (A–Z)" },
+  { value: "name_desc", label: "Sort: Name (Z–A)" },
+];
 
 // ───────────────────────────────────────────────────────────── Workspace
 
@@ -597,7 +625,7 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
         <button type="button" onClick={backToLibrary} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
           ← Readings
         </button>
-        <div className="space-y-3 rounded-2xl border bg-card p-8 text-center" data-no-reading>
+        <div className="space-y-3 rounded-card border border-border bg-card p-8 text-center shadow-card" data-no-reading>
           <p className="text-lg font-semibold">{profile.name}</p>
           <p className="text-sm text-muted-foreground">No reading has been generated for this person yet.</p>
           <Button onClick={() => void startFirstReading()} disabled={preparingGenerate}>

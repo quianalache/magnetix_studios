@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { OptionSelect } from "@/components/system/option-select";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { CenterKey } from "@/lib/energetics/human-design-data";
@@ -206,19 +207,15 @@ export function ChartDesignFieldControl({
         <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
           {label}
         </label>
-        <select
+        <OptionSelect
           id={id}
-          value={String(value ?? "")}
-          onChange={(e) => onChange(field, e.target.value)}
+          value={value == null || value === "" ? null : String(value)}
+          onChange={(v) => v !== null && onChange(field, v)}
+          options={SELECT_OPTIONS[field]}
           disabled={disabled}
-          className="h-9 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {SELECT_OPTIONS[field].map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          size="sm"
+          className="w-full"
+        />
       </div>
     );
   }

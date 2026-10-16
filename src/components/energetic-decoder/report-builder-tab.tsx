@@ -3,12 +3,29 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { FileText, Pencil, Copy, Plus, Trash2, Search, Sparkles } from "lucide-react";
+import { FileText, Pencil, Copy, PlusCircle, Trash2, Search, LayoutTemplate } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { OptionSelect } from "@/components/system/option-select";
+import { useConfirm } from "@/components/system/confirm-dialog";
+import { DecoderEditorialPage } from "@/components/energetic-decoder/decoder-shell";
+import { CS_SCOPE, StatusPill } from "@/components/energetic-decoder/content-sets-visuals";
 import { formatRelativeTime } from "@/lib/format";
 import type { ReportDesign } from "@/types/report-blocks";
+
+const STATUS_OPTIONS = [
+  { value: "draft", label: "Draft" },
+  { value: "active", label: "Active" },
+] as const;
+const PAGE_SIZE_OPTIONS = [
+  { value: "letter", label: "US Letter" },
+  { value: "a4", label: "A4" },
+  { value: "custom", label: "Custom" },
+] as const;
+const COLS = "@min-[760px]/rdlib:grid-cols-[minmax(0,1.6fr)_120px_minmax(0,1fr)_70px_130px_120px]";
 
 type SetSummary = { id: string; name: string; isDefault: boolean };
 
@@ -24,7 +41,8 @@ export function EnergeticDecoderReportBuilderTab() {
   const [renaming, setRenaming] = useState<ReportDesign | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "active">("all");
+  const [statusFilter, setStatusFilter] = useState<"draft" | "active" | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   function load() {
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs`).then((r) => r.json()).then((d) => setDesigns(d.designs ?? [])).catch(() => toast.error("Couldn’t load report designs."));
@@ -41,7 +59,8 @@ export function EnergeticDecoderReportBuilderTab() {
     } catch { toast.error("Couldn’t create report."); setCreating(false); }
   }
   async function remove(id: string) {
-    if (!window.confirm("Delete this report design?")) return;
+    const ok = await confirm({ title: "Delete this report design?", description: "This can't be undone.", confirmLabel: "Delete", tone: "danger" });
+    if (!ok) return;
     const old = designs; setDesigns((prev) => prev?.filter((d) => d.id !== id) ?? null);
     const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs/${id}`, { method: "DELETE" });
     if (!res.ok) { setDesigns(old); toast.error("Couldn’t delete report design."); }
@@ -58,17 +77,125 @@ export function EnergeticDecoderReportBuilderTab() {
     const data = await res.json(); setDesigns((prev) => prev?.map((d) => d.id === renaming.id ? data.design : d) ?? null); setRenaming(null); toast.success("Renamed.");
   }
 
-  const shownDesigns = designs?.filter((d) => (!search.trim() || d.title.toLowerCase().includes(search.trim().toLowerCase())) && (statusFilter === "all" || (d.status ?? "draft") === statusFilter)) ?? null;
-  return <div className="space-y-6">
-    <div className="relative overflow-hidden rounded-3xl border border-violet-100 bg-white p-6 shadow-sm dark:border-violet-900/40 dark:bg-slate-950">
-      <div className="pointer-events-none absolute -top-24 right-8 h-56 w-56 rounded-full bg-[radial-gradient(circle_at_35%_35%,#fff7df,transparent_22%),radial-gradient(circle,#eadbff,transparent_64%)] opacity-80" />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="relative"><div className="flex items-center gap-2 text-violet-700 dark:text-violet-300"><Sparkles className="h-5 w-5" /><span className="text-sm font-semibold">Energetic Decoder · Report Builder</span></div><h2 className="mt-2 font-serif text-3xl font-semibold tracking-tight">Report Designs</h2><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Compose multi-page reports on a freeform canvas. Each design uses one Content Set and keeps its own visual language.</p></div>
-        <Dialog open={open} onOpenChange={setOpen}><DialogTrigger className="inline-flex items-center gap-2 rounded-xl bg-[#5420a8] px-4 py-2.5 text-sm font-semibold text-white shadow-sm"><Plus className="h-4 w-4" /> Create report design</DialogTrigger><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>New Report Design</DialogTitle></DialogHeader><div className="space-y-4 py-2"><label className="block text-sm font-medium">Report Design name<Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Energetic Blueprint" className="mt-1.5" /></label><label className="block text-sm font-medium">Content Set<select value={contentSetId} onChange={(e) => setContentSetId(e.target.value)} className="mt-1.5 h-10 w-full rounded-lg border bg-background px-3 text-sm">{sets.map((s) => <option key={s.id} value={s.id}>{s.name}{s.isDefault ? " (built-in)" : ""}</option>)}</select></label><label className="block text-sm font-medium">Page size<select value={pageSize} onChange={(e) => setPageSize(e.target.value as typeof pageSize)} className="mt-1.5 h-10 w-full rounded-lg border bg-background px-3 text-sm"><option value="letter">US Letter</option><option value="a4">A4</option><option value="custom">Custom</option></select></label><button onClick={create} disabled={creating} className="w-full rounded-xl bg-[#5420a8] py-2.5 text-sm font-semibold text-white disabled:opacity-50">{creating ? "Creating…" : "Create & open canvas"}</button></div></DialogContent></Dialog>
+  const shownDesigns = designs?.filter((d) => (!search.trim() || d.title.toLowerCase().includes(search.trim().toLowerCase())) && (statusFilter === null || (d.status ?? "draft") === statusFilter)) ?? null;
+  const setName = (d: ReportDesign) => sets.find((s) => s.id === (d.contentSetId || "default"))?.name ?? "Default";
+
+  // v2 (2026-10-16): Content Sets' sibling — the same serif header with the
+  // planet, the section tabs, and one toolbar card holding search, the status
+  // filter, Create and the light table.
+  return (
+    <DecoderEditorialPage
+      icon={LayoutTemplate}
+      title="Report Designs"
+      description="Compose multi-page reports on a freeform canvas. Each design uses one Content Set and keeps its own visual language."
+    >
+      <div data-report-designs-library className="@container/rdlib min-w-0 rounded-2xl border bg-card p-4 shadow-card sm:p-5">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-0 flex-1 basis-60 @min-[900px]/rdlib:max-w-[330px]">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-[var(--cs-subtle)]" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search report designs…" className="h-11 rounded-xl bg-card pl-11" aria-label="Search report designs" />
+          </div>
+          <OptionSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} noneLabel="All statuses" aria-label="Filter by status" className="h-11 w-44 rounded-xl" />
+          <div className="flex w-full @min-[640px]/rdlib:ml-auto @min-[640px]/rdlib:w-auto">
+            <Button className="h-11 flex-1 rounded-xl px-5 @min-[640px]/rdlib:flex-none" onClick={() => setOpen(true)}>
+              <PlusCircle className="mr-2 size-[18px]" />
+              Create report design
+            </Button>
+          </div>
+        </div>
+
+        {designs === null ? (
+          <div className="h-40 animate-pulse rounded-xl bg-[var(--cs-head)]" />
+        ) : shownDesigns?.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-10 text-center">
+            <FileText className="mx-auto mb-3 size-8 text-[var(--cs-subtle)] opacity-50" />
+            <p className="text-sm text-[var(--cs-body)]">{designs.length === 0 ? "No report designs yet." : "No report designs match."}</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border">
+            <div className={`hidden items-center gap-4 bg-[var(--cs-head)] px-5 py-3.5 text-sm font-semibold text-[var(--cs-ink)] @min-[760px]/rdlib:grid ${COLS}`}>
+              <span>Name</span>
+              <span>Status</span>
+              <span>Content set</span>
+              <span>Pages</span>
+              <span>Updated</span>
+              <span className="text-right">Actions</span>
+            </div>
+            <ul className="divide-y">
+              {shownDesigns?.map((d) => (
+                <li key={d.id} data-report-design-row={d.id} className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 bg-card px-4 py-3.5 text-sm @min-[760px]/rdlib:px-5 ${COLS}`}>
+                  <Link className="min-w-0 truncate font-semibold text-[var(--cs-ink)] hover:text-[var(--cs-link)] hover:underline" href={`/sa/${subAccountId}/energetic-decoder/reports/${d.id}`}>
+                    {d.title}
+                  </Link>
+                  <div className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--cs-subtle)] @min-[760px]/rdlib:contents">
+                    <StatusPill status={d.status ?? "draft"} />
+                    <span className="truncate @min-[760px]/rdlib:text-[var(--cs-body)]">
+                      <span className="@min-[760px]/rdlib:hidden">Content set: </span>
+                      {setName(d)}
+                    </span>
+                    <span className="tabular-nums @min-[760px]/rdlib:text-[var(--cs-body)]">
+                      {d.pages.length}
+                      <span className="@min-[760px]/rdlib:hidden"> {d.pages.length === 1 ? "page" : "pages"}</span>
+                    </span>
+                    <span className="text-xs">{formatRelativeTime(d.updatedAt ? new Date(d.updatedAt) : null)}</span>
+                  </div>
+                  <div className="col-start-2 row-span-2 row-start-1 flex items-center justify-end gap-0.5 @min-[760px]/rdlib:col-start-auto @min-[760px]/rdlib:row-span-1 @min-[760px]/rdlib:row-start-auto">
+                    <button type="button" title="Rename" aria-label={`Rename ${d.title}`} className="rounded-md p-2 text-[var(--cs-subtle)] hover:bg-[var(--cs-tint)] hover:text-[var(--cs-link)]" onClick={() => { setRenaming(d); setRenameValue(d.title); }}>
+                      <Pencil className="size-4" />
+                    </button>
+                    <button type="button" title="Duplicate" aria-label={`Duplicate ${d.title}`} className="rounded-md p-2 text-[var(--cs-subtle)] hover:bg-[var(--cs-tint)] hover:text-[var(--cs-link)]" onClick={() => duplicate(d.id)}>
+                      <Copy className="size-4" />
+                    </button>
+                    <button type="button" title="Delete" aria-label={`Delete ${d.title}`} className="rounded-md p-2 text-[var(--cs-subtle)] hover:bg-destructive/10 hover:text-destructive" onClick={() => remove(d.id)}>
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {shownDesigns && shownDesigns.length > 0 && (
+          <p className="mt-4 text-sm text-[var(--cs-body)]" data-library-range>
+            Showing {shownDesigns.length} of {designs?.length ?? 0} report design{(designs?.length ?? 0) === 1 ? "" : "s"}
+          </p>
+        )}
       </div>
-      <div className="mt-6 flex flex-wrap gap-2"><label className="relative min-w-[240px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search report designs…" className="pl-9" /></label><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="h-10 rounded-lg border bg-background px-3 text-sm"><option value="all">All statuses</option><option value="draft">Draft</option><option value="active">Active</option></select></div>
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-violet-100 dark:border-violet-900/40"><div className="min-w-[760px]"><div className="grid grid-cols-[minmax(220px,1.5fr)_110px_150px_90px_120px_120px] gap-3 bg-[#f7f2ff] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-violet-800 dark:bg-violet-950/30 dark:text-violet-200"><span>Name</span><span>Status</span><span>Content Set</span><span>Pages</span><span>Updated</span><span>Actions</span></div>{designs === null ? <div className="p-8 text-sm text-muted-foreground">Loading report designs…</div> : shownDesigns?.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground"><FileText className="mx-auto mb-2 h-7 w-7 opacity-40" />No report designs match.</div> : shownDesigns?.map((d) => <div key={d.id} className="grid grid-cols-[minmax(220px,1.5fr)_110px_150px_90px_120px_120px] items-center gap-3 border-t px-4 py-3 text-sm"><Link className="min-w-0 truncate font-medium hover:text-violet-700" href={`/sa/${subAccountId}/energetic-decoder/reports/${d.id}`}>{d.title}</Link><span className="w-fit rounded-full bg-violet-100 px-2 py-1 text-xs text-violet-800">{d.status ?? "Draft"}</span><span className="truncate text-muted-foreground">{sets.find((s) => s.id === (d.contentSetId || "default"))?.name ?? "Default"}</span><span>{d.pages.length}</span><span className="text-xs text-muted-foreground">{formatRelativeTime(d.updatedAt ? new Date(d.updatedAt) : null)}</span><div className="flex items-center gap-2"><button title="Rename" onClick={() => { setRenaming(d); setRenameValue(d.title); }}><Pencil className="h-4 w-4 text-muted-foreground" /></button><button title="Duplicate" onClick={() => duplicate(d.id)}><Copy className="h-4 w-4 text-muted-foreground" /></button><button title="Delete" onClick={() => remove(d.id)}><Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-600" /></button></div></div>)}</div></div>
-    </div>
-    <Dialog open={renaming !== null} onOpenChange={(v) => !v && setRenaming(null)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Rename Report Design</DialogTitle></DialogHeader><Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} /><button onClick={saveRename} className="rounded-xl bg-[#5420a8] py-2 text-sm font-semibold text-white">Save</button></DialogContent></Dialog>
-  </div>;
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className={`${CS_SCOPE} sm:max-w-lg`}>
+          <DialogHeader>
+            <DialogTitle>New Report Design</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="rd-new-title">Report Design name</Label>
+              <Input id="rd-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Energetic Blueprint" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rd-new-set">Content Set</Label>
+              <OptionSelect id="rd-new-set" value={contentSetId} onChange={(v) => v && setContentSetId(v)} options={sets.map((s) => ({ value: s.id, label: `${s.name}${s.isDefault ? " (built-in)" : ""}` }))} className="w-full" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rd-new-size">Page size</Label>
+              <OptionSelect id="rd-new-size" value={pageSize} onChange={(v) => v && setPageSize(v)} options={PAGE_SIZE_OPTIONS} className="w-full" />
+            </div>
+            <Button onClick={create} disabled={creating} className="w-full">
+              {creating ? "Creating…" : "Create & open canvas"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={renaming !== null} onOpenChange={(v) => !v && setRenaming(null)}>
+        <DialogContent className={`${CS_SCOPE} sm:max-w-md`}>
+          <DialogHeader>
+            <DialogTitle>Rename Report Design</DialogTitle>
+          </DialogHeader>
+          <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} aria-label="Report design name" />
+          <Button onClick={saveRename}>Save</Button>
+        </DialogContent>
+      </Dialog>
+      {confirmDialog}
+    </DecoderEditorialPage>
+  );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Link2 } from "lucide-react";
-import { useSubAccount } from "@/context/sub-account-context";
+import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -38,7 +38,8 @@ export function LinkReadingContactDialog({
   readingName: string;
   onLinked: (contactId: string) => void;
 }) {
-  const { subAccountId, agencyId } = useSubAccount();
+  // Optional: the effect below already waits for both ids (and static UI checks render this outside the provider).
+  const { subAccountId, agencyId } = useOptionalSubAccount() ?? { subAccountId: "", agencyId: null };
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selected, setSelected] = useState<Contact | null>(null);
   const [saving, setSaving] = useState(false);

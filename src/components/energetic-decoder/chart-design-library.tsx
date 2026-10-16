@@ -17,10 +17,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatRelativeTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
+import { EmptyState } from "@/components/system/empty-state";
 import { CHART_SYSTEM_LABEL, ChartDesignPreview } from "@/components/energetic-decoder/chart-design-controls";
 
 /**
@@ -46,7 +46,19 @@ function lastUpdated(set: ChartDesignSetWithMembers): Date | null {
   return stamps.length > 0 ? new Date(Math.max(...stamps)) : null;
 }
 
-export function ChartDesignLibrary({ legacyFallback }: { legacyFallback: ReactNode }) {
+/**
+ * `frame` places the library in its page (v2, 2026-10-16): the Chart Designs
+ * tab passes the Decoder page header, which receives the New Chart Design
+ * action, and the section tabs. Every state — loading, error, migration,
+ * gallery — renders inside the same frame so the page never jumps.
+ */
+export function ChartDesignLibrary({
+  legacyFallback,
+  frame = (_actions, body) => body,
+}: {
+  legacyFallback: ReactNode;
+  frame?: (actions: ReactNode, body: ReactNode) => ReactNode;
+}) {
   const { subAccountId, saPath, isAdmin } = useSubAccount();
   const router = useRouter();
   const [data, setData] = useState<ListResponse | null>(null);
@@ -154,23 +166,41 @@ export function ChartDesignLibrary({ legacyFallback }: { legacyFallback: ReactNo
     if (ok) setDeleteTarget(null);
   }
 
+  const newButton = isAdmin ? (
+    <Button onClick={() => setCreateOpen(true)}>
+      <Plus className="size-4" />
+      New Chart Design
+    </Button>
+  ) : null;
+
   if (loadError) {
-    return (
-      <div className="rounded-2xl border bg-card p-6 text-sm text-muted-foreground">
+    return frame(
+      null,
+      <div className="rounded-card border border-border bg-card p-6 text-sm text-muted-foreground shadow-card">
         Couldn&apos;t load chart designs.{" "}
-        <button type="button" className="font-medium text-primary underline" onClick={load}>
+        <button type="button" className="font-medium text-link underline" onClick={load}>
           Try again
         </button>
-      </div>
+      </div>,
     );
   }
-  if (!data) return <div className="h-64 animate-pulse rounded-2xl bg-muted/20" />;
+  if (!data) {
+    return frame(
+      null,
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="h-60 animate-pulse rounded-card bg-muted" />
+        ))}
+      </div>,
+    );
+  }
 
   if (data.migrationRequired) {
-    return (
+    return frame(
+      null,
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-2xl border border-dashed bg-card p-4 text-sm text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="flex items-start gap-3 rounded-card border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0 text-link" />
           <p>
             Your chart designs are being upgraded to unified Chart Designs — one design covering Human Design, Mandala and
             Astrology together. Until the upgrade is applied to this workspace, your current designs keep working exactly as
@@ -178,46 +208,31 @@ export function ChartDesignLibrary({ legacyFallback }: { legacyFallback: ReactNo
           </p>
         </div>
         {legacyFallback}
-      </div>
+      </div>,
     );
   }
 
-  return (
-    <div className="rounded-2xl border bg-card p-6">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-xl">
-          <h2 className="text-base font-semibold">Chart Designs</h2>
-          <p className="text-sm text-muted-foreground">
-            Each Chart Design holds the look of every chart — Human Design, Mandala and Astrology, each styled on its own.
-            The Default is used wherever a profile hasn&apos;t been given another design.
-          </p>
-        </div>
-        {isAdmin && (
-          <Button onClick={() => setCreateOpen(true)} className="shrink-0">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Chart Design
-          </Button>
-        )}
-      </div>
-
-      {data.sets.length > 3 && (
-        <div className="relative mb-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+  return frame(
+    newButton,
+    <div className="space-y-4" data-chart-design-gallery>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 basis-60 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search chart designs…" className="pl-9" aria-label="Search chart designs" />
         </div>
-      )}
+        <span className="text-caption text-muted-foreground tabular-nums">
+          {data.sets.length} {data.sets.length === 1 ? "design" : "designs"}
+        </span>
+      </div>
 
       {shown.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <Palette className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">{query ? "No chart designs match that search." : "No chart designs yet."}</p>
-        </div>
+        <EmptyState icon={Palette} title={query ? "No chart designs match that search." : "No chart designs yet."} className="rounded-card border border-dashed border-border bg-card" />
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((set) => {
             const updated = lastUpdated(set);
             return (
-              <li key={set.id}>
+              <li key={set.id} className="min-w-0">
                 <div
                   role="link"
                   tabIndex={0}
@@ -225,89 +240,88 @@ export function ChartDesignLibrary({ legacyFallback }: { legacyFallback: ReactNo
                   onKeyDown={(e) => {
                     if (e.key === "Enter") router.push(editorPath(set.id));
                   }}
-                  className={cn(
-                    "group flex cursor-pointer flex-col gap-4 rounded-xl border bg-background/60 p-4 transition hover:border-primary/40 hover:shadow-sm sm:flex-row sm:items-center",
-                    set.isDefault && "border-primary/40 bg-primary/5",
-                  )}
+                  data-chart-design-card={set.id}
+                  className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-card border border-border bg-card shadow-card outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
-                  <div className="flex shrink-0 gap-2">
+                  {/* Real previews of this design on a neutral tray. */}
+                  <div className="flex justify-center gap-2 border-b border-border bg-muted px-3 py-3">
                     {(["humanDesign", "mandala"] as const).map((system) => (
-                      <div key={system} className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-lg border bg-white p-1.5" title={CHART_SYSTEM_LABEL[system]}>
+                      <div key={system} className="flex size-24 items-center justify-center overflow-hidden rounded-lg border border-border bg-white p-1.5 sm:size-28" title={CHART_SYSTEM_LABEL[system]}>
                         <ChartDesignPreview system={system} design={set.designs[system]} sampleHd={sampleHd} sampleAstro={sampleAstro} size="thumb" className="h-full w-full" />
                       </div>
                     ))}
                   </div>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold">{set.name}</p>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="min-w-0 truncate text-body font-semibold text-foreground">{set.name}</p>
                       {set.isDefault && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                          <Star className="h-2.5 w-2.5 fill-current" />
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-tag-gold-bg px-2 py-0.5 text-caption font-medium text-tag-gold-fg">
+                          <Star className="size-3 fill-current" aria-hidden="true" />
                           Default
                         </span>
                       )}
+                      <div className="ml-auto shrink-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        {busy?.endsWith(set.id) ? (
+                          <Loader2 className="m-2 size-4 animate-spin text-muted-foreground" />
+                        ) : (
+                          <DropdownMenu>
+                            {/* `relative` contains the sr-only label below: without a positioned ancestor its
+                                absolute box escapes <main>'s scroll area and stretches the whole document. */}
+                            <DropdownMenuTrigger className="relative inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
+                              <MoreHorizontal className="size-4" />
+                              <span className="sr-only">Actions for {set.name}</span>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => router.push(editorPath(set.id))}>
+                                <Palette className="mr-2 h-3.5 w-3.5" />
+                                {isAdmin ? "Edit" : "Open"}
+                              </DropdownMenuItem>
+                              {isAdmin && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setRenameTarget(set);
+                                      setRenameValue(set.name);
+                                    }}
+                                  >
+                                    <Pencil className="mr-2 h-3.5 w-3.5" />
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => duplicate(set)}>
+                                    <Copy className="mr-2 h-3.5 w-3.5" />
+                                    Duplicate
+                                  </DropdownMenuItem>
+                                  {!set.isDefault && (
+                                    <DropdownMenuItem onClick={() => makeDefault(set)}>
+                                      <Star className="mr-2 h-3.5 w-3.5" />
+                                      Set as default
+                                    </DropdownMenuItem>
+                                  )}
+                                  {!set.isDefault && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(set)}>
+                                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
-                    {updated && <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(updated)}</p>}
-                    <div className="flex flex-wrap gap-1.5">
+                    {updated && <p className="-mt-1.5 text-caption text-muted-foreground">Updated {formatRelativeTime(updated)}</p>}
+                    <div className="mt-auto flex flex-wrap gap-1.5">
                       {(["humanDesign", "mandala", "astrology"] as const).map((system) => (
-                        <span key={system} className="rounded-full border bg-background px-2 py-0.5 text-[11px] text-muted-foreground">
+                        <span key={system} className="rounded-md bg-muted px-2 py-0.5 text-caption text-muted-foreground">
                           {CHART_SYSTEM_LABEL[system]}
                         </span>
                       ))}
-                      <span className="rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground/70">Frequency · Coming soon</span>
+                      <span className="rounded-md border border-dashed border-border px-2 py-0.5 text-caption text-ink-tertiary">Frequency · Coming soon</span>
                     </div>
-                  </div>
-                  <div className="shrink-0 self-start sm:self-center" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                    {busy?.endsWith(set.id) ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      <DropdownMenu>
-                        {/* `relative` contains the sr-only label below: without a positioned ancestor its
-                            absolute box escapes <main>'s scroll area and stretches the whole document. */}
-                        <DropdownMenuTrigger className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions for {set.name}</span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => router.push(editorPath(set.id))}>
-                            <Palette className="mr-2 h-3.5 w-3.5" />
-                            {isAdmin ? "Edit" : "Open"}
-                          </DropdownMenuItem>
-                          {isAdmin && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setRenameTarget(set);
-                                  setRenameValue(set.name);
-                                }}
-                              >
-                                <Pencil className="mr-2 h-3.5 w-3.5" />
-                                Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => duplicate(set)}>
-                                <Copy className="mr-2 h-3.5 w-3.5" />
-                                Duplicate
-                              </DropdownMenuItem>
-                              {!set.isDefault && (
-                                <DropdownMenuItem onClick={() => makeDefault(set)}>
-                                  <Star className="mr-2 h-3.5 w-3.5" />
-                                  Set as default
-                                </DropdownMenuItem>
-                              )}
-                              {!set.isDefault && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(set)}>
-                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
                   </div>
                 </div>
               </li>
@@ -382,6 +396,6 @@ export function ChartDesignLibrary({ legacyFallback }: { legacyFallback: ReactNo
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </div>,
   );
 }

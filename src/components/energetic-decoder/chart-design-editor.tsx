@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Activity,
-  ArrowLeft,
+  ChevronRight,
   Check,
   Circle,
   CircleDot,
@@ -17,6 +17,7 @@ import {
   MoveHorizontal,
   Orbit,
   PaintBucket,
+  Palette,
   Rows3,
   Share2,
   Sparkles,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import type { ChartDesignSystem } from "@/types/chart-design";
@@ -210,59 +212,73 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   return (
     // A purpose-built editing workspace, so it may run wider than the usual dashboard page (1500px vs 1400px):
     // the extra width goes to the preview, letting Human Design reach its natural size on wide screens.
-    // The editor also trims momentum-scope's 1.5rem padding to 0.75rem (momentum-scope is unlayered CSS,
-    // so a Tailwind padding class wouldn't win — hence the inline style).
-    <div className="momentum-scope mx-auto w-full max-w-[1500px] space-y-4 rounded-2xl" style={{ padding: "0.75rem" }}>
+    // v2 (2026-10-16): no `.momentum-scope` frame — white system panels on the canvas, and a record header
+    // (breadcrumb, icon chip, editable name, Duplicate / Save Changes) like every Magnetix record page.
+    <div className="mx-auto w-full max-w-[1500px] space-y-4">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 space-y-2">
-          <Link href={libraryHref} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" />
+      <header className="flex flex-col gap-3" data-chart-design-header>
+        <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
+          <Link href={saPath("/energetic-decoder")} className="hover:text-foreground hover:underline">
+            Energetic Decoder
+          </Link>
+          <ChevronRight className="size-3.5" aria-hidden="true" />
+          <Link href={libraryHref} className="hover:text-foreground hover:underline">
             Chart Designs
           </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={state.name}
-              onChange={(e) => setState((s) => setEditorName(s, e.target.value))}
-              disabled={readOnly}
-              maxLength={80}
-              aria-label="Chart design name"
-              className="min-w-0 max-w-full flex-1 rounded-md border border-transparent bg-transparent px-1 text-2xl font-semibold tracking-tight outline-none hover:border-border focus:border-border focus:bg-background disabled:hover:border-transparent sm:text-3xl"
-            />
-            {set.isDefault && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                <Star className="h-2.5 w-2.5 fill-current" />
-                Default
-              </span>
-            )}
+          <ChevronRight className="size-3.5" aria-hidden="true" />
+          <span aria-current="page" className="min-w-0 truncate font-medium text-foreground">
+            {state.name || set.name}
+          </span>
+        </nav>
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="flex min-w-0 flex-[1_1_18rem] items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
+              <Palette className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={state.name}
+                  onChange={(e) => setState((s) => setEditorName(s, e.target.value))}
+                  disabled={readOnly}
+                  maxLength={80}
+                  aria-label="Chart design name"
+                  className="-ml-1 min-w-0 max-w-full flex-1 rounded-md border border-transparent bg-transparent px-1 text-title-lg font-semibold tracking-tight text-foreground outline-none hover:border-border focus:border-border focus:bg-card disabled:hover:border-transparent"
+                />
+                {set.isDefault && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-tag-gold-bg px-2 py-0.5 text-caption font-medium text-tag-gold-fg">
+                    <Star className="size-3 fill-current" aria-hidden="true" />
+                    Default
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">One design for every chart — each chart system keeps its own colors.</p>
+            </div>
           </div>
-          <p className="px-1 text-sm text-muted-foreground">
-            One design for every chart — each chart system keeps its own colors.
-          </p>
+          {!readOnly && (
+            <div className="flex max-w-full flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={() => void duplicate()} disabled={duplicating || saving}>
+                {duplicating ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
+                Duplicate
+              </Button>
+              <Button onClick={() => void save()} disabled={!dirty || saving}>
+                {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                Save Changes
+              </Button>
+            </div>
+          )}
         </div>
-        {!readOnly && (
-          <div className="flex shrink-0 items-center gap-2 pt-6">
-            <Button variant="outline" onClick={() => void duplicate()} disabled={duplicating || saving}>
-              {duplicating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Copy className="mr-1.5 h-4 w-4" />}
-              Duplicate
-            </Button>
-            <Button onClick={() => void save()} disabled={!dirty || saving}>
-              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
-              Save Changes
-            </Button>
-          </div>
-        )}
-      </div>
+      </header>
 
       {readOnly && (
-        <div className="rounded-xl border border-dashed bg-card px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-card border border-dashed border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           View only — only sub-account admins can change chart designs.
         </div>
       )}
       {dirty && !readOnly && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-800 dark:text-amber-300">
+        <Alert tone="warning">
           Unsaved changes{changed.length > 0 ? ` in ${changed.map((s) => CHART_SYSTEM_LABEL[s]).join(", ")}` : ""} — Save Changes keeps them.
-        </div>
+        </Alert>
       )}
 
       {/* System tabs — in normal page flow: they scroll away with the header. */}
@@ -363,7 +379,7 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
           }
         />
       ) : (
-        <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
+        <div className="rounded-card border border-dashed border-border bg-card p-10 text-center">
           <Activity className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
           <h2 className="text-base font-semibold">Frequency styling is coming soon</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">

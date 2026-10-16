@@ -2,7 +2,10 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ContentSetsLibrary } from "@/components/energetic-decoder/content-sets-library";
-import { ContentSetEditor, type EditorSelection } from "@/components/energetic-decoder/content-set-editor";
+import {
+  ContentSetEditor,
+  type EditorSelection,
+} from "@/components/energetic-decoder/content-set-editor";
 import type { ContentSystem } from "@/lib/energetic-decoder/content-sets";
 
 /**
@@ -32,7 +35,6 @@ export function EnergeticDecoderContentTab() {
   if (!setId)
     return (
       <ContentSetsLibrary
-        onHome={() => router.push(`${pathname}?tab=home`, { scroll: false })}
         onOpenSet={(id) => {
           go({ set: id }, true);
           window.scrollTo({ top: 0 });
@@ -42,21 +44,36 @@ export function EnergeticDecoderContentTab() {
 
   const system = searchParams.get("system");
   const selection: EditorSelection = {
-    system: system === "hd" || system === "astro" || system === "freq" ? (system as ContentSystem) : null,
+    system:
+      system === "hd" || system === "astro" || system === "freq"
+        ? (system as ContentSystem)
+        : null,
     category: searchParams.get("category"),
     entry: searchParams.get("entry"),
   };
+  // The approved editor keeps its own header and width (the module's old
+  // 72rem frame); only the surrounding page chrome changed in v2.
   return (
-    <ContentSetEditor
-      key={setId}
-      setId={setId}
-      selection={selection}
-      onBack={() => go({}, true)}
-      onHome={() => router.push(`${pathname}?tab=home`, { scroll: false })}
-      onSelect={(next) => {
-        // Each phone step is its own history entry so the device Back button walks back a step.
-        go({ set: setId, system: next.system, category: next.category, entry: next.entry }, true);
-      }}
-    />
+    <div className="mx-auto w-full max-w-6xl min-w-0">
+      <ContentSetEditor
+        key={setId}
+        setId={setId}
+        selection={selection}
+        onBack={() => go({}, true)}
+        onHome={() => router.push(`${pathname}?tab=home`, { scroll: false })}
+        onSelect={(next) => {
+          // Each phone step is its own history entry so the device Back button walks back a step.
+          go(
+            {
+              set: setId,
+              system: next.system,
+              category: next.category,
+              entry: next.entry,
+            },
+            true
+          );
+        }}
+      />
+    </div>
   );
 }

@@ -216,7 +216,7 @@ check("header: no Generate Report (reports are generated from the Reports tab); 
     const header = html.slice(html.indexOf("data-reading-header"), html.indexOf("data-workspace-tabs"));
     assert.ok(!header.includes("Generate Report") && !header.includes("data-generate-report"), "no header-level Generate Report");
     assert.ok(header.includes("More Actions"), "⋮ menu kept");
-    assert.ok(html.includes("flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:max-w-full"));
+    assert.ok(html.includes("flex w-full min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:max-w-full sm:justify-end"));
   }
   assert.ok(!readFileSync("src/components/energetic-decoder/human-design-reading-workspace.tsx", "utf8").includes("onOpenGenerateDialog"));
 });
@@ -235,8 +235,9 @@ check("tab strips re-reveal the selected tab when their contents/size change (la
 check("tab strips scroll sideways only, inside themselves (touch pan-x, no vertical movement, no page overscroll, hidden scrollbar)", () => {
   for (const c of ["touch-pan-x", "overflow-x-auto", "overflow-y-hidden", "overscroll-x-contain", "[scrollbar-width:none]", "min-w-0"]) assert.ok(TAB_STRIP_CLASS.includes(c), c);
   assert.ok(ws(false).includes("touch-pan-x") && ws(false).includes("data-workspace-tabs"));
-  const page = readFileSync("src/app/(dashboard)/sa/[subAccountId]/energetic-decoder/page.tsx", "utf8");
-  assert.ok(page.includes("className={`${TAB_STRIP_CLASS}") && page.includes("data-module-tabs") && page.includes("useActiveTabVisible(tabStripRef, tab)"));
+  // v2 (2026-10-16): the module tabs live in the shared Decoder shell's pill strip.
+  const shell = readFileSync("src/components/energetic-decoder/decoder-shell.tsx", "utf8");
+  assert.ok(shell.includes("className={`${TAB_STRIP_CLASS}") && shell.includes("data-module-tabs") && shell.includes("useActiveTabVisible(tabStripRef, nav?.tab)"));
 });
 
 console.log("\nReading history (2+ snapshots only)");
@@ -257,10 +258,11 @@ check("one reading → no history control", () => {
 check("two+ readings → 'Reading from [date]', newest first and marked latest, the open snapshot selected", () => {
   const html = wsWith([{ id: "rB", createdAt: "2026-06-01T12:00:00Z" }, { id: "rA", createdAt: "2026-01-01T12:00:00Z" }]);
   assert.ok(html.includes("data-reading-history") && html.includes(">Reading from<"));
-  const opts = [...html.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<!-- -->([^<]*)<\/option>|<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g)].map((m) => m[1] ?? m[4]);
-  assert.deepEqual(opts, ["rB", "rA"]);
-  assert.ok(html.includes("Jun 1, 2026") && html.includes("Jan 1, 2026") && html.includes("(latest)"));
-  assert.ok(/<option value="rB" selected=""/.test(html), "the snapshot on screen is selected");
+  // v2 (2026-10-16): a system Select (OptionSelect), whose options render only when opened — so the
+  // closed trigger is checked for the selected snapshot, and the option list for order + labels.
+  assert.ok(html.includes("Jun 1, 2026 (latest)"), "the snapshot on screen is shown selected, marked latest");
+  const src = readFileSync("src/components/energetic-decoder/human-design-reading-workspace.tsx", "utf8");
+  assert.ok(src.includes("value={reading.id}") && src.includes('options={readingHistory.map((r, i) => ({ value: r.id, label: `${readingHistoryLabel(r, readingHistory)}${i === 0 ? " (latest)" : ""}` }))}'), "options follow readingHistory (newest first), the first marked latest");
 });
 check("selecting a snapshot is a navigation: pushes ?readingId= (none for the latest) and keeps the workspace tab; no history rows in the library", () => {
   assert.ok(tab.includes("router.push(build({ profileId, readingId: isLatest ? null : id, view: searchParams.get(\"view\") }), { scroll: false });"));

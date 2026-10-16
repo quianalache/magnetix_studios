@@ -12,10 +12,11 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { Alert } from "@/components/ui/alert";
+import { EmptyState } from "@/components/system/empty-state";
+import { DecoderIndexPage } from "@/components/energetic-decoder/decoder-shell";
 import type { EmbedConfig } from "@/types/embed-config";
 
-const CARD_BG = ["bg-card", "bg-secondary", "bg-accent/20", "bg-muted"] as const;
 
 /**
  * Embeds — list-first (2026-08-09), replacing the old single anonymous
@@ -67,6 +68,13 @@ export function EnergeticDecoderEmbedsTab() {
     }
   }
 
+  const qrLink = (
+    <Button variant="outline" render={<Link href={saPath("/qr-codes")} />}>
+      <ArrowUpRight className="size-4" />
+      Generate a QR code (opens QR Codes)
+    </Button>
+  );
+
   async function remove(id: string) {
     setEmbeds((prev) => prev?.filter((e) => e.id !== id) ?? null);
     try {
@@ -78,82 +86,76 @@ export function EnergeticDecoderEmbedsTab() {
     }
   }
 
+  // v2 (2026-10-16): the standard operational page — header with Create
+  // embed, the section tabs, the shared empty state, then the same honest
+  // "not built yet" note and the QR Codes link. No new embed functionality.
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border bg-card p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Embeds</h2>
-            <p className="text-sm text-muted-foreground">
-              Every submission through any of these becomes a saved reading + Contact automatically.
-            </p>
-          </div>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground">
-              <Plus className="h-3.5 w-3.5" />
-              Create new
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>New embed</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Instagram Bio Link" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Where it&apos;s going (optional)</Label>
-                  <Input value={placementNote} onChange={(e) => setPlacementNote(e.target.value)} placeholder="e.g. magnetixstudios.com footer" />
-                </div>
-                <Button onClick={create} disabled={creating} className="w-full">
-                  {creating ? "Creating…" : "Create embed"}
-                </Button>
+    <DecoderIndexPage
+      icon={Share2}
+      title="Embeds"
+      description="Every submission through an embed becomes a saved reading and a Contact automatically."
+      actions={
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger render={<Button />}>
+            <Plus className="size-4" />
+            Create embed
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>New embed</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Instagram Bio Link" />
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {embeds === null ? (
-          <div className="h-24 animate-pulse rounded-xl bg-muted/30" />
-        ) : embeds.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-8 text-center">
-            <Share2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No embeds yet. Create your first one.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {embeds.map((e, i) => (
-              <EmbedRow key={e.id} embed={e} bg={CARD_BG[i % CARD_BG.length]} subAccountId={subAccountId} onDelete={() => remove(e.id)} />
+              <div className="space-y-2">
+                <Label>Where it&apos;s going (optional)</Label>
+                <Input value={placementNote} onChange={(e) => setPlacementNote(e.target.value)} placeholder="e.g. magnetixstudios.com footer" />
+              </div>
+              <Button onClick={create} disabled={creating} className="w-full">
+                {creating ? "Creating…" : "Create embed"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      }
+    >
+      {embeds === null ? (
+        <div className="h-24 animate-pulse rounded-card bg-muted" />
+      ) : embeds.length === 0 ? (
+        <EmptyState
+          icon={Share2}
+          title="No embeds yet"
+          description="Create your first embed to put the public reading tool on your website."
+          action={qrLink}
+          className="rounded-card border border-dashed border-border bg-card"
+        />
+      ) : (
+        <div className="space-y-4">
+          <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-card shadow-card">
+            {embeds.map((e) => (
+              <EmbedRow key={e.id} embed={e} subAccountId={subAccountId} onDelete={() => remove(e.id)} />
             ))}
-          </div>
-        )}
-
-        <div className="mt-5 flex items-start gap-2 rounded-xl border border-dashed p-3.5 text-xs text-muted-foreground">
-          <span className="mt-0.5 rounded-full bg-muted px-1.5 py-0.5 font-semibold uppercase tracking-wide">Not built yet</span>
-          <span>
-            View / chart-run counts per embed, and picking a specific Chart Design per embed — both need new tracking + routing that
-            doesn&apos;t exist yet. Every embed currently opens the same public tool with your default chart designs.
-          </span>
+          </ul>
+          {qrLink}
         </div>
+      )}
 
-        <Button variant="outline" size="sm" className="mt-3" render={<Link href={saPath("/qr-codes")} />}>
-          <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-          Generate a QR code (opens QR Codes)
-        </Button>
-      </div>
-    </div>
+      <Alert tone="info" title="Not built yet">
+        View / chart-run counts per embed, and picking a specific Chart Design per embed — both need new tracking + routing that
+        doesn&apos;t exist yet. Every embed currently opens the same public tool with your default chart designs.
+      </Alert>
+    </DecoderIndexPage>
   );
 }
 
 function EmbedRow({
   embed,
-  bg,
   subAccountId,
   onDelete,
 }: {
   embed: EmbedConfig;
-  bg: (typeof CARD_BG)[number];
   subAccountId: string;
   onDelete: () => void;
 }) {
@@ -172,10 +174,10 @@ function EmbedRow({
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-3 rounded-xl border-none p-4 shadow-sm", bg)}>
+    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{embed.name}</p>
-        <p className="truncate text-[11px] text-muted-foreground">{embed.placementNote || "No placement note"}</p>
+        <p className="truncate text-body-sm font-semibold">{embed.name}</p>
+        <p className="truncate text-caption text-muted-foreground">{embed.placementNote || "No placement note"}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => copy("link")}>
@@ -186,10 +188,10 @@ function EmbedRow({
           <Copy className="mr-1 h-3 w-3" />
           {copied === "script" ? "Copied" : "Iframe"}
         </Button>
-        <button type="button" onClick={onDelete} className="text-muted-foreground hover:text-destructive">
+        <button type="button" onClick={onDelete} aria-label={`Delete ${embed.name}`} className="rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-    </div>
+    </li>
   );
 }

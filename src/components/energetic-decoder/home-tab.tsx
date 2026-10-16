@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  ScrollText, Wand2, LayoutTemplate, Palette, BookOpen, Share2,
-} from "lucide-react";
+import { ArrowRight, BookOpen, LayoutTemplate, Palette, ScrollText, Share2, Sparkles } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { cn } from "@/lib/utils";
+import { MetricCard } from "@/components/system/metric-card";
+import { EmptyState } from "@/components/system/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DecoderEditorialPage } from "@/components/energetic-decoder/decoder-shell";
 
 /** Must match the Tab union in page.tsx — kept here as a subset so this file doesn't need to import the page component. */
 export type EnergeticDecoderHomeTarget = "readings" | "builder" | "content" | "chartDesigns" | "embeds";
@@ -26,6 +28,10 @@ interface HomeStats {
  * countable stats only — no invented "reports purchased today" style
  * revenue figures, since there's no Stripe purchase record for reports yet
  * to make that real (flagged, not silently faked).
+ *
+ * v2 (2026-10-16): the module's editorial landing — serif header with the
+ * planet, white figure cards, Recent readings beside Jump to. No New reading
+ * / Reading configuration here (owner decision): those live on Readings.
  */
 export function EnergeticDecoderHomeTab({ onGoto }: { onGoto: (t: EnergeticDecoderHomeTarget) => void }) {
   const { subAccountId } = useSubAccount();
@@ -38,26 +44,58 @@ export function EnergeticDecoderHomeTab({ onGoto }: { onGoto: (t: EnergeticDecod
       .catch(() => setStats(null));
   }, [subAccountId]);
 
-  const links: { target: EnergeticDecoderHomeTarget; label: string; desc: string; icon: typeof ScrollText }[] = [
-    { target: "readings", label: "Readings", desc: "See a client's saved chart", icon: ScrollText },
-    { target: "builder", label: "Report Builder", desc: "Edit a personalized report design", icon: LayoutTemplate },
-    { target: "chartDesigns", label: "Chart Designs", desc: "Manage saved chart color presets", icon: Palette },
-    { target: "content", label: "Content", desc: "Rewrite what a gate or type says", icon: BookOpen },
-    { target: "embeds", label: "Embeds", desc: "Manage embed codes for your site", icon: Share2 },
+  const links: { target: EnergeticDecoderHomeTarget; label: string; desc: string; icon: typeof ScrollText; tone: Tone }[] = [
+    { target: "readings", label: "Readings", desc: "See a client's saved chart", icon: ScrollText, tone: "violet" },
+    { target: "builder", label: "Report Builder", desc: "Edit a personalized report design", icon: LayoutTemplate, tone: "pink" },
+    { target: "content", label: "Content", desc: "Rewrite what a gate or type says", icon: BookOpen, tone: "gold" },
+    { target: "chartDesigns", label: "Chart Designs", desc: "Manage saved chart color presets", icon: Palette, tone: "aqua" },
+    { target: "embeds", label: "Embeds", desc: "Manage embed codes for your site", icon: Share2, tone: "blue" },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <HomeStat icon={ScrollText} bg="bg-card" label="Total readings" value={stats?.totalReadings} hint={stats ? `+${stats.readingsToday} today` : undefined} />
-        <HomeStat icon={LayoutTemplate} bg="bg-secondary" label="Report designs" value={stats?.reportDesignCount} hint="in Report Builder" />
-        <HomeStat icon={Wand2} bg="bg-accent/20" label="Chart designs" value={stats?.chartDesignCount} hint="saved color presets" />
-        <HomeStat icon={Share2} bg="bg-muted" label="Embeds" value={stats?.embedCount} hint="links you've created" />
+    <DecoderEditorialPage
+      icon={Sparkles}
+      title="Energetic Decoder"
+      description="Human Design and Astrology chart readings — pick whichever system(s) you offer. Frequency is coming soon."
+    >
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" data-decoder-home-stats>
+        <MetricCard icon={ScrollText} tone="violet" label="Total readings" value={stats?.totalReadings ?? "—"} hint={stats ? `+${stats.readingsToday} today` : undefined} loading={!stats} />
+        <MetricCard icon={LayoutTemplate} tone="pink" label="Report designs" value={stats?.reportDesignCount ?? "—"} hint="in Report Builder" loading={!stats} />
+        <MetricCard icon={Palette} tone="aqua" label="Chart designs" value={stats?.chartDesignCount ?? "—"} hint="saved color presets" loading={!stats} />
+        <MetricCard icon={Share2} tone="gold" label="Embeds" value={stats?.embedCount ?? "—"} hint="links you've created" loading={!stats} />
       </div>
 
-      <div>
-        <p className="mb-2.5 text-sm font-semibold">Jump to</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <section className="min-w-0 overflow-hidden rounded-card border border-border bg-card shadow-card" aria-labelledby="decoder-recent">
+          <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+            <h2 id="decoder-recent" className="text-section font-semibold">Recent readings</h2>
+            <button type="button" onClick={() => onGoto("readings")} className="inline-flex items-center gap-1 text-body-sm font-semibold text-link hover:underline">
+              View all <ArrowRight className="size-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          {!stats ? (
+            <div className="space-y-2 px-5 pb-5">
+              {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+            </div>
+          ) : stats.recent.length === 0 ? (
+            <EmptyState compact icon={ScrollText} title="No readings yet" description="Readings you create show up here." />
+          ) : (
+            <ul className="divide-y divide-border border-t border-border">
+              {stats.recent.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-3 text-body-sm sm:px-5">
+                  <span className="min-w-0 truncate">
+                    <span className="font-semibold text-foreground">{r.name}</span>
+                    <span className="text-muted-foreground"> — {systemLabel(r.system)} reading</span>
+                  </span>
+                  <span className="shrink-0 text-caption text-muted-foreground tabular-nums">{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="min-w-0 space-y-2.5" aria-labelledby="decoder-jump">
+          <h2 id="decoder-jump" className="text-micro font-semibold tracking-[0.12em] text-ink-tertiary uppercase">Jump to</h2>
           {links.map((l) => {
             const Icon = l.icon;
             return (
@@ -65,72 +103,37 @@ export function EnergeticDecoderHomeTab({ onGoto }: { onGoto: (t: EnergeticDecod
                 key={l.target}
                 type="button"
                 onClick={() => onGoto(l.target)}
-                className="flex items-start gap-3 rounded-xl border bg-card p-4 text-left shadow-sm hover:border-primary"
+                className="group flex w-full items-center gap-3 rounded-card border border-border bg-card px-4 py-3 text-left shadow-card transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/30 text-primary">
-                  <Icon className="h-4 w-4" />
+                <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-chip", TONE[l.tone])}>
+                  <Icon className="size-4" aria-hidden="true" />
                 </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">{l.label}</p>
-                  <p className="text-xs text-muted-foreground">{l.desc}</p>
-                </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-body-sm font-semibold text-foreground">{l.label}</span>
+                  <span className="block truncate text-caption text-muted-foreground">{l.desc}</span>
+                </span>
+                <ArrowRight className="size-4 shrink-0 text-link transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </button>
             );
           })}
-        </div>
+        </section>
       </div>
-
-      <div>
-        <p className="mb-2.5 text-sm font-semibold">Recent activity</p>
-        {!stats ? (
-          <div className="h-24 animate-pulse rounded-xl bg-muted/30" />
-        ) : stats.recent.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-6 text-center text-xs text-muted-foreground">No readings yet.</p>
-        ) : (
-          <div className="divide-y rounded-xl border bg-card">
-            {stats.recent.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                <span className="min-w-0 truncate font-medium">{r.name} — {systemLabel(r.system)} reading</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    </DecoderEditorialPage>
   );
 }
+
+type Tone = "violet" | "pink" | "gold" | "aqua" | "blue";
+const TONE: Record<Tone, string> = {
+  violet: "bg-tag-violet-bg text-tag-violet-fg",
+  pink: "bg-tag-pink-bg text-tag-pink-fg",
+  gold: "bg-tag-gold-bg text-tag-gold-fg",
+  aqua: "bg-tag-aqua-bg text-tag-aqua-fg",
+  blue: "bg-tag-blue-bg text-tag-blue-fg",
+};
 
 function systemLabel(system: string): string {
   if (system === "mixed") return "Human Design + Astrology";
   if (system === "humanDesign") return "Human Design";
   if (system === "astrology") return "Astrology";
   return "Frequency";
-}
-
-function HomeStat({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  bg,
-}: {
-  icon: typeof ScrollText;
-  label: string;
-  value: number | undefined;
-  hint?: string;
-  bg: string;
-}) {
-  return (
-    <div className={cn("rounded-lg border-none shadow-sm", bg)}>
-      <div className="flex flex-row items-center justify-between gap-2 p-6 pb-2">
-        <h3 className="text-sm font-medium tracking-tight text-foreground">{label}</h3>
-        <Icon className="h-4 w-4 shrink-0 text-primary" />
-      </div>
-      <div className="p-6 pt-0">
-        <div className="text-2xl font-bold tabular-nums text-foreground">{value ?? "—"}</div>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-      </div>
-    </div>
-  );
 }

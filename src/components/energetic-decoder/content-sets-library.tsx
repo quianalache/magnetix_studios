@@ -25,6 +25,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { DecoderEditorialPage } from "@/components/energetic-decoder/decoder-shell";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,10 +50,8 @@ import {
   type ContentSetStatus,
 } from "@/lib/energetic-decoder/content-sets";
 import {
-  Breadcrumb,
   CS_SCOPE,
   IconTile,
-  PageHeader,
   StatusPill,
   displayTitle,
   setTile,
@@ -93,7 +92,11 @@ export function formatSetDate(iso: string | null): string {
   return iso ? DATE_FMT.format(new Date(iso)) : "—";
 }
 
-export function ContentSetsLibrary({ onOpenSet, onHome }: { onOpenSet: (id: string) => void; onHome?: () => void }) {
+const TITLE = "Content Sets";
+const DESCRIPTION =
+  "Content sets hold reusable interpretation content for your reports. Create, edit, and manage content for different focuses, languages, and audiences — all in one place.";
+
+export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => void }) {
   const { subAccountId, isAdmin } = useSubAccount();
   const base = `/api/sub-accounts/${subAccountId}/energetic-decoder/content-sets`;
   const [sets, setSets] = useState<ContentSetRow[] | null>(null);
@@ -186,36 +189,24 @@ export function ContentSetsLibrary({ onOpenSet, onHome }: { onOpenSet: (id: stri
     }
   }
 
-  const header = (
-    <PageHeader
-      icon={Sparkles}
-      title="Content Sets"
-      description="Content sets hold reusable interpretation content for your reports. Create, edit, and manage content for different focuses, languages, and audiences — all in one place."
-      breadcrumb={<Breadcrumb items={[{ label: "Energetic Decoder", onClick: onHome }, { label: "Content Sets" }]} />}
-    />
-  );
-
   if (loadError) {
     return (
-      <div className={cn(CS_SCOPE, "min-w-0 space-y-6")}>
-        {header}
+      <DecoderEditorialPage icon={Sparkles} title={TITLE} description={DESCRIPTION}>
         <div className="rounded-2xl border bg-card p-6 text-sm text-[var(--cs-body)]">
           Couldn&apos;t load content sets.{" "}
           <button type="button" className="font-medium text-[var(--cs-link)] underline" onClick={load}>
             Try again
           </button>
         </div>
-      </div>
+      </DecoderEditorialPage>
     );
   }
 
   const statusLabel = statusFilter === "all" ? "All Statuses" : statusFilter === "active" ? "Active" : "Draft";
 
   return (
-    <div className={cn(CS_SCOPE, "min-w-0 space-y-6")} data-content-sets-library>
-      {header}
-
-      <div className="@container/cslib min-w-0 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(26,18,56,0.04)] sm:p-5">
+    <DecoderEditorialPage icon={Sparkles} title={TITLE} description={DESCRIPTION}>
+      <div data-content-sets-library className="@container/cslib min-w-0 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(26,18,56,0.04)] sm:p-5">
         <div className="mb-5 flex flex-wrap items-center gap-3">
           <div className="relative min-w-0 flex-1 basis-60 @min-[900px]/cslib:max-w-[330px]">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[var(--cs-subtle)]" />
@@ -435,7 +426,7 @@ export function ContentSetsLibrary({ onOpenSet, onHome }: { onOpenSet: (id: stri
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </DecoderEditorialPage>
   );
 }
 

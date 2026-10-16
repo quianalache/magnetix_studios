@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { usePathname, useParams, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, FlaskConical, ScrollText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { OptionSelect } from "@/components/system/option-select";
 import { useSubAccount } from "@/context/sub-account-context";
 import { contentRequirementLabel } from "@/lib/energetic-decoder/content-sets";
 import type { ReportDesign } from "@/types/report-blocks";
@@ -52,6 +54,13 @@ export default function ReportDesignPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  // Opened without a usable source (no `?source=`, an unknown one, or a
+  // reading with no id): ask which data to preview with instead of showing
+  // the API's raw "source must be 'sample' or 'reading'" message.
+  const sourceParam = searchParams.get("source");
+  const needsSource = !(sourceParam === "sample" || (sourceParam === "reading" && !!searchParams.get("readingId")));
 
   async function openPdfPreview() {
     if (!data || pdfLoading) return;
@@ -72,7 +81,7 @@ export default function ReportDesignPreviewPage() {
   }
 
   useEffect(() => {
-    if (!subAccountId) return;
+    if (!subAccountId || needsSource) return;
     const source = searchParams.get("source") ?? "";
     const readingId = searchParams.get("readingId");
     const qs = new URLSearchParams({ source });
@@ -97,7 +106,16 @@ export default function ReportDesignPreviewPage() {
         setData(next);
       })
       .catch((e: Error) => setError(e.message));
-  }, [subAccountId, params.reportId, searchParams]);
+  }, [subAccountId, params.reportId, searchParams, needsSource]);
+
+  /** Re-open this preview with the chosen source, keeping its other params (draft, contentSetId). */
+  function chooseSource(next: { source: "sample" } | { source: "reading"; readingId: string }) {
+    const qs = new URLSearchParams(searchParams.toString());
+    qs.set("source", next.source);
+    if (next.source === "reading") qs.set("readingId", next.readingId);
+    else qs.delete("readingId");
+    router.replace(`${pathname}?${qs}`);
+  }
 
   return (
     <div className="momentum-scope min-h-screen">
@@ -116,13 +134,15 @@ export default function ReportDesignPreviewPage() {
           )}
         </div>
 
-        {error && (
+        {needsSource && <ChooseSource subAccountId={subAccountId} onChoose={chooseSource} />}
+
+        {!needsSource && error && (
           <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
             {error}
           </div>
         )}
 
-        {!data && !error && <div className="h-96 w-full animate-pulse rounded-2xl bg-muted/30" />}
+        {!needsSource && !data && !error && <div className="h-96 w-full animate-pulse rounded-2xl bg-muted/30" />}
 
         {data && (
           <>
@@ -147,6 +167,54 @@ export default function ReportDesignPreviewPage() {
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Friendly source picker shown when the preview URL doesn't say what to preview with. */
+function ChooseSource({
+  subAccountId,
+  onChoose,
+}: {
+  subAccountId: string;
+  onChoose: (next: { source: "sample" } | { source: "reading"; readingId: string }) => void;
+}) {
+  const [readings, setReadings] = useState<{ id: string; name: string }[] | null>(null);
+  const [readingId, setReadingId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!subAccountId) return;
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/readings`)
+      .then((r) => (r.ok ? r.json() : { readings: [] }))
+      .then((d: { readings?: { id: string; name: string }[] }) => setReadings((d.readings ?? []).map((r) => ({ id: r.id, name: r.name }))))
+      .catch(() => setReadings([]));
+  }, [subAccountId]);
+
+  return (
+    <div className="rounded-2xl border bg-card p-6" data-preview-choose-source>
+      <h2 className="text-xl font-semibold tracking-tight">Choose what to preview with</h2>
+      <p className="mt-1 text-sm text-muted-foreground">This preview needs data to fill in the report. Use the sample data, or pick one of your readings.</p>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-3 rounded-xl border p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold"><FlaskConical className="size-4" aria-hidden="true" /> Sample data</p>
+          <p className="text-sm text-muted-foreground">A built-in example chart — nothing personal.</p>
+          <Button className="mt-auto" onClick={() => onChoose({ source: "sample" })}>Use sample data</Button>
+        </div>
+        <div className="flex flex-col gap-3 rounded-xl border p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold"><ScrollText className="size-4" aria-hidden="true" /> A reading</p>
+          <OptionSelect
+            value={readingId}
+            onChange={setReadingId}
+            options={(readings ?? []).map((r) => ({ value: r.id, label: r.name }))}
+            placeholder={readings === null ? "Loading readings…" : readings.length === 0 ? "No readings yet" : "Choose a reading…"}
+            disabled={!readings || readings.length === 0}
+            aria-label="Reading to preview with"
+            className="w-full"
+          />
+          <Button variant="outline" className="mt-auto" disabled={!readingId} onClick={() => readingId && onChoose({ source: "reading", readingId })}>
+            Preview with this reading
+          </Button>
+        </div>
       </div>
     </div>
   );

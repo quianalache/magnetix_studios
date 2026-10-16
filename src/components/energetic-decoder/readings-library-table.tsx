@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronsUpDown, ArrowDown, ArrowUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CS_SCOPE } from "@/components/energetic-decoder/content-sets-visuals";
 import { ZODIAC_ELEMENT, ZODIAC_GLYPH, ZODIAC_GLYPH_FONT, type ZodiacElement } from "@/lib/energetics/mandala-spec";
 import {
   libraryPageWindow,
@@ -122,10 +123,11 @@ export function ReadingsLibraryTable({
   const to = data ? from + rows.length - (rows.length > 0 ? 1 : 0) : 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-background" data-readings-library>
+    // The light Content Sets table (v2 Decoder standard): white card, soft neutral header row.
+    <div className={cn(CS_SCOPE, "overflow-hidden rounded-2xl border bg-card shadow-card")} data-readings-library>
       {/* Column headings — desktop/tablet only; phones get stacked rows. */}
       <div
-        className="hidden items-center gap-4 border-b bg-card/60 px-5 py-3 text-xs font-semibold text-muted-foreground md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_7.5rem]"
+        className="hidden items-center gap-4 border-b bg-[var(--cs-head)] px-5 py-3.5 text-sm font-semibold text-[var(--cs-ink)] md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_7.5rem]"
         role="row"
       >
         <button
@@ -159,7 +161,7 @@ export function ReadingsLibraryTable({
               data-row-kind={row.kind}
               data-row-id={row.id}
               onClick={() => onOpen(row)}
-              className="group flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-card/25 md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_7.5rem] md:gap-4 md:px-5 md:py-2"
+              className="group flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-[var(--cs-head)] md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_7.5rem] md:gap-4 md:px-5 md:py-2"
             >
               {/* Name (+ the chart summary stacked underneath on phones) */}
               <div className="flex min-w-0 flex-1 items-center gap-3">
