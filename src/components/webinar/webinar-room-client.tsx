@@ -9,7 +9,12 @@ import {
   type TrackReference,
 } from "@livekit/components-react";
 import { ConnectionState, Room, Track } from "livekit-client";
+import { CalendarClock, Link2Off, Loader2, WifiOff } from "lucide-react";
 import "@livekit/components-styles";
+import { PublicAction, PublicStateShell, type PublicVariant } from "@/components/public/public-shell";
+
+/** Why a join attempt stopped — from the access API's status, never its raw message. */
+type JoinProblem = "invalid" | "not-open" | "connect";
 
 function RoomView({
   room,
@@ -64,9 +69,16 @@ function RoomView({
     </main>
   );
 }
-export default function WebinarRoomClient({ token }: { token: string }) {
+export default function WebinarRoomClient({
+  token,
+  businessName,
+}: {
+  token: string;
+  /** The host workspace's name, resolved server-side from the link. */
+  businessName: string | null;
+}) {
   const [room] = useState(() => new Room());
-  const [error, setError] = useState("");
+  const [problem, setProblem] = useState<JoinProblem | null>(null);
   const [details, setDetails] = useState<{
     token: string;
     url: string;
@@ -76,25 +88,53 @@ export default function WebinarRoomClient({ token }: { token: string }) {
   useEffect(() => {
     void fetch(`/api/webinar/access/${token}`, { method: "POST" })
       .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Unable to join webinar.");
-        setDetails(data);
+        if (res.ok) return setDetails(await res.json());
+        // 401 bad signature / 404 webinar gone → the link; 403 → not live yet or registration no longer active.
+        setProblem(res.status === 403 ? "not-open" : res.status === 401 || res.status === 404 ? "invalid" : "connect");
       })
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "Unable to join webinar.")
-      );
+      .catch(() => setProblem("connect"));
     return () => {
       room.disconnect();
     };
   }, [room, token]);
   useEffect(() => {
     if (!details) return;
-    void room
-      .connect(details.url, details.token)
-      .catch(() => setError("Unable to connect to the webinar room."));
+    void room.connect(details.url, details.token).catch(() => setProblem("connect"));
   }, [details, room]);
-  if (error) return <main className="text-destructive p-6">{error}</main>;
-  if (!details) return <main className="p-6">Joining webinar…</main>;
+  const variant: PublicVariant = businessName ? { kind: "tenant", brand: { name: businessName } } : { kind: "magnetix" };
+  if (problem === "invalid")
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={Link2Off}
+        title="This webinar link isn't valid"
+        description="Check that you opened the whole link from your registration email, or ask the host to send it again."
+      />
+    );
+  if (problem === "not-open")
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={CalendarClock}
+        tone="brand"
+        title="This webinar isn't open right now"
+        description="The room opens when the webinar goes live. Come back at the start time using the link from your registration email."
+        action={<PublicAction onClick={() => window.location.reload()}>Check again</PublicAction>}
+      />
+    );
+  if (problem === "connect")
+    return (
+      <PublicStateShell
+        variant={variant}
+        icon={WifiOff}
+        tone="error"
+        title="We couldn't connect you to the webinar"
+        description="Check your connection and try again."
+        action={<PublicAction onClick={() => window.location.reload()}>Try again</PublicAction>}
+      />
+    );
+  if (!details)
+    return <PublicStateShell variant={variant} icon={Loader2} tone="brand" title="Joining webinar…" poweredBy={false} />;
   return (
     <RoomContext.Provider value={room}>
       <RoomView room={room} title={details.title} role={details.role} />

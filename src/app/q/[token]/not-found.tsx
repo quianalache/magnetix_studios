@@ -1,5 +1,9 @@
 import { Link2Off } from "lucide-react";
 import { PublicStateShell } from "@/components/public/public-shell";
+import type { Metadata } from "next";
+
+/** The not-found render takes this boundary's metadata (the page's is dropped). */
+export const metadata: Metadata = { title: "Link not valid" };
 
 /** Invalid or replaced quote / invoice link (re-sending a quote mints a new link). */
 export default function QuoteLinkNotFound() {

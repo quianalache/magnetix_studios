@@ -231,15 +231,31 @@ export default function OfferThemeEditorPage({
               </div>
             </PopoverContent>
           </Popover>
-          <a href={`/offer/${subAccountId}/${offerId}`} target="_blank" rel="noreferrer">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="rounded-full bg-violet-100 text-violet-900 hover:bg-violet-200"
-            >
-              <ExternalLink className="h-4 w-4" /> Preview
-            </Button>
-          </a>
+          {/* The public page only exists once the offer is published — a draft
+              link always reads "This page isn't available". The canvas on
+              this page renders the same checkout view meanwhile. */}
+          {offer?.visibility === "published" ? (
+            <a href={`/offer/${subAccountId}/${offerId}`} target="_blank" rel="noreferrer">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full bg-violet-100 text-violet-900 hover:bg-violet-200"
+              >
+                <ExternalLink className="h-4 w-4" /> Preview
+              </Button>
+            </a>
+          ) : (
+            <span title="Draft — publish this offer to open its public page. The preview on this page shows the same checkout.">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled
+                className="rounded-full bg-violet-100 text-violet-900"
+              >
+                <ExternalLink className="h-4 w-4" /> Preview (draft)
+              </Button>
+            </span>
+          )}
         </div>
       </div>
 

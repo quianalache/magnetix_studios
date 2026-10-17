@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 
 import { resolveBookingLogo } from "@/lib/brand/workspace-logo";
@@ -11,6 +13,7 @@ import { eventStatus } from "@/types/events";
 import type { BookingPage } from "@/types/booking";
 import type { CalendarEvent } from "@/types/events";
 import type { SubAccountDoc } from "@/types/tenancy";
+import { publicTitle } from "@/lib/server/public-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -33,18 +36,22 @@ interface PageProps {
   params: Promise<{ token: string }>;
 }
 
-export default async function PublicEventPage({ params }: PageProps) {
-  const { token } = await params;
-
+/**
+ * Loads the booking a manage link points at, applying every check the page
+ * relies on (HMAC, current token hash, booking-page event). Null = not found.
+ * Cached per request so the title and the page share one read.
+ */
+const loadManagedEvent = cache(async (token: string) => {
   const verified = verifyEventToken(token);
-  if (!verified) notFound();
+  if (!verified) return null;
 
   const db = getAdminDb();
   const eventSnap = await db.collection("events").doc(verified.eventId).get();
-  if (!eventSnap.exists) notFound();
+  if (!eventSnap.exists) return null;
   const event = eventSnap.data() as CalendarEvent;
-  if (event.publicTokenHash !== hashEventToken(token)) notFound();
-  if (!event.bookingPageSlug) notFound();
+  if (event.publicTokenHash !== hashEventToken(token)) return null;
+  const pageSlug = event.bookingPageSlug;
+  if (!pageSlug) return null;
 
   const [subSnap, pageSnap] = await Promise.all([
     db.doc(`subAccounts/${event.subAccountId}`).get(),
@@ -54,9 +61,32 @@ export default async function PublicEventPage({ params }: PageProps) {
       )
       .get(),
   ]);
-  if (!subSnap.exists) notFound();
+  if (!subSnap.exists) return null;
   const sub = subSnap.data() as SubAccountDoc;
   const page = (pageSnap.exists ? pageSnap.data() : null) as BookingPage | null;
+  // The same business name the public booking page shows; empty when neither exists.
+  const businessName = (page?.brandName || sub.name || "").trim();
+  return { event, sub, page, pageSlug, businessName };
+});
+
+/** Browser title: "{session} · {business}". */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  try {
+    const loaded = await loadManagedEvent((await params).token);
+    if (!loaded) return {};
+    const { event, page, businessName } = loaded;
+    return { title: publicTitle(page?.name ?? event.title ?? "Your booking", businessName) };
+  } catch {
+    return {};
+  }
+}
+
+export default async function PublicEventPage({ params }: PageProps) {
+  const { token } = await params;
+
+  const loaded = await loadManagedEvent(token);
+  if (!loaded) notFound();
+  const { event, sub, page, pageSlug, businessName } = loaded;
 
   const startAt = (
     event.startAt as { toDate?: () => Date } | null
@@ -67,7 +97,7 @@ export default async function PublicEventPage({ params }: PageProps) {
   if (!startAt || !endAt) notFound();
 
   const branding = {
-    name: page?.brandName || sub.name || "Booking",
+    name: businessName,
     logoUrl: resolveBookingLogo(page ?? {}, sub),
     accentColor: page?.accentColor ?? null,
   };
@@ -80,7 +110,7 @@ export default async function PublicEventPage({ params }: PageProps) {
       status={eventStatus(event)}
       title={event.title ?? "Meeting"}
       pageName={page?.name ?? event.title ?? "Meeting"}
-      pageSlug={event.bookingPageSlug}
+      pageSlug={pageSlug}
       bookingPageStatus={page?.status ?? "published"}
       timezone={page?.timezone ?? "UTC"}
       durationMinutes={page?.durationMinutes ?? 30}

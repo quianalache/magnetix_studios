@@ -46,13 +46,13 @@ export default async function LoginPage({
   }
 
   // Magnetix-owned sign-in on the shared public shell (2026-10-16). The
-  // LoginForm draws its own card, so the shell provides the frame only.
+  // shell draws the card and the heading; LoginForm is fields only.
   return (
-    <PublicAuthShell variant={{ kind: "magnetix" }} title="Welcome back" description="Sign in to your workspace." card={false}>
+    <PublicAuthShell variant={{ kind: "magnetix" }} title="Welcome back" description="Sign in to your workspace.">
       {/* Suspense required because LoginForm reads ?email= via
           useSearchParams to pre-fill from "you already have an account"
           redirects out of the signup page. */}
-      <Suspense fallback={<div className="bg-card h-[420px] rounded-xl border" />}>
+      <Suspense fallback={<div className="h-[260px]" />}>
         <LoginForm />
       </Suspense>
     </PublicAuthShell>

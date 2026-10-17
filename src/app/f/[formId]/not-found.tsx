@@ -1,5 +1,9 @@
 import { FileX2 } from "lucide-react";
 import { PublicStateShell } from "@/components/public/public-shell";
+import type { Metadata } from "next";
+
+/** The not-found render takes this boundary's metadata (the page's is dropped). */
+export const metadata: Metadata = { title: "Form not available" };
 
 
 export default function FormNotFound() {

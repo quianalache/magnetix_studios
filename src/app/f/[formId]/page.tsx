@@ -172,20 +172,24 @@ function FormFrame({
 }) {
   const style = appearanceStyle(appearance);
 
-  // Body background per mode. Embed = transparent so the host page shows
-  // through. Otherwise an opaque colour matching the theme so the system
-  // preference can't leak a dark/light mismatch.
+  // The page behind the card is the form's own background (2026-10-17 owner
+  // QA): the Background colour control when set, otherwise the theme's plain
+  // white / dark — never a platform wash, so the hosted page matches the
+  // builder. Embed = transparent so the host page shows through. Body gets
+  // the same opaque colour so the visitor's system preference can't leak a
+  // dark/light mismatch.
+  // Only a plain colour value reaches the <style> tag below.
+  const customBg =
+    appearance.backgroundColor && /^[#a-z0-9(),.%\s-]{1,64}$/i.test(appearance.backgroundColor)
+      ? appearance.backgroundColor
+      : null;
   const bodyBg = appearance.embed
     ? "transparent"
-    : appearance.theme === "dark"
-      ? "oklch(0.145 0 0)"
-      : "oklch(1 0 0)";
+    : (customBg ?? (appearance.theme === "dark" ? "oklch(0.145 0 0)" : "oklch(1 0 0)"));
 
   const wrapperClass = appearance.embed
     ? "flex min-h-screen items-center justify-center bg-transparent p-4 font-sans text-foreground sm:p-6"
-    : appearance.theme === "dark"
-      ? "flex min-h-screen items-center justify-center bg-[oklch(0.145_0_0)] p-4 font-sans text-foreground sm:p-6"
-      : "flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-4 font-sans text-foreground sm:p-6";
+    : "flex min-h-screen items-center justify-center bg-background p-4 font-sans text-foreground sm:p-6";
 
   return (
     <>

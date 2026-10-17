@@ -250,7 +250,7 @@ export function PublicEventView(props: Props) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={props.branding.logoUrl}
-              alt={props.branding.name}
+              alt={props.branding.name || "Logo"}
               className="mx-auto h-12 w-auto rounded-md object-contain"
             />
           ) : (
@@ -260,6 +260,13 @@ export function PublicEventView(props: Props) {
             >
               <CalendarClock className="h-6 w-6" />
             </span>
+          )}
+          {/* The business, as on the public booking page (the footer is the
+              platform credit only). */}
+          {props.branding.name && (
+            <p className="text-sm font-medium text-muted-foreground">
+              {props.branding.name}
+            </p>
           )}
           <h1 className="text-2xl font-bold tracking-tight">
             {props.pageName}

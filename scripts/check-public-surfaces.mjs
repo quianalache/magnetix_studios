@@ -89,7 +89,26 @@ const ident = src("src/lib/server/public-identity.ts");
 check("public identity reads only the existing name fields (no new brand settings)", !/brand|accent|logo/i.test(ident.replace(/\/\*\*[\s\S]*?\*\//g, "")));
 
 check("offer/course titles go through the same access check as the page", src("src/app/offer/[saId]/[offerId]/page.tsx").includes('requireOfferPageAccess(saId, offerId);\n    if (access.kind === "notFound") return {};') && src("src/app/course/[saId]/[courseId]/page.tsx").includes('requireCoursePageAccess(saId, courseId);\n    if (access.kind === "notFound") return {};'));
+check("not-found boundaries carry server metadata titles (not only the client-hoisted <title>)", ["src/app/not-found.tsx", "src/app/f/[formId]/not-found.tsx", "src/app/e/[token]/not-found.tsx", "src/app/q/[token]/not-found.tsx", "src/app/b/[subAccountId]/[slug]/not-found.tsx", "src/app/offer/[saId]/[offerId]/not-found.tsx", "src/app/course/[saId]/[courseId]/not-found.tsx", "src/app/my/password/reset/not-found.tsx", "src/app/member-password/[saId]/reset/not-found.tsx"].every((f) => /export const metadata: Metadata = \{ title: "/.test(src(f))));
 check("community title only for a published group", src("src/app/c/[saId]/[groupSlug]/layout.tsx").includes('group.status === "published" ? { title: group.name }'));
+
+// 2026-10-17 correction pass (owner live QA).
+const join = code("src/app/webinar/join/[token]/page.tsx");
+const room = code("src/components/webinar/webinar-room-client.tsx");
+check("webinar join: invalid link is a state card with its own title", join.includes("<PublicStateShell") && join.includes("This webinar link isn't valid") && join.includes("generateMetadata"));
+check("webinar join: client failures are state cards, never raw error text", room.includes("<PublicStateShell") && !/text-destructive/.test(room) && !/data\.error/.test(room));
+check("booking /e names the business above the title (not in the footer) and has a title", /\{props\.branding\.name && \(\s*<p/.test(ev) && src("src/app/e/[token]/page.tsx").includes("generateMetadata"));
+check("community signup has its own browser title", src("src/app/c/[saId]/signup/page.tsx").includes("generateMetadata"));
+check("staff login: the shell owns the heading — no inner Log In card", !/CardTitle|Log In/.test(code("src/components/auth/login-form.tsx")) && !src("src/app/(auth)/login/page.tsx").includes("card={false}"));
+check("invalid reset cards link back to sign-in", src("src/app/my/password/reset/not-found.tsx").includes('href="/my/login"') && src("src/app/member-password/[saId]/reset/page.tsx").includes("Go to sign in"));
+check("member reset sign-in link is rebuilt from the workspace id, never taken from next", !/href=\{sp\.next|href=\{next/.test(src("src/app/member-password/[saId]/reset/page.tsx")));
+for (const f of ["src/lib/unsubscribe-pages/tenant.tsx", "src/lib/unsubscribe-pages/agency.tsx"]) {
+  check(`unsubscribe: invalid link says so (${f})`, src(f).includes("This unsubscribe link isn't valid"));
+}
+check("hosted form page background is the form's own --background, never a platform wash", !/from-indigo-500\/5|tenant-wash|public-cloud/.test(code("src/app/f/[formId]/page.tsx")) && code("src/app/f/[formId]/page.tsx").includes("bg-background"));
+for (const f of ["src/app/(builder)/sa/[subAccountId]/courses/offers/[offerId]/theme/page.tsx", "src/app/(builder)/sa/[subAccountId]/courses/[courseId]/theme/page.tsx"]) {
+  check(`checkout editor only links the public page once published (${f})`, /(offer\?\.visibility === "published"|course\?\.published) \?/.test(src(f)));
+}
 
 console.log(`\nPublic surfaces contract: ${pass} passed, ${fail} failed.`);
 process.exit(fail ? 1 : 0);

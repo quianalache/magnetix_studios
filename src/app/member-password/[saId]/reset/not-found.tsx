@@ -1,5 +1,9 @@
 import { KeyRound } from "lucide-react";
 import { PublicStateShell } from "@/components/public/public-shell";
+import type { Metadata } from "next";
+
+/** The not-found render takes this boundary's metadata (the page's is dropped). */
+export const metadata: Metadata = { title: "Password link not valid" };
 
 /** A password link without a token (or for a workspace that no longer exists). */
 export default function PasswordLinkNotFound() {

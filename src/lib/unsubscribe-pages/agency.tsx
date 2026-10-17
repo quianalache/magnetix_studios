@@ -15,6 +15,9 @@ type Status = "loading" | "ok" | "error";
 export default function AgencyUnsubscribePage({ token }: { token: string }) {
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  // The API rejected the link itself (400 bad/expired token, 404 no such
+  // recipient) — as opposed to a network or server failure.
+  const [linkInvalid, setLinkInvalid] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -22,6 +25,7 @@ export default function AgencyUnsubscribePage({ token }: { token: string }) {
       try {
         const res = await fetch(`/api/u/agency/${token}`, { method: "POST" });
         if (!res.ok) {
+          setLinkInvalid(res.status === 400 || res.status === 404);
           const payload = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(payload.error ?? "Could not process unsubscribe.");
         }
@@ -51,7 +55,7 @@ export default function AgencyUnsubscribePage({ token }: { token: string }) {
     );
   }
   return (
-    <PublicStateShell variant={variant} icon={AlertTriangle} tone="error" title="Something went wrong" description={errorMessage}>
+    <PublicStateShell variant={variant} icon={AlertTriangle} tone="error" title={linkInvalid ? "This unsubscribe link isn't valid" : "Something went wrong"} description={linkInvalid ? "It may have expired or been copied incompletely." : errorMessage}>
       <p className="public-faint text-xs">Reply to a previous email and we&apos;ll opt you out manually.</p>
     </PublicStateShell>
   );
