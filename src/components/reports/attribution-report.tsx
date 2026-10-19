@@ -163,7 +163,7 @@ export function AttributionReport({
   }, [contacts, deals, rangeDays, rangeCutoff, currency]);
 
   const [visitPageFilter, setVisitPageFilter] = useState<
-    "all" | "booking" | "offer"
+    "all" | "booking" | "offer" | "readingTool"
   >("all");
 
   // "day" is a UTC "YYYY-MM-DD" string — compare against the same cutoff
@@ -327,7 +327,7 @@ export function AttributionReport({
           <div>
             <h2 className="text-section font-semibold">Page visits &amp; conversions</h2>
             <p className="text-xs text-muted-foreground">
-              Every landing on a booking or checkout page, whether or not it
+              Every landing on a booking, checkout or reading-tool page, whether or not it
               converted, broken down by UTM tag — or, for untagged traffic, an
               auto-detected referrer.
             </p>
@@ -339,6 +339,7 @@ export function AttributionReport({
               { value: "all", label: "All pages" },
               { value: "booking", label: "Booking" },
               { value: "offer", label: "Offer" },
+              { value: "readingTool", label: "Reading tool" },
             ]}
           />
         </div>

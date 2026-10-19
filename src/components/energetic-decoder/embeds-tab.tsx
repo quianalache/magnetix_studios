@@ -1,51 +1,67 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Share2, Copy, Trash2, ArrowUpRight } from "lucide-react";
+import { Eye, Plus, Share2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { buildDecoderUrl } from "@/lib/domains/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
-import { Alert } from "@/components/ui/alert";
+import { StatusPill, type StatusTone } from "@/components/system/status-pill";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/system/empty-state";
 import { DecoderIndexPage } from "@/components/energetic-decoder/decoder-shell";
+import { EmbedEditor } from "@/components/energetic-decoder/embed-editor";
+import { EMBED_STATUS_LABEL, embedAccessLabel, embedDeliverySummary } from "@/lib/energetic-decoder/embeds";
 import type { EmbedConfig } from "@/types/embed-config";
 
-
 /**
- * Embeds — list-first (2026-08-09), replacing the old single anonymous
- * link/iframe card (embed-share-card.tsx). Her direct ask: "a different tab
- * for embed chart, so you could see the different charts that... you
- * created embed codes for."
- *
- * Honest scope: every embed here points at the same real public decoder
- * tool — there's no per-embed chart-design routing or view/submission
- * tracking wired up yet (that's real new plumbing, not built in this
- * pass). What's real: naming and organizing the links you hand out, which
- * is what was actually broken before (one anonymous link, no way to tell
- * two placements apart).
+ * Embeds — the Public Reading Tool's configured experiences (Phase 1,
+ * 2026-10-19). `?tab=embeds` lists them; `&embed=ID` opens the editor.
+ * Counts are lifetime totals and exclude Test records.
  */
+
+export type EmbedWithPlacements = EmbedConfig & { placements: { pageId: string; name: string; published: boolean }[] };
+
+export const EMBED_STATUS_TONE: Record<EmbedConfig["status"], StatusTone> = {
+  live: "success",
+  draft: "neutral",
+  archived: "warning",
+};
+
 export function EnergeticDecoderEmbedsTab() {
-  const { subAccountId, saPath } = useSubAccount();
-  const [embeds, setEmbeds] = useState<EmbedConfig[] | null>(null);
+  const searchParams = useSearchParams();
+  const embedId = searchParams.get("embed");
+  if (embedId) return <EmbedEditor embedId={embedId} />;
+  return <EmbedsList />;
+}
+
+export function embedPreviewHref(subAccountId: string, embedId: string, mode: "preview" | "test") {
+  return `/decoder/${subAccountId}?embed=${encodeURIComponent(embedId)}&mode=${mode}`;
+}
+
+function EmbedsList() {
+  const { subAccountId } = useSubAccount();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [embeds, setEmbeds] = useState<EmbedWithPlacements[] | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [placementNote, setPlacementNote] = useState("");
   const [creating, setCreating] = useState(false);
 
-  function load() {
+  useEffect(() => {
+    let cancelled = false;
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/embeds`)
       .then((r) => r.json())
-      .then((d) => setEmbeds(d.embeds ?? []))
+      .then((d) => !cancelled && setEmbeds(d.embeds ?? []))
       .catch(() => toast.error("Couldn't load embeds."));
-  }
-  useEffect(load, [subAccountId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [subAccountId]);
+
+  const openEditor = (id: string) => router.push(`${pathname}?tab=embeds&embed=${encodeURIComponent(id)}`, { scroll: false });
 
   async function create() {
     setCreating(true);
@@ -53,14 +69,13 @@ export function EnergeticDecoderEmbedsTab() {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/embeds`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() || "Untitled embed", placementNote: placementNote.trim() }),
+        body: JSON.stringify({ name: name.trim() || "Untitled embed" }),
       });
-      if (!res.ok) throw new Error();
-      toast.success("Embed created.");
+      const data = await res.json();
+      if (!res.ok || !data.embed) throw new Error();
       setOpen(false);
       setName("");
-      setPlacementNote("");
-      load();
+      openEditor(data.embed.id);
     } catch {
       toast.error("Couldn't create embed.");
     } finally {
@@ -68,55 +83,37 @@ export function EnergeticDecoderEmbedsTab() {
     }
   }
 
-  const qrLink = (
-    <Button variant="outline" render={<Link href={saPath("/qr-codes")} />}>
-      <ArrowUpRight className="size-4" />
-      Generate a QR code (opens QR Codes)
-    </Button>
-  );
-
-  async function remove(id: string) {
-    setEmbeds((prev) => prev?.filter((e) => e.id !== id) ?? null);
-    try {
-      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/embeds/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-    } catch {
-      toast.error("Couldn't delete.");
-      load();
-    }
-  }
-
-  // v2 (2026-10-16): the standard operational page — header with Create
-  // embed, the section tabs, the shared empty state, then the same honest
-  // "not built yet" note and the QR Codes link. No new embed functionality.
   return (
     <DecoderIndexPage
       icon={Share2}
       title="Embeds"
-      description="Every submission through an embed becomes a saved reading and a Contact automatically."
+      description="Each Embed is a complete reading experience — place it on a Pages & Funnels page or install it on any website."
       actions={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            Create embed
+            New embed
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>New embed</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-2">
+            <form
+              className="space-y-4 py-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void create();
+              }}
+            >
               <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Instagram Bio Link" />
+                <Label htmlFor="new-embed-name">Name</Label>
+                <Input id="new-embed-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Free Energetic Blueprint" autoFocus />
+                <p className="text-caption text-muted-foreground">Only you see this name. It starts as a Draft.</p>
               </div>
-              <div className="space-y-2">
-                <Label>Where it&apos;s going (optional)</Label>
-                <Input value={placementNote} onChange={(e) => setPlacementNote(e.target.value)} placeholder="e.g. magnetixstudios.com footer" />
-              </div>
-              <Button onClick={create} disabled={creating} className="w-full">
-                {creating ? "Creating…" : "Create embed"}
+              <Button type="submit" disabled={creating} className="w-full">
+                {creating ? "Creating…" : "Create and set up"}
               </Button>
-            </div>
+            </form>
           </DialogContent>
         </Dialog>
       }
@@ -127,71 +124,88 @@ export function EnergeticDecoderEmbedsTab() {
         <EmptyState
           icon={Share2}
           title="No embeds yet"
-          description="Create your first embed to put the public reading tool on your website."
-          action={qrLink}
+          description="Create an Embed to put the Public Reading Tool on a Pages & Funnels page or your website."
           className="rounded-card border border-dashed border-border bg-card"
         />
       ) : (
-        <div className="space-y-4">
-          <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-card shadow-card">
+        <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
+          {/* Desktop table */}
+          <table className="hidden w-full text-left text-body-sm md:table">
+            <thead className="border-b border-border bg-muted/40 text-caption text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 font-medium">Embed</th>
+                <th className="px-3 py-2.5 font-medium">Status</th>
+                <th className="px-3 py-2.5 font-medium">Access</th>
+                <th className="px-3 py-2.5 font-medium">After submission</th>
+                <th className="px-3 py-2.5 font-medium">Placed on</th>
+                <th className="px-3 py-2.5 text-right font-medium">Readings</th>
+                <th className="px-3 py-2.5 text-right font-medium">Contacts</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {embeds.map((e) => (
+                <tr key={e.id} className="cursor-pointer hover:bg-muted/30" onClick={() => openEditor(e.id)}>
+                  <td className="max-w-[260px] px-4 py-3">
+                    <p className="truncate font-semibold">{e.name}</p>
+                    {e.placementNote && <p className="truncate text-caption text-muted-foreground">{e.placementNote}</p>}
+                  </td>
+                  <td className="px-3 py-3">
+                    <StatusPill tone={EMBED_STATUS_TONE[e.status]}>{EMBED_STATUS_LABEL[e.status]}</StatusPill>
+                  </td>
+                  <td className="px-3 py-3 text-muted-foreground">{embedAccessLabel(e)}</td>
+                  <td className="px-3 py-3 text-muted-foreground">{embedDeliverySummary(e)}</td>
+                  <td className="px-3 py-3 text-muted-foreground">{placementSummary(e)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{e.stats.readings.toLocaleString()}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{e.stats.contacts.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
+                    <a
+                      href={embedPreviewHref(subAccountId, e.id, "preview")}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-caption font-medium hover:bg-muted"
+                    >
+                      <Eye className="size-3.5" />
+                      Preview
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Phone cards */}
+          <ul className="divide-y divide-border md:hidden">
             {embeds.map((e) => (
-              <EmbedRow key={e.id} embed={e} subAccountId={subAccountId} onDelete={() => remove(e.id)} />
+              <li key={e.id} className="space-y-2 px-4 py-3.5">
+                <button type="button" onClick={() => openEditor(e.id)} className="flex w-full items-start justify-between gap-3 text-left">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{e.name}</span>
+                    <span className="block truncate text-caption text-muted-foreground">{embedDeliverySummary(e)}</span>
+                  </span>
+                  <StatusPill tone={EMBED_STATUS_TONE[e.status]}>{EMBED_STATUS_LABEL[e.status]}</StatusPill>
+                </button>
+                <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
+                  <span>
+                    {e.stats.readings.toLocaleString()} Readings · {e.stats.contacts.toLocaleString()} Contacts · {placementSummary(e)}
+                  </span>
+                  <a href={embedPreviewHref(subAccountId, e.id, "preview")} target="_blank" rel="noreferrer" className="shrink-0 font-medium text-foreground underline">
+                    Preview
+                  </a>
+                </div>
+              </li>
             ))}
           </ul>
-          {qrLink}
         </div>
       )}
-
-      <Alert tone="info" title="Not built yet">
-        View / chart-run counts per embed, and picking a specific Chart Design per embed — both need new tracking + routing that
-        doesn&apos;t exist yet. Every embed currently opens the same public tool with your default chart designs.
-      </Alert>
+      <p className="text-caption text-muted-foreground">Readings and Contacts are lifetime totals and exclude Test runs.</p>
     </DecoderIndexPage>
   );
 }
 
-function EmbedRow({
-  embed,
-  subAccountId,
-  onDelete,
-}: {
-  embed: EmbedConfig;
-  subAccountId: string;
-  onDelete: () => void;
-}) {
-  const { subAccount } = useSubAccount();
-  const [copied, setCopied] = useState<"link" | "script" | null>(null);
-
-  function url() {
-    return buildDecoderUrl({ subAccount, subAccountId });
-  }
-  function copy(kind: "link" | "script") {
-    const text = kind === "link" ? url() : `<iframe src="${url()}" width="100%" height="700" style="border:0;background:transparent"></iframe>`;
-    navigator.clipboard.writeText(text);
-    setCopied(kind);
-    toast.success(kind === "link" ? "Link copied" : "Embed snippet copied");
-    setTimeout(() => setCopied(null), 2000);
-  }
-
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
-      <div className="min-w-0">
-        <p className="truncate text-body-sm font-semibold">{embed.name}</p>
-        <p className="truncate text-caption text-muted-foreground">{embed.placementNote || "No placement note"}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => copy("link")}>
-          <Copy className="mr-1 h-3 w-3" />
-          {copied === "link" ? "Copied" : "Link"}
-        </Button>
-        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => copy("script")}>
-          <Copy className="mr-1 h-3 w-3" />
-          {copied === "script" ? "Copied" : "Iframe"}
-        </Button>
-        <button type="button" onClick={onDelete} aria-label={`Delete ${embed.name}`} className="rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </li>
-  );
+function placementSummary(e: EmbedWithPlacements): string {
+  const live = e.placements.filter((p) => p.published).length;
+  if (e.placements.length === 0) return "—";
+  return live === e.placements.length
+    ? `${live} page${live === 1 ? "" : "s"}`
+    : `${e.placements.length} page${e.placements.length === 1 ? "" : "s"} (${live} published)`;
 }
