@@ -1,5 +1,6 @@
 import { createPuckConfig } from "@/components/pages-funnels/puck/config";
 import { FormElementServerRender } from "@/components/pages-funnels/puck/form-server";
+import { ReadingToolElementServerRender } from "@/components/pages-funnels/puck/reading-tool-server";
 
 /**
  * Production SERVER/PUBLIC Puck config (master spec §10) — the one to pass
@@ -12,4 +13,4 @@ import { FormElementServerRender } from "@/components/pages-funnels/puck/form-se
  * proved a hook-free config can serve both a client editor and a server
  * `<Render>` pass.
  */
-export const serverPuckConfig = createPuckConfig(FormElementServerRender);
+export const serverPuckConfig = createPuckConfig(FormElementServerRender, ReadingToolElementServerRender);

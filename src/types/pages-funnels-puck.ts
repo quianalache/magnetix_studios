@@ -1,3 +1,4 @@
+import type { ReadingToolPayload } from "@/types/embed-config";
 import type { LeadForm } from "@/types/forms";
 import type { BlockAlignment } from "@/types/pages-funnels";
 import type { ColumnWidth } from "@/types/pages-funnels-v2";
@@ -114,6 +115,12 @@ export const DEFAULT_PAGE_ACTION: PageAction = { type: "none" };
 export interface PuckPageMetadata {
   subAccountId: string;
   resolvedForms?: Record<string, LeadForm | null>;
+  /** The page being rendered — set on the published route so a Public
+   *  Reading Tool submission records which page it came from. */
+  pageId?: string;
+  /** Public Reading Tool blocks, pre-resolved by the published route
+   *  (undefined in the editor/preview, which fetch on demand). */
+  resolvedEmbeds?: Record<string, ReadingToolPayload | null>;
 }
 
 // ---------- Background (Phase 2D — production-grade color/gradient/blur) ----------

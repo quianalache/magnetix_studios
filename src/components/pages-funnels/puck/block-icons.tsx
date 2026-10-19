@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   GalleryHorizontal,
   FileText,
+  Sparkles,
 } from "lucide-react";
 
 /**
@@ -41,4 +42,5 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   Accordion: ChevronsUpDown,
   Hero: GalleryHorizontal,
   Form: FileText,
+  ReadingTool: Sparkles,
 };

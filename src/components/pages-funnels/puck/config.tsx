@@ -19,6 +19,7 @@ import {
 import { BackgroundFieldEditor } from "@/components/pages-funnels/puck/background-field";
 import { StyleFieldEditor } from "@/components/pages-funnels/puck/style-field";
 import { FormFieldEditor } from "@/components/pages-funnels/puck/form-field";
+import { ReadingToolFieldEditor } from "@/components/pages-funnels/puck/reading-tool-field";
 import { ImageFieldEditor } from "@/components/pages-funnels/puck/image-field";
 import {
   SectionRender,
@@ -64,6 +65,24 @@ export interface FormComponentProps {
   style?: StyleConfig;
   metadata?: PuckPageMetadata;
 }
+
+export interface ReadingToolComponentProps {
+  id: string;
+  embedId: string;
+  style?: StyleConfig;
+  metadata?: PuckPageMetadata;
+}
+
+/**
+ * Public Reading Tool selector (Business → Public Reading Tool, 2026-10-19):
+ * a dropdown of this sub-account's saved Embeds — no Magnetix embed code is
+ * ever pasted into Magnetix. Stores the Embed id.
+ */
+const embedIdField: CustomField<string> = {
+  type: "custom",
+  label: "Embed",
+  render: ({ value, onChange }) => <ReadingToolFieldEditor value={value} onChange={onChange} />,
+};
 
 const ACTION_TYPE_OPTIONS = [
   { label: "None", value: "none" },
@@ -490,7 +509,8 @@ const SECTION_SHARED_FIELDS = {
 };
 
 export function createPuckConfig(
-  FormComponent: React.ComponentType<FormComponentProps>
+  FormComponent: React.ComponentType<FormComponentProps>,
+  ReadingToolComponent: React.ComponentType<ReadingToolComponentProps>
 ): Config {
   return {
     categories: {
@@ -512,7 +532,7 @@ export function createPuckConfig(
       // Category order matches master spec §6's approved customer-facing
       // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
-      business: { title: "Business", components: ["Form"] },
+      business: { title: "Business", components: ["Form", "ReadingTool"] },
     },
     components: {
       Section: {
@@ -767,6 +787,7 @@ export function createPuckConfig(
               "Spacer",
               "Accordion",
               "Form",
+              "ReadingTool",
             ],
           },
         },
@@ -1109,6 +1130,21 @@ export function createPuckConfig(
             style={style}
             metadata={puck.metadata as PuckPageMetadata}
           />
+        ),
+      },
+
+      // Public Reading Tool (2026-10-19) — places a saved Energetic Decoder
+      // Embed natively. The published page renders only the visitor-facing
+      // tool; labels like "Public Reading Tool" stay in builder chrome.
+      ReadingTool: {
+        label: "Public Reading Tool",
+        fields: {
+          embedId: embedIdField,
+          style: formStyleField,
+        },
+        defaultProps: { embedId: "", style: DEFAULT_STYLE_CONFIG },
+        render: ({ id, embedId, style, puck }) => (
+          <ReadingToolComponent id={id} embedId={embedId} style={style} metadata={puck.metadata as PuckPageMetadata} />
         ),
       },
     },

@@ -7,7 +7,8 @@ import { getPageSections } from "@/lib/pages-funnels/v2/migrate";
 import { collectFormIds } from "@/lib/pages-funnels/v2/tree-utils";
 import { SectionTreeView } from "@/components/pages-funnels/renderer-v2/tree-view";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
-import { collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import { collectPuckEmbedIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
 import { publicTitle } from "@/lib/server/public-identity";
 
@@ -85,11 +86,19 @@ export default async function PublicPagePreview({
         };
       })
     );
+    // Public Reading Tool blocks (2026-10-19): resolved here so visitors get
+    // the live tool without a client fetch; only this page's own
+    // sub-account's Embeds can resolve.
+    const embedIds = collectPuckEmbedIds(page.puckPublishedData);
+    const resolvedEmbeds =
+      page.subAccountId && embedIds.length > 0
+        ? await resolveReadingToolPayloads(page.subAccountId, embedIds)
+        : {};
     return (
       <Render
         config={serverPuckConfig}
         data={page.puckPublishedData}
-        metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms }}
+        metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, pageId: page.id }}
       />
     );
   }

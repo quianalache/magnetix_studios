@@ -51,3 +51,21 @@ function isComponentDataArray(value: unknown): value is ComponentData[] {
     )
   );
 }
+
+/**
+ * Every unique Embed id placed by a Public Reading Tool block — the
+ * published route resolves these (Admin SDK) into
+ * `PuckPageMetadata.resolvedEmbeds` before `<Render>`, same pattern as Forms.
+ */
+export function collectPuckEmbedIds(data: Data): string[] {
+  const ids = new Set<string>();
+  const walk = (node: ComponentData) => {
+    const props = node.props as Record<string, unknown>;
+    if (node.type === "ReadingTool" && typeof props.embedId === "string" && props.embedId) ids.add(props.embedId);
+    for (const value of Object.values(props)) {
+      if (isComponentDataArray(value)) for (const child of value) walk(child);
+    }
+  };
+  for (const node of data.content) walk(node);
+  return [...ids];
+}
