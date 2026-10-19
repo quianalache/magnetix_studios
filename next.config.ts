@@ -110,6 +110,28 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Public Reading Tool (2026-10-19): the tool page is the iframe
+        // target for external website installs, so any site may frame it.
+        // Staff-only modes (Preview/Test) need the staff session cookie,
+        // which a cross-site iframe never sends (SameSite=Lax), so they
+        // can't be reached through someone else's frame.
+        source: "/decoder/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *;" }],
+      },
+      {
+        source: "/decoder",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *;" }],
+      },
+      {
+        // Public Reading Tool install loader — same treatment as widget.js.
+        source: "/reading-tool.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=300, s-maxage=300" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+      {
         // Widget loader: long-cache and serve to any origin so the
         // <script> tag works on any buyer's site.
         source: "/widget.js",

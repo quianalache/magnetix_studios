@@ -202,6 +202,7 @@ export function HumanDesignSummary({
   mandalaDesign,
   chartStyle = "both",
   hideChartAndBasics = false,
+  narrowLayout = "stacked",
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
   /** The sub-account's default Human Design Chart Design (2026-08-09 rebuild — full color set, not just one field) — falls back to the traditional black/white/gray base when not passed. */
@@ -234,6 +235,8 @@ export function HumanDesignSummary({
    * component) keeps its exact existing output, zero regression.
    */
   hideChartAndBasics?: boolean;
+  /** Passed to HumanDesignFullChart — "compact" keeps the M1 three-column chart on phones (public surfaces). */
+  narrowLayout?: "stacked" | "compact";
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -274,14 +277,14 @@ export function HumanDesignSummary({
           <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Human Design — Design (left) · BodyGraph · Personality (right)
           </p>
-          <HumanDesignFullChart profile={profile} design={hdDesign} />
+          <HumanDesignFullChart profile={profile} design={hdDesign} narrowLayout={narrowLayout} />
         </div>
       )}
 
       {(chartStyle === "both" || chartStyle === "mandala") && mandalaDesign && (
         <div className="rounded-2xl border bg-card p-4">
           <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Mandala — real, built 2026-08-09 (not available from Bodygraph&apos;s API, drawn locally)
+            Mandala
           </p>
           <MandalaChart
             profile={profile}

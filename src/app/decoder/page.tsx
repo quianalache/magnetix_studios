@@ -15,10 +15,15 @@ export const dynamic = "force-dynamic";
  * mirrors — delegates to the existing opaque `/decoder/[saId]` page rather
  * than duplicating its render logic.
  */
-export default async function CustomDomainDecoderPage() {
+export default async function CustomDomainDecoderPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const host = (await headers()).get("host");
   const sub = await getSubAccountByCustomDomain(host);
   if (!sub) notFound();
 
-  return PublicDecoderPage({ params: Promise.resolve({ saId: sub.id }) });
+  // `?embed=` (and the install script's params) pass straight through.
+  return PublicDecoderPage({ params: Promise.resolve({ saId: sub.id }), searchParams });
 }

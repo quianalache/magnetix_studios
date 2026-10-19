@@ -138,6 +138,8 @@ export const PUBLIC_PATHS = [
   "/embed",
   // Widget loader JS — public static file served from /public.
   "/widget.js",
+  // Public Reading Tool external-install loader (2026-10-19).
+  "/reading-tool.js",
   // PWA — the manifest is fetched by the browser without credentials on
   // every page (including /login), and the service worker script must be
   // publicly fetchable for registration. Both are harmless to expose:

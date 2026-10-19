@@ -132,6 +132,7 @@ function ArrowBadge({
   color,
   style,
   align,
+  compact,
 }: {
   label: string;
   source: string;
@@ -139,7 +140,19 @@ function ArrowBadge({
   color: string;
   style: VariableArrowStyle;
   align: "left" | "right";
+  /** Phone (M1) layout: arrow + name only. */
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className={`flex items-center gap-1 text-[9px] leading-tight ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
+        {value ? <ArrowGlyph direction={value.arrow} color={color} style={style} /> : <span className="inline-block h-3 w-3 shrink-0" />}
+        <span className="font-semibold uppercase tracking-wide" style={{ color }}>
+          {label}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className={`flex items-center gap-1.5 text-[10px] ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
       {value ? (
@@ -270,11 +283,55 @@ function ActivationColumn({
   );
 }
 
+/**
+ * M1 phone rail (Public Reading Tool, 2026-10-19): the same 13 activations
+ * as `ActivationColumn`, compressed to planet symbol + gate.line so Design |
+ * BodyGraph | Personality stay ONE chart composition on a phone instead of
+ * stacking into a long list.
+ */
+function CompactRail({
+  side,
+  activations,
+  color,
+}: {
+  side: "Design" | "Personality";
+  activations: HumanDesignProfile["design"] | HumanDesignProfile["personality"];
+  color: string;
+}) {
+  const right = side === "Personality";
+  const hex = color.replace("#", "");
+  const rgb = hex.length === 6 ? [0, 2, 4].map((o) => Number.parseInt(hex.slice(o, o + 2), 16)) : null;
+  const ink = rgb && (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255 > 0.62 ? "#18181b" : "#ffffff";
+  return (
+    <div data-hd-rail-compact className="flex flex-col gap-[3px] pt-8">
+      <p className={`mb-0.5 text-[9px] font-semibold uppercase tracking-wide ${right ? "text-right" : ""}`} style={{ color }}>
+        {side === "Design" ? "Des." : "Pers."}
+      </p>
+      {HD_BODY_LABELS.map(({ body, label, symbol }) => {
+        const a = activations.find((x) => x.body === body);
+        return (
+          <div
+            key={body}
+            title={`${label} ${a ? `${a.gate}.${a.line}` : "—"}`}
+            className={`flex items-center gap-0.5 rounded-[4px] px-1 py-[3px] text-[10px] leading-none tabular-nums ${right ? "flex-row-reverse" : ""}`}
+            style={{ backgroundColor: color, color: ink }}
+          >
+            <span aria-hidden="true">{symbol}</span>
+            <span className="sr-only">{label}</span>
+            <span className="font-semibold">{a ? `${a.gate}.${a.line}` : "—"}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function HumanDesignFullChart({
   profile,
   design,
   className,
   fill,
+  narrowLayout = "stacked",
 }: {
   profile: HumanDesignProfile;
   /**
@@ -288,7 +345,15 @@ export function HumanDesignFullChart({
   /** The sub-account's Human Design Chart Design — falls back to the same defaults chart-design-service.ts seeds a fresh design with, so this always renders correctly even with no design saved yet. */
   design?: ChartDesign | null;
   className?: string;
+  /**
+   * Below the 3-column width: "stacked" (default — every existing consumer)
+   * stacks Design, BodyGraph, Personality; "compact" (the Public Reading
+   * Tool's M1 phone layout) keeps all three side by side as one chart with
+   * compressed symbol + gate.line rails.
+   */
+  narrowLayout?: "stacked" | "compact";
 }) {
+  const compact = narrowLayout === "compact";
   const personalityActivationColor = design?.personalityActivationColor || FALLBACK.personalityActivationColor;
   const designActivationColor = design?.designActivationColor || FALLBACK.designActivationColor;
   const arrowStyle = design?.arrowStyle || FALLBACK.arrowStyle;
@@ -422,8 +487,23 @@ export function HumanDesignFullChart({
        * BodyGraph SVG itself (human-design-chart.tsx) and the PDF layout
        * are unchanged.
        */}
-      <div className="grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:justify-center @min-[804px]/hdfc:gap-x-3">
-        {rail("Design")}
+      <div
+        className={
+          compact
+            ? "grid grid-cols-[minmax(0,52px)_minmax(0,1fr)_minmax(0,52px)] items-start gap-1.5 @min-[700px]/hdfc:grid-cols-[150px_minmax(0,1fr)_150px] @min-[700px]/hdfc:gap-x-3 @min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:justify-center"
+            : "grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:justify-center @min-[804px]/hdfc:gap-x-3"
+        }
+      >
+        {compact ? (
+          <>
+            <div className="@min-[700px]/hdfc:hidden">
+              <CompactRail side="Design" activations={profile.design} color={designActivationColor} />
+            </div>
+            <div className="hidden @min-[700px]/hdfc:block">{rail("Design")}</div>
+          </>
+        ) : (
+          rail("Design")
+        )}
 
         <div className="mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[440px]">
           {/*
@@ -439,15 +519,36 @@ export function HumanDesignFullChart({
            * calculated arrows/directions/colors as before, arranged as
            * two fixed 2-item stacks instead of 4 items that could wrap.
            */}
-          <div data-hd-variables className="mb-1 flex items-start justify-between gap-4">
+          <div data-hd-variables className={`mb-1 flex items-start justify-between gap-4 ${compact ? "hidden @min-[700px]/hdfc:flex" : ""}`}>
             {variablesLeft}
             {variablesRight}
           </div>
+          {compact && (
+            <div data-hd-variables-compact className="mb-1 flex items-start justify-between gap-2 @min-[700px]/hdfc:hidden">
+              <div className="space-y-0.5">
+                <ArrowBadge compact label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
+                <ArrowBadge compact label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />
+              </div>
+              <div className="space-y-0.5">
+                <ArrowBadge compact label="Perspective" source="Personality Node" value={arrows?.perspective} color={arrowColor} style={arrowStyle} align="right" />
+                <ArrowBadge compact label="Motivation" source="Personality Sun" value={arrows?.motivation} color={arrowColor} style={arrowStyle} align="right" />
+              </div>
+            </div>
+          )}
 
           {bodygraph("w-full")}
         </div>
 
-        {rail("Personality")}
+        {compact ? (
+          <>
+            <div className="@min-[700px]/hdfc:hidden">
+              <CompactRail side="Personality" activations={profile.personality} color={personalityActivationColor} />
+            </div>
+            <div className="hidden @min-[700px]/hdfc:block">{rail("Personality")}</div>
+          </>
+        ) : (
+          rail("Personality")
+        )}
       </div>
     </div>
   );

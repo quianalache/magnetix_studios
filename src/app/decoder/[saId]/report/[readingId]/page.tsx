@@ -71,7 +71,7 @@ export default async function EnergeticDecoderReportPage({
       data-public-shell="decoder-report"
       style={{ "--decoder-accent": theme.accent } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="mx-auto w-full max-w-5xl">
         <div className="mb-6 flex items-center gap-2">
           {theme.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -87,20 +87,23 @@ export default async function EnergeticDecoderReportPage({
               {reading.birthPlace} · {reading.birthDate} · {reading.birthTime}
             </p>
           </div>
-          <a
-            href={`/api/decoder/${saId}/report/${readingId}/pdf`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            download
-          >
-            Download PDF
-          </a>
+          {/* An Embed can turn the PDF off (Public Reading Tool, 2026-10-19). */}
+          {reading.embed?.pdf !== false && (
+            <a
+              href={`/api/decoder/${saId}/report/${readingId}/pdf`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              download
+            >
+              Download PDF
+            </a>
+          )}
         </div>
 
         {hasAnySystem ? (
           <div className="space-y-4">
             {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
             {reading.humanDesign && (
-              <HumanDesignSummary profile={reading.humanDesign} hdDesign={hdDesign} mandalaDesign={mandalaDesign} />
+              <HumanDesignSummary profile={reading.humanDesign} hdDesign={hdDesign} mandalaDesign={mandalaDesign} narrowLayout="compact" />
             )}
             {reading.astrology && <AstrologySummary chart={reading.astrology} astroDesign={astroDesign} />}
           </div>
