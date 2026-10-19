@@ -14,6 +14,17 @@ type Tab = DecoderTab;
 const VALID_TABS: Tab[] = DECODER_TABS.map((t) => t.key);
 
 /**
+ * `?tab=` is matched leniently (2026-10-19): `chart-designs`,
+ * `chart_designs` and `chartdesigns` all mean `chartDesigns`, and
+ * `report-builder` means the Report Builder tab. Unknown values → Home.
+ */
+const normalizeTab = (v: string | null) => (v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const TAB_BY_KEY = new Map<string, Tab>([
+  ...VALID_TABS.map((t) => [normalizeTab(t), t] as [string, Tab]),
+  ["reportbuilder", "builder" as Tab],
+]);
+
+/**
  * Structured after researching bodygraph.com (2026-08-05, then again more
  * thoroughly 2026-08-08/09 at her explicit request). Rev 2 of the tab
  * structure (2026-08-09): a real Home overview up front, and Chart Designs
@@ -38,7 +49,7 @@ export default function EnergeticDecoderPage() {
   // module resets to Home, and Back/Forward move between tabs.
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const tab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "home";
+  const tab: Tab = TAB_BY_KEY.get(normalizeTab(requestedTab)) ?? "home";
   const router = useRouter();
   const pathname = usePathname();
 

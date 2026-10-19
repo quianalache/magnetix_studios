@@ -120,6 +120,9 @@ export async function deleteEmbedConfig(subAccountId: string, embedId: string): 
   if (current.stats.readings > 0) {
     throw new EmbedError("This Embed has Readings. Archive it instead so its history stays intact.", 409);
   }
+  // Test runs never count as Readings — clear them with the Embed so a
+  // staff QA Embed leaves nothing behind.
+  await cleanupEmbedTestRecords(subAccountId, embedId);
   await col().doc(embedId).delete();
 }
 

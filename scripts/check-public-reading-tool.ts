@@ -244,6 +244,16 @@ async function main() {
     assert.equal(after.size, liveCount);
   });
 
+  await check("Deleting a QA Embed also removes its Test records", async () => {
+    const qa = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "QA · staff test" });
+    const res = await post({ embedId: qa.id, mode: "test", name: "QA Run", ...BIRTH }, true);
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    await svc.deleteEmbedConfig(SA, qa.id);
+    assert.equal((await db.doc(`energeticDecoderReadings/${body.reading.id}`).get()).exists, false);
+    assert.equal(await svc.getEmbedConfig(SA, qa.id), null);
+  });
+
   await check("Archived Embed: new public Readings refused, old Reading still readable", async () => {
     await svc.updateEmbedConfig(SA, live.id, { status: "archived" });
     const res = await post({ embedId: live.id, name: "Late", email: "late@example.com", ...BIRTH });
