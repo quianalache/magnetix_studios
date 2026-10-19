@@ -18,7 +18,7 @@ export function AttributionVisitLogger({
   pageId,
 }: {
   subAccountId: string;
-  pageType: "booking" | "offer";
+  pageType: "booking" | "offer" | "readingTool";
   pageId: string;
 }) {
   const fired = useRef(false);
