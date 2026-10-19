@@ -104,6 +104,31 @@ export async function markMemberEmailVerified(
   });
 }
 
+/**
+ * Privileged-grant rule (2026-10-19): access granted by staff or a paid
+ * invoice to a Member whose email has never been proven must not become
+ * usable by whoever created that Member through an instant sign-up.
+ * Rejects every existing session of an unverified Member, so the grant is
+ * only reachable after a sign-in link proves the inbox. No-op for
+ * verified Members.
+ */
+export async function requireFreshSignInIfUnverified(
+  subAccountId: string,
+  memberId: string
+): Promise<void> {
+  const db = getAdminDb();
+  const ref = db.doc(`subAccounts/${subAccountId}/members/${memberId}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.emailVerified !== false) return;
+    tx.set(
+      ref,
+      { sessionsValidAfter: Date.now(), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+  });
+}
+
 function isBlank(value: unknown): boolean {
   return typeof value !== "string" || value.trim() === "";
 }

@@ -202,10 +202,15 @@ export function SubAccountMembersSection() {
     }
   }
 
-  async function copyInviteLink(email: string) {
+  async function copyInviteLink(email: string, inviteToken?: string) {
+    // Signup requires the invite's secret, so a link without it can't work.
+    if (!inviteToken) {
+      toast.error("This invite is from before invite links were secured — cancel it and invite again.");
+      return;
+    }
     const origin =
       typeof window !== "undefined" ? window.location.origin : "";
-    const url = `${origin}/signup?email=${encodeURIComponent(email)}`;
+    const url = `${origin}/signup?email=${encodeURIComponent(email)}&invite=${encodeURIComponent(inviteToken)}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Invite link copied");
@@ -472,7 +477,7 @@ export function SubAccountMembersSection() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => copyInviteLink(inv.email)}
+                      onClick={() => copyInviteLink(inv.email, inv.token)}
                       aria-label="Copy invite link"
                       className="h-7 px-2 text-[11px]"
                       disabled={busyInviteId === inv.id}

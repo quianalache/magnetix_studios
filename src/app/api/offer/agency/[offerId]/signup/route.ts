@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { signupRateLimitError } from "@/lib/community/signup-sign-in-link";
 import { resolveSignupPerson } from "@/lib/server/signup-person";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
 import { getAgencyCourseOffer } from "@/lib/server/agency-course-offer-service";
@@ -27,6 +28,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *  natural place to persist — a small, disclosed, non-blocking gap. */
 export async function POST(request: Request, { params }: { params: Promise<{ offerId: string }> }) {
   const { offerId } = await params;
+  const rateLimited = signupRateLimitError(request);
+  if (rateLimited) {
+    return NextResponse.json({ error: rateLimited }, { status: 429 });
+  }
 
   const agencyId = await resolveFirstAgencyId();
   if (!agencyId) return NextResponse.json({ error: "Not found" }, { status: 404 });

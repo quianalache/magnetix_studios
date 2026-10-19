@@ -21,6 +21,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_token: "That sign-in link was incomplete. Request a new one below.",
   expired:
     "That sign-in link has expired or was already used. Request a new one below.",
+  used: "That sign-in link has already been used. Request a new one below.",
   inactive:
     "Your account is no longer active. Contact us if you think this is a mistake.",
   error: "Something went wrong signing you in. Request a new link below.",

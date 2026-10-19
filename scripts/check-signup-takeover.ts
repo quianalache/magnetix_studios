@@ -60,7 +60,17 @@ async function main() {
   const db = getAdminDb();
   const { POST: offerSignup } = await import("../src/app/api/offer/[saId]/[offerId]/signup/route");
   const { POST: courseSignup } = await import("../src/app/api/course/[saId]/[courseId]/signup/route");
-  const { GET: courseVerify } = await import("../src/app/api/course/[saId]/login/verify/route");
+  const courseVerifyRoute = await import("../src/app/api/course/[saId]/login/verify/route");
+  const portalVerifyRoute = await import("../src/app/api/portal/[saId]/_routes/login/verify/route");
+  const myVerifyRoute = await import("../src/app/api/my/login/verify/route");
+  const { POST: staffSignup } = await import("../src/app/api/auth/signup/route");
+  const { redeemMagicLinkOnce } = await import("../src/lib/auth/magic-link-once");
+  const { signPersonMagicLinkToken } = await import("../src/lib/server/person-auth");
+  const { grantAccessForContact } = await import("../src/lib/server/contact-access-service");
+  const { requirePersonFreshSignInIfUnverified } = await import("../src/lib/server/person-identity-service");
+  // Opening the emailed link is a GET (continue page); the page POSTs back.
+  const courseVerify = (req: Request, ctx: { params: Promise<{ saId: string }> }) =>
+    courseVerifyRoute.POST(new Request(req.url, { method: "POST" }), ctx);
   const { GET: bridgeFromMember } = await import("../src/app/api/my/bridge-from-member/route");
   const { signMemberSessionToken, signMemberMagicLinkToken } = await import("../src/lib/community/member-auth");
   const { getCurrentMember } = await import("../src/lib/community/member-session");
@@ -88,6 +98,7 @@ async function main() {
     title: "Open course",
     published: true,
     access: "open",
+    createdAt: new Date(),
   });
   await db.doc("contacts/c_victim").set({
     subAccountId: SA, agencyId: "ag_signup_sec", name: "Victim Name",
@@ -119,6 +130,8 @@ async function main() {
     offerSignup(
       new Request(`http://localhost/api/offer/${SA}/${OFFER}/signup`, {
         method: "POST",
+        // A distinct client per call so the per-IP throttle never trips here.
+        headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 250)}` },
         body: JSON.stringify(body),
       }),
       { params: Promise.resolve({ saId: SA, offerId: OFFER }) }
@@ -127,6 +140,8 @@ async function main() {
     courseSignup(
       new Request(`http://localhost/api/course/${SA}/${COURSE}/signup`, {
         method: "POST",
+        // A distinct client per call so the per-IP throttle never trips here.
+        headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 250)}` },
         body: JSON.stringify(body),
       }),
       { params: Promise.resolve({ saId: SA, courseId: COURSE }) }
@@ -255,6 +270,7 @@ async function main() {
       new Request(`http://localhost/api/course/${SA}/login/verify?token=${encodeURIComponent(token)}`),
       { params: Promise.resolve({ saId: SA }) }
     );
+    assert.equal(res.status, 303);
     assert.equal(new URL(res.headers.get("location")!).pathname + new URL(res.headers.get("location")!).search, `/offer/${SA}/${OFFER}?enroll=1`);
     const current = await getCurrentMember(SA);
     assert.equal(current?.id, "m_victim");
@@ -298,6 +314,154 @@ async function main() {
     await establishPersonSessionForEmail("fresh-person@example.com");
     jar.set(PERSON_COOKIE, earlyToken);
     assert.equal(await getCurrentPerson(), null, "pre-verification person session rejected");
+  });
+
+  // ── Single-use sign-in links ──────────────────────────────────────────
+  const verifyUrl = (base: string, token: string, extra = "") =>
+    `http://localhost${base}?token=${encodeURIComponent(token)}${extra}`;
+
+  await check("Opening a sign-in link (GET) only shows the continue page — nothing redeemed", async () => {
+    jar.clear();
+    await sleep(3);
+    const token = signMemberMagicLinkToken(SA, "victim@example.com");
+    const res = await courseVerifyRoute.GET();
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("content-type") ?? "", /text\/html/);
+    const html = await res.text();
+    assert.match(html, /<form method="post"/);
+    assert.equal(html.includes(token), false, "page never echoes the token");
+    assert.equal(jar.has(MEMBER_COOKIE), false);
+    // still redeemable afterwards
+    const post = await courseVerify(new Request(verifyUrl(`/api/course/${SA}/login/verify`, token)), { params: Promise.resolve({ saId: SA }) });
+    assert.equal(post.status, 303);
+    assert.equal((await getCurrentMember(SA))?.id, "m_victim");
+  });
+
+  await check("Course link: first use signs in, second use is refused", async () => {
+    await sleep(3);
+    const token = signMemberMagicLinkToken(SA, "victim@example.com", undefined, COURSE);
+    const ctx = { params: Promise.resolve({ saId: SA }) };
+    jar.clear();
+    const first = await courseVerify(new Request(verifyUrl(`/api/course/${SA}/login/verify`, token)), ctx);
+    assert.equal(new URL(first.headers.get("location")!).pathname, `/course/${SA}/${COURSE}`);
+    assert.ok(jar.has(MEMBER_COOKIE));
+    jar.clear();
+    const second = await courseVerify(new Request(verifyUrl(`/api/course/${SA}/login/verify`, token)), { params: Promise.resolve({ saId: SA }) });
+    assert.equal(second.status, 303);
+    assert.match(second.headers.get("location") ?? "", /\/course\/sa_signup_sec\/login\?error=used/);
+    assert.equal(jar.has(MEMBER_COOKIE), false, "reused link signs nobody in");
+  });
+
+  await check("Portal link: single use", async () => {
+    await sleep(3);
+    const token = signMemberMagicLinkToken(SA, "victim@example.com");
+    const run = () =>
+      portalVerifyRoute.POST(new Request(verifyUrl(`/api/portal/${SA}/login/verify`, token), { method: "POST" }), { params: Promise.resolve({ saId: SA }) });
+    jar.clear();
+    assert.match((await run()).headers.get("location") ?? "", /\/portal\/sa_signup_sec$/);
+    jar.clear();
+    assert.match((await run()).headers.get("location") ?? "", /error=used/);
+    assert.equal(jar.has(MEMBER_COOKIE), false);
+  });
+
+  await check("MyMagnetix link: single use, keeps its destination", async () => {
+    const token = signPersonMagicLinkToken("victim-person@example.com");
+    const run = () =>
+      myVerifyRoute.POST(new Request(verifyUrl("/api/my/login/verify", token, "&next=%2Fmy%2Freadings"), { method: "POST" }));
+    jar.clear();
+    const first = await run();
+    assert.equal(new URL(first.headers.get("location")!).pathname, "/my/readings");
+    assert.ok(jar.has(PERSON_COOKIE));
+    jar.clear();
+    assert.match((await run()).headers.get("location") ?? "", /\/my\/login\?error=used/);
+    assert.equal(jar.has(PERSON_COOKIE), false);
+  });
+
+  await check("Two simultaneous redemptions of one link: exactly one wins", async () => {
+    const token = signMemberMagicLinkToken(SA, "race@example.com");
+    const results = await Promise.all(Array.from({ length: 5 }, () => redeemMagicLinkOnce(token, Date.now() + 60000)));
+    assert.equal(results.filter(Boolean).length, 1);
+  });
+
+  // ── Staff invites need the invite link ───────────────────────────────
+  if (process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    await db.doc("appConfig/main").set({ adminUid: "owner_uid", firstAgencyId: "ag_signup_sec" });
+    await db.collection("invites").doc("inv_1").set({
+      email: "new-staff@example.com", agencyId: "ag_signup_sec", subAccountId: SA,
+      subAccountRole: "admin", agencyRole: null, invitedByUid: "owner_uid",
+      acceptedByUid: null, acceptedAt: null, revokedAt: null, assignedTerritoryIds: [], token: "correct-invite-secret",
+    });
+    const signup = (body: Record<string, unknown>) =>
+      staffSignup(new Request("http://localhost/api/auth/signup", { method: "POST", body: JSON.stringify(body) }));
+
+    await check("Staff sign-up with the invited email but no invite link is refused", async () => {
+      const res = await signup({ email: "new-staff@example.com", password: "attacker-pass-123" });
+      assert.ok(res.status >= 400);
+      const inv = (await db.doc("invites/inv_1").get()).data()!;
+      assert.equal(inv.acceptedByUid, null, "invite not claimed");
+    });
+
+    await check("Staff sign-up with a wrong invite secret is refused", async () => {
+      const res = await signup({ email: "new-staff@example.com", password: "attacker-pass-123", inviteToken: "guess" });
+      assert.ok(res.status >= 400);
+      assert.equal((await db.doc("invites/inv_1").get()).data()!.acceptedByUid, null);
+    });
+
+    await check("Staff sign-up with the real invite link succeeds", async () => {
+      const res = await signup({ email: "new-staff@example.com", password: "owner-pass-12345", inviteToken: "correct-invite-secret" });
+      assert.ok(res.status < 300, `status ${res.status}: ${await res.clone().text()}`);
+      assert.ok((await db.doc("invites/inv_1").get()).data()!.acceptedByUid);
+    });
+  } else {
+    console.log("  (skipping staff-invite checks — set FIREBASE_AUTH_EMULATOR_HOST)");
+  }
+
+  // ── Grants to unverified identities ───────────────────────────────────
+  await check("Granting access to an unverified sign-up kills that sign-up's sessions", async () => {
+    jar.clear();
+    // An instant sign-up with an existing lead's email (no member yet).
+    await db.doc("contacts/c_lead2").set({ subAccountId: SA, agencyId: "ag_signup_sec", name: "Lead Two", email: "lead2@example.com" });
+    assert.equal((await (await offerReq({ name: "Impostor", email: "lead2@example.com" })).json()).mode, "free");
+    const impostorToken = jar.get(MEMBER_COOKIE)!;
+    const impostor = await getCurrentMember(SA);
+    assert.ok(impostor);
+    await sleep(5);
+    const contact = { id: "c_lead2", ...(await contactDoc("c_lead2")) } as unknown as Parameters<typeof grantAccessForContact>[0]["contact"];
+    await grantAccessForContact({ contact, key: `course:${COURSE}`, staffUid: "owner_uid" });
+    jar.clear();
+    jar.set(MEMBER_COOKIE, impostorToken);
+    assert.equal(await getCurrentMember(SA), null, "impostor session can't reach the grant");
+  });
+
+  await check("Granting agency access to an unverified person kills its sessions", async () => {
+    jar.clear();
+    const r = await resolveSignupPerson({ email: "fresh-agency@example.com", origin: "http://localhost", next: "/x" });
+    assert.equal(r.kind, "person");
+    const tok = jar.get(PERSON_COOKIE)!;
+    await sleep(5);
+    await requirePersonFreshSignInIfUnverified((r as { personId: string }).personId);
+    jar.clear();
+    jar.set(PERSON_COOKIE, tok);
+    assert.equal(await getCurrentPerson(), null);
+  });
+
+  await check("Sign-in-required wording never says an account exists", async () => {
+    jar.clear();
+    const body = await (await offerReq({ name: "X", email: "victim@example.com" })).json();
+    assert.equal(body.mode, "verify");
+    assert.equal(/already has an account|exists/i.test(body.message), false);
+  });
+
+  await check("Per-IP throttle on sign-up", async () => {
+    let last = 0;
+    for (let i = 0; i < 25; i++) {
+      const res = await offerSignup(
+        new Request(`http://localhost/api/offer/${SA}/${OFFER}/signup`, { method: "POST", headers: { "x-forwarded-for": "203.0.113.9" }, body: "{}" }),
+        { params: Promise.resolve({ saId: SA, offerId: OFFER }) }
+      );
+      last = res.status;
+    }
+    assert.equal(last, 429);
   });
 
   console.log(`\n${passed} checks passed.`);

@@ -126,10 +126,10 @@ export function signPersonSessionToken(personId: string, email: string): string 
 
 export function verifyPersonMagicLinkToken(
   token: string,
-): { email: string } | null {
+): { email: string; expiresAt: number } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ml") return null;
-  return { email: payload.e };
+  return { email: payload.e, expiresAt: payload.exp };
 }
 
 export function verifyPersonSessionToken(

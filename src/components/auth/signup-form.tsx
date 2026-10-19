@@ -26,6 +26,8 @@ export function SignupForm() {
   // signup API still re-validates against the invite doc by email, so this is
   // pure UX convenience.
   const initialEmail = searchParams?.get("email") ?? "";
+  // The invite secret from the emailed link — required to claim an invite.
+  const inviteToken = searchParams?.get("invite") ?? "";
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -61,6 +63,7 @@ export function SignupForm() {
           email,
           password,
           displayName: email.split("@")[0],
+          inviteToken,
         }),
       });
 

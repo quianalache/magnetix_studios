@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  asSeeOther,
+  magicLinkContinuePage,
+  redeemMagicLinkOnce,
+} from "@/lib/auth/magic-link-once";
 import { getCommunityGate } from "@/lib/community/gate";
 import {
   signMemberSessionToken,
@@ -26,7 +31,7 @@ export const dynamic = "force-dynamic";
  * GET so the email link works on a single tap. Redirects into the community on
  * success, or back to the login page with an error param on failure.
  */
-export async function GET(
+async function redeemLink(
   request: Request,
   { params }: { params: Promise<{ saId: string }> }
 ) {
@@ -52,6 +57,8 @@ export async function GET(
 
   const verified = verifyMemberMagicLinkToken(token);
   if (!verified || verified.subAccountId !== saId) return loginUrl("expired");
+  // Each emailed link signs someone in once — see magic-link-once.ts.
+  if (!(await redeemMagicLinkOnce(token, verified.expiresAt))) return loginUrl("used");
 
   let memberId: string;
   try {
@@ -107,4 +114,14 @@ export async function GET(
       ? verified.returnPath
       : communityRootHref(linkBase);
   return NextResponse.redirect(new URL(safeReturnPath, url));
+}
+
+/** Opening the emailed link never signs in; the page it returns POSTs back
+ *  here, and only that POST redeems the link (see magic-link-once.ts). */
+export async function GET() {
+  return magicLinkContinuePage();
+}
+
+export async function POST(request: Request, ctx: { params: Promise<{ saId: string }> }) {
+  return asSeeOther(await redeemLink(request, ctx));
 }

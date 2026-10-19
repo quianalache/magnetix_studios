@@ -12,6 +12,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_token: "That sign-in link was incomplete. Request a new one below.",
   expired:
     "That sign-in link has expired or was already used. Request a new one below.",
+  used: "That sign-in link has already been used. Request a new one below.",
   error: "Something went wrong signing you in. Request a new link below.",
   no_access: "That account doesn't have any MyMagnetix relationships yet.",
   bridge_unavailable:

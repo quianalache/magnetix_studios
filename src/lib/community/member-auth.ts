@@ -179,10 +179,13 @@ export function verifyMemberMagicLinkToken(token: string): {
   invitedByMemberId?: string;
   displayName?: string;
   returnPath?: string;
+  /** Epoch ms — used to expire the single-use redemption record. */
+  expiresAt: number;
 } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ml") return null;
   return {
+    expiresAt: payload.exp,
     subAccountId: payload.sa,
     email: payload.e,
     joinGroupId: payload.j,

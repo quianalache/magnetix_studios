@@ -165,6 +165,27 @@ export async function markPersonEmailVerified(personId: string): Promise<void> {
 }
 
 /**
+ * Privileged-grant rule (2026-10-19) — person twin of
+ * `requireFreshSignInIfUnverified`: an agency grant to a person whose email
+ * was never proven rejects that person's existing sessions, so only
+ * someone who proves the inbox can use it. No-op for verified persons.
+ */
+export async function requirePersonFreshSignInIfUnverified(
+  personId: string
+): Promise<void> {
+  const ref = col().doc(personId);
+  await getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.emailVerified !== false) return;
+    tx.set(
+      ref,
+      { sessionsValidAfter: Date.now(), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+  });
+}
+
+/**
  * Lazily link a tenant Member doc to its person identity. No-op (zero
  * reads beyond the one already-loaded `member`, zero writes) when a
  * `personId` is already set — the common case after the first login post-

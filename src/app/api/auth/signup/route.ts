@@ -1,15 +1,26 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { seedDefaultTemplates } from "@/lib/automations/seed-templates";
 import { GLOBAL_TERRITORY_ID, type Role } from "@/types";
 
+function inviteTokenMatches(stored: unknown, presented: unknown): boolean {
+  if (typeof stored !== "string" || !stored) return false;
+  if (typeof presented !== "string" || !presented) return false;
+  const a = Buffer.from(stored);
+  const b = Buffer.from(presented);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 interface SignupBody {
   email?: string;
   password?: string;
   displayName?: string;
+  /** Invite secret from the emailed/copied signup link (2026-10-19). */
+  inviteToken?: string;
 }
 
 type Decision =
@@ -75,20 +86,25 @@ export async function POST(request: Request) {
       // Find an unrevoked, unaccepted typed invite for this email. Typed
       // invites name a specific sub-account + role; that's the membership
       // we'll mint.
+      //
+      // The invite's secret must match (2026-10-19): knowing which email was
+      // invited is not enough to claim the seat. One message for "no invite"
+      // and "wrong/missing link" so pending invites can't be probed.
       const inviteQuery = await tx.get(
         db
           .collection("invites")
           .where("email", "==", email)
           .where("acceptedByUid", "==", null)
-          .where("revokedAt", "==", null)
-          .limit(1),
+          .where("revokedAt", "==", null),
       );
-      if (inviteQuery.empty) {
+      const inviteDoc = inviteQuery.docs.find((d) =>
+        inviteTokenMatches(d.get("token"), body.inviteToken),
+      );
+      if (!inviteDoc) {
         throw new Error(
-          "This email is not invited. Ask the agency to invite you.",
+          "Sign-up needs your invite link. Open the link from your invite email, or ask the agency to invite you.",
         );
       }
-      const inviteDoc = inviteQuery.docs[0];
       const invite = inviteDoc.data();
       const agencyId = invite.agencyId as string | undefined;
       const subAccountId = invite.subAccountId as string | null | undefined;

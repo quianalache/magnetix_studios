@@ -2,7 +2,10 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
+import {
+  ensurePersonIdentity,
+  requirePersonFreshSignInIfUnverified,
+} from "@/lib/server/person-identity-service";
 import {
   enrollInAgencyStandaloneCourseServerSide,
   getAgencyStandaloneCourse,
@@ -98,6 +101,8 @@ export async function grantAgencyCourseComplimentaryAccess(opts: {
   }
 
   const personId = await ensurePersonIdentity(email);
+  // A staff grant must never become usable by an unverified instant sign-up.
+  await requirePersonFreshSignInIfUnverified(personId);
   const enroll = () =>
     enrollInAgencyStandaloneCourseServerSide({
       agencyId: opts.agencyId,

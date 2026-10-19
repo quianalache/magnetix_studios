@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { signupRateLimitError } from "@/lib/community/signup-sign-in-link";
 import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { getStandaloneEnrollment } from "@/lib/server/standalone-course-service";
@@ -29,6 +30,10 @@ export async function POST(
   { params }: { params: Promise<{ saId: string; offerId: string }> }
 ) {
   const { saId, offerId } = await params;
+  const rateLimited = signupRateLimitError(request);
+  if (rateLimited) {
+    return NextResponse.json({ error: rateLimited }, { status: 429 });
+  }
 
   const gate = await getStandaloneCoursesGate(saId);
   if (!gate || !gate.enabled) {

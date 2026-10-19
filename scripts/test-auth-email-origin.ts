@@ -86,7 +86,7 @@ function main() {
         containsUnsafeHostname(origin) === null
       );
 
-      const inviteUrl = buildInviteUrl("client-owner@example.invalid");
+      const inviteUrl = buildInviteUrl("client-owner@example.invalid", "test-invite-token");
       check(
         "buildInviteUrl() starts with the canonical CRM domain",
         inviteUrl.startsWith(CANONICAL_APP_ORIGIN)

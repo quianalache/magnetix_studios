@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomBytes } from "crypto";
+
 import { FieldValue } from "firebase-admin/firestore";
 import type { UserRecord } from "firebase-admin/auth";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
@@ -152,16 +154,26 @@ export async function createInviteServerSide(
 
   let inviteId: string;
   let reused = false;
+  // Invite secret (2026-10-19): signup requires it, so knowing the invited
+  // email alone can't claim the seat. Readable only by admins (rules).
+  let inviteToken: string;
   if (!dupSnap.empty) {
     inviteId = dupSnap.docs[0].id;
     reused = true;
+    const existingToken = dupSnap.docs[0].get("token");
+    inviteToken =
+      typeof existingToken === "string" && existingToken
+        ? existingToken
+        : newInviteToken();
     // Re-inviting doubles as "update": reflect the role + territories the
     // admin just picked so a corrected selection takes effect on accept.
     await dupSnap.docs[0].ref.update({
       subAccountRole: role,
       assignedTerritoryIds,
+      token: inviteToken,
     });
   } else {
+    inviteToken = newInviteToken();
     const ref = await db.collection("invites").add({
       email,
       agencyId: sub.agencyId,
@@ -174,11 +186,12 @@ export async function createInviteServerSide(
       acceptedAt: null,
       revokedAt: null,
       assignedTerritoryIds,
+      token: inviteToken,
     });
     inviteId = ref.id;
   }
 
-  const inviteUrl = buildInviteUrl(email);
+  const inviteUrl = buildInviteUrl(email, inviteToken);
 
   // Send the delivery email. Failures here don't roll back the invite — the
   // admin can still copy the link from the UI and share it manually.
@@ -517,9 +530,14 @@ async function validateTerritoryIds(
     .map((s) => s.id);
 }
 
-export function buildInviteUrl(email: string): string {
+/** Random, URL-safe secret carried by every staff invite link. */
+export function newInviteToken(): string {
+  return randomBytes(24).toString("base64url");
+}
+
+export function buildInviteUrl(email: string, inviteToken: string): string {
   const appUrl = getAuthEmailOrigin();
-  const path = `/signup?email=${encodeURIComponent(email)}`;
+  const path = `/signup?email=${encodeURIComponent(email)}&invite=${encodeURIComponent(inviteToken)}`;
   return `${appUrl}${path}`;
 }
 

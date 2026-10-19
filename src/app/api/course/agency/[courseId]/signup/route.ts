@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { signupRateLimitError } from "@/lib/community/signup-sign-in-link";
 import { resolveSignupPerson } from "@/lib/server/signup-person";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
 import {
@@ -26,6 +27,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 export async function POST(request: Request, { params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;
+  const rateLimited = signupRateLimitError(request);
+  if (rateLimited) {
+    return NextResponse.json({ error: rateLimited }, { status: 429 });
+  }
 
   const agencyId = await resolveFirstAgencyId();
   if (!agencyId) return NextResponse.json({ error: "Not found" }, { status: 404 });

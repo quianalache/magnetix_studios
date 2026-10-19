@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  asSeeOther,
+  magicLinkContinuePage,
+  redeemMagicLinkOnce,
+} from "@/lib/auth/magic-link-once";
 import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
 import {
   signMemberSessionToken,
@@ -17,7 +22,7 @@ export const dynamic = "force-dynamic";
  * session and redirects back to the course, where the buyer completes
  * enroll/purchase as an explicit follow-up click (now that they're signed in).
  */
-export async function GET(
+async function redeemLink(
   request: Request,
   { params }: { params: Promise<{ saId: string }> },
 ) {
@@ -36,6 +41,8 @@ export async function GET(
 
   const verified = verifyMemberMagicLinkToken(token);
   if (!verified || verified.subAccountId !== saId) return loginUrl("expired");
+  // Each emailed link signs someone in once — see magic-link-once.ts.
+  if (!(await redeemMagicLinkOnce(token, verified.expiresAt))) return loginUrl("used");
 
   let memberId: string;
   try {
@@ -75,4 +82,14 @@ export async function GET(
   }
 
   return NextResponse.redirect(new URL(`/course/${saId}/login`, url));
+}
+
+/** Opening the emailed link never signs in; the page it returns POSTs back
+ *  here, and only that POST redeems the link (see magic-link-once.ts). */
+export async function GET() {
+  return magicLinkContinuePage();
+}
+
+export async function POST(request: Request, ctx: { params: Promise<{ saId: string }> }) {
+  return asSeeOther(await redeemLink(request, ctx));
 }

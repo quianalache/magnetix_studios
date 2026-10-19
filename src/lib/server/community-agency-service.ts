@@ -4,7 +4,10 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
 import { resolveBrandName, resolveCustomBrand } from "@/lib/landing/resolve-brand";
-import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
+import {
+  ensurePersonIdentity,
+  requirePersonFreshSignInIfUnverified,
+} from "@/lib/server/person-identity-service";
 import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import { extractMentionedMemberIds } from "@/lib/server/notification-producers";
@@ -1297,6 +1300,8 @@ export async function addAgencyGroupMemberServerSide(opts: {
   // this email would resolve to — never a new, agency-only identity. See
   // this file's module comment.
   const personId = await ensurePersonIdentity(email);
+  // An invite must never become usable by an unverified instant sign-up.
+  await requirePersonFreshSignInIfUnverified(personId);
 
   const doc = {
     agencyId: opts.agencyId,

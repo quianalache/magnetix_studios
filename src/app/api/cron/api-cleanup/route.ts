@@ -8,6 +8,7 @@ import {
 } from "@/lib/automations/qstash";
 import { sweepOldWatchdogRuns } from "@/lib/server/agents-watchdog-service";
 import { sweepExpiredUploadIntakes } from "@/lib/server/assets/media-upload-intake-service";
+import { sweepExpiredMagicLinkRedemptions } from "@/lib/auth/magic-link-once";
 
 /**
  * Daily cleanup sweep for the public API's TTL'd collections.
@@ -128,6 +129,9 @@ export async function POST(request: Request) {
     // Abandoned Media Library direct uploads (intake record + object).
     const intakes = await sweepExpiredUploadIntakes();
     results.push({ collection: "mediaUploadIntakes", deleted: intakes.deleted, hitCap: intakes.hitCap });
+    // Used single-use sign-in links whose 15-minute window has passed.
+    const redemptions = await sweepExpiredMagicLinkRedemptions(now);
+    results.push({ collection: "magicLinkRedemptions", deleted: redemptions, hitCap: redemptions >= 400 });
   } catch (err) {
     console.error("[cron/api-cleanup] sweep failed", err);
     return NextResponse.json(

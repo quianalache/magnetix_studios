@@ -35,7 +35,7 @@ import {
   formatActivityAmount,
   recordContactActivity,
 } from "@/lib/server/contact-activity";
-import { ensureMember } from "@/lib/community/member-account";
+import { ensureMember, requireFreshSignInIfUnverified } from "@/lib/community/member-account";
 import { resolveLineItemSourceType } from "@/lib/quotes/line-items";
 import type { Quote, InvoiceOfferFulfillmentItem } from "@/types/quotes";
 import {
@@ -971,6 +971,9 @@ export async function fulfillInvoiceOfferLinesServerSide(opts: {
         source: "course",
       })
     ).id;
+    // A paid-invoice grant must never become usable by an unverified
+    // instant sign-up that happens to share the recipient's email.
+    await requireFreshSignInIfUnverified(quote.subAccountId, memberId);
   } catch (error) {
     const message =
       error instanceof Error

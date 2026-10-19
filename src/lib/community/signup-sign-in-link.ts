@@ -23,8 +23,30 @@ export function signInRequiredResponseBody(email: string) {
   return {
     ok: true as const,
     mode: "verify" as const,
-    message: `This email already has an account. We've sent a sign-in link to ${email} — open it to continue right where you left off.`,
+    // Neutral on purpose: never states that an account exists.
+    message: `For your security, we've emailed a sign-in link to ${email}. Open it to continue right where you left off.`,
   };
+}
+
+const SIGNUP_IP_LIMIT = 20;
+const SIGNUP_IP_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Per-IP throttle shared by the four instant sign-up routes — slows bulk
+ * probing of which emails have accounts (and bulk sign-up spam) without
+ * affecting a real buyer. Returns a 429 body, or null when allowed.
+ */
+export function signupRateLimitError(request: Request): string | null {
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "unknown";
+  const allowed = checkMemberAuthRateLimit({
+    key: `signup-ip:${ip}`,
+    limit: SIGNUP_IP_LIMIT,
+    windowMs: SIGNUP_IP_WINDOW_MS,
+  });
+  return allowed ? null : "Too many attempts. Please wait a few minutes and try again.";
 }
 
 function emailHtml(title: string, intro: string, link: string): string {

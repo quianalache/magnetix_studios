@@ -1025,6 +1025,9 @@ export interface InviteDocV2 {
    * ignored for admin invites (admins always see every territory).
    */
   assignedTerritoryIds?: string[];
+  /** Invite secret carried in the emailed/copied signup link (2026-10-19).
+   *  Signup requires it; absent only on invites created before then. */
+  token?: string;
 }
 
 export interface UserSubAccountMembership {

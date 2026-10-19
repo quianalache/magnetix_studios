@@ -4,7 +4,10 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
-import { findMemberByEmail } from "@/lib/community/member-account";
+import {
+  findMemberByEmail,
+  requireFreshSignInIfUnverified,
+} from "@/lib/community/member-account";
 import { ensurePersonLinkForMember } from "@/lib/server/person-identity-service";
 import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
 import {
@@ -552,6 +555,8 @@ export async function grantAccessForContact(opts: {
   }
 
   const member = await memberForGrant(opts.contact);
+  // A grant must never become usable by an unverified instant sign-up.
+  await requireFreshSignInIfUnverified(opts.contact.subAccountId, member.id);
   if (parsed.kind === "community") {
     return grantComplimentaryCommunityAccess({
       contact: opts.contact,

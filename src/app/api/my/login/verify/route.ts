@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  asSeeOther,
+  magicLinkContinuePage,
+  redeemMagicLinkOnce,
+} from "@/lib/auth/magic-link-once";
 import { verifyPersonMagicLinkToken } from "@/lib/server/person-auth";
 import { setPersonSessionCookie } from "@/lib/server/person-session";
 import { establishPersonSessionForEmail } from "@/lib/server/person-password";
@@ -12,7 +17,7 @@ export const dynamic = "force-dynamic";
  * reconciliation — a Person has no tenant relationships of its own to
  * create; those stay owned by the existing Member reconciliation paths.
  */
-export async function GET(request: Request) {
+async function redeemLink(request: Request) {
   const url = new URL(request.url);
   const loginUrl = (error: string) =>
     NextResponse.redirect(new URL(`/my/login?error=${error}`, url));
@@ -22,6 +27,8 @@ export async function GET(request: Request) {
 
   const verified = verifyPersonMagicLinkToken(token);
   if (!verified) return loginUrl("expired");
+  // Each emailed link signs someone in once — see magic-link-once.ts.
+  if (!(await redeemMagicLinkOnce(token, verified.expiresAt))) return loginUrl("used");
 
   // First-time-access loop fix: `/api/my/login` embedded this — already
   // validated as a relative path there, but re-validated here too since
@@ -39,4 +46,14 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(new URL(next, url));
+}
+
+/** Opening the emailed link never signs in; the page it returns POSTs back
+ *  here, and only that POST redeems the link (see magic-link-once.ts). */
+export async function GET() {
+  return magicLinkContinuePage();
+}
+
+export async function POST(request: Request) {
+  return asSeeOther(await redeemLink(request));
 }
