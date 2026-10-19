@@ -4,8 +4,8 @@ import {
   getApp,
   type FirebaseApp,
 } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -40,9 +40,18 @@ function getFirebaseApp(): FirebaseApp {
   return _app;
 }
 
+/**
+ * Local QA only: when these are set (never in production builds), the
+ * browser SDK talks to the Firebase emulators instead of the live project,
+ * so staff screens can be exercised end to end without touching real data.
+ */
+const AUTH_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+const FIRESTORE_EMULATOR = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST;
+
 export function getFirebaseAuth(): Auth {
   if (!_auth) {
     _auth = getAuth(getFirebaseApp());
+    if (AUTH_EMULATOR) connectAuthEmulator(_auth, `http://${AUTH_EMULATOR}`, { disableWarnings: true });
   }
   return _auth;
 }
@@ -50,6 +59,10 @@ export function getFirebaseAuth(): Auth {
 export function getFirebaseDb(): Firestore {
   if (!_db) {
     _db = getFirestore(getFirebaseApp());
+    if (FIRESTORE_EMULATOR) {
+      const [host, port] = FIRESTORE_EMULATOR.split(":");
+      connectFirestoreEmulator(_db, host, Number(port));
+    }
   }
   return _db;
 }
