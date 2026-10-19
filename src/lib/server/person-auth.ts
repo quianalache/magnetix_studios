@@ -134,10 +134,12 @@ export function verifyPersonMagicLinkToken(
 
 export function verifyPersonSessionToken(
   token: string,
-): { personId: string; email: string } | null {
+): { personId: string; email: string; issuedAt: number } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ses" || !payload.pid) return null;
-  return { personId: payload.pid, email: payload.e };
+  // Issue time is derived from the fixed TTL so tokens minted before this
+  // field existed still compare correctly against `people.sessionsValidAfter`.
+  return { personId: payload.pid, email: payload.e, issuedAt: payload.exp - SESSION_TTL_MS };
 }
 
 /**

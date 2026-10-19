@@ -10,9 +10,7 @@ import {
   type EnrollBirthDetails,
 } from "@/lib/server/standalone-course-service";
 import { startStandaloneCourseStripeCheckoutServerSide } from "@/lib/server/standalone-course-purchase-service";
-import { ensureMember } from "@/lib/community/member-account";
-import { signMemberSessionToken } from "@/lib/community/member-auth";
-import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { resolveSignupMember } from "@/lib/community/signup-member";
 
 export const dynamic = "force-dynamic";
 
@@ -84,16 +82,19 @@ export async function POST(
     birthDetails = { name, birthDate, birthTime, birthPlace, lat: body?.lat, lng: body?.lng, timeZone: body?.timeZone };
   }
 
-  const member = await ensureMember({
+  // Sign-up security (2026-10-19): knowing an existing member's email never
+  // signs anyone in — see resolveSignupMember.
+  const resolved = await resolveSignupMember({
     subAccountId: saId,
     email,
     displayName: name,
     phone,
-    source: "course",
+    returnPath: `/course/${saId}/${courseId}?enroll=1`,
   });
-
-  const token = signMemberSessionToken(saId, member.id, member.email);
-  await setMemberSessionCookie(token);
+  if (resolved.kind === "sign-in-required") {
+    return NextResponse.json(resolved.body);
+  }
+  const member = resolved.member;
 
   const classroomUrl = `/course/${saId}/${courseId}/classroom`;
 

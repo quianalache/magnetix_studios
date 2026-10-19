@@ -61,6 +61,26 @@ export interface Member {
   passwordHash?: string | null;
   passwordUpdatedAt?: Timestamp | FieldValue | null;
   /**
+   * Sign-up security (2026-10-19). `false` only for a Member created by an
+   * instant Offer/course sign-up, where nobody has yet proven they own the
+   * email. Absent on every older Member (treated as verified). Flips to
+   * `true` the first time the email is proven (magic link, password reset
+   * link, or a verified MyMagnetix session) — see `markMemberEmailVerified`.
+   */
+  emailVerified?: boolean;
+  /**
+   * Epoch ms. Session cookies issued before this are rejected by
+   * `getCurrentMember`. Stamped when an unverified Member is first verified,
+   * so a session minted by whoever typed the email first stops working.
+   */
+  sessionsValidAfter?: number;
+  /**
+   * True when an unverified sign-up was linked to a Contact that already
+   * existed. Until the email is verified, that Contact's data (Readings,
+   * invoices, projects, bookings) is hidden from the session.
+   */
+  contactLinkUnverified?: boolean;
+  /**
    * Skool migration, Gap 2 (2026-08-20) — true only for a minimal, non-login
    * "historical author" identity created to preserve authorship on imported
    * content from a former/unresolvable platform member (no real email ever

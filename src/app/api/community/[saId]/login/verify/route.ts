@@ -59,6 +59,7 @@ export async function GET(
       subAccountId: saId,
       email: verified.email,
       displayName: verified.displayName,
+      emailProof: "proven",
     });
     if (member.status !== "active") return loginUrl("inactive");
     memberId = member.id;

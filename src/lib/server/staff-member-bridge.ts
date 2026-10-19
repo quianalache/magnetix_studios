@@ -70,6 +70,7 @@ export async function resolveMemberForStaffBridge(
     subAccountId,
     email: access.email,
     source: "staff-bridge",
+    emailProof: "proven",
   });
 
   return { ok: true, result: { member, callerEmail: access.email } };

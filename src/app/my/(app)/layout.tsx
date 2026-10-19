@@ -53,7 +53,7 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
   ]);
   const [attentionItems, unreadNotificationCount] = await Promise.all([
     listAttentionForPerson(memberships),
-    countUnreadForPerson(person.id),
+    person.emailVerified ? countUnreadForPerson(person.id) : 0,
   ]);
 
   return (

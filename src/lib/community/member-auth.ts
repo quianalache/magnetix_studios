@@ -195,10 +195,22 @@ export function verifyMemberMagicLinkToken(token: string): {
 
 export function verifyMemberSessionToken(
   token: string
-): { subAccountId: string; memberId: string; email: string } | null {
+): {
+  subAccountId: string;
+  memberId: string;
+  email: string;
+  issuedAt: number;
+} | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ses" || !payload.mid) return null;
-  return { subAccountId: payload.sa, memberId: payload.mid, email: payload.e };
+  // Issue time is derived from the fixed TTL so tokens minted before this
+  // field existed still compare correctly against `Member.sessionsValidAfter`.
+  return {
+    subAccountId: payload.sa,
+    memberId: payload.mid,
+    email: payload.e,
+    issuedAt: payload.exp - SESSION_TTL_MS,
+  };
 }
 
 /**

@@ -55,6 +55,7 @@ export async function GET(
       subAccountId: saId,
       email: verified.email,
       source: "portal",
+      emailProof: "proven",
     });
     if (member.status !== "active") return loginUrl("inactive");
 

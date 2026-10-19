@@ -9,9 +9,7 @@ import {
   hasPaidCourseOffer,
   startCourseOfferStripeCheckoutServerSide,
 } from "@/lib/server/course-offer-purchase-service";
-import { ensureMember } from "@/lib/community/member-account";
-import { signMemberSessionToken } from "@/lib/community/member-auth";
-import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { resolveSignupMember } from "@/lib/community/signup-member";
 import { normalizeAttribution } from "@/lib/attribution";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
 import type { ContactAttribution } from "@/types/contacts";
@@ -85,18 +83,21 @@ export async function POST(
     );
   }
 
-  const member = await ensureMember({
+  // Sign-up security (2026-10-19): knowing an existing member's email never
+  // signs anyone in — see resolveSignupMember.
+  const resolved = await resolveSignupMember({
     subAccountId: saId,
     email,
     displayName: name,
     phone: collectPhoneNumber ? phone : null,
     address: collectAddress ? address : null,
-    source: "course",
     attribution,
+    returnPath: `/offer/${saId}/${offerId}?enroll=1`,
   });
-
-  const token = signMemberSessionToken(saId, member.id, member.email);
-  await setMemberSessionCookie(token);
+  if (resolved.kind === "sign-in-required") {
+    return NextResponse.json(resolved.body);
+  }
+  const member = resolved.member;
 
   const firstCourseId = offer.courseIds[0];
   const successUrl = firstCourseId

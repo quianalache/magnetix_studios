@@ -69,6 +69,12 @@ export interface PersonIdentity {
   /** Account-level MyMagnetix first-run tour state. */
   myMagnetixOnboardingStatus?: "completed" | "dismissed";
   myMagnetixOnboardingUpdatedAt?: string | null;
+  /** Sign-up security (2026-10-19) — `false` only for a person created by an
+   *  agency Offer/course instant sign-up before the email was proven.
+   *  Absent = verified (every older person). */
+  emailVerified?: boolean;
+  /** Epoch ms — person sessions issued before this are rejected. */
+  sessionsValidAfter?: number;
 }
 
 function col() {
@@ -109,6 +115,55 @@ export async function ensurePersonIdentity(email: string): Promise<string> {
   return ref.id;
 }
 
+/** Existing person id for an email, or null. Never creates. */
+export async function findPersonIdByEmail(email: string): Promise<string | null> {
+  const snap = await col()
+    .where("primaryEmail", "==", normalizeEmail(email))
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0].id;
+}
+
+/**
+ * Sign-up security (2026-10-19) — create a person for an email nobody has
+ * proven yet (agency Offer/course instant sign-up of a brand-new email).
+ * Callers must have checked `findPersonIdByEmail` first; an existing
+ * person is never handed to an unverified caller.
+ */
+export async function createUnverifiedPerson(email: string): Promise<string> {
+  const ref = await col().add({
+    primaryEmail: normalizeEmail(email),
+    emailVerified: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/**
+ * Record that the person's email has just been proven (magic link,
+ * password reset link, or a verified Member/staff identity). For a person
+ * created by an unverified sign-up this flips `emailVerified` and rejects
+ * every session issued before now, so whoever typed the email first loses
+ * access the moment the real owner shows up. No-op for verified persons.
+ */
+export async function markPersonEmailVerified(personId: string): Promise<void> {
+  const ref = col().doc(personId);
+  await getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.emailVerified !== false) return;
+    tx.set(
+      ref,
+      {
+        emailVerified: true,
+        sessionsValidAfter: Date.now(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  });
+}
+
 /**
  * Lazily link a tenant Member doc to its person identity. No-op (zero
  * reads beyond the one already-loaded `member`, zero writes) when a
@@ -135,12 +190,23 @@ export async function ensurePersonIdentity(email: string): Promise<string> {
  */
 export async function ensurePersonLinkForMember(
   subAccountId: string,
-  member: { id: string; email: string; personId?: string | null }
+  member: {
+    id: string;
+    email: string;
+    personId?: string | null;
+    emailVerified?: boolean;
+  }
 ): Promise<string | null | undefined> {
   if (member.personId) return member.personId;
+  // An unverified instant-sign-up Member must never be joined to the
+  // person (and so to MyMagnetix, which spans every business) until its
+  // email is proven — see markMemberEmailVerified.
+  if (member.emailVerified === false) return null;
 
   try {
     const personId = await ensurePersonIdentity(member.email);
+    // A verified Member proves the same email for the person too.
+    await markPersonEmailVerified(personId);
     await getAdminDb()
       .doc(`subAccounts/${subAccountId}/members/${member.id}`)
       .set(
@@ -179,6 +245,7 @@ export async function ensurePersonLinkForStaffUser(staffUser: {
 
   try {
     const personId = await ensurePersonIdentity(staffUser.email);
+    await markPersonEmailVerified(personId);
     await getAdminDb()
       .doc(`users/${staffUser.uid}`)
       .set(

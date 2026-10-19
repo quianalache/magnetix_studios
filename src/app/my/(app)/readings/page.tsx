@@ -22,7 +22,9 @@ export default async function MyMagnetixReadingsPage() {
   const person = await getCurrentPerson();
   if (!person) redirect("/my/login");
 
-  const readings = await listReadingsForPerson(person.id);
+  // Readings are linked by email, so they stay hidden until an instant
+  // sign-up has proven it owns that email.
+  const readings = person.emailVerified ? await listReadingsForPerson(person.id) : [];
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -32,7 +34,14 @@ export default async function MyMagnetixReadingsPage() {
         Every reading you&rsquo;ve generated, across every Magnetix business.
       </p>
 
-      {readings.length === 0 ? (
+      {!person.emailVerified ? (
+        <p className="text-muted-foreground mt-6 text-sm">
+          Confirm your email to see your Readings.{" "}
+          <Link href="/my/login?next=/my/readings" className="text-primary font-medium underline">
+            Email me a sign-in link
+          </Link>
+        </p>
+      ) : readings.length === 0 ? (
         <p className="mt-6 text-[13px] text-[#909090]">No readings yet.</p>
       ) : (
         <div className="mt-5 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">

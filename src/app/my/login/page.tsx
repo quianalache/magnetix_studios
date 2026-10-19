@@ -59,7 +59,9 @@ export default async function MyMagnetixLoginPage({
   // login) — otherwise fall through and show the form so they can actually
   // sign in as the identity they asked for.
   const existingPerson = await getCurrentPerson();
-  if (existingPerson) {
+  // An instant-sign-up session whose email isn't proven yet still needs the
+  // form, so it can request a sign-in link to confirm the email.
+  if (existingPerson?.emailVerified) {
     const alreadyCorrectIdentity =
       hasExplicitIdentityRequest &&
       existingPerson.primaryEmail.toLowerCase() === prefillEmail.toLowerCase();

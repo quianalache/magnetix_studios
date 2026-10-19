@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
@@ -64,6 +64,19 @@ export function EnrollModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Set when the email already has an account: the server signed nobody in
+  // and emailed the owner a sign-in link back to this page.
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // That sign-in link returns with ?enroll=1 — reopen the form so checkout
+  // continues where it stopped (now signed in, so it's prefilled).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("enroll") !== "1") return;
+    url.searchParams.delete("enroll");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    setOpen(true);
+  }, []);
 
   const cta =
     access === "purchase" ? `Enroll Now — ${priceLabel}` : "Enroll Now";
@@ -86,13 +99,18 @@ export function EnrollModal({
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        mode?: "free" | "paid";
+        mode?: "free" | "paid" | "verify";
         redirectTo?: string;
         clientSecret?: string;
+        message?: string;
         error?: string;
       };
       if (!res.ok || !data.ok) {
         throw new Error(data.error ?? "Couldn't sign up. Try again.");
+      }
+      if (data.mode === "verify") {
+        setNotice(data.message ?? "Check your email for a sign-in link to continue.");
+        return;
       }
       if (data.mode === "free" && data.redirectTo) {
         router.push(data.redirectTo);
@@ -122,6 +140,7 @@ export function EnrollModal({
           setStep("form");
           setClientSecret(null);
           setError(null);
+          setNotice(null);
         }
       }}
     >
@@ -138,7 +157,24 @@ export function EnrollModal({
             : "sm:max-w-sm"
         }
       >
-        {step === "form" ? (
+        {step === "form" && notice ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Check your email</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">{notice}</p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setNotice(null)}
+              >
+                Use a different email
+              </Button>
+            </div>
+          </>
+        ) : step === "form" ? (
           <>
             <DialogHeader>
               <DialogTitle>{cta}</DialogTitle>

@@ -6,7 +6,10 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import { signPersonSessionToken } from "@/lib/server/person-auth";
-import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
+import {
+  ensurePersonIdentity,
+  markPersonEmailVerified,
+} from "@/lib/server/person-identity-service";
 
 /**
  * MyMagnetix global Person password — deliberate sibling of
@@ -179,7 +182,15 @@ export async function consumePersonPasswordToken({
     const passwordHash = await hashPersonPassword(password);
     tx.set(
       personRef,
-      { passwordHash, passwordUpdatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
+      {
+        passwordHash,
+        passwordUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        // The emailed link proves the inbox — see markPersonEmailVerified.
+        ...(personSnap.data()?.emailVerified === false
+          ? { emailVerified: true, sessionsValidAfter: Date.now() }
+          : {}),
+      },
       { merge: true },
     );
     tx.set(tokenRef, { usedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -270,6 +281,8 @@ export async function establishPersonSessionForEmail(email: string): Promise<{
 }> {
   const normalizedEmail = normalizeEmail(email);
   const personId = await ensurePersonIdentity(normalizedEmail);
+  // Must run before signing: it may reject sessions issued before now.
+  await markPersonEmailVerified(personId);
   const sessionToken = signPersonSessionToken(personId, normalizedEmail);
   return { personId, sessionToken };
 }

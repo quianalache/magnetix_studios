@@ -24,8 +24,10 @@ export async function GET() {
   if (!person) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const [notifications, unreadCount] = await Promise.all([
-    listRecentNotificationsForPerson(person.id),
-    countUnreadForPerson(person.id),
+    // Notifications describe activity linked by email (e.g. Readings);
+    // hidden until an instant-sign-up email has been proven.
+    person.emailVerified ? listRecentNotificationsForPerson(person.id) : [],
+    person.emailVerified ? countUnreadForPerson(person.id) : 0,
   ]);
 
   const serialized = notifications.map((n) => ({

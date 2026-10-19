@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { resolveSignupPerson } from "@/lib/server/signup-person";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
 import { getAgencyCourseOffer } from "@/lib/server/agency-course-offer-service";
 import { getAgencyStandaloneEnrollment } from "@/lib/server/agency-standalone-course-service";
@@ -9,9 +10,6 @@ import {
   hasPaidAgencyCourseOffer,
   startAgencyCourseOfferStripeCheckoutServerSide,
 } from "@/lib/server/agency-course-offer-purchase-service";
-import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
-import { signPersonSessionToken } from "@/lib/server/person-auth";
-import { setPersonSessionCookie } from "@/lib/server/person-session";
 
 export const dynamic = "force-dynamic";
 
@@ -63,9 +61,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ off
     return NextResponse.json({ error: "You must agree to the terms before continuing." }, { status: 400 });
   }
 
-  const personId = await ensurePersonIdentity(email);
-  const token = signPersonSessionToken(personId, email);
-  await setPersonSessionCookie(token);
+  // Sign-up security (2026-10-19): knowing an existing person's email never
+  // signs anyone in — see resolveSignupPerson.
+  const resolved = await resolveSignupPerson({
+    email,
+    origin: new URL(request.url).origin,
+    next: `/offer/agency/${offerId}?enroll=1`,
+  });
+  if (resolved.kind === "sign-in-required") {
+    return NextResponse.json(resolved.body);
+  }
+  const personId = resolved.personId;
 
   const firstCourseId = offer.courseIds[0];
   const successUrl = firstCourseId ? `/course/agency/${firstCourseId}/classroom` : "/my";

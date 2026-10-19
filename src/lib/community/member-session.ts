@@ -38,11 +38,30 @@ export async function getCurrentMember(
 
   const data = snap.data() as Omit<Member, "id">;
   if (data.status !== "active") return null;
+  // Sign-up security (2026-10-19): a session issued before the email was
+  // first proven belongs to whoever typed the email at sign-up.
+  if (
+    typeof data.sessionsValidAfter === "number" &&
+    verified.issuedAt < data.sessionsValidAfter
+  ) {
+    return null;
+  }
 
   // Best-effort "last active" stamp; never block the read on it.
   void ref
     .set({ lastSeenAt: FieldValue.serverTimestamp() }, { merge: true })
     .catch(() => {});
+
+  // Until the email is proven, the session sees only what this sign-up
+  // created: no pre-existing Contact's data, no MyMagnetix person link.
+  if (data.emailVerified === false) {
+    return {
+      id: snap.id,
+      ...data,
+      contactId: data.contactLinkUnverified ? null : data.contactId,
+      personId: null,
+    };
+  }
 
   return { id: snap.id, ...data };
 }

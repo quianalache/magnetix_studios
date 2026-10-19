@@ -12,6 +12,10 @@ import { getAdminDb } from "@/lib/firebase/admin";
 export interface CurrentPerson {
   id: string;
   primaryEmail: string;
+  /** False only for a person created by an instant agency sign-up whose
+   *  email hasn't been proven yet. Cross-business data (Readings,
+   *  notifications) stays hidden until it is. */
+  emailVerified: boolean;
 }
 
 /**
@@ -37,8 +41,18 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
 
   const snap = await getAdminDb().doc(`people/${verified.personId}`).get();
   if (!snap.exists) return null;
+  const data = snap.data() ?? {};
+  // Sessions issued before the email was first proven belong to whoever
+  // typed it at sign-up, not necessarily its owner.
+  if (typeof data.sessionsValidAfter === "number" && verified.issuedAt < data.sessionsValidAfter) {
+    return null;
+  }
 
-  return { id: snap.id, primaryEmail: (snap.data()?.primaryEmail as string) ?? verified.email };
+  return {
+    id: snap.id,
+    primaryEmail: (data.primaryEmail as string) ?? verified.email,
+    emailVerified: data.emailVerified !== false,
+  };
 }
 
 export async function setPersonSessionCookie(token: string): Promise<void> {

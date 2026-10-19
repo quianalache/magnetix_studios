@@ -43,6 +43,7 @@ export async function GET(
       subAccountId: saId,
       email: verified.email,
       source: "course",
+      emailProof: "proven",
     });
     if (member.status !== "active") return loginUrl("inactive");
     memberId = member.id;
@@ -53,6 +54,19 @@ export async function GET(
 
   const sessionToken = signMemberSessionToken(saId, memberId, verified.email);
   await setMemberSessionCookie(sessionToken);
+
+  // Sign-up security (2026-10-19): a sign-in link sent by an Offer/course
+  // sign-up returns to that same page (signed into the token) with the
+  // enrollment form reopened. Only this business's offer/course pages.
+  const returnPath = verified.returnPath;
+  if (
+    returnPath &&
+    !returnPath.includes("//") &&
+    (returnPath.startsWith(`/offer/${saId}/`) ||
+      returnPath.startsWith(`/course/${saId}/`))
+  ) {
+    return NextResponse.redirect(new URL(returnPath, url));
+  }
 
   if (verified.courseId) {
     return NextResponse.redirect(

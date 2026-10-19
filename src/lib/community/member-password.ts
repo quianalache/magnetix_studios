@@ -128,6 +128,7 @@ export async function authenticateMemberWithPassword({
         subAccountId,
         email: normalizedEmail,
         source: "staff-bridge",
+        emailProof: "proven",
       });
       if (resolvedMember.status === "active") {
         const sessionToken = signMemberSessionToken(
@@ -229,15 +230,28 @@ export async function consumeMemberPasswordToken({
     }
 
     const passwordHash = await hashMemberPassword(password);
+    // The emailed reset link proves the inbox — see markMemberEmailVerified.
+    const provesUnverifiedEmail = member.emailVerified === false;
     tx.set(
       memberRef,
       {
         passwordHash,
         passwordUpdatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+        ...(provesUnverifiedEmail
+          ? {
+              emailVerified: true,
+              sessionsValidAfter: Date.now(),
+              contactLinkUnverified: FieldValue.delete(),
+            }
+          : {}),
       },
       { merge: true }
     );
+    if (provesUnverifiedEmail) {
+      member.emailVerified = true;
+      delete member.contactLinkUnverified;
+    }
     tx.set(tokenRef, { usedAt: FieldValue.serverTimestamp() }, { merge: true });
 
     const sessionToken = signMemberSessionToken(
@@ -274,6 +288,15 @@ export async function setMemberPassword({
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const validationError = validateMemberPassword(newPassword);
   if (validationError) return { ok: false, error: validationError };
+  // A session from an unverified instant sign-up must not be able to
+  // plant a password that would outlive the real owner verifying.
+  if (member.emailVerified === false) {
+    return {
+      ok: false,
+      error:
+        "Confirm your email first — use the sign-in link we email you, then set a password.",
+    };
+  }
   if (member.passwordHash) {
     if (!currentPassword)
       return { ok: false, error: "Enter your current password." };
