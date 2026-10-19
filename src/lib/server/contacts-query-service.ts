@@ -91,9 +91,11 @@ export async function loadVisibleContacts(opts: {
     query = query.where("territoryId", "in", territoryIds.slice(0, 30));
   }
   const snap = await query.get();
-  const contacts = snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<Contact, "id">) }) as Contact,
-  );
+  // Embed Test contacts (Public Reading Tool) are hidden from Contacts;
+  // they're cleaned up from the Embed editor.
+  const contacts = snap.docs
+    .filter((d) => d.get("testRecord") !== true)
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Contact, "id">) }) as Contact);
 
   cache.set(key, { at: Date.now(), contacts });
   if (cache.size > CACHE_MAX_ENTRIES) {

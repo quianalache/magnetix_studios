@@ -90,6 +90,8 @@ export async function createContactServerSide(
   const doc = {
     name: input.name,
     email: input.email,
+    // Case-insensitive matching key (2026-10-19) — see findExistingContactId.
+    emailLower: normalizeContactEmail(input.email),
     phone: input.phone,
     company: input.company,
     address: input.address,
@@ -206,7 +208,11 @@ export async function updateContactServerSide(opts: {
   // written with update(); every other field keeps the existing merge.
   const { customFields, ...mergePatch } = opts.patch;
   await ref.set(
-    { ...mergePatch, updatedAt: FieldValue.serverTimestamp() },
+    {
+      ...mergePatch,
+      ...(typeof mergePatch.email === "string" ? { emailLower: normalizeContactEmail(mergePatch.email) } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
     { merge: true }
   );
   if (customFields !== undefined) {
@@ -377,20 +383,43 @@ export function emitContactDeleted(opts: {
  * queries, no composite index needed. Not name — names vary too much
  * ("Bob" vs "Robert") to be a reliable identity key.
  */
+/** The case-insensitive email key stored as `contacts.emailLower`. */
+export function normalizeContactEmail(email: string | null | undefined): string {
+  return (email ?? "").trim().toLowerCase();
+}
+
+/**
+ * Email matching is case-insensitive (2026-10-19): `Maya@Example.com` and
+ * `maya@example.com` are one Contact. Firestore can't compare case-
+ * insensitively, so this checks the stored `emailLower` key first, then
+ * contacts written before that key existed (stored lowercased, or stored
+ * exactly as typed). `scripts/backfill-contact-email-lower.ts` adds the key
+ * to older contacts. Embed Test contacts (`testRecord`) never match a live
+ * submission.
+ */
 export async function findExistingContactId(
   db: FirebaseFirestore.Firestore,
   subAccountId: string,
   { email, phone }: { email?: string; phone?: string }
 ): Promise<string | null> {
-  const cleanEmail = email?.trim().toLowerCase();
+  const typedEmail = email?.trim() ?? "";
+  const cleanEmail = typedEmail.toLowerCase();
   if (cleanEmail) {
-    const dupe = await db
-      .collection("contacts")
-      .where("subAccountId", "==", subAccountId)
-      .where("email", "==", cleanEmail)
-      .limit(1)
-      .get();
-    if (!dupe.empty) return dupe.docs[0].id;
+    const candidates: [string, string][] = [
+      ["emailLower", cleanEmail],
+      ["email", cleanEmail],
+      ...(typedEmail !== cleanEmail ? ([["email", typedEmail]] as [string, string][]) : []),
+    ];
+    for (const [field, value] of candidates) {
+      const dupe = await db
+        .collection("contacts")
+        .where("subAccountId", "==", subAccountId)
+        .where(field, "==", value)
+        .limit(5)
+        .get();
+      const live = dupe.docs.find((d) => d.get("testRecord") !== true);
+      if (live) return live.id;
+    }
   }
   const cleanPhone = phone?.trim();
   if (cleanPhone) {

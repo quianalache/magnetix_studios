@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   createContactServerSide,
+  findExistingContactId,
   updateContactServerSide,
 } from "@/lib/server/contacts-service";
 import { ensurePersonLinkForMember } from "@/lib/server/person-identity-service";
@@ -267,14 +268,10 @@ export async function ensureMember({
   let contactId: string | null = null;
   let contactPreexisting = false;
   try {
-    const contactSnap = await db
-      .collection("contacts")
-      .where("subAccountId", "==", subAccountId)
-      .where("email", "==", normalizedEmail)
-      .limit(1)
-      .get();
-    if (!contactSnap.empty) {
-      contactId = contactSnap.docs[0].id;
+    // Case-insensitive (2026-10-19) — same matcher every lead path uses.
+    const existingContactId = await findExistingContactId(db, subAccountId, { email: normalizedEmail });
+    if (existingContactId) {
+      contactId = existingContactId;
       contactPreexisting = true;
     } else {
       const result = await createContactServerSide({
