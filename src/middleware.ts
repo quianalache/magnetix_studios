@@ -47,13 +47,29 @@ function loginRedirectTarget(pathname: string): string {
   return override ? override.target(pathname) : pathname;
 }
 
+/**
+ * Identity headers are set by this middleware ONLY from a verified session
+ * (`handleValidToken` below), and route handlers trust them
+ * (`require-tenancy.ts`, `current-staff.ts`). A request that is let through
+ * WITHOUT a verified session (public paths, or Firebase not configured)
+ * must never carry client-supplied copies — otherwise anyone could send
+ * `x-user-uid: <some staff uid>` and be treated as that staff user.
+ */
+const IDENTITY_HEADERS = ["x-user-uid", "x-user-email"] as const;
+
+function nextWithoutIdentityHeaders(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  for (const name of IDENTITY_HEADERS) headers.delete(name);
+  return NextResponse.next({ request: { headers } });
+}
+
 export default function middleware(request: NextRequest) {
   // Skip auth middleware if Firebase is not configured
   if (
     !process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
     !process.env.FIREBASE_ADMIN_PROJECT_ID
   ) {
-    return NextResponse.next();
+    return nextWithoutIdentityHeaders(request);
   }
 
   return authMiddleware(request, {
@@ -93,7 +109,7 @@ export default function middleware(request: NextRequest) {
 
       // Allow public paths without authentication
       if (isPublicPath(pathname)) {
-        return NextResponse.next();
+        return nextWithoutIdentityHeaders(request);
       }
 
       // Redirect unauthenticated users to login for protected paths
@@ -107,7 +123,7 @@ export default function middleware(request: NextRequest) {
 
       // On error, allow public paths and redirect protected paths
       if (isPublicPath(pathname)) {
-        return NextResponse.next();
+        return nextWithoutIdentityHeaders(request);
       }
 
       const url = request.nextUrl.clone();
