@@ -26,7 +26,7 @@ import type { ContactAttribution } from "@/types/contacts";
  * marketing-site funnel) — NOT shared code, a decoupled sibling.
  */
 
-export type AttributionPageType = "booking" | "offer" | "platformSignup";
+export type AttributionPageType = "booking" | "offer" | "platformSignup" | "readingTool";
 
 const DIMENSION_KEYS = [
   "utmSource",

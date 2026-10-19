@@ -57,6 +57,7 @@ const CATEGORY: Partial<Record<ActivityType, ActivityCategory>> = {
   task_completed: "pipeline",
   contact_territory_changed: "pipeline",
   form_submitted: "forms",
+  reading_created: "forms",
   automation_started: "automation",
   automation_step_sent: "automation",
   automation_step_skipped: "automation",

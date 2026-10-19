@@ -1,7 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 
 export interface CurrentStaffUser {
   uid: string;
@@ -43,4 +43,27 @@ export async function getCurrentStaffUser(): Promise<CurrentStaffUser | null> {
   if (userSnap.data()?.status !== "active") return null;
 
   return { uid, email };
+}
+
+/**
+ * The signed-in staff member, only if they can access this sub-account
+ * (agency owner of its agency, or an active sub-account member) — the
+ * Server Component twin of `requireSubAccountMember`. Used by staff-only
+ * public-route modes such as the Public Reading Tool's Preview and Test.
+ */
+export async function getStaffForSubAccount(subAccountId: string): Promise<CurrentStaffUser | null> {
+  const staff = await getCurrentStaffUser();
+  if (!staff) return null;
+  const db = getAdminDb();
+  const [subSnap, memberSnap, record] = await Promise.all([
+    db.doc(`subAccounts/${subAccountId}`).get(),
+    db.doc(`subAccounts/${subAccountId}/subAccountMembers/${staff.uid}`).get(),
+    getAdminAuth().getUser(staff.uid).catch(() => null),
+  ]);
+  if (!subSnap.exists) return null;
+  const claims = (record?.customClaims ?? {}) as { agencyRole?: string; agencyId?: string; status?: string };
+  if (claims.status && claims.status !== "active") return null;
+  if (claims.agencyRole === "owner" && claims.agencyId === subSnap.get("agencyId")) return staff;
+  if (memberSnap.exists && memberSnap.get("status") === "active") return staff;
+  return null;
 }

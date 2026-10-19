@@ -1,3 +1,5 @@
+import type { ReadingEmbedSnapshot, ReadingPlacement } from "@/types/embed-config";
+import type { ContactAttribution } from "@/types/contacts";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
@@ -146,6 +148,17 @@ export interface EnergeticDecoderReading {
   origin?: ReadingOrigin;
   /** The staff member who created it (origin "staff" only). Absent on public/legacy readings. */
   createdByUid?: string;
+  /** Public Reading Tool (2026-10-19) — forward-only, absent on older readings. */
+  /** The Content Set whose text was snapshotted (absent = Default). */
+  contentSetId?: string;
+  /** The Embed this Reading was created through, frozen at creation. */
+  embed?: ReadingEmbedSnapshot;
+  /** Where it was submitted (a Pages & Funnels page, an external site, the direct link). */
+  placement?: ReadingPlacement;
+  /** Campaign/source attribution captured from the submission (UTM + referrer). */
+  attribution?: ContactAttribution;
+  /** An Embed Test run — hidden from lists, stats and lifetime counts. */
+  test?: boolean;
 }
 
 /**

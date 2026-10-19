@@ -95,7 +95,7 @@ export async function POST(request: Request) {
   if (
     !subAccountId ||
     !pageId ||
-    (pageType !== "booking" && pageType !== "offer")
+    (pageType !== "booking" && pageType !== "offer" && pageType !== "readingTool")
   ) {
     return noop();
   }
@@ -116,6 +116,10 @@ export async function POST(request: Request) {
     if (!pageSnap.exists) return noop();
     const page = pageSnap.data() as BookingPage;
     if (page.status !== "published") return noop();
+  } else if (pageType === "readingTool") {
+    // Public Reading Tool: pageId is the Embed id; only Live Embeds count.
+    const embedSnap = await db.doc(`embedConfigs/${pageId}`).get();
+    if (!embedSnap.exists || embedSnap.get("subAccountId") !== subAccountId || embedSnap.get("status") !== "live") return noop();
   } else {
     const offer = await getCourseOffer(subAccountId, pageId);
     if (!offer || offer.visibility !== "published") return noop();

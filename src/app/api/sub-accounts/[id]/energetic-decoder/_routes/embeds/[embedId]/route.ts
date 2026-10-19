@@ -2,46 +2,94 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { updateEmbedConfig, deleteEmbedConfig } from "@/lib/server/embed-config-service";
+import {
+  deleteEmbedConfig,
+  EmbedError,
+  getEmbedConfig,
+  listEmbedPlacements,
+  listEmbedTestRecords,
+  updateEmbedConfig,
+} from "@/lib/server/embed-config-service";
+import { listContentSets } from "@/lib/server/content-set-service";
+import { listChartDesignSets } from "@/lib/server/chart-design-set-service";
+import { listStandaloneCourses } from "@/lib/server/standalone-course-service";
+import { listCourseOffers } from "@/lib/server/course-offer-service";
+import { loadReadingSystems } from "@/lib/server/energetic-decoder-service";
+import { resolveReadingToolPayload } from "@/lib/server/reading-tool-payload";
 
-export async function PATCH(
-  request: Request,
-  ctx: { params: Promise<{ id: string; embedId: string }> },
-) {
+type Ctx = { params: Promise<{ id: string; embedId: string }> };
+
+/** One Embed for the editor, with everything its selectors offer. */
+export async function GET(request: Request, ctx: Ctx) {
   const { id: subAccountId, embedId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  let body: Record<string, unknown>;
+  // `?view=tool` — what the Pages & Funnels editor/preview renders.
+  if (new URL(request.url).searchParams.get("view") === "tool") {
+    const payload = await resolveReadingToolPayload(subAccountId, embedId);
+    if (!payload) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, payload });
+  }
+
+  const embed = await getEmbedConfig(subAccountId, embedId);
+  if (!embed) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const [placements, test, contentSets, chartSets, courses, offers, systems] = await Promise.all([
+    listEmbedPlacements(subAccountId),
+    listEmbedTestRecords(subAccountId, embedId),
+    listContentSets(subAccountId),
+    listChartDesignSets(subAccountId, access.agencyId ?? embed.agencyId),
+    listStandaloneCourses(subAccountId).catch(() => []),
+    listCourseOffers(subAccountId).catch(() => []),
+    loadReadingSystems(subAccountId),
+  ]);
+
+  return NextResponse.json({
+    ok: true,
+    embed: { ...embed, placements: placements.get(embedId) ?? [] },
+    testRecords: test.readingIds.length,
+    options: {
+      contentSets: contentSets.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault })),
+      chartDesigns: chartSets.sets.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault })),
+      courses: courses.map((c) => ({ id: c.id, title: c.title, published: !!c.published })),
+      offers: offers.map((o) => ({ id: o.id, title: o.title, published: o.visibility === "published" })),
+      systems: "error" in systems
+        ? { humanDesign: false, astrology: false }
+        : { humanDesign: !!systems.reportConfig.includeHumanDesign, astrology: !!systems.reportConfig.includeAstrology },
+    },
+  });
+}
+
+export async function PATCH(request: Request, ctx: Ctx) {
+  const { id: subAccountId, embedId } = await ctx.params;
+  const access = await requireSubAccountMember(request, subAccountId);
+  if (access instanceof NextResponse) return access;
+
+  let body: unknown;
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const fields: Record<string, unknown> = {};
-  if (typeof body.name === "string") fields.name = body.name;
-  if (typeof body.placementNote === "string") fields.placementNote = body.placementNote;
-
   try {
-    const embed = await updateEmbedConfig(subAccountId, embedId, fields);
+    const embed = await updateEmbedConfig(subAccountId, embedId, body);
     return NextResponse.json({ ok: true, embed });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  } catch (err) {
+    if (err instanceof EmbedError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 }
 
-export async function DELETE(
-  request: Request,
-  ctx: { params: Promise<{ id: string; embedId: string }> },
-) {
+export async function DELETE(request: Request, ctx: Ctx) {
   const { id: subAccountId, embedId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
-
   try {
     await deleteEmbedConfig(subAccountId, embedId);
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  } catch (err) {
+    if (err instanceof EmbedError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 }

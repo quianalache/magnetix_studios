@@ -57,6 +57,9 @@ export interface CreateNotificationInput {
    *  e.g. a specific reply's commentId, a specific course's courseId. This
    *  IS what makes `dedupeKey` deterministic; see the module comment. */
   sourceObjectId: string;
+  /** In-app only — skip the email channel (e.g. an Embed with MyMagnetix
+   *  on but email off). Default false: unchanged behavior. */
+  skipEmail?: boolean;
 }
 
 /**
@@ -133,6 +136,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
   // never fail the caller's write path — it only adds one email-send's
   // latency, which is the accepted tradeoff for actually reliable
   // delivery, exactly as accepted for notification-doc creation itself.
+  if (input.skipEmail) return;
   await dispatchNotificationEmail({
     id: dedupeKey,
     personId: input.personId,

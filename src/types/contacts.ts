@@ -352,7 +352,10 @@ export type ActivityType =
   // Complimentary (no-payment) course access granted / revoked by staff
   // from the Contact profile — covers paid courses too.
   | "course_access_granted"
-  | "course_access_revoked";
+  | "course_access_revoked"
+  // Public Reading Tool (2026-10-19) — a Reading was created through an
+  // Embed. Written by energetic-decoder-service.ts (live submissions only).
+  | "reading_created";
 
 export interface Note {
   id: string;

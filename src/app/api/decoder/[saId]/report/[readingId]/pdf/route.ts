@@ -23,6 +23,8 @@ export async function GET(
   const { saId, readingId } = await params;
   const reading = await getReadingById(saId, readingId);
   if (!reading) return NextResponse.json({ error: "Reading not found" }, { status: 404 });
+  // The Embed this Reading came through turned the PDF off.
+  if (reading.embed?.pdf === false) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists || subSnap.data()?.status === "archived") {

@@ -5,7 +5,12 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import {
   createContactServerSide,
   findExistingContactId,
+  normalizeContactEmail,
+  updateContactServerSide,
 } from "@/lib/server/contacts-service";
+import type { ContactAttribution } from "@/types/contacts";
+import type { ReadingEmbedSnapshot, ReadingPlacement } from "@/types/embed-config";
+import { GLOBAL_TERRITORY_ID } from "@/types";
 import { calculateGeneKeysProfile } from "@/lib/energetics/gene-keys";
 import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
 import { calculateAstrologyChart } from "@/lib/energetics/astrology";
@@ -39,6 +44,8 @@ import {
 } from "@/types/energetic-decoder";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import { FREQUENCY_COMING_SOON } from "@/lib/energetics/frequency-availability";
+import { loadContentSetValuesForReading } from "@/lib/server/content-set-service";
+import { overlayContentSet } from "@/lib/energetic-decoder/content-overlay";
 
 export interface CreateReadingInput extends EnergeticDecoderRequest {
   subAccountId: string;
@@ -49,6 +56,17 @@ export interface CreateReadingInput extends EnergeticDecoderRequest {
   createdByUid: string;
   /** Recorded on the reading (forward-only). Set by the route, never from the request body. */
   origin: ReadingOrigin;
+  /** Public Reading Tool (2026-10-19) — everything below is set by the
+   *  route from the resolved Embed, never trusted from the request body. */
+  /** Content Set whose text this Reading snapshots ("default"/null = Default). */
+  contentSetId?: string | null;
+  embed?: ReadingEmbedSnapshot | null;
+  placement?: ReadingPlacement | null;
+  attribution?: ContactAttribution | null;
+  /** Embed Test run: a hidden test Contact, no webhooks/workflows, `test` on the Reading. */
+  test?: boolean;
+  /** Extra public-form Contact fields. Fill blank fields only; tags are additive. */
+  publicContact?: { phone?: string; tags?: string[] };
 }
 
 export interface CreateReadingResult {
@@ -78,18 +96,9 @@ export async function createEnergeticDecoderReading(
   // toggle's "on by default" behavior, instead of a missing field reading
   // as silently off. Read before any Contact/Profile write so a reading
   // that would include nothing is refused without side effects.
-  const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
-  const reportConfig = {
-    ...defaultEnergeticDecoderReportConfig(),
-    ...(subSnap.data()?.energeticDecoderReportConfig ?? {}),
-  };
-  // Frequency is Coming soon (frequency-availability.ts): new readings
-  // never include it, whatever the stored sequence checkboxes say.
-  const includeFrequency =
-    !FREQUENCY_COMING_SOON && (reportConfig.includeActivation || reportConfig.includeVenus || reportConfig.includePearl);
-  if (!includeFrequency && !reportConfig.includeHumanDesign && !reportConfig.includeAstrology) {
-    return { error: "New readings need Human Design or Astrology turned on in Reading Configuration. Frequency is coming soon." };
-  }
+  const config = await loadReadingSystems(input.subAccountId);
+  if ("error" in config) return config;
+  const { reportConfig, includeFrequency } = config;
 
   // -------------------------------------------------------------------
   // Phase 3 Task 4 (2026-08-13) — resolve WHO this reading is for before
@@ -173,10 +182,24 @@ export async function createEnergeticDecoderReading(
         return { error: "That contact could not be found." };
       }
       contactId = input.contactId;
+    } else if (input.test) {
+      // Embed Test: a hidden test Contact keyed by the staff tester's email —
+      // never the live Contact with the same email, never webhooks/workflows.
+      contactId = await findOrCreateTestContact({
+        subAccountId: input.subAccountId,
+        agencyId: input.agencyId,
+        name: name.trim(),
+        email,
+      });
     } else {
+      const extraTags = input.publicContact?.tags ?? [];
+      const phone = input.publicContact?.phone?.trim() ?? "";
       const found = await findExistingContactId(db, input.subAccountId, { email });
       if (found) {
         contactId = found;
+        // Returning Contact: a public form never overwrites what's there —
+        // blank fields filled, tags added, first-touch attribution only.
+        await fillReturningContact(found, { phone, tags: ["energetic-decoder", ...extraTags], attribution: input.attribution ?? null });
       } else {
         const { id } = await createContactServerSide({
           subAccountId: input.subAccountId,
@@ -185,11 +208,12 @@ export async function createEnergeticDecoderReading(
           mode: "live",
           name: name.trim(),
           email: email.trim(),
-          phone: "",
+          phone,
           company: "",
           address: "",
           source: "Energetic Decoder",
-          tags: ["energetic-decoder"],
+          tags: [...new Set(["energetic-decoder", ...extraTags])],
+          attribution: input.attribution ?? null,
         });
         contactId = id;
         contactCreated = true;
@@ -226,6 +250,179 @@ export async function createEnergeticDecoderReading(
         ).id;
   }
 
+  const body = await calculateReadingBody({
+    subAccountId: input.subAccountId,
+    reportConfig,
+    includeFrequency,
+    birthDate,
+    birthTime,
+    place,
+    contentSetId: input.contentSetId ?? null,
+  });
+  const filteredSpheres = body.spheres;
+  const humanDesign = body.humanDesign;
+  const astrology = body.astrology;
+
+  const readingRef = db.collection("energeticDecoderReadings").doc();
+  const doc = {
+    subAccountId: input.subAccountId,
+    agencyId: input.agencyId,
+    contactId,
+    profileId,
+    system: "geneKeys" as const,
+    // Frozen snapshot at generation time — intentionally still stored here
+    // in full even though a Profile now also holds this data, so this
+    // reading never silently changes if the Profile is corrected later
+    // (Edit Profile is additive-only against future readings, never a
+    // retroactive rewrite of past ones).
+    name: name.trim(),
+    birthDate,
+    birthTime,
+    birthPlace: place.displayName,
+    timeZone: place.timeZone,
+    spheres: filteredSpheres,
+    humanDesign,
+    astrology,
+    origin: input.origin,
+    ...(input.contentSetId ? { contentSetId: input.contentSetId } : {}),
+    ...(input.embed ? { embed: input.embed } : {}),
+    ...(input.placement ? { placement: input.placement } : {}),
+    ...(input.attribution ? { attribution: input.attribution } : {}),
+    ...(input.test ? { test: true } : {}),
+    // Staff readings record who made them; the public decoder passes a
+    // fixed placeholder, which is not a person and is not stored.
+    ...(input.origin === "staff" && input.createdByUid ? { createdByUid: input.createdByUid } : {}),
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  await readingRef.set(doc);
+
+  // createdAt is a serverTimestamp sentinel, not a real value, until the
+  // doc is re-read — honest to return null here rather than fabricate a
+  // client-side Date that might drift from what the server actually wrote.
+  return {
+    reading: { id: readingRef.id, ...doc, createdAt: null },
+    contactId,
+    contactCreated,
+  };
+}
+
+/**
+ * Returning-Contact safe update (Public Reading Tool, 2026-10-19). Someone
+ * who knows an email address must never be able to change an established
+ * Contact: name/email/address are never touched, phone is filled only when
+ * blank, tags are only added, attribution is first-touch only.
+ */
+async function fillReturningContact(
+  contactId: string,
+  opts: { phone: string; tags: string[]; attribution: ContactAttribution | null },
+): Promise<void> {
+  const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
+  if (!snap.exists) return;
+  const c = snap.data() ?? {};
+  const patch: { phone?: string; tags?: string[]; attribution?: ContactAttribution } = {};
+  if (opts.phone && !(typeof c.phone === "string" && c.phone.trim())) patch.phone = opts.phone;
+  const existingTags = Array.isArray(c.tags) ? (c.tags as string[]) : [];
+  const missing = opts.tags.filter((t) => !existingTags.includes(t));
+  if (missing.length > 0) patch.tags = [...existingTags, ...missing];
+  if (opts.attribution && !c.attribution) patch.attribution = opts.attribution;
+  if (Object.keys(patch).length === 0) return;
+  await updateContactServerSide({ contactId, patch }).catch((err) =>
+    console.warn("[energetic-decoder] returning-contact update failed", err),
+  );
+}
+
+/** Embed Test contacts: hidden (`testRecord`), mode "test", written directly so no webhook or workflow fires. */
+async function findOrCreateTestContact(opts: {
+  subAccountId: string;
+  agencyId: string;
+  name: string;
+  email: string;
+}): Promise<string> {
+  const db = getAdminDb();
+  const emailLower = normalizeContactEmail(opts.email);
+  const existing = await db
+    .collection("contacts")
+    .where("subAccountId", "==", opts.subAccountId)
+    .where("emailLower", "==", emailLower)
+    .where("testRecord", "==", true)
+    .limit(1)
+    .get();
+  if (!existing.empty) return existing.docs[0].id;
+  const ref = await db.collection("contacts").add({
+    name: opts.name || "Test contact",
+    email: emailLower,
+    emailLower,
+    phone: "",
+    company: "",
+    address: "",
+    source: "Energetic Decoder (Test)",
+    tags: ["embed-test"],
+    testRecord: true,
+    mode: "test",
+    pipelineStage: null,
+    attribution: null,
+    emailOptedOut: false,
+    smsOptedOut: false,
+    territoryId: GLOBAL_TERRITORY_ID,
+    agencyId: opts.agencyId,
+    subAccountId: opts.subAccountId,
+    createdByUid: "embed-test",
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/**
+ * Which systems this sub-account includes in new readings (Reading
+ * Configuration checkboxes) — merged over the defaults (not just a
+ * whole-object fallback) so a sub-account whose config was saved BEFORE
+ * includeHumanDesign existed still gets it on, matching every other
+ * toggle's "on by default" behavior, instead of a missing field reading
+ * as silently off. Read before any Contact/Profile write so a reading
+ * that would include nothing is refused without side effects.
+ */
+export async function loadReadingSystems(subAccountId: string): Promise<
+  | { reportConfig: ReturnType<typeof defaultEnergeticDecoderReportConfig>; includeFrequency: boolean }
+  | { error: string }
+> {
+  const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
+  const reportConfig = {
+    ...defaultEnergeticDecoderReportConfig(),
+    ...(subSnap.data()?.energeticDecoderReportConfig ?? {}),
+  };
+  // Frequency is Coming soon (frequency-availability.ts): new readings
+  // never include it, whatever the stored sequence checkboxes say.
+  const includeFrequency =
+    !FREQUENCY_COMING_SOON && (reportConfig.includeActivation || reportConfig.includeVenus || reportConfig.includePearl);
+  if (!includeFrequency && !reportConfig.includeHumanDesign && !reportConfig.includeAstrology) {
+    return { error: "New readings need Human Design or Astrology turned on in Reading Configuration. Frequency is coming soon." };
+  }
+  return { reportConfig, includeFrequency };
+}
+
+/**
+ * The calculation + text snapshot of a Reading — no writes. Shared by the
+ * real save path and the Public Reading Tool's Preview (which must run the
+ * real calculation without creating anything). `contentSetId` selects the
+ * Content Set whose filled-in text replaces Default's in the snapshot
+ * (blank fields keep Default's — see content-overlay.ts).
+ */
+export async function calculateReadingBody(opts: {
+  subAccountId: string;
+  reportConfig: ReturnType<typeof defaultEnergeticDecoderReportConfig>;
+  includeFrequency: boolean;
+  birthDate: string;
+  birthTime: string;
+  place: { lat: number; lng: number; displayName: string; timeZone: string };
+  contentSetId: string | null;
+}): Promise<{
+  spheres: GeneKeysSphereResult[];
+  humanDesign: EnergeticDecoderReading["humanDesign"];
+  astrology: EnergeticDecoderReading["astrology"];
+}> {
+  const { reportConfig, includeFrequency, birthDate, birthTime, place } = opts;
+  const input = { subAccountId: opts.subAccountId };
   // Skipped entirely while Frequency is Coming soon — the engine itself is unchanged.
   const profile = includeFrequency
     ? calculateGeneKeysProfile({
@@ -385,41 +582,14 @@ export async function createEnergeticDecoderReading(
   const humanDesign = rawHumanDesign ? { ...rawHumanDesign, content: hdContent } : null;
   const astrology = rawAstrology ? { ...rawAstrology, content: astroContent } : null;
 
-  const readingRef = db.collection("energeticDecoderReadings").doc();
-  const doc = {
-    subAccountId: input.subAccountId,
-    agencyId: input.agencyId,
-    contactId,
-    profileId,
-    system: "geneKeys" as const,
-    // Frozen snapshot at generation time — intentionally still stored here
-    // in full even though a Profile now also holds this data, so this
-    // reading never silently changes if the Profile is corrected later
-    // (Edit Profile is additive-only against future readings, never a
-    // retroactive rewrite of past ones).
-    name: name.trim(),
-    birthDate,
-    birthTime,
-    birthPlace: place.displayName,
-    timeZone: place.timeZone,
-    spheres: filteredSpheres,
-    humanDesign,
-    astrology,
-    origin: input.origin,
-    // Staff readings record who made them; the public decoder passes a
-    // fixed placeholder, which is not a person and is not stored.
-    ...(input.origin === "staff" && input.createdByUid ? { createdByUid: input.createdByUid } : {}),
-    createdAt: FieldValue.serverTimestamp(),
-  };
-  await readingRef.set(doc);
 
-  // createdAt is a serverTimestamp sentinel, not a real value, until the
-  // doc is re-read — honest to return null here rather than fabricate a
-  // client-side Date that might drift from what the server actually wrote.
-  return {
-    reading: { id: readingRef.id, ...doc, createdAt: null },
-    contactId,
-    contactCreated,
+  const overlay = await loadContentSetValuesForReading(opts.subAccountId, opts.contentSetId);
+  const raw = { spheres: filteredSpheres, humanDesign, astrology };
+  const body = overlay ? overlayContentSet(raw, (id) => overlay.get(id)) : raw;
+  return body as {
+    spheres: GeneKeysSphereResult[];
+    humanDesign: EnergeticDecoderReading["humanDesign"];
+    astrology: EnergeticDecoderReading["astrology"];
   };
 }
 
@@ -448,15 +618,21 @@ export async function getHomeStats(subAccountId: string): Promise<EnergeticDecod
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  const [totalSnap, recentSnap, reportDesignsSnap, chartDesignsSnap, embedsSnap] = await Promise.all([
+  const [totalSnap, recentSnap, reportDesignsSnap, chartDesignsSnap, embedsSnap, testSnap] = await Promise.all([
     readingsCol.count().get(),
-    readingsCol.orderBy("createdAt", "desc").limit(5).get(),
+    readingsCol.orderBy("createdAt", "desc").limit(15).get(),
     db.collection("reportDesigns").where("subAccountId", "==", subAccountId).count().get(),
     db.collection("chartDesigns").where("subAccountId", "==", subAccountId).count().get(),
     db.collection("embedConfigs").where("subAccountId", "==", subAccountId).count().get(),
+    // Embed Test runs are excluded from every count (equality query, no index).
+    readingsCol.where("test", "==", true).select("createdAt").get(),
   ]);
+  const testToday = testSnap.docs.filter((d) => {
+    const c = d.get("createdAt");
+    return c?.toDate ? (c.toDate() as Date) >= todayStart : false;
+  }).length;
 
-  const recent = recentSnap.docs.map((d) => {
+  const recent = recentSnap.docs.filter((d) => d.get("test") !== true).slice(0, 5).map((d) => {
     const data = d.data();
     const createdAt = data.createdAt?.toDate ? (data.createdAt.toDate() as Date) : null;
     const system: EnergeticDecoderHomeStats["recent"][number]["system"] =
@@ -467,10 +643,10 @@ export async function getHomeStats(subAccountId: string): Promise<EnergeticDecod
   // today — a dedicated count query on the same (subAccountId, createdAt)
   // index gets the true figure instead.
   const todaySnap = await readingsCol.where("createdAt", ">=", todayStart).count().get();
-  const readingsToday = todaySnap.data().count;
+  const readingsToday = Math.max(0, todaySnap.data().count - testToday);
 
   return {
-    totalReadings: totalSnap.data().count,
+    totalReadings: Math.max(0, totalSnap.data().count - testSnap.size),
     readingsToday,
     reportDesignCount: reportDesignsSnap.data().count,
     chartDesignCount: chartDesignsSnap.data().count,
@@ -590,9 +766,9 @@ export async function listReadingsForSubAccount(
     .orderBy("createdAt", "desc")
     .limit(limit)
     .get();
-  const readings = snap.docs.map(
-    (d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading,
-  );
+  const readings = snap.docs
+    .filter((d) => d.get("test") !== true)
+    .map((d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading);
   return Promise.all(
     readings.map((r) => withDerivedVariableArrows(r).then(withCanonicalSphereOrder).then(withIsoCreatedAt)),
   );
@@ -614,7 +790,7 @@ export async function listReadingsForProfile(
     .where("profileId", "==", profileId)
     .get();
   const readings = await Promise.all(
-    snap.docs.map((d) =>
+    snap.docs.filter((d) => d.get("test") !== true).map((d) =>
       withDerivedVariableArrows({ id: d.id, ...d.data() } as EnergeticDecoderReading)
         .then(withCanonicalSphereOrder)
         .then(withIsoCreatedAt),

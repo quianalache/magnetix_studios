@@ -16,7 +16,7 @@ export interface AttributionVisitRow {
   id: string;
   subAccountId: string;
   agencyId: string;
-  pageType: "booking" | "offer";
+  pageType: "booking" | "offer" | "readingTool";
   pageId: string;
   day: string;
   utmSource: string | null;

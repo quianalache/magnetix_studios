@@ -100,6 +100,7 @@ export async function listPortalReadings(
     .where("contactId", "==", contactId)
     .get();
   return snap.docs
+    .filter((d) => d.get("test") !== true)
     .map((d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading)
     .sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
 }

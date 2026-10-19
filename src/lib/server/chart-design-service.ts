@@ -199,13 +199,32 @@ export async function resolveChartDesignForProfile(
  */
 export async function resolveChartDesignsForReading(
   subAccountId: string,
-  reading: Pick<EnergeticDecoderReading, "profileId" | "humanDesign" | "astrology">,
+  reading: Pick<EnergeticDecoderReading, "profileId" | "humanDesign" | "astrology"> & {
+    embed?: { chartDesignSetId?: string | null } | null;
+  },
 ): Promise<ResolvedReadingChartDesigns> {
   const [profile, data] = await Promise.all([
     reading.profileId ? getEnergeticProfile(subAccountId, reading.profileId) : Promise.resolve(null),
     loadChartDesignData(subAccountId),
   ]);
-  return resolveReadingChartDesigns({ subAccountId, ...data, profile }, reading);
+  // A Reading made through an Embed uses that Embed's Chart Design unless
+  // staff set a design on the Profile itself (Public Reading Tool, 2026-10-19).
+  const embedSetId = reading.embed?.chartDesignSetId ?? null;
+  const refs = profile?.chartDesignSetId || !embedSetId ? profile : { ...(profile ?? {}), chartDesignSetId: embedSetId };
+  return resolveReadingChartDesigns({ subAccountId, ...data, profile: refs }, reading);
+}
+
+/** The Chart Designs an Embed's result renders with (its unified design, else the sub-account default). */
+export async function resolveChartDesignsForEmbed(
+  subAccountId: string,
+  chartDesignSetId: string | null,
+): Promise<{ hdDesign: ChartDesign | null; mandalaDesign: ChartDesign | null; astroDesign: ChartDesign | null }> {
+  const data = await loadChartDesignData(subAccountId);
+  const resolved = resolveReadingChartDesigns(
+    { subAccountId, ...data, profile: chartDesignSetId ? { chartDesignSetId } : null },
+    { humanDesign: true, astrology: true },
+  );
+  return { hdDesign: resolved.hdDesign, mandalaDesign: resolved.mandalaDesign, astroDesign: resolved.astroDesign };
 }
 
 export async function createChartDesign(opts: {

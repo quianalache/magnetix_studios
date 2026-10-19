@@ -513,6 +513,8 @@ export async function notifyReadingReady(opts: {
   hasGeneKeys: boolean;
   hasHumanDesign: boolean;
   hasAstrology: boolean;
+  /** Public Reading Tool: the Embed's email setting. Default true (unchanged). */
+  sendEmail?: boolean;
 }): Promise<void> {
   const contact = await getContactEmail(opts.contactId);
   if (!contact) return;
@@ -545,6 +547,7 @@ export async function notifyReadingReady(opts: {
     // the reading's own id is already the recurring unit, no disambiguator
     // needed.
     sourceObjectId: opts.readingId,
+    skipEmail: opts.sendEmail === false,
   });
 }
 

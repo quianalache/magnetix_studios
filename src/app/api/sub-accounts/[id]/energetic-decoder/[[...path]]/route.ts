@@ -21,31 +21,32 @@ import * as h14 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/cont
 import * as h15 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/content-sets/import/route";
 import * as h16 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/content-sets/route";
 import * as h17 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/embeds/[embedId]/route";
-import * as h18 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/embeds/route";
-import * as h19 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/gate-content/[gate]/route";
-import * as h20 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/gate-content/route";
-import * as h21 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/[generatedReportId]/pdf/route";
-import * as h22 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/[generatedReportId]/preview-data/route";
-import * as h23 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/[generatedReportId]/route";
-import * as h24 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/route";
-import * as h25 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/geocode/route";
-import * as h26 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/home-stats/route";
-import * as h27 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/library/route";
-import * as h28 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/[profileId]/route";
-import * as h29 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/route";
-import * as h30 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/contact/route";
-import * as h31 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/pdf/route";
-import * as h32 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/route";
-import * as h33 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/route";
-import * as h34 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-config/route";
-import * as h35 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/duplicate/route";
-import * as h36 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-data/route";
-import * as h37 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-pdf/route";
-import * as h38 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/route";
-import * as h39 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/route";
-import * as h40 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-page-templates/[templateId]/route";
-import * as h41 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-page-templates/route";
-import * as h42 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/theme/route";
+import * as h18 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/embeds/[embedId]/test-records/route";
+import * as h19 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/embeds/route";
+import * as h20 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/gate-content/[gate]/route";
+import * as h21 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/gate-content/route";
+import * as h22 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/[generatedReportId]/pdf/route";
+import * as h23 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/[generatedReportId]/preview-data/route";
+import * as h24 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/[generatedReportId]/route";
+import * as h25 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/route";
+import * as h26 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/geocode/route";
+import * as h27 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/home-stats/route";
+import * as h28 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/library/route";
+import * as h29 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/[profileId]/route";
+import * as h30 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/route";
+import * as h31 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/contact/route";
+import * as h32 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/pdf/route";
+import * as h33 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/route";
+import * as h34 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/route";
+import * as h35 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-config/route";
+import * as h36 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/duplicate/route";
+import * as h37 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-data/route";
+import * as h38 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-pdf/route";
+import * as h39 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/route";
+import * as h40 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/route";
+import * as h41 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-page-templates/[templateId]/route";
+import * as h42 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-page-templates/route";
+import * as h43 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/theme/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -69,31 +70,32 @@ const d = createApiDispatcher([
   ["content-sets/import", h15],
   ["content-sets", h16],
   ["embeds/[embedId]", h17],
-  ["embeds", h18],
-  ["gate-content/[gate]", h19],
-  ["gate-content", h20],
-  ["generated-reports/[generatedReportId]/pdf", h21],
-  ["generated-reports/[generatedReportId]/preview-data", h22],
-  ["generated-reports/[generatedReportId]", h23],
-  ["generated-reports", h24],
-  ["geocode", h25],
-  ["home-stats", h26],
-  ["library", h27],
-  ["profiles/[profileId]", h28],
-  ["profiles", h29],
-  ["readings/[readingId]/contact", h30],
-  ["readings/[readingId]/pdf", h31],
-  ["readings/[readingId]", h32],
-  ["readings", h33],
-  ["report-config", h34],
-  ["report-designs/[designId]/duplicate", h35],
-  ["report-designs/[designId]/preview-data", h36],
-  ["report-designs/[designId]/preview-pdf", h37],
-  ["report-designs/[designId]", h38],
-  ["report-designs", h39],
-  ["report-page-templates/[templateId]", h40],
-  ["report-page-templates", h41],
-  ["theme", h42],
+  ["embeds/[embedId]/test-records", h18],
+  ["embeds", h19],
+  ["gate-content/[gate]", h20],
+  ["gate-content", h21],
+  ["generated-reports/[generatedReportId]/pdf", h22],
+  ["generated-reports/[generatedReportId]/preview-data", h23],
+  ["generated-reports/[generatedReportId]", h24],
+  ["generated-reports", h25],
+  ["geocode", h26],
+  ["home-stats", h27],
+  ["library", h28],
+  ["profiles/[profileId]", h29],
+  ["profiles", h30],
+  ["readings/[readingId]/contact", h31],
+  ["readings/[readingId]/pdf", h32],
+  ["readings/[readingId]", h33],
+  ["readings", h34],
+  ["report-config", h35],
+  ["report-designs/[designId]/duplicate", h36],
+  ["report-designs/[designId]/preview-data", h37],
+  ["report-designs/[designId]/preview-pdf", h38],
+  ["report-designs/[designId]", h39],
+  ["report-designs", h40],
+  ["report-page-templates/[templateId]", h41],
+  ["report-page-templates", h42],
+  ["theme", h43],
 ]);
 
 export const GET = d.GET;

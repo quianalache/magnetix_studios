@@ -156,6 +156,8 @@ export function activityVisuals(
       return { icon: i(Users, "text-link"), label: "Booking reassigned" };
     case "purchase_completed":
       return { icon: i(ShoppingBag, "text-status-success-fg"), label: "Purchase" };
+    case "reading_created":
+      return { icon: i(FileText, "text-link"), label: "Reading created" };
     case "course_enrolled":
       return { icon: i(GraduationCap, "text-link"), label: "Course enrollment" };
     case "community_access_granted":

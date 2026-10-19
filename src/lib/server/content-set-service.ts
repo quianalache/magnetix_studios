@@ -63,8 +63,10 @@ export interface ContentSetSummary {
 }
 
 export interface ContentSetUsage {
-  /** Only real references — Report Designs today. */
+  /** Only real references — Report Designs and Embeds. */
   reportDesigns: { id: string; title: string; updatedAt: string | null }[];
+  /** Embeds whose Readings snapshot this set (Public Reading Tool, 2026-10-19). */
+  embeds: { id: string; name: string }[];
   /** True for Default: designs that don't pick a set use it. */
   implicit: boolean;
 }
@@ -193,10 +195,43 @@ async function designsBySet(subAccountId: string, db: Db): Promise<Map<string, C
   return map;
 }
 
+async function embedsBySet(subAccountId: string, db: Db): Promise<Map<string, ContentSetUsage["embeds"]>> {
+  const snap = await db.collection("embedConfigs").where("subAccountId", "==", subAccountId).get();
+  const map = new Map<string, ContentSetUsage["embeds"]>();
+  for (const d of snap.docs) {
+    const raw = d.get("reading.contentSetId");
+    const setId = typeof raw === "string" && raw ? raw : DEFAULT_CONTENT_SET_ID;
+    const list = map.get(setId) ?? [];
+    list.push({ id: d.id, name: (d.get("name") as string) || "Untitled embed" });
+    map.set(setId, list);
+  }
+  return map;
+}
+
 export async function getContentSetUsage(subAccountId: string, setId: string, db: Db = getAdminDb()): Promise<ContentSetUsage> {
   if (setId !== DEFAULT_CONTENT_SET_ID) await requireSet(subAccountId, setId, db);
-  const map = await designsBySet(subAccountId, db);
-  return { reportDesigns: map.get(setId) ?? [], implicit: setId === DEFAULT_CONTENT_SET_ID };
+  const [map, embeds] = await Promise.all([designsBySet(subAccountId, db), embedsBySet(subAccountId, db)]);
+  return { reportDesigns: map.get(setId) ?? [], embeds: embeds.get(setId) ?? [], implicit: setId === DEFAULT_CONTENT_SET_ID };
+}
+
+/**
+ * The selected set's own values for snapshotting a Reading (Content Set per
+ * Embed). Null means Default — the Reading keeps today's Default snapshot
+ * unchanged. A missing/foreign set also reads as Default (fail safe: a
+ * deleted set can never break a public submission).
+ */
+export async function loadContentSetValuesForReading(
+  subAccountId: string,
+  setId: string | null | undefined,
+  db: Db = getAdminDb(),
+): Promise<Map<string, ContentEntryValues> | null> {
+  if (!setId || setId === DEFAULT_CONTENT_SET_ID) return null;
+  try {
+    const { ref } = await requireSet(subAccountId, setId, db);
+    return await readEntries(ref);
+  } catch {
+    return null;
+  }
 }
 
 // ── Sets ────────────────────────────────────────────────────────────────
@@ -240,11 +275,15 @@ export async function assertContentSetSelectable(subAccountId: string, setId: st
 }
 
 export async function listContentSets(subAccountId: string, db: Db = getAdminDb()): Promise<ContentSetSummary[]> {
-  const [snap, usage, def] = await Promise.all([
+  const [snap, designUsage, def, embedUsage] = await Promise.all([
     db.collection(CONTENT_SETS_COLLECTION).where("subAccountId", "==", subAccountId).get(),
     designsBySet(subAccountId, db),
     loadDefaultLibrary(subAccountId, db),
+    embedsBySet(subAccountId, db),
   ]);
+  const usage = new Map<string, unknown[]>();
+  for (const [k, v] of designUsage) usage.set(k, [...v]);
+  for (const [k, v] of embedUsage) usage.set(k, [...(usage.get(k) ?? []), ...v]);
   const custom = snap.docs
     .map((d) => summarize(d.id, d.data() as SetDoc, usage.get(d.id)?.length ?? 0))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -424,6 +463,9 @@ export async function deleteContentSet(subAccountId: string, setId: string, db: 
   const usage = await getContentSetUsage(subAccountId, setId, db);
   if (usage.reportDesigns.length > 0) {
     throw new ContentSetError(`This set is used in ${usage.reportDesigns.length} report design${usage.reportDesigns.length === 1 ? "" : "s"}. Switch them to another set first.`, 409);
+  }
+  if (usage.embeds.length > 0) {
+    throw new ContentSetError(`This set is used by ${usage.embeds.length} embed${usage.embeds.length === 1 ? "" : "s"}. Switch them to another set first.`, 409);
   }
   await db.recursiveDelete(ref);
 }

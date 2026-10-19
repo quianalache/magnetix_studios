@@ -39,16 +39,20 @@ export async function listReadingsLibrary(
     db
       .collection("energeticDecoderReadings")
       .where("subAccountId", "==", subAccountId)
-      .select("profileId", "contactId", "name", "createdAt")
+      .select("profileId", "contactId", "name", "createdAt", "test")
       .get(),
   ]);
 
-  const profiles: LibraryProfileInput[] = profilesSnap.docs.map((d) => ({
+  // Embed Test runs (Public Reading Tool) are hidden by default — their
+  // Readings and the hidden test Contacts' Profiles. Cleaned up from the Embed.
+  const testContactIds = new Set(readingsSnap.docs.filter((d) => d.get("test") === true).map((d) => str(d.get("contactId"))));
+  const liveReadingDocs = readingsSnap.docs.filter((d) => d.get("test") !== true);
+  const profiles: LibraryProfileInput[] = profilesSnap.docs.filter((d) => !testContactIds.has(str(d.get("contactId")))).map((d) => ({
     id: d.id,
     name: str(d.get("name")) || "Unnamed",
     contactId: str(d.get("contactId")) || null,
   }));
-  const readings: LibraryReadingInput[] = readingsSnap.docs.map((d) => ({
+  const readings: LibraryReadingInput[] = liveReadingDocs.map((d) => ({
     id: d.id,
     profileId: str(d.get("profileId")) || null,
     contactId: str(d.get("contactId")) || null,
@@ -159,7 +163,7 @@ export async function listContactDecoderSummaries(
       .collection("energeticDecoderReadings")
       .where("subAccountId", "==", subAccountId)
       .where("contactId", "==", contactId)
-      .select("profileId", "contactId", "name", "createdAt")
+      .select("profileId", "contactId", "name", "createdAt", "test")
       .get(),
   ]);
   const labels = new Map(profilesSnap.docs.map((d) => [d.id, str(d.get("relationshipLabel")) || null]));
@@ -168,7 +172,7 @@ export async function listContactDecoderSummaries(
     name: str(d.get("name")) || "Unnamed",
     contactId: str(d.get("contactId")) || null,
   }));
-  const readings: LibraryReadingInput[] = readingsSnap.docs.map((d) => ({
+  const readings: LibraryReadingInput[] = readingsSnap.docs.filter((d) => d.get("test") !== true).map((d) => ({
     id: d.id,
     profileId: str(d.get("profileId")) || null,
     contactId: str(d.get("contactId")) || null,
