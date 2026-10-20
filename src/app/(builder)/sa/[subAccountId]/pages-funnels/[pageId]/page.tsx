@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -24,6 +25,7 @@ import {
 import { getForm } from "@/lib/firestore/forms";
 import { createBlock, duplicateBlock } from "@/lib/pages-funnels/blocks";
 import { getPageSections } from "@/lib/pages-funnels/v2/migrate";
+import { pageEditorPath, pageUsesNewBuilder } from "@/lib/pages-funnels/editor-route";
 import { SectionTreeView } from "@/components/pages-funnels/renderer-v2/tree-view";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +66,7 @@ export default function PageEditor({
 }) {
   const { pageId } = use(params);
   const { saPath } = useSubAccount();
+  const router = useRouter();
 
   const [page, setPage] = useState<PageDoc | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -218,7 +221,18 @@ export default function PageEditor({
     setSelectedId(copy.id);
   }
 
-  if (!loaded) {
+  // A page with New Builder (Puck) content belongs to the New Builder — this
+  // editor can't represent it and its Save/Publish would write `blocks` the
+  // public page no longer reads (see editor-route.ts). Old bookmarks and
+  // links land here, so hand them over with `replace` (no back-button loop),
+  // keeping any query string.
+  const redirectToNewBuilder = !!page && pageUsesNewBuilder(page);
+  useEffect(() => {
+    if (!page || !redirectToNewBuilder) return;
+    router.replace(saPath(pageEditorPath(page)) + window.location.search);
+  }, [page, redirectToNewBuilder, router, saPath]);
+
+  if (!loaded || redirectToNewBuilder) {
     return (
       <div className="flex h-dvh items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

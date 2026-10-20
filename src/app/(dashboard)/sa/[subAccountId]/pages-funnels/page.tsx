@@ -38,6 +38,7 @@ import { PAGE_TEMPLATES, getTemplate } from "@/lib/pages-funnels/templates";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
+import { pageEditorPath } from "@/lib/pages-funnels/editor-route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -222,7 +223,7 @@ export default function PagesFunnelsPage() {
               key={page.id}
               page={page}
               subAccount={subAccount}
-              editHref={saPath(`/pages-funnels/${page.id}`)}
+              editHref={saPath(pageEditorPath(page))}
               newBuilderHref={saPath(`/pages-funnels/${page.id}/new-builder`)}
               onDuplicate={() => handleDuplicate(page)}
               onDelete={() => handleDelete(page)}
