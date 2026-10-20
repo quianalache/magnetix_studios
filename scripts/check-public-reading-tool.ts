@@ -201,6 +201,86 @@ async function main() {
     assert.equal(readingsForProfile.size, 2);
   });
 
+  await check("Email note is truthful: never 'sent' when the email didn't go out", async () => {
+    // Email isn't configured in the emulator run (RESEND_API_KEY removed above),
+    // so an Embed with email on must report "notSent", never "sent".
+    const res = await post({ embedId: live.id, name: "Mail Check", email: "mail@example.com", ...BIRTH });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.email, "notSent");
+    const off = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "No email" });
+    await svc.updateEmbedConfig(SA, off.id, { status: "live", afterSubmit: { email: false } });
+    const res2 = await post({ embedId: off.id, name: "Mail Off", email: "mailoff@example.com", ...BIRTH });
+    assert.equal((await res2.json()).email, "off");
+    const prev = await post({ embedId: off.id, mode: "preview", name: "P", ...BIRTH }, true);
+    assert.equal((await prev.json()).email, "preview");
+  });
+
+  await check("Consent (agreement): required, recorded on the Reading, marketing consent untouched", async () => {
+    const agree = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "Agreement" });
+    await svc.updateEmbedConfig(SA, agree.id, { status: "live", form: { consent: { enabled: true, text: "I agree to the terms.", purpose: "agreement" } } });
+    const refused = await post({ embedId: agree.id, name: "No Tick", email: "notick@example.com", ...BIRTH });
+    assert.equal(refused.status, 400);
+    const res = await post({
+      embedId: agree.id, name: "Ticked", email: "ticked@example.com", consent: true, ...BIRTH,
+      attribution: { landingPage: "https://studio.example/free" },
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    const r = (await db.doc(`energeticDecoderReadings/${body.reading.id}`).get()).data()!;
+    assert.equal(r.consent.given, true);
+    assert.equal(r.consent.textShown, "I agree to the terms.");
+    assert.equal(r.consent.purpose, "agreement");
+    assert.equal(r.consent.embedId, agree.id);
+    assert.equal(r.consent.sourceUrl, "https://studio.example/free");
+    assert.ok(Date.parse(r.consent.consentedAt) > 0);
+    const c = (await db.doc(`contacts/${r.contactId}`).get()).data()!;
+    assert.equal(c.emailConsent ?? null, null, "an agreement never becomes marketing permission");
+  });
+
+  await check("Consent (marketing permission): Contact's email consent written like a Form", async () => {
+    const mkt = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "Newsletter" });
+    await svc.updateEmbedConfig(SA, mkt.id, { status: "live", form: { consent: { enabled: true, text: "Send me your newsletter.", purpose: "emailMarketing" } } });
+    await db.doc("contacts/c_unsub").set({
+      subAccountId: SA, agencyId: AG, name: "Ola", email: "ola@example.com", emailLower: "ola@example.com",
+      phone: "", tags: [], emailOptedOut: true, emailConsent: { status: "unsubscribed" },
+    });
+    const res = await post({ embedId: mkt.id, name: "Ola", email: "ola@example.com", consent: true, ...BIRTH });
+    assert.equal(res.status, 200);
+    const c = (await db.doc("contacts/c_unsub").get()).data()!;
+    assert.equal(c.emailOptedOut, false, "explicit fresh opt-in, same as a Form's email-consent box");
+    assert.equal(c.emailConsent.status, "consented");
+    assert.equal(c.emailConsent.source, `embed:${mkt.id}`);
+    assert.equal(c.emailConsent.textShown, "Send me your newsletter.");
+    assert.match(c.emailConsent.ip, /^198\.51\.100\./);
+    assert.equal(c.name, "Ola", "nothing else on the Contact changes");
+  });
+
+  await check("Reading created: fires for a returning Contact who already has every tag", async () => {
+    await db.doc("workflows/wf_reading").set({
+      subAccountId: SA, agencyId: AG, createdByUid: STAFF_UID, name: "Follow up", status: "active",
+      trigger: { type: "reading.created", filters: { all: [] }, embedId: live.id },
+      startNodeId: "n1", nodes: { n1: { id: "n1", type: "goal", config: {} } }, stats: { enrolled: 0, completed: 0 },
+    });
+    // c_returning already carries every tag this Embed adds (from the earlier submission).
+    const runs = async () => (await db.collection("workflowRuns").where("workflowId", "==", "wf_reading").get()).docs;
+    const before = (await runs()).length;
+    const res = await post({ embedId: live.id, name: "Maya Again", email: "maya@example.com", ...BIRTH });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    const after = await runs();
+    assert.equal(after.length, before + 1, "one run for this Reading");
+    const run = after.find((d) => d.get("context")?.readingId === body.reading.id);
+    assert.ok(run, "run carries the Reading");
+    assert.equal(run!.get("contactId"), "c_returning");
+    // A different Embed doesn't match an Embed-specific workflow; a Test run never fires it.
+    const other = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "Other" });
+    await svc.updateEmbedConfig(SA, other.id, { status: "live" });
+    await post({ embedId: other.id, name: "Maya", email: "maya@example.com", ...BIRTH });
+    await post({ embedId: live.id, mode: "test", name: "T", ...BIRTH }, true);
+    assert.equal((await runs()).length, before + 1);
+  });
+
   await check("Content Set per Embed: filled text replaces Default, blanks keep Default", async () => {
     const setRef = db.collection("energeticDecoderContentSets").doc("set_custom");
     await setRef.set({ subAccountId: SA, agencyId: AG, name: "Custom", description: "", status: "active", scope: "sub_account", origin: { kind: "blank", sourceSetId: null } });

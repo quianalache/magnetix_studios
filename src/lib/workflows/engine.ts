@@ -1134,6 +1134,7 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
         ["lessonId", "lessonId"],
         ["offerId", "offerId"],
         ["groupId", "groupId"],
+        ["embedId", "embedId"],
         ["assignedToUid", "assignedToUid"],
       ];
       if (

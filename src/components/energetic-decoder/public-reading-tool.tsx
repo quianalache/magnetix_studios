@@ -42,6 +42,12 @@ interface SubmitLinks {
   myMagnetix: string | null;
 }
 
+/** What happened to the "Your Reading is ready" email (see public-reading-service). */
+type EmailOutcome = "sent" | "notSent" | "off" | "preview";
+
+/** The Mandala and Astrology wheel in the wide result area (2026-10-20: up from 560/520). */
+const RESULT_WHEEL = "mx-auto w-full max-w-[720px]";
+
 export type ReadingToolMode = "live" | "test" | "preview";
 
 export function PublicReadingTool({
@@ -91,7 +97,7 @@ export function PublicReadingTool({
   const attributionRef = useRef<ReturnType<typeof readAttributionFromBrowser>>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ reading: EnergeticDecoderReading; links: SubmitLinks } | null>(null);
+  const [result, setResult] = useState<{ reading: EnergeticDecoderReading; links: SubmitLinks; email: EmailOutcome } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const staffMode = mode !== "live";
 
@@ -170,10 +176,15 @@ export function PublicReadingTool({
         ok?: boolean;
         reading?: EnergeticDecoderReading;
         links?: SubmitLinks;
+        email?: EmailOutcome;
         error?: string;
       };
       if (!res.ok || !data.ok || !data.reading) throw new Error(data.error ?? "Something went wrong. Try again.");
-      setResult({ reading: data.reading, links: data.links ?? { report: null, pdf: null, myMagnetix: null } });
+      setResult({
+        reading: data.reading,
+        links: data.links ?? { report: null, pdf: null, myMagnetix: null },
+        email: data.email ?? "off",
+      });
       requestAnimationFrame(() => rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -193,6 +204,7 @@ export function PublicReadingTool({
           embed={embed}
           reading={result.reading}
           links={result.links}
+          emailOutcome={result.email}
           mode={mode}
           email={staffMode ? null : email}
           accent={accent}
@@ -315,29 +327,30 @@ function KeyFacts({ reading }: { reading: EnergeticDecoderReading }) {
   const astro = reading.astrology;
   const sun = astro?.placements.find((p) => p.body === "sun");
   const moon = astro?.placements.find((p) => p.body === "moon");
-  const facts: [string, string][] = [];
+  // [label, value, wide] — a wide fact (the Incarnation Cross) spans two
+  // columns so its full name fits on a line or two instead of being cut off.
+  const facts: [string, string, boolean][] = [];
   if (hd) {
-    facts.push(["Type", hd.type]);
-    facts.push(["Strategy", hd.content?.typeStrategy || hd.strategy]);
-    facts.push(["Authority", hd.authority]);
-    if (hd.profile) facts.push(["Profile", hd.profile]);
-    if (hd.definitionLabel) facts.push(["Definition", hd.definitionLabel]);
-    if (hd.incarnationCross) facts.push(["Incarnation Cross", hd.incarnationCross]);
+    facts.push(["Type", hd.type, false]);
+    facts.push(["Strategy", hd.content?.typeStrategy || hd.strategy, false]);
+    facts.push(["Authority", hd.authority, false]);
+    if (hd.profile) facts.push(["Profile", hd.profile, false]);
+    if (hd.definitionLabel) facts.push(["Definition", hd.definitionLabel, false]);
+    if (hd.incarnationCross) facts.push(["Incarnation Cross", hd.incarnationCross, true]);
   }
   if (astro) {
-    if (sun) facts.push(["Sun", sun.sign]);
-    if (moon) facts.push(["Moon", moon.sign]);
-    facts.push(["Rising", astro.angles.ascendant.sign]);
+    if (sun) facts.push(["Sun", sun.sign, false]);
+    if (moon) facts.push(["Moon", moon.sign, false]);
+    facts.push(["Rising", astro.angles.ascendant.sign, false]);
   }
   if (facts.length === 0) return null;
+  // Values wrap — never truncated or hover-only — so every fact is readable on a phone.
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-2xl border bg-card p-4 sm:grid-cols-3 lg:grid-cols-4">
-      {facts.map(([label, value]) => (
-        <div key={label} className="min-w-0">
+    <dl data-key-facts className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-2xl border bg-card p-4 sm:grid-cols-3 lg:grid-cols-4">
+      {facts.map(([label, value, wide]) => (
+        <div key={label} className={`min-w-0 ${wide ? "col-span-2" : ""}`}>
           <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
-          <dd className="truncate text-sm font-semibold" title={value}>
-            {value}
-          </dd>
+          <dd className="text-sm font-semibold text-pretty break-words">{value}</dd>
         </div>
       ))}
     </dl>
@@ -348,6 +361,7 @@ function ReadingResult({
   embed,
   reading,
   links,
+  emailOutcome,
   mode,
   email,
   accent,
@@ -359,6 +373,7 @@ function ReadingResult({
   embed: PublicEmbedConfig;
   reading: EnergeticDecoderReading;
   links: SubmitLinks;
+  emailOutcome: EmailOutcome;
   mode: ReadingToolMode;
   email: string | null;
   accent: string;
@@ -382,7 +397,12 @@ function ReadingResult({
     if (real.length) deliveryNotes.push(`Preview — a real visitor’s Reading would be ${real.join(" and ")}.`);
   } else {
     if (embed.afterSubmit.myMagnetix) deliveryNotes.push("Your Reading is saved in MyMagnetix — sign in with your email to see it anytime.");
-    if (embed.afterSubmit.email) deliveryNotes.push(email ? `We’ve emailed a link to ${email}.` : "We’ve emailed you a link.");
+    // Only claim the email went out when the send actually succeeded.
+    if (emailOutcome === "sent") deliveryNotes.push(email ? `We’ve emailed a link to ${email}.` : "We’ve emailed you a link.");
+    // The Reading Report button is always shown for a saved Reading, so
+    // "below" holds in every display mode, Confirmation only included.
+    else if (emailOutcome === "notSent")
+      deliveryNotes.push("We couldn’t send your email just now — open your Reading Report below anytime.");
   }
 
   return (
@@ -436,7 +456,7 @@ function ReadingResult({
               <div className="rounded-2xl border bg-card p-4">
                 <MandalaChart
                   profile={reading.humanDesign}
-                  className="mx-auto w-full max-w-[560px]"
+                  className={RESULT_WHEEL}
                   gateColor={mandalaDesign?.chartDefinedColor ?? defaultChartDesignColor()}
                   backgroundColor={mandalaDesign?.backgroundColor ?? "white"}
                   personalityColor={mandalaDesign?.personalityActivationColor}
@@ -455,11 +475,11 @@ function ReadingResult({
           {view === "astrology" && reading.astrology && (
             <div className="space-y-4">
               {show === "full" ? (
-                <AstrologySummary chart={reading.astrology} astroDesign={astroDesign} />
+                <AstrologySummary chart={reading.astrology} astroDesign={astroDesign} wheelClassName={RESULT_WHEEL} />
               ) : (
                 <>
                   <div className="rounded-2xl border bg-card p-4">
-                    <AstrologyWheelChart chart={reading.astrology} className="mx-auto w-full max-w-[520px]" colors={resolveAstrologyColors(astroDesign)} />
+                    <AstrologyWheelChart chart={reading.astrology} className={RESULT_WHEEL} colors={resolveAstrologyColors(astroDesign)} />
                   </div>
                   <KeyFacts reading={{ ...reading, humanDesign: null }} />
                 </>

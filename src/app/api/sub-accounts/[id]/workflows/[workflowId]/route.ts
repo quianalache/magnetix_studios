@@ -102,6 +102,7 @@ const TRIGGER_TYPES = [
   "community.event.ended",
   "community.live.ended",
   "community.replay.ready",
+  "reading.created",
   "message.sent",
   "conversation.assigned",
   "conversation.closed",
@@ -301,6 +302,7 @@ export async function PATCH(
           "lessonId",
           "offerId",
           "groupId",
+          "embedId",
           "assignedToUid",
         ]
           .filter(

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Code2, Copy, ExternalLink, Eye, FlaskConical, LayoutTemplate, Save, Share2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeft, Code2, Copy, ExternalLink, Eye, FlaskConical, LayoutTemplate, Save, Share2, Trash2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildDecoderUrl } from "@/lib/domains/public-url";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,6 +22,7 @@ import { StatusPill } from "@/components/system/status-pill";
 import { DecoderEditorialPage } from "@/components/energetic-decoder/decoder-shell";
 import { EMBED_STATUS_TONE, embedPreviewHref, type EmbedWithPlacements } from "@/components/energetic-decoder/embeds-tab";
 import {
+  EMBED_SHOW_HELP,
   EMBED_SHOW_LABEL,
   EMBED_SHOW_OPTIONS,
   EMBED_STATUS_LABEL,
@@ -29,7 +31,7 @@ import {
   embedCombinationError,
   normalizeEmbedTags,
 } from "@/lib/energetic-decoder/embeds";
-import type { EmbedConfig, EmbedFieldMode, EmbedNextStep, EmbedStatus } from "@/types/embed-config";
+import type { EmbedConfig, EmbedConsentPurpose, EmbedFieldMode, EmbedNextStep, EmbedShowOnPage, EmbedStatus } from "@/types/embed-config";
 
 /**
  * The Embed editor (Public Reading Tool, Phase 1). Primary actions first —
@@ -139,7 +141,9 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
       setEmbed((prev) => (prev ? { ...data.embed, placements: prev.placements } : prev));
       setDraft(toDraft(data.embed));
       setTagsText((data.embed.contact.tags as string[]).join(", "));
-      toast.success(nextStatus === "live" ? "Embed is live." : "Saved.");
+      toast.success(
+        nextStatus === "live" ? "Embed is live." : nextStatus === "archived" ? "Embed archived." : nextStatus === "draft" ? "Embed is offline (Draft)." : "Saved.",
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
@@ -152,7 +156,7 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return toast.error("Couldn't clean up test records.");
     setTestRecords(0);
-    toast.success(`Removed ${data.removed?.readings ?? 0} test reading(s).`);
+    toast.success(`Deleted ${data.removed?.readings ?? 0} test reading(s).`);
   }
 
   async function remove() {
@@ -200,10 +204,16 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
           All embeds
         </button>
         <div className="flex items-center gap-2">
-          <StatusPill tone={EMBED_STATUS_TONE[draft.status]}>{EMBED_STATUS_LABEL[draft.status]}</StatusPill>
-          {embed.status !== "live" && (
+          {/* The saved status — it only changes through these actions, which
+              save immediately (pending edits included). */}
+          <StatusPill tone={EMBED_STATUS_TONE[embed.status]}>{EMBED_STATUS_LABEL[embed.status]}</StatusPill>
+          {embed.status === "live" ? (
+            <Button size="sm" variant="outline" onClick={() => save("draft")} disabled={saving}>
+              Take offline
+            </Button>
+          ) : (
             <Button size="sm" onClick={() => save("live")} disabled={saving || !!combinationError}>
-              Go live
+              {embed.status === "archived" ? "Restore & go live" : "Go live"}
             </Button>
           )}
         </div>
@@ -239,34 +249,29 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
           </div>
         </div>
       </div>
-      {embed.status !== "live" && (
-        <p className="text-body-sm text-muted-foreground">
-          This Embed is {EMBED_STATUS_LABEL[embed.status].toLowerCase()} — visitors can’t use it until it’s live. Preview and Run a test always work for you.
-        </p>
-      )}
+      <p className="text-body-sm text-muted-foreground">
+        {embed.status === "live"
+          ? "Live — visitors can use it now. Saved changes reach visitors right away."
+          : embed.status === "archived"
+            ? "Archived — no new Readings. Everyone who already got a Reading keeps it. Preview and Run a test still work for you."
+            : "Draft — visitors can’t use it until you click Go live. Preview and Run a test always work for you."}
+      </p>
 
-      <SettingsSection title="Name & status" description="Only you see the name — visitors never do.">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="ee-name">Embed name</Label>
-            <Input id="ee-name" value={draft.name} onChange={(e) => update("name", e.target.value)} maxLength={80} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <SegmentedControl
-              value={draft.status}
-              onChange={(v) => update("status", v)}
-              options={(["draft", "live", "archived"] as EmbedStatus[]).map((s) => ({ value: s, label: EMBED_STATUS_LABEL[s] }))}
-            />
-            <p className="text-caption text-muted-foreground">Archived stops new Readings. Existing Readings and Reading Reports stay available.</p>
-          </div>
+      <SettingsSection title="Name" description="Only you see the name — visitors never do.">
+        <div className="space-y-1.5 md:max-w-md">
+          <Label htmlFor="ee-name">Embed name</Label>
+          <Input id="ee-name" value={draft.name} onChange={(e) => update("name", e.target.value)} maxLength={80} />
         </div>
       </SettingsSection>
 
-      <SettingsSection title="1 · Access" description="Who can use this Embed.">
-        <p className="text-body-sm">
-          <strong>Anyone</strong> with the page or link. Paid Reading access (sold through an Offer) arrives in the next phase.
-        </p>
+      <SettingsSection title="1 · Who can use it" description="Who can submit the form and get a Reading.">
+        <div className="space-y-1 text-body-sm">
+          <p>
+            <strong>Everyone, free.</strong> While it’s Live, anyone who reaches this form — on a Magnetix page, on another website or
+            through the direct link — can submit it and get a Reading. No sign-in or payment.
+          </p>
+          <p className="text-muted-foreground">Charging for Readings (sold through an Offer) arrives in the next phase.</p>
+        </div>
       </SettingsSection>
 
       <SettingsSection title="2 · Form" description="Name, email, birth date, time and place are always asked.">
@@ -298,16 +303,34 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
           <div className="space-y-2 md:col-span-2">
             <label className="flex items-center gap-2 text-body-sm">
               <Switch checked={draft.form.consent.enabled} onCheckedChange={(v) => update("form", { ...draft.form, consent: { ...draft.form.consent, enabled: v } })} />
-              Ask for consent with a checkbox
+              Ask them to tick a consent box
             </label>
             {draft.form.consent.enabled && (
-              <Textarea
-                aria-label="Consent text"
-                value={draft.form.consent.text}
-                onChange={(e) => update("form", { ...draft.form, consent: { ...draft.form.consent, text: e.target.value } })}
-                maxLength={400}
-                rows={2}
-              />
+              <div className="space-y-3">
+                <Textarea
+                  aria-label="Consent text"
+                  value={draft.form.consent.text}
+                  onChange={(e) => update("form", { ...draft.form, consent: { ...draft.form.consent, text: e.target.value } })}
+                  maxLength={400}
+                  rows={2}
+                />
+                <div className="space-y-1.5">
+                  <Label>What does ticking it mean?</Label>
+                  <SegmentedControl
+                    value={draft.form.consent.purpose}
+                    onChange={(v) => update("form", { ...draft.form, consent: { ...draft.form.consent, purpose: v as EmbedConsentPurpose } })}
+                    options={[
+                      { value: "agreement", label: "An agreement" },
+                      { value: "emailMarketing", label: "Marketing email permission" },
+                    ]}
+                  />
+                  <p className="text-caption text-muted-foreground">
+                    {draft.form.consent.purpose === "emailMarketing"
+                      ? "Recorded on their Reading, and the Contact is marked as opted in to marketing email — the same as a Form’s email-consent box. Make sure your wording asks for that."
+                      : "Recorded on their Reading with your exact wording, the date and where they were. It doesn’t opt them in to marketing email."}
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -316,7 +339,7 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
       <SettingsSection title="3 · Reading" description="The words, the look, and which views visitors see.">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Content Set</Label>
+            <Label>Reading text (Content Set)</Label>
             <Select
               value={draft.reading.contentSetId}
               onValueChange={(v) => v && update("reading", { ...draft.reading, contentSetId: v })}
@@ -333,10 +356,10 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-caption text-muted-foreground">Blank entries in a custom set use Default’s text, so a Reading is never empty.</p>
+            <p className="text-caption text-muted-foreground">The words in their Reading. Blank entries in a custom set use Default’s text, so a Reading is never empty.</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Chart Design</Label>
+            <Label>Chart colors (Chart Design)</Label>
             <Select
               value={draft.reading.chartDesignSetId ?? "__default"}
               onValueChange={(v) => v && update("reading", { ...draft.reading, chartDesignSetId: v === "__default" ? null : v })}
@@ -354,9 +377,10 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-caption text-muted-foreground">Colors for the Human Design, Mandala and Astrology charts. Text and layout don’t change.</p>
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label>Views shown</Label>
+            <Label>Charts to show</Label>
             <div className="flex flex-wrap gap-4">
               {EMBED_VIEWS.map((v) => {
                 const available = viewAvailable(v);
@@ -379,57 +403,77 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
               })}
             </div>
             <p className="text-caption text-muted-foreground">
-              With two or more views, visitors switch between them with tabs. Systems are turned on in Reading Configuration.
+              With two or more charts, visitors switch between them with tabs. Systems are turned on in Reading Configuration.
             </p>
           </div>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="4 · After submission" description="What the visitor sees and receives.">
+      <SettingsSection title="4 · After submission" description="What they see right away, what they receive, and where they go next.">
         <div className="space-y-5">
           <div className="space-y-1.5">
-            <Label>On the page, show</Label>
-            <SegmentedControl
+            <Label id="ee-show-label">Right after they submit, show</Label>
+            <RadioGroup
+              aria-labelledby="ee-show-label"
               value={draft.afterSubmit.show}
-              onChange={(v) => update("afterSubmit", { ...draft.afterSubmit, show: v })}
-              options={EMBED_SHOW_OPTIONS.map((o) => ({ value: o, label: EMBED_SHOW_LABEL[o] }))}
-            />
+              onValueChange={(v) => update("afterSubmit", { ...draft.afterSubmit, show: v as EmbedShowOnPage })}
+              className="gap-2 md:grid-cols-3"
+            >
+              {EMBED_SHOW_OPTIONS.map((o) => (
+                <label
+                  key={o}
+                  className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${
+                    draft.afterSubmit.show === o ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <RadioGroupItem value={o} className="mt-0.5" />
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="block text-body-sm font-medium">{EMBED_SHOW_LABEL[o]}</span>
+                    <span className="block text-caption text-muted-foreground">{EMBED_SHOW_HELP[o]}</span>
+                  </span>
+                </label>
+              ))}
+            </RadioGroup>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="ee-confirm">Message</Label>
+            <Label htmlFor="ee-confirm">Thank-you message</Label>
             <Input
               id="ee-confirm"
               value={draft.afterSubmit.confirmationMessage}
               onChange={(e) => update("afterSubmit", { ...draft.afterSubmit, confirmationMessage: e.target.value })}
               maxLength={400}
             />
+            <p className="text-caption text-muted-foreground">The first line they see after submitting, in every option above.</p>
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="flex items-center gap-2 text-body-sm">
-              <Switch checked={draft.afterSubmit.myMagnetix} onCheckedChange={(v) => update("afterSubmit", { ...draft.afterSubmit, myMagnetix: v })} />
-              Save to MyMagnetix
-            </label>
-            <label className="flex items-center gap-2 text-body-sm">
-              <Switch checked={draft.afterSubmit.email} onCheckedChange={(v) => update("afterSubmit", { ...draft.afterSubmit, email: v })} />
-              Email “Your Reading is ready”
-            </label>
-            <label className="flex items-center gap-2 text-body-sm">
-              <Switch checked={draft.afterSubmit.pdf} onCheckedChange={(v) => update("afterSubmit", { ...draft.afterSubmit, pdf: v })} />
-              Offer PDF download
-            </label>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Reading output</Label>
-            <div className="space-y-1 text-body-sm">
-              <p>
-                <strong>Reading Report</strong> — the standard client-facing page for this Reading, with its PDF.
-              </p>
-              <p className="text-muted-foreground">A Report Design delivered as a Generated Report arrives with Reading access in the next phase.</p>
+          <div className="space-y-2">
+            <Label>What they receive</Label>
+            <div className="grid gap-3 md:grid-cols-3">
+              <DeliveryToggle
+                checked={draft.afterSubmit.myMagnetix}
+                onChange={(v) => update("afterSubmit", { ...draft.afterSubmit, myMagnetix: v })}
+                label="Save to their MyMagnetix account"
+                help="They sign in with their email to find this Reading anytime. Adds an Open MyMagnetix button."
+              />
+              <DeliveryToggle
+                checked={draft.afterSubmit.email}
+                onChange={(v) => update("afterSubmit", { ...draft.afterSubmit, email: v })}
+                label="Email them a link to their Reading"
+                help="A “Your Reading is ready” email with a link to their Reading Report."
+              />
+              <DeliveryToggle
+                checked={draft.afterSubmit.pdf}
+                onChange={(v) => update("afterSubmit", { ...draft.afterSubmit, pdf: v })}
+                label="Show a Download PDF button"
+                help="Lets them save their Reading Report as a PDF."
+              />
             </div>
+            <p className="text-caption text-muted-foreground">
+              Every Reading also includes the standard Reading Report page — they open it with the “View your Reading Report” button.
+            </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-1.5">
-              <Label>Next step button</Label>
+              <Label>Button after their Reading</Label>
               <Select
                 value={nextStep.kind}
                 onValueChange={(v) => {
@@ -447,14 +491,14 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
                             : { kind: "none" };
                   update("afterSubmit", { ...draft.afterSubmit, nextStep: step });
                 }}
-                items={{ none: "None", myMagnetix: "MyMagnetix", course: "A course", offer: "An Offer", url: "A page or URL" }}
+                items={{ none: "None", myMagnetix: "Open MyMagnetix", course: "A course", offer: "An Offer", url: "A page or URL" }}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="myMagnetix">MyMagnetix</SelectItem>
+                  <SelectItem value="myMagnetix">Open MyMagnetix</SelectItem>
                   <SelectItem value="course" disabled={options.courses.length === 0}>
                     A course
                   </SelectItem>
@@ -539,17 +583,18 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
             <li>New visitors become Contacts (source “Energetic Decoder”). Returning visitors are matched by email — their details are never overwritten.</li>
             <li>Every submission creates a Reading and an activity entry on the Contact, including where it came from (page, website, campaign).</li>
             <li>
-              Start follow-up from{" "}
+              Start follow-up in{" "}
               <Link href={saPath("/workflows")} className="font-medium text-foreground underline">
                 Workflows
               </Link>{" "}
-              with “Contact created” or a tag added below.
+              with <strong className="text-foreground">Reading created</strong> — it fires for every Reading through this Embed, new and
+              returning Contacts alike (Test runs excluded).
             </li>
           </ul>
           <div className="space-y-1.5">
             <Label htmlFor="ee-tags">Tags to add</Label>
             <Input id="ee-tags" value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="e.g. blueprint, free-reading" />
-            <p className="text-caption text-muted-foreground">Comma-separated. Added to new and returning Contacts; existing tags are never removed.</p>
+            <p className="text-caption text-muted-foreground">Comma-separated. Added to new and returning Contacts; existing tags are never removed. Useful for filtering lists and broadcasts.</p>
           </div>
         </div>
       </SettingsSection>
@@ -567,9 +612,9 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
             <p className="text-caption text-muted-foreground">The tool’s own page — useful for emails and testing. Add utm_ parameters to track a campaign.</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Used on</Label>
+            <Label>Placed on these Pages &amp; Funnels pages</Label>
             {embed.placements.length === 0 ? (
-              <p className="text-muted-foreground">Not placed on any Pages &amp; Funnels page yet.</p>
+              <p className="text-muted-foreground">None yet.</p>
             ) : (
               <ul className="space-y-1">
                 {embed.placements.map((p) => (
@@ -580,6 +625,9 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
                 ))}
               </ul>
             )}
+            <p className="text-caption text-muted-foreground">
+              Website installs aren’t listed. A published page shows the tool only while this Embed is Live.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ee-note">Internal note</Label>
@@ -590,12 +638,25 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
               Test records: <strong>{testRecords}</strong> <span className="text-muted-foreground">(hidden from Readings, Contacts and counts)</span>
             </span>
             <Button size="sm" variant="outline" onClick={cleanupTests} disabled={testRecords === 0}>
-              Clean up
+              Delete test records
             </Button>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-muted-foreground">
-              {embed.stats.readings > 0 ? "This Embed has Readings — archive it to stop new ones." : "Delete this Embed permanently."}
+              {embed.status === "archived"
+                ? "Archived — no new Readings. Use “Restore & go live” at the top to bring it back."
+                : "Archive stops new Readings. Everyone who already got a Reading keeps their Reading Report, PDF and MyMagnetix copy."}
+            </span>
+            {embed.status !== "archived" && (
+              <Button size="sm" variant="outline" onClick={() => save("archived")} disabled={saving}>
+                <Archive className="size-4" />
+                Archive
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-muted-foreground">
+              {embed.stats.readings > 0 ? "This Embed has Readings, so it can’t be deleted — archive it instead." : "Delete this Embed permanently."}
             </span>
             {embed.stats.readings === 0 && (
               <Button size="sm" variant="outline" onClick={remove}>
@@ -609,6 +670,18 @@ export function EmbedEditor({ embedId }: { embedId: string }) {
 
       <InstallDialog open={installOpen} onOpenChange={setInstallOpen} embedUrl={embedUrl} onCopy={copy} />
     </DecoderEditorialPage>
+  );
+}
+
+function DeliveryToggle({ checked, onChange, label, help }: { checked: boolean; onChange: (v: boolean) => void; label: string; help: string }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5 text-body-sm">
+      <Switch checked={checked} onCheckedChange={onChange} className="mt-0.5" />
+      <span className="min-w-0 space-y-0.5">
+        <span className="block font-medium">{label}</span>
+        <span className="block text-caption text-muted-foreground">{help}</span>
+      </span>
+    </label>
   );
 }
 

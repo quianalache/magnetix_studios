@@ -2,6 +2,7 @@ import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createNotification } from "@/lib/server/notification-service";
+import type { NotificationEmailOutcome } from "@/lib/server/notification-email-service";
 import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
 import { communityPostHref, communityHomeHref } from "@/lib/community/routes";
 import { formatStartLocal } from "@/lib/booking/email";
@@ -515,9 +516,9 @@ export async function notifyReadingReady(opts: {
   hasAstrology: boolean;
   /** Public Reading Tool: the Embed's email setting. Default true (unchanged). */
   sendEmail?: boolean;
-}): Promise<void> {
+}): Promise<NotificationEmailOutcome | null> {
   const contact = await getContactEmail(opts.contactId);
-  if (!contact) return;
+  if (!contact) return null;
 
   const personId = await ensurePersonIdentity(contact.email);
 
@@ -534,7 +535,7 @@ export async function notifyReadingReady(opts: {
   const readingName = deriveReadingName(opts);
   const destination = `/decoder/${opts.subAccountId}/report/${opts.readingId}`;
 
-  await createNotification({
+  return createNotification({
     personId,
     subAccountId: opts.subAccountId,
     eventType: "reading.ready",

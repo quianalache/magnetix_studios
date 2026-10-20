@@ -2,7 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { dispatchNotificationEmail } from "@/lib/server/notification-email-service";
+import { dispatchNotificationEmail, type NotificationEmailOutcome } from "@/lib/server/notification-email-service";
 import type { NotificationDoc, NotificationEventType, NotificationObjectType } from "@/types/notifications";
 
 /**
@@ -74,8 +74,11 @@ export interface CreateNotificationInput {
  * For events that legitimately recur (a second, different reply; a second,
  * different mention), each has its OWN distinct `sourceObjectId` (the new
  * comment's id) — a genuinely new notification, not a duplicate.
+ *
+ * Returns what happened to the email channel (null when no email was
+ * attempted: a duplicate, a failed write, or `skipEmail`).
  */
-export async function createNotification(input: CreateNotificationInput): Promise<void> {
+export async function createNotification(input: CreateNotificationInput): Promise<NotificationEmailOutcome | null> {
   const dedupeKey = [
     input.eventType,
     sanitizeIdSegment(input.sourceObjectId),
@@ -110,7 +113,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
     if (code !== 6) {
       console.error("[notification-service] createNotification failed:", err instanceof Error ? err.message : String(err));
     }
-    return; // duplicate OR failed write — either way, no email dispatch
+    return null; // duplicate OR failed write — either way, no email dispatch
   }
 
   // Email is a delivery CHANNEL on the notification, never independent of
@@ -136,8 +139,8 @@ export async function createNotification(input: CreateNotificationInput): Promis
   // never fail the caller's write path — it only adds one email-send's
   // latency, which is the accepted tradeoff for actually reliable
   // delivery, exactly as accepted for notification-doc creation itself.
-  if (input.skipEmail) return;
-  await dispatchNotificationEmail({
+  if (input.skipEmail) return null;
+  return dispatchNotificationEmail({
     id: dedupeKey,
     personId: input.personId,
     subAccountId: input.subAccountId,

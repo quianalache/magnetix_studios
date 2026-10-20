@@ -113,12 +113,19 @@ interface DispatchInput {
  * delivery record and returns. The caller never awaits this in a way that
  * could block the notification write it already completed.
  */
+/**
+ * What happened to the email — returned so a caller that tells a person
+ * "we've emailed you" can say so only when it's true (Public Reading Tool,
+ * 2026-10-20). Existing callers ignore it.
+ */
+export type NotificationEmailOutcome = "sent" | "failed" | "skipped";
+
 export async function dispatchNotificationEmail(
   notification: DispatchInput
-): Promise<void> {
+): Promise<NotificationEmailOutcome> {
   try {
-    if (!isEmailEligibleEventType(notification.eventType)) return;
-    if (!emailIsConfigured()) return; // local/dev without Resend configured — silent no-op, matches emailIsConfigured's existing use elsewhere
+    if (!isEmailEligibleEventType(notification.eventType)) return "skipped";
+    if (!emailIsConfigured()) return "skipped"; // local/dev without Resend configured — silent no-op, matches emailIsConfigured's existing use elsewhere
 
     const ref = deliveryCol().doc(notification.id);
     try {
@@ -131,7 +138,7 @@ export async function dispatchNotificationEmail(
       const code = (err as { code?: number })?.code;
       if (code !== 6)
         console.error("[notification-email] delivery doc create failed:", err);
-      return;
+      return "skipped";
     }
 
     // Agency Community activity (subAccountId: null) has no tenant to
@@ -158,7 +165,7 @@ export async function dispatchNotificationEmail(
         failureReason: "no-deliverable-email",
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return;
+      return "skipped";
     }
 
     const sub =
@@ -210,6 +217,7 @@ export async function dispatchNotificationEmail(
         provider: "resend",
         sentAt: FieldValue.serverTimestamp(),
       });
+      return "sent";
     } catch (err) {
       await ref.update({
         status: "failed",
@@ -217,6 +225,7 @@ export async function dispatchNotificationEmail(
         failureReason: sanitizeFailureReason(err),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      return "failed";
     }
   } catch (err) {
     // Top-level safety net — this function must never throw into its
@@ -225,6 +234,7 @@ export async function dispatchNotificationEmail(
       "[notification-email] dispatchNotificationEmail failed:",
       err
     );
+    return "failed";
   }
 }
 

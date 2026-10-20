@@ -1,4 +1,4 @@
-import type { ReadingEmbedSnapshot, ReadingPlacement } from "@/types/embed-config";
+import type { ReadingConsentRecord, ReadingEmbedSnapshot, ReadingPlacement } from "@/types/embed-config";
 import type { ContactAttribution } from "@/types/contacts";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
@@ -159,6 +159,8 @@ export interface EnergeticDecoderReading {
   attribution?: ContactAttribution;
   /** An Embed Test run — hidden from lists, stats and lifetime counts. */
   test?: boolean;
+  /** The Embed consent tick, when the form asked for one (2026-10-20). */
+  consent?: ReadingConsentRecord;
 }
 
 /**

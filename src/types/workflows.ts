@@ -65,6 +65,8 @@ export type WorkflowTriggerType =
   | "community.event.ended"
   | "community.live.ended"
   | "community.replay.ready"
+  /** Public Reading Tool: a real (non-Test) submission created a Reading. */
+  | "reading.created"
   | "message.sent"
   | "conversation.assigned"
   | "conversation.closed"
@@ -157,6 +159,8 @@ export interface WorkflowTrigger {
   lessonId?: string | null;
   offerId?: string | null;
   groupId?: string | null;
+  /** Restrict `reading.created` to one Public Reading Tool Embed. */
+  embedId?: string | null;
   assignedToUid?: string | null;
 }
 

@@ -463,10 +463,13 @@ export function HumanDesignSummary({
 export function AstrologySummary({
   chart,
   astroDesign,
+  wheelClassName = "mx-auto w-full max-w-[520px]",
 }: {
   chart: AstrologyChart & { content?: AstrologyReadingContent };
   /** The sub-account's default Astrology Chart Design (2026-08-09 rebuild) — falls back to the traditional neutral ink when not passed. */
   astroDesign?: ChartDesign | null;
+  /** Wheel sizing — the Public Reading Tool's wider result area passes a larger cap. */
+  wheelClassName?: string;
 }) {
   const content = chart.content;
   const sun = chart.placements.find((p) => p.body === "sun");
@@ -493,7 +496,7 @@ export function AstrologySummary({
         */}
         <AstrologyWheelChart
           chart={chart}
-          className="mx-auto w-full max-w-[520px]"
+          className={wheelClassName}
           colors={resolveAstrologyColors(astroDesign)}
         />
       </div>

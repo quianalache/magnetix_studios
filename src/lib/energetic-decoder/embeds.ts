@@ -53,6 +53,13 @@ export const EMBED_SHOW_LABEL: Record<EmbedShowOnPage, string> = {
   confirmation: "Confirmation only",
 };
 
+/** One line per option, in the editor — what the visitor sees on the page. */
+export const EMBED_SHOW_HELP: Record<EmbedShowOnPage, string> = {
+  full: "The chart, key facts and the full written interpretation, right on the page.",
+  chartFacts: "The chart and a short summary (e.g. Type, Strategy, Authority). The full interpretation stays in their Reading Report.",
+  confirmation: "Your thank-you message and buttons only — no chart here. They open their Reading from the Reading Report button, email or MyMagnetix.",
+};
+
 export function defaultEmbedSettings(): EmbedSettings {
   return {
     access: { mode: "anyone" },
@@ -61,7 +68,7 @@ export function defaultEmbedSettings(): EmbedSettings {
       intro: "Enter your birth details to decode your energetic blueprint.",
       buttonLabel: "Get my reading",
       phone: "off",
-      consent: { enabled: false, text: "I agree to receive emails about my reading." },
+      consent: { enabled: false, text: "I agree to receive emails about my reading.", purpose: "agreement" },
     },
     reading: {
       contentSetId: DEFAULT_CONTENT_SET_ID,
@@ -179,6 +186,9 @@ export function normalizeEmbedConfig(id: string, raw: Record<string, unknown>): 
       consent: {
         enabled: consent.enabled === true,
         text: str(consent.text, EMBED_LIMITS.consentText) || d.form.consent.text,
+        // Absent on Embeds saved before 2026-10-20 → "agreement": an old
+        // tick never silently becomes marketing permission.
+        purpose: consent.purpose === "emailMarketing" ? "emailMarketing" : "agreement",
       },
     },
     reading: {

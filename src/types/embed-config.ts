@@ -28,6 +28,16 @@ export type EmbedShowOnPage = "full" | "chartFacts" | "confirmation";
 
 export type EmbedFieldMode = "off" | "optional" | "required";
 
+/**
+ * What the consent checkbox means (2026-10-20). "agreement" — the visitor
+ * agrees to the owner's wording (e.g. emails about this Reading, terms); it
+ * is recorded on the Reading and grants nothing else. "emailMarketing" — the
+ * wording asks for permission to send marketing email, so a tick also
+ * writes the Contact's existing marketing-email consent (`emailConsent`),
+ * exactly like a Form's email-consent field.
+ */
+export type EmbedConsentPurpose = "agreement" | "emailMarketing";
+
 /** What the visitor receives as their lasting Reading output. Report Design
  *  delivery (an automatically Generated Report) needs secure client access
  *  to Generated Reports and arrives with Phase 2. */
@@ -47,7 +57,7 @@ export interface EmbedFormSettings {
   intro: string;
   buttonLabel: string;
   phone: EmbedFieldMode;
-  consent: { enabled: boolean; text: string };
+  consent: { enabled: boolean; text: string; purpose: EmbedConsentPurpose };
 }
 
 export interface EmbedReadingSettings {
@@ -123,6 +133,20 @@ export type ReadingPlacement =
   | { kind: "page"; pageId: string }
   | { kind: "external"; host: string | null }
   | { kind: "direct" };
+
+/**
+ * Proof of the consent tick, frozen onto the Reading the submission created:
+ * who (the Reading's Contact), what (exact wording + purpose), when, where.
+ */
+export interface ReadingConsentRecord {
+  given: true;
+  textShown: string;
+  purpose: EmbedConsentPurpose;
+  consentedAt: string;
+  embedId: string;
+  /** The page the visitor was on, when known (attribution landing page). */
+  sourceUrl: string | null;
+}
 
 /** The Embed facts frozen onto a Reading at creation. */
 export interface ReadingEmbedSnapshot {

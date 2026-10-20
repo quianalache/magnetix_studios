@@ -70,6 +70,7 @@ import type {
 
 const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "form.submitted",
+  "reading.created",
   "contact.created",
   "contact.tag.added",
   "pipeline.stage.changed",
@@ -339,6 +340,7 @@ export function WorkflowBuilder({
   saId,
   initial,
   forms,
+  embeds = [],
   readiness,
   whatsappTemplates,
   emailTemplates,
@@ -347,6 +349,8 @@ export function WorkflowBuilder({
   saId: string;
   initial: BuilderInitial;
   forms: { id: string; name: string }[];
+  /** Public Reading Tool Embeds, for the `reading.created` picker. */
+  embeds?: { id: string; name: string }[];
   readiness: BuilderReadiness;
   whatsappTemplates: WhatsappTemplateOption[];
   emailTemplates: WorkflowEmailTemplateOption[];
@@ -618,6 +622,30 @@ export function WorkflowBuilder({
                     </option>
                   ))}
                 </select>
+              )}
+
+              {trigger?.type === "reading.created" && (
+                <>
+                  <select
+                    value={trigger.embedId ?? ""}
+                    onChange={(e) =>
+                      setTrigger({ ...trigger, embedId: e.target.value || null })
+                    }
+                    className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+                  >
+                    <option value="">Any Embed</option>
+                    {embeds.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-muted-foreground mt-1.5 text-xs">
+                    Fires every time someone gets a Reading through an Embed —
+                    new and returning Contacts alike. Readings you create
+                    yourself and Test runs don&apos;t trigger it.
+                  </p>
+                </>
               )}
 
               {trigger?.type === "pipeline.stage.changed" && (

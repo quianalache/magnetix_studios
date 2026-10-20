@@ -10,11 +10,13 @@ import { recordEmbedReading } from "@/lib/server/embed-config-service";
 import { notifyReadingReady } from "@/lib/server/notification-producers";
 import { recordContactActivity } from "@/lib/server/contact-activity";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
+import { fireWorkflowTrigger } from "@/lib/workflows/engine";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { buildDecoderReportUrl, platformOrigin } from "@/lib/domains/public-url";
 import { legacyPublicEmbed, toPublicEmbed } from "@/lib/energetic-decoder/embeds";
-import type { EmbedConfig, ReadingPlacement } from "@/types/embed-config";
+import { FieldValue } from "firebase-admin/firestore";
+import type { EmbedConfig, ReadingConsentRecord, ReadingPlacement } from "@/types/embed-config";
 import type { ContactAttribution } from "@/types/contacts";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { SubAccountDoc } from "@/types";
@@ -26,7 +28,8 @@ import type { SubAccountDoc } from "@/types";
  *   live    — a visitor. Contact match-or-create (case-insensitive, never
  *             overwriting a returning Contact), Profile, a new Reading,
  *             delivery (MyMagnetix / email) per the Embed, an activity row,
- *             lifetime counts, and the attribution conversion.
+ *             lifetime counts, the attribution conversion, the consent
+ *             record, and the `reading.created` workflow trigger.
  *   test    — staff rehearsing the real journey: a hidden test Contact keyed
  *             to the staff member's own email, the Reading marked `test`,
  *             delivery exercised exactly as configured but only ever to the
@@ -58,6 +61,8 @@ export interface PublicReadingSubmission {
   timeZone?: string;
   placement: ReadingPlacement | null;
   attribution: ContactAttribution | null;
+  /** The visitor's IP, for the marketing-email consent audit (same as Forms). */
+  ip?: string | null;
 }
 
 export interface PublicReadingResult {
@@ -67,6 +72,13 @@ export interface PublicReadingResult {
     pdf: string | null;
     myMagnetix: string | null;
   };
+  /**
+   * The "Your Reading is ready" email: "sent" only when the provider
+   * accepted it, "notSent" when the Embed asked for it but it didn't go out
+   * (the visitor is never told it was sent), "off" when the Embed doesn't
+   * email, and "preview" for Preview (nothing is ever sent).
+   */
+  email: "sent" | "notSent" | "off" | "preview";
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -81,8 +93,8 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
   }
   // Test/Preview always use the signed-in staff member's own email, so a
   // rehearsal can never reach or create a visitor's record.
-  const email = input.mode === "live" ? input.email.trim() : (input.staffEmail ?? "").trim();
-  if (!EMAIL_RE.test(email)) return { error: "Enter a valid email address.", status: 400 };
+  const emailAddress = input.mode === "live" ? input.email.trim() : (input.staffEmail ?? "").trim();
+  if (!EMAIL_RE.test(emailAddress)) return { error: "Enter a valid email address.", status: 400 };
   if (publicEmbed.form.phone === "required" && !phone) return { error: "Phone number is required.", status: 400 };
   if (publicEmbed.form.consent.enabled && input.consent !== true) {
     return { error: "Please tick the consent box to continue.", status: 400 };
@@ -126,17 +138,28 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       createdAt: null,
     };
     // Preview links are inert — there's no saved Reading to open.
-    return { reading, links: { report: null, pdf: null, myMagnetix: null } };
+    return { reading, links: { report: null, pdf: null, myMagnetix: null }, email: "preview" };
   }
 
   const embed = input.embed;
+  const consent: ReadingConsentRecord | null =
+    embed && publicEmbed.form.consent.enabled && input.consent === true
+      ? {
+          given: true,
+          textShown: publicEmbed.form.consent.text,
+          purpose: publicEmbed.form.consent.purpose,
+          consentedAt: new Date().toISOString(),
+          embedId: embed.id,
+          sourceUrl: input.attribution?.landingPage ?? null,
+        }
+      : null;
   const result = await createEnergeticDecoderReading({
     subAccountId: input.subAccountId,
     agencyId: input.agencyId,
     createdByUid: input.mode === "test" ? "embed-test" : "energetic-decoder-public",
     origin: "public_decoder",
     name,
-    email,
+    email: emailAddress,
     birthDate: input.birthDate,
     birthTime: input.birthTime,
     birthPlace: input.birthPlace,
@@ -159,13 +182,16 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
     attribution: input.mode === "live" ? input.attribution : null,
     test: input.mode === "test",
     publicContact: { phone, tags: embed?.contact.tags ?? [] },
+    consent,
   });
   if ("error" in result) return { error: result.error, status: 422 };
   const reading = result.reading;
 
   // ── Delivery, exactly as the Embed is configured ──
+  // The visitor is told "we've emailed you" only when the send succeeded.
+  let email: PublicReadingResult["email"] = delivery.email ? "notSent" : "off";
   if (delivery.myMagnetix) {
-    await notifyReadingReady({
+    const outcome = await notifyReadingReady({
       subAccountId: input.subAccountId,
       readingId: reading.id,
       contactId: result.contactId,
@@ -173,18 +199,48 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       hasHumanDesign: !!reading.humanDesign,
       hasAstrology: !!reading.astrology,
       sendEmail: delivery.email,
-    }).catch((err) => console.warn("[public-reading] MyMagnetix delivery failed", err));
+    }).catch((err) => {
+      console.warn("[public-reading] MyMagnetix delivery failed", err);
+      return null;
+    });
+    if (delivery.email && outcome === "sent") email = "sent";
   } else if (delivery.email) {
-    await sendReadingReadyEmail({
+    const sent = await sendReadingReadyEmail({
       subAccountId: input.subAccountId,
-      to: email,
+      to: emailAddress,
       readingId: reading.id,
       readingName: name,
-    }).catch((err) => console.warn("[public-reading] email delivery failed", err));
+    }).catch((err) => {
+      console.warn("[public-reading] email delivery failed", err);
+      return false;
+    });
+    if (sent) email = "sent";
   }
 
   // ── Live-only bookkeeping (never for Test) ──
   if (input.mode === "live") {
+    // Marketing-email permission only when the owner said the checkbox asks
+    // for it — same write as a Form's email-consent field (resubscribes on an
+    // explicit fresh tick, never revokes). An "agreement" tick is recorded on
+    // the Reading only.
+    if (consent?.purpose === "emailMarketing") {
+      await getAdminDb()
+        .doc(`contacts/${result.contactId}`)
+        .update({
+          emailOptedOut: false,
+          emailConsent: {
+            status: "consented",
+            consentedAt: FieldValue.serverTimestamp(),
+            unsubscribedAt: null,
+            source: `embed:${consent.embedId}`,
+            sourceUrl: consent.sourceUrl,
+            textShown: consent.textShown,
+            ip: input.ip ?? null,
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+        .catch((err) => console.warn("[public-reading] consent write failed", err));
+    }
     if (embed) {
       await recordEmbedReading(embed.id, { contactCreated: result.contactCreated });
       // Same visits→conversions rollup booking/offer pages use (Reports →
@@ -208,6 +264,26 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       createdBy: "energetic-decoder-public",
       dedupeKey: `reading_created_${reading.id}`,
     });
+    // Fires for every real submission — new AND returning Contacts — so
+    // follow-up never depends on a tag being new. Awaited (the same
+    // serverless-freeze lesson as notifications); the engine never throws.
+    if (embed) {
+      await fireWorkflowTrigger({
+        agencyId: input.agencyId,
+        subAccountId: input.subAccountId,
+        type: "reading.created",
+        contactId: result.contactId,
+        context: {
+          eventId: `reading.created:${reading.id}`,
+          eventType: "reading.created",
+          source: "public-reading-tool",
+          readingId: reading.id,
+          embedId: embed.id,
+          placement: input.placement?.kind ?? "direct",
+          contactCreated: result.contactCreated,
+        },
+      });
+    }
   }
 
   return {
@@ -217,6 +293,7 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       pdf: delivery.pdf ? `/api/decoder/${input.subAccountId}/report/${reading.id}/pdf` : null,
       myMagnetix: delivery.myMagnetix ? "/my/readings" : null,
     },
+    email,
   };
 }
 
@@ -230,15 +307,17 @@ function placementLabel(p: ReadingPlacement | null): string {
 /**
  * "Your Reading is ready" when an Embed has email on but MyMagnetix off —
  * links straight to the Reading Report. (With MyMagnetix on, the
- * MyMagnetix notification email carries this instead.)
+ * MyMagnetix notification email carries this instead.) True when the
+ * provider accepted the email; false when email isn't set up; throws when
+ * the send fails.
  */
 async function sendReadingReadyEmail(opts: {
   subAccountId: string;
   to: string;
   readingId: string;
   readingName: string;
-}): Promise<void> {
-  if (!emailIsConfigured()) return;
+}): Promise<boolean> {
+  if (!emailIsConfigured()) return false;
   const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
   const sub = subSnap.data() as SubAccountDoc | undefined;
   const businessName = (sub?.name as string | undefined) || "Your practitioner";
@@ -257,4 +336,5 @@ async function sendReadingReadyEmail(opts: {
 </body></html>`,
     idempotencyKey: `reading-ready-${opts.readingId}`,
   });
+  return true;
 }

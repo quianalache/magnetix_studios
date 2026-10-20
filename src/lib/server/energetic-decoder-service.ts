@@ -9,7 +9,7 @@ import {
   updateContactServerSide,
 } from "@/lib/server/contacts-service";
 import type { ContactAttribution } from "@/types/contacts";
-import type { ReadingEmbedSnapshot, ReadingPlacement } from "@/types/embed-config";
+import type { ReadingConsentRecord, ReadingEmbedSnapshot, ReadingPlacement } from "@/types/embed-config";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import { calculateGeneKeysProfile } from "@/lib/energetics/gene-keys";
 import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
@@ -67,6 +67,8 @@ export interface CreateReadingInput extends EnergeticDecoderRequest {
   test?: boolean;
   /** Extra public-form Contact fields. Fill blank fields only; tags are additive. */
   publicContact?: { phone?: string; tags?: string[] };
+  /** The Embed consent tick, frozen onto the Reading as proof. */
+  consent?: ReadingConsentRecord | null;
 }
 
 export interface CreateReadingResult {
@@ -289,6 +291,7 @@ export async function createEnergeticDecoderReading(
     ...(input.placement ? { placement: input.placement } : {}),
     ...(input.attribution ? { attribution: input.attribution } : {}),
     ...(input.test ? { test: true } : {}),
+    ...(input.consent ? { consent: input.consent } : {}),
     // Staff readings record who made them; the public decoder passes a
     // fixed placeholder, which is not a person and is not stored.
     ...(input.origin === "staff" && input.createdByUid ? { createdByUid: input.createdByUid } : {}),

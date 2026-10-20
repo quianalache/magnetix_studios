@@ -43,6 +43,7 @@ export function WorkflowBuilderLoader({
 }) {
   const [initial, setInitial] = useState<BuilderInitial | null>(null);
   const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
+  const [embeds, setEmbeds] = useState<{ id: string; name: string }[]>([]);
   const [whatsappTemplates, setWhatsappTemplates] = useState<
     WhatsappTemplateOption[]
   >([]);
@@ -81,6 +82,18 @@ export function WorkflowBuilderLoader({
         }
       } catch {
         /* forms are optional — picker just shows "Any form" */
+      }
+      try {
+        const res = await fetch(
+          `/api/sub-accounts/${saId}/energetic-decoder/embeds`
+        );
+        const d = res.ok
+          ? ((await res.json()) as { embeds?: { id: string; name: string }[] })
+          : {};
+        if (alive)
+          setEmbeds((d.embeds ?? []).map((e) => ({ id: e.id, name: e.name })));
+      } catch {
+        /* optional — the Reading-created picker just shows "Any Embed" */
       }
       try {
         const snap = await getDocs(
@@ -204,6 +217,7 @@ export function WorkflowBuilderLoader({
       saId={saId}
       initial={initial}
       forms={forms}
+      embeds={embeds}
       readiness={readiness}
       whatsappTemplates={whatsappTemplates}
       emailTemplates={emailTemplates}

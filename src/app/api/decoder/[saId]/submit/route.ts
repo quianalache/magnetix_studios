@@ -62,14 +62,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ saI
 
   const mode: PublicReadingMode = body.mode === "test" || body.mode === "preview" ? body.mode : "live";
   let staffEmail: string | null = null;
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   if (mode !== "live") {
     const access = await requireSubAccountMember(request, saId);
     if (access instanceof NextResponse) return NextResponse.json({ error: "Not found" }, { status: 404 });
     staffEmail = access.email || null;
     if (!staffEmail) return NextResponse.json({ error: "Your staff account has no email on file." }, { status: 400 });
   } else {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const allowed = checkMemberAuthRateLimit({ key: `reading-tool:${saId}:${ip}`, limit: 12, windowMs: 10 * 60 * 1000 });
+    const allowed = checkMemberAuthRateLimit({ key: `reading-tool:${saId}:${ip ?? "unknown"}`, limit: 12, windowMs: 10 * 60 * 1000 });
     if (!allowed) return NextResponse.json({ error: "Too many readings from this connection. Try again in a few minutes." }, { status: 429 });
   }
 
@@ -111,8 +111,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ saI
     timeZone: str(body.timeZone, 80) || undefined,
     placement,
     attribution: normalizeAttribution(body.attribution),
+    ip,
   });
 
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
-  return NextResponse.json({ ok: true, reading: result.reading, links: result.links, mode });
+  return NextResponse.json({ ok: true, reading: result.reading, links: result.links, email: result.email, mode });
 }
