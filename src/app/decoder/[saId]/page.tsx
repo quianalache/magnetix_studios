@@ -54,15 +54,21 @@ export default async function PublicDecoderPage({
   const businessName = (sub.name as string) || "Energetic Decoder";
   const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
 
+  const embedded = one(sp.embedded) === "1";
+  const brandStyle = { ...tenantBrandStyle({ name: businessName, primary: theme.accent }), "--decoder-accent": theme.accent } as React.CSSProperties;
+
   const requestedMode = one(sp.mode);
   const mode: ReadingToolMode = requestedMode === "preview" || requestedMode === "test" ? requestedMode : "live";
-  if (mode !== "live" && !(await getStaffForSubAccount(saId))) notFound();
-
   const embedId = one(sp.embed);
   const embed = embedId ? await getEmbedConfig(saId, embedId) : null;
-  if (embedId && !embed) notFound();
-  // Draft and Archived Embeds fail closed for visitors; staff can still Preview/Test.
-  if (embed && mode === "live" && embed.status !== "live") notFound();
+  // Fail closed, but on THIS route with an intentional state (not the site's
+  // generic 404): an unknown Embed, a Draft/Archived Embed for visitors, or a
+  // staff-only mode without a staff session. Nothing about the Embed or the
+  // reason is revealed, and no form is rendered, so no Reading can be made.
+  const staffModeDenied = mode !== "live" && !(await getStaffForSubAccount(saId));
+  if (staffModeDenied || (embedId && !embed) || (embed && mode === "live" && embed.status !== "live")) {
+    return <ToolUnavailable businessName={businessName} logoUrl={theme.logoUrl} embedded={embedded} style={brandStyle} />;
+  }
 
   const designs = embed
     ? await resolveChartDesignsForEmbed(saId, embed.reading.chartDesignSetId)
@@ -72,7 +78,6 @@ export default async function PublicDecoderPage({
         getDefaultChartDesign(saId, "astrology"),
       ]).then(([hdDesign, mandalaDesign, astroDesign]) => ({ hdDesign, mandalaDesign, astroDesign }));
 
-  const embedded = one(sp.embedded) === "1";
   const host = one(sp.host).toLowerCase().replace(/[^a-z0-9.-]/g, "").slice(0, 120);
   const placement: ReadingPlacement = embedded ? { kind: "external", host: host || null } : { kind: "direct" };
 
@@ -124,6 +129,45 @@ export default async function PublicDecoderPage({
         <span className="public-ink font-semibold">{businessName}</span>
       </div>
       {tool}
+    </div>
+  );
+}
+
+/** The intentional "not available" state for the tool's own route. */
+function ToolUnavailable({
+  businessName,
+  logoUrl,
+  embedded,
+  style,
+}: {
+  businessName: string;
+  logoUrl?: string | null;
+  embedded: boolean;
+  style: React.CSSProperties;
+}) {
+  const card = (
+    <div className="tenant-card mx-auto w-full max-w-lg p-6 text-center sm:p-8" data-reading-tool-unavailable>
+      <h1 className="public-ink text-xl font-semibold tracking-tight">This reading isn’t available right now</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Please check back later, or contact {businessName}.</p>
+    </div>
+  );
+  if (embedded) {
+    return (
+      <div className="tenant-surface p-3 sm:p-4" style={{ ...style, background: "transparent" }} data-public-shell="decoder-embedded">
+        {card}
+      </div>
+    );
+  }
+  return (
+    <div className="tenant-surface tenant-wash min-h-screen p-4 sm:p-6" style={style} data-public-shell="decoder">
+      <div className="mx-auto mb-6 flex w-full max-w-lg items-center justify-center gap-2.5 pt-4 sm:pt-10">
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={businessName} className="h-7 w-auto" />
+        ) : null}
+        <span className="public-ink font-semibold">{businessName}</span>
+      </div>
+      {card}
     </div>
   );
 }
