@@ -16,6 +16,7 @@ import {
   Glasses,
   Grid3x3,
   Info,
+  ScanEye,
 } from "lucide-react";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
@@ -64,6 +65,7 @@ const HD_ICONS = {
   notSelfTheme: CloudRain,
   digestion: Utensils,
   sense: Eye,
+  designSense: ScanEye,
   motivation: Flame,
   perspective: Glasses,
   environment: Grid3x3,
@@ -73,25 +75,28 @@ function HdTile({
   icon: Icon,
   label,
   value,
+  wide = false,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | null | undefined;
+  /** Spans the full row on phones (two-column grid) — for long values like the Incarnation Cross. */
+  wide?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-xl border bg-card p-3">
+    <div className={cn("flex items-start gap-2.5 rounded-xl border bg-card p-3", wide && "col-span-2 sm:col-span-1")}>
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <Icon className="h-4 w-4" />
       </span>
       <div className="min-w-0">
         <p className="text-[11px] text-muted-foreground">{label}</p>
-        <p className="truncate text-sm font-semibold text-foreground">{value || "—"}</p>
+        <p className="text-sm font-semibold text-pretty break-words text-foreground">{value || "—"}</p>
       </div>
     </div>
   );
 }
 
-/** "Your Human Design" — core identity fields + the 5 real, calculated Variables the mockup surfaces (Digestion/Sense/Motivation/Perspective/Environment; Design Sense exists in the data too but wasn't asked for here). Real bug-avoidance: `profile.variables` is undefined on readings saved before 2026-08-10's local Variable calculation — each tile just reads "—" rather than fabricating a value, same convention HumanDesignSummary's own Variables block already uses. */
+/** "Your Human Design" — core identity fields + all 6 calculated Variables (Design Sense added 2026-10-21 so this matches the Human Design view's Variables list). Real bug-avoidance: `profile.variables` is undefined on readings saved before 2026-08-10's local Variable calculation — each tile just reads "—" rather than fabricating a value, same convention HumanDesignSummary's own Variables block already uses. */
 function HumanDesignCard({ profile }: { profile: HumanDesignProfile }) {
   const v = profile.variables;
   return (
@@ -102,19 +107,20 @@ function HumanDesignCard({ profile }: { profile: HumanDesignProfile }) {
         <HdTile icon={HD_ICONS.strategy} label="Strategy" value={profile.strategy} />
         <HdTile icon={HD_ICONS.authority} label="Inner Authority" value={profile.authority} />
         <HdTile icon={HD_ICONS.definition} label="Definition" value={profile.definitionLabel} />
+        <HdTile icon={HD_ICONS.incarnationCross} label="Incarnation Cross" value={profile.incarnationCross} wide />
         <HdTile icon={HD_ICONS.profile} label="Profile" value={profile.profile} />
-        <HdTile icon={HD_ICONS.incarnationCross} label="Incarnation Cross" value={profile.incarnationCross} />
         <HdTile icon={HD_ICONS.signature} label="Signature" value={profile.signature} />
         <HdTile icon={HD_ICONS.notSelfTheme} label="Not-Self Theme" value={profile.notSelfTheme} />
         <HdTile icon={HD_ICONS.digestion} label="Digestion" value={v?.digestion.value} />
         <HdTile icon={HD_ICONS.sense} label="Sense" value={v?.sense.value} />
+        <HdTile icon={HD_ICONS.designSense} label="Design Sense" value={v?.designSense?.value} />
         <HdTile icon={HD_ICONS.motivation} label="Motivation" value={v?.motivation.value} />
         <HdTile icon={HD_ICONS.perspective} label="Perspective" value={v?.perspective.value} />
         <HdTile icon={HD_ICONS.environment} label="Environment" value={v?.environment.value} />
       </div>
       {!v && (
         <p className="mt-3 text-[11px] italic text-muted-foreground">
-          Digestion/Sense/Motivation/Perspective/Environment aren&apos;t calculated for this reading (generated before local Variable calculation shipped).
+          The Variables aren&apos;t calculated for this reading (generated before local Variable calculation shipped).
         </p>
       )}
     </div>

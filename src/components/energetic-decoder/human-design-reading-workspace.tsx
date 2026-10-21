@@ -96,7 +96,8 @@ function InfoField({ label, value }: { label: string; value: string | null | und
   return (
     <div className="min-w-0">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-semibold text-foreground">{value || "—"}</p>
+      {/* Wraps — never truncated — so long values (Strategy, Definition, Incarnation Cross) read in full on every width. */}
+      <p className="mt-0.5 text-sm font-semibold text-pretty break-words text-foreground">{value || "—"}</p>
     </div>
   );
 }
@@ -106,7 +107,8 @@ function ChartInformation({ profile }: { profile: HumanDesignProfile }) {
   return (
     <div className="rounded-2xl border bg-card p-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chart Information</p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 lg:grid-cols-8">
+      {/* Two rows of four on wider screens: at eight across, a wrapped Incarnation Cross stacked 4–5 lines. */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
         <InfoField label="Type" value={profile.type} />
         <InfoField label="Strategy" value={profile.strategy} />
         <InfoField label="Authority" value={profile.authority} />
