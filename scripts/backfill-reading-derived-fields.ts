@@ -17,8 +17,9 @@
  *     same snapshot new Readings get.
  *   Astrology (added 2026-08-09): the North Node, South Node and Lilith
  *     placements, and the aspects involving them — recomputed from the saved
- *     birth inputs + the Profile's saved coordinates + the Reading's saved
- *     house system, and ONLY written when every saved placement, angle and
+ *     birth inputs + the original coordinates (the Reading's Profile, else a
+ *     same-business Reading with identical birth inputs and identical saved
+ *     angles and house cusps — never a fresh geocode) + the saved house system, and ONLY written when every saved placement, angle and
  *     house cusp matches the recomputation and every saved aspect is still
  *     present (the new list is a pure superset).
  *
@@ -123,10 +124,12 @@ async function main() {
       const have = new Set(astro.placements.map((p) => p.body));
       const missingBodies = [...NEW_ASTRO_BODIES].filter((b) => !have.has(b));
       if (missingBodies.length) {
-        const profile = r.profileId ? (await db.doc(`energeticProfiles/${r.profileId}`).get()).data() : null;
-        if (typeof profile?.lat !== "number" || typeof profile?.lng !== "number") {
-          skipped.push(`${label}: Astrology not touched — no saved coordinates on the Profile`);
+        const coords = await recoverCoordinates(doc.id, r, astro, snap.docs);
+        if (!coords) {
+          skipped.push(`${label}: Astrology not touched — original coordinates not recoverable from saved data`);
         } else {
+          const profile = coords;
+          console.log(`  ${label}: coordinates from ${coords.source}`);
           const chiron = astro.placements.find((p) => p.body === "chiron") as (Placement & { retrograde?: boolean }) | undefined;
           const calc = calculateAstrologyChart({
             date: r.birthDate, time: r.birthTime, timeZone: r.timeZone, lat: profile.lat, lng: profile.lng,
@@ -175,6 +178,41 @@ async function main() {
   }
   for (const p of plans) await db.doc(`energeticDecoderReadings/${p.id}`).update(p.patch);
   console.log(`\nApplied: ${plans.length} Reading(s) updated.`);
+}
+
+/**
+ * The exact coordinates the Reading was calculated with — never a fresh
+ * geocode. First the Reading's own Profile. Otherwise another Reading in the
+ * same business with byte-identical birth date, time, zone and place text
+ * whose Profile stores coordinates AND whose saved angles and every house
+ * cusp equal this Reading's (angles/cusps are a function of the exact
+ * coordinates, so equality proves the same location produced both charts).
+ * All qualifying sources must agree.
+ */
+async function recoverCoordinates(
+  id: string,
+  r: FirebaseFirestore.DocumentData,
+  astro: { angles?: Record<string, { longitude: number }>; houses?: { cusps: unknown[] } },
+  all: FirebaseFirestore.QueryDocumentSnapshot[],
+): Promise<{ lat: number; lng: number; source: string } | null> {
+  const db = getAdminDb();
+  const own = r.profileId ? (await db.doc(`energeticProfiles/${r.profileId}`).get()).data() : null;
+  if (typeof own?.lat === "number" && typeof own?.lng === "number") return { lat: own.lat, lng: own.lng, source: "its own Profile" };
+  const cusps = (h?: { cusps: unknown[] }) => JSON.stringify((h?.cusps ?? []).map((c) => (typeof c === "number" ? c : (c as { longitude: number }).longitude)));
+  const found: { lat: number; lng: number; from: string }[] = [];
+  for (const d of all) {
+    if (d.id === id) continue;
+    const o = d.data();
+    if (o.subAccountId !== r.subAccountId || o.birthDate !== r.birthDate || o.birthTime !== r.birthTime || o.timeZone !== r.timeZone || o.birthPlace !== r.birthPlace) continue;
+    const oa = o.astrology as typeof astro | undefined;
+    const anglesEqual = ["ascendant", "descendant", "mc", "ic"].every((k) => oa?.angles?.[k]?.longitude === astro.angles?.[k]?.longitude);
+    if (!anglesEqual || cusps(oa?.houses) !== cusps(astro.houses) || cusps(astro.houses) === "[]") continue;
+    const p = o.profileId ? (await db.doc(`energeticProfiles/${o.profileId}`).get()).data() : null;
+    if (typeof p?.lat === "number" && typeof p?.lng === "number") found.push({ lat: p.lat, lng: p.lng, from: d.id });
+  }
+  if (!found.length) return null;
+  if (!found.every((f) => f.lat === found[0].lat && f.lng === found[0].lng)) return null;
+  return { lat: found[0].lat, lng: found[0].lng, source: `matching Reading(s) ${found.map((f) => f.from).join(", ")} (identical birth inputs, angles and cusps)` };
 }
 
 main().then(
