@@ -1,5 +1,6 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { ChartDesign } from "@/types/chart-design";
+import type { FeaturedOfferPayload, FeaturedOfferPresentation } from "@/types/reading-blocks";
 
 /**
  * Embeds — the Public Reading Tool's configured experiences (Phase 1,
@@ -45,12 +46,26 @@ export type EmbedReadingOutput =
   | { kind: "readingReport" }
   | { kind: "reportDesign"; reportDesignId: string };
 
+/**
+ * The Standard Result's next step (2026-10-21): nothing, a button, or a
+ * Featured Offer card. `myMagnetix` is kept only so older Reading Tools
+ * still read — MyMagnetix now has its own primary button whenever "Save to
+ * MyMagnetix" is on, so it is no longer offered as a next step.
+ */
 export type EmbedNextStep =
   | { kind: "none" }
   | { kind: "myMagnetix"; label: string }
   | { kind: "course"; courseId: string; label: string }
   | { kind: "offer"; offerId: string; label: string }
-  | { kind: "url"; url: string; label: string };
+  | { kind: "url"; url: string; label: string }
+  | ({ kind: "featuredOffer"; offerId: string } & FeaturedOfferPresentation);
+
+/**
+ * Where the visitor goes after submitting (2026-10-21). "standard" — the
+ * built-in Standard Result, right where the form was. "customPage" — the
+ * whole browser tab moves to a Reading Result Page built in Pages & Funnels.
+ */
+export type EmbedResultDestination = { kind: "standard" } | { kind: "customPage"; pageId: string };
 
 export interface EmbedFormSettings {
   title: string;
@@ -70,6 +85,10 @@ export interface EmbedReadingSettings {
 }
 
 export interface EmbedAfterSubmitSettings {
+  /** Standard Result or a custom Reading Result Page. `show`,
+   *  `confirmationMessage`, `pdf` and `nextStep` describe the Standard
+   *  Result only; `myMagnetix` and `email` are delivery and apply to both. */
+  destination: EmbedResultDestination;
   show: EmbedShowOnPage;
   /** Shown with the confirmation (and above the result in the other modes). */
   confirmationMessage: string;
@@ -123,8 +142,14 @@ export interface PublicEmbedConfig {
   form: EmbedFormSettings;
   views: EmbedResultView[];
   afterSubmit: Pick<EmbedAfterSubmitSettings, "show" | "confirmationMessage" | "myMagnetix" | "pdf" | "email"> & {
+    /** "customPage" — the submission response carries the Result Page link. */
+    destination: EmbedResultDestination["kind"];
     /** Resolved href for the next-step button, or null. */
     nextStep: { href: string; label: string } | null;
+    /** The Standard Result's Featured Offer — the creator's presentation
+     *  plus the real Offer (filled in server-side; null when not chosen or
+     *  the Offer isn't published). */
+    featuredOffer: { presentation: FeaturedOfferPresentation; offer: FeaturedOfferPayload } | null;
   };
 }
 
@@ -157,6 +182,9 @@ export interface ReadingEmbedSnapshot {
   views: EmbedResultView[];
   pdf: boolean;
   myMagnetix: boolean;
+  /** The Reading Result Page this Reading was sent to, when the Reading
+   *  Tool used one (absent on Readings created before 2026-10-21). */
+  resultPageId?: string | null;
 }
 
 /**

@@ -68,7 +68,7 @@ export async function listReadingsForPerson(personId: string, limit = 30): Promi
       readingName: deriveReadingName(data),
       personName: data.name,
       completedAt: createdAt ? createdAt.toISOString() : null,
-      viewHref: `/decoder/${data.subAccountId}/report/${d.id}`,
+      viewHref: `/my/readings/${d.id}`,
     };
   });
 }

@@ -1,5 +1,6 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
+import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 
 /**
  * Native Pages & Funnels builder — the data model for a block-based visual
@@ -24,7 +25,10 @@ export type PageType =
   | "webinar"
   | "checkout"
   | "thank_you"
-  | "generic";
+  | "generic"
+  /** Shows a person their Reading right after a Reading Tool submission
+   *  (2026-10-21). New Builder only; unlocks the Reading blocks. */
+  | "reading_result";
 
 export type PageStatus = "draft" | "published";
 
@@ -46,6 +50,7 @@ export const PAGE_TYPE_LABELS: Record<PageType, string> = {
   checkout: "Checkout Page",
   thank_you: "Thank You Page",
   generic: "Blank Page",
+  reading_result: "Reading Result Page",
 };
 
 export const PAGE_GOAL_LABELS: Record<PageGoal, string> = {
@@ -313,6 +318,9 @@ export interface PageDoc {
   puckPublishedData?: PuckData | null;
   puckDraftUpdatedAt?: Timestamp | FieldValue | null;
   puckPublishedAt?: Timestamp | FieldValue | null;
+  /** Reading Result Pages only — page-level Chart Design + builder sample.
+   *  Absent = DEFAULT_READING_RESULT_PAGE_SETTINGS. */
+  readingResult?: ReadingResultPageSettings;
 }
 
 export type CreatePageInput = {

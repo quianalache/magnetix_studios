@@ -6,8 +6,11 @@ import type { Data } from "@puckeditor/core";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
-import { collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import { collectPuckFeaturedOfferIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
+import { getPage } from "@/lib/firestore/pages-funnels";
+import { readReadingPreviewHandoff } from "@/lib/energetic-decoder/reading-preview-handoff";
+import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext } from "@/types/reading-blocks";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 import type { LeadForm } from "@/types/forms";
 
@@ -71,18 +74,60 @@ export default function NewBuilderPreviewPage({
     let cancelled = false;
 
     async function load() {
-      const raw = sessionStorage.getItem(previewStorageKey(pageId));
-      if (!raw) {
-        setState({ status: "missing" });
-        return;
+      // Reading Tool Preview → custom Result Page (2026-10-21): render the
+      // page's saved DRAFT with the unsaved preview Reading the tool parked
+      // in this browser. Otherwise: the editor's in-memory data, as before.
+      const fromReadingToolPreview = new URLSearchParams(window.location.search).get("reading") === "preview";
+      const page = await getPage(pageId).catch(() => null);
+      let data: Data;
+      if (fromReadingToolPreview) {
+        if (!page?.puckDraftData) {
+          setState({ status: "missing" });
+          return;
+        }
+        data = page.puckDraftData;
+      } else {
+        const raw = sessionStorage.getItem(previewStorageKey(pageId));
+        if (!raw) {
+          setState({ status: "missing" });
+          return;
+        }
+        try {
+          data = JSON.parse(raw) as Data;
+        } catch {
+          setState({ status: "missing" });
+          return;
+        }
       }
 
-      let data: Data;
-      try {
-        data = JSON.parse(raw) as Data;
-      } catch {
-        setState({ status: "missing" });
-        return;
+      let readingContext: ReadingBlockContext | null | undefined;
+      if (page?.pageType === "reading_result") {
+        const offerIds = collectPuckFeaturedOfferIds(data);
+        const handoff = fromReadingToolPreview ? readReadingPreviewHandoff(pageId) : null;
+        if (handoff) {
+          const offers: ReadingBlockContext["offers"] = {};
+          await Promise.all(
+            offerIds.map(async (id) => {
+              const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/featured-offers?offerId=${encodeURIComponent(id)}`).catch(() => null);
+              offers[id] = res?.ok ? (((await res.json()) as { offer: ReadingBlockContext["offers"][string] }).offer ?? null) : null;
+            }),
+          );
+          readingContext = {
+            subAccountId,
+            reading: handoff.reading,
+            designs: handoff.designs,
+            accent: handoff.accent,
+            mode: "preview",
+            access: { pdfHref: null, reportHref: null, myMagnetix: { actionUrl: null, openUrl: "/my/readings", maskedEmail: null } },
+            offers,
+            sampleLabel: null,
+          };
+        } else {
+          const settings = { ...DEFAULT_READING_RESULT_PAGE_SETTINGS, ...(page.readingResult ?? {}) };
+          const qs = new URLSearchParams({ pageId, sample: settings.sample, chartDesignSetId: settings.chartDesignSetId ?? "", offers: offerIds.join(",") });
+          const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/result-page-context?${qs}`).catch(() => null);
+          readingContext = res?.ok ? (((await res.json()) as { context: ReadingBlockContext }).context ?? null) : null;
+        }
       }
 
       const formIds = collectPuckFormIds(data);
@@ -106,7 +151,17 @@ export default function NewBuilderPreviewPage({
       setState({
         status: "ready",
         data,
-        metadata: { subAccountId, resolvedForms },
+        metadata: {
+          subAccountId,
+          resolvedForms,
+          pageId,
+          ...(readingContext !== undefined
+            ? {
+                readingContext,
+                ...(readingContext ? {} : { readingBuilder: { status: "unavailable" as const, message: "Couldn’t load a Reading for this preview." } }),
+              }
+            : {}),
+        },
       });
     }
 

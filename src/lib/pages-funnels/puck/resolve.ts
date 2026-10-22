@@ -53,6 +53,25 @@ function isComponentDataArray(value: unknown): value is ComponentData[] {
 }
 
 /**
+ * Every Offer placed by a Featured Offer block (Reading Result Pages,
+ * 2026-10-21) — resolved from the real Offers before render, client-safe so
+ * the builder can refresh its preview when a block's Offer changes.
+ */
+export function collectPuckFeaturedOfferIds(data: Data | null | undefined): string[] {
+  if (!data) return [];
+  const ids = new Set<string>();
+  const walk = (node: ComponentData) => {
+    const props = node.props as Record<string, unknown>;
+    if (node.type === "FeaturedOffer" && typeof props.offerId === "string" && props.offerId) ids.add(props.offerId);
+    for (const value of Object.values(props)) {
+      if (isComponentDataArray(value)) for (const child of value) walk(child);
+    }
+  };
+  for (const node of data.content) walk(node);
+  return [...ids];
+}
+
+/**
  * Every unique Embed id placed by a Public Reading Tool block — the
  * published route resolves these (Admin SDK) into
  * `PuckPageMetadata.resolvedEmbeds` before `<Render>`, same pattern as Forms.

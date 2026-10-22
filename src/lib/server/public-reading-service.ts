@@ -13,13 +13,26 @@ import { bumpAttributionVisit } from "@/lib/attribution-visits";
 import { fireWorkflowTrigger } from "@/lib/workflows/engine";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
-import { buildDecoderReportUrl, platformOrigin } from "@/lib/domains/public-url";
+import { buildDecoderReportUrl, buildPublishedPageUrl, platformOrigin } from "@/lib/domains/public-url";
 import { legacyPublicEmbed, toPublicEmbed } from "@/lib/energetic-decoder/embeds";
+import { mintReadingResultPass } from "@/lib/server/reading-result-pass";
+import { maskEmail, readingOwnerEmail } from "@/lib/server/reading-access";
 import { FieldValue } from "firebase-admin/firestore";
 import type { EmbedConfig, ReadingConsentRecord, ReadingPlacement } from "@/types/embed-config";
 import type { ContactAttribution } from "@/types/contacts";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
+import type { PageDoc } from "@/types/pages-funnels";
 import type { SubAccountDoc } from "@/types";
+
+/** Origin of an absolute URL; "" (same-origin, relative links) when the
+ *  deployment has no NEXT_PUBLIC_APP_URL and the URL came back relative. */
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return platformOrigin();
+  }
+}
 
 /**
  * Public Reading Tool submissions (Phase 1, 2026-10-19) — one place that
@@ -67,11 +80,25 @@ export interface PublicReadingSubmission {
 
 export interface PublicReadingResult {
   reading: EnergeticDecoderReading;
+  /**
+   * What the visitor can open right away (2026-10-21). Every link carries
+   * the signed 24-hour result pass for THIS Reading — the Reading id alone
+   * opens nothing. `report` is only offered when MyMagnetix isn't the
+   * Reading's permanent home.
+   */
   links: {
     report: string | null;
     pdf: string | null;
-    myMagnetix: string | null;
+    /** POST target for the "Open your Reading in MyMagnetix" button. */
+    myMagnetixAction: string | null;
   };
+  /** The pass itself, for the in-page MyMagnetix button (never stored by the browser). */
+  pass: string | null;
+  myMagnetix: { openUrl: string; maskedEmail: string | null } | null;
+  /** Custom Reading Result Page: the whole tab moves here (live and Test). */
+  redirect: string | null;
+  /** Preview + custom Result Page: the unsaved Reading is shown on this page's draft. */
+  previewPageId: string | null;
   /**
    * The "Your Reading is ready" email: "sent" only when the provider
    * accepted it, "notSent" when the Embed asked for it but it didn't go out
@@ -101,7 +128,15 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
   }
 
   const delivery = publicEmbed.afterSubmit;
-  const reportPath = (readingId: string) => `/decoder/${input.subAccountId}/report/${readingId}`;
+  // Custom Reading Result Page — only one that belongs to this business and
+  // is a Reading Result Page. Live visitors need it published; staff
+  // Preview/Test may use the draft. Anything else falls back to the
+  // Standard Result rather than stranding the visitor.
+  const destination = input.embed?.afterSubmit.destination;
+  const resultPage =
+    destination?.kind === "customPage"
+      ? await resolveResultPage(input.subAccountId, destination.pageId, { allowDraft: input.mode !== "live" })
+      : null;
 
   // ── Preview: real calculation, configured result, nothing written ──
   if (input.mode === "preview") {
@@ -137,8 +172,18 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       astrology: body.astrology,
       createdAt: null,
     };
-    // Preview links are inert — there's no saved Reading to open.
-    return { reading, links: { report: null, pdf: null, myMagnetix: null }, email: "preview" };
+    // Preview links are inert — there's no saved Reading to open. With a
+    // custom Result Page the tool shows this unsaved Reading on the page's
+    // draft (staff-only builder preview); nothing is written either way.
+    return {
+      reading,
+      links: { report: null, pdf: null, myMagnetixAction: null },
+      pass: null,
+      myMagnetix: null,
+      redirect: null,
+      previewPageId: resultPage?.pageId ?? null,
+      email: "preview",
+    };
   }
 
   const embed = input.embed;
@@ -174,8 +219,11 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
           contentSetId: embed.reading.contentSetId,
           chartDesignSetId: embed.reading.chartDesignSetId,
           views: embed.reading.views,
-          pdf: embed.afterSubmit.pdf,
+          // A custom Result Page places its own PDF button — the Standard
+          // Result's toggle doesn't apply to it.
+          pdf: resultPage ? true : embed.afterSubmit.pdf,
           myMagnetix: embed.afterSubmit.myMagnetix,
+          resultPageId: resultPage?.pageId ?? null,
         }
       : null,
     placement: input.placement,
@@ -186,6 +234,17 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
   });
   if ("error" in result) return { error: result.error, status: 422 };
   const reading = result.reading;
+
+  // The 24-hour result pass for exactly this Reading (and its Result Page,
+  // when there is one). It never signs anyone in — see reading-result-pass.ts.
+  const pass = mintReadingResultPass({
+    readingId: reading.id,
+    subAccountId: input.subAccountId,
+    pageId: resultPage?.pageId ?? null,
+    test: input.mode === "test",
+  });
+  const passPath = (to: "report" | "pdf" | "page") =>
+    `/api/decoder/${input.subAccountId}/result?pass=${encodeURIComponent(pass)}&to=${to}`;
 
   // ── Delivery, exactly as the Embed is configured ──
   // The visitor is told "we've emailed you" only when the send succeeded.
@@ -210,6 +269,7 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       to: emailAddress,
       readingId: reading.id,
       readingName: name,
+      pass,
     }).catch((err) => {
       console.warn("[public-reading] email delivery failed", err);
       return false;
@@ -259,7 +319,7 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
       contactId: result.contactId,
       type: "reading_created",
       content: embed
-        ? `Reading for ${name} created through the “${embed.name}” embed${placementLabel(input.placement)}.`
+        ? `Reading for ${name} created through the “${embed.name}” Reading Tool${placementLabel(input.placement)}.`
         : `Reading for ${name} created through the public reading tool.`,
       createdBy: "energetic-decoder-public",
       dedupeKey: `reading_created_${reading.id}`,
@@ -286,15 +346,51 @@ export async function submitPublicReading(input: PublicReadingSubmission): Promi
     }
   }
 
+  // A custom Result Page: the whole tab moves to the page on its own domain
+  // (custom domain when verified), where the pass becomes a cookie.
+  const subForUrls = resultPage ? ((await getAdminDb().doc(`subAccounts/${input.subAccountId}`).get()).data() as SubAccountDoc | undefined) : undefined;
+  const redirect = resultPage
+    ? `${originOf(buildPublishedPageUrl({ subAccount: subForUrls, pageId: resultPage.pageId }))}${passPath("page")}`
+    : null;
+  const ownerEmail = delivery.myMagnetix ? await readingOwnerEmail(reading).catch(() => null) : null;
+
   return {
     reading,
     links: {
-      report: reportPath(reading.id),
-      pdf: delivery.pdf ? `/api/decoder/${input.subAccountId}/report/${reading.id}/pdf` : null,
-      myMagnetix: delivery.myMagnetix ? "/my/readings" : null,
+      // MyMagnetix is the permanent home when it's on, so the Reading
+      // Report button only appears when it's off.
+      report: delivery.myMagnetix ? null : passPath("report"),
+      pdf: delivery.pdf || resultPage ? passPath("pdf") : null,
+      myMagnetixAction: delivery.myMagnetix ? `/api/decoder/${input.subAccountId}/result` : null,
     },
+    pass,
+    myMagnetix: delivery.myMagnetix
+      ? { openUrl: `${platformOrigin()}/my/readings/${reading.id}`, maskedEmail: maskEmail(ownerEmail ?? emailAddress) }
+      : null,
+    redirect,
+    previewPageId: null,
     email,
   };
+}
+
+/**
+ * A Reading Result Page this business owns — published for visitors, the
+ * draft too for staff Preview/Test. Null otherwise (the caller falls back to
+ * the Standard Result so a visitor is never stranded).
+ */
+export async function resolveResultPage(
+  subAccountId: string,
+  pageId: string,
+  opts: { allowDraft: boolean },
+): Promise<{ pageId: string } | null> {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(pageId)) return null;
+  const snap = await getAdminDb().collection("pages").doc(pageId).get();
+  if (!snap.exists) return null;
+  const page = snap.data() as Partial<PageDoc>;
+  if (page.subAccountId !== subAccountId || page.pageType !== "reading_result") return null;
+  if (page.puckPublishedData) return { pageId };
+  if (opts.allowDraft && page.puckDraftData) return { pageId };
+  return null;
 }
 
 function placementLabel(p: ReadingPlacement | null): string {
@@ -305,23 +401,27 @@ function placementLabel(p: ReadingPlacement | null): string {
 }
 
 /**
- * "Your Reading is ready" when an Embed has email on but MyMagnetix off —
- * links straight to the Reading Report. (With MyMagnetix on, the
- * MyMagnetix notification email carries this instead.) True when the
- * provider accepted the email; false when email isn't set up; throws when
- * the send fails.
+ * "Your Reading is ready" when a Reading Tool has email on but MyMagnetix
+ * off. The link carries the 24-hour result pass (2026-10-21) — after that,
+ * the Reading Report's gate sends them to MyMagnetix, where they sign in
+ * with this same email. (With MyMagnetix on, the MyMagnetix notification
+ * email carries this instead.) True when the provider accepted the email;
+ * false when email isn't set up; throws when the send fails.
  */
 async function sendReadingReadyEmail(opts: {
   subAccountId: string;
   to: string;
   readingId: string;
   readingName: string;
+  pass: string;
 }): Promise<boolean> {
   if (!emailIsConfigured()) return false;
   const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
   const sub = subSnap.data() as SubAccountDoc | undefined;
   const businessName = (sub?.name as string | undefined) || "Your practitioner";
-  const link = buildDecoderReportUrl({ subAccount: sub, subAccountId: opts.subAccountId, readingId: opts.readingId }) || `${platformOrigin()}/decoder/${opts.subAccountId}/report/${opts.readingId}`;
+  // Same domain the Reading Report itself is served on (custom domain when verified).
+  const reportOrigin = originOf(buildDecoderReportUrl({ subAccount: sub, subAccountId: opts.subAccountId, readingId: opts.readingId }));
+  const link = `${reportOrigin}/api/decoder/${opts.subAccountId}/result?pass=${encodeURIComponent(opts.pass)}&to=report`;
   const escape = (v: string) => v.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
   await sendTenantEmail({
     sub,

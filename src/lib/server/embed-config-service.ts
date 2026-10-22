@@ -53,7 +53,7 @@ export async function createEmbedConfig(opts: {
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
-    name: opts.name.trim().slice(0, 80) || "Untitled embed",
+    name: opts.name.trim().slice(0, 80) || "Untitled Reading Tool",
     placementNote: opts.placementNote?.trim().slice(0, 200) ?? "",
     status: "draft",
     ...defaultEmbedSettings(),
@@ -86,15 +86,38 @@ async function assertReferencesInTenant(next: EmbedConfig): Promise<void> {
     const course = await db.doc(`subAccounts/${next.subAccountId}/standaloneCourses/${step.courseId}`).get();
     if (!course.exists) throw new EmbedError("That course doesn’t exist. Choose another next step.", 400);
   }
-  if (step.kind === "offer") {
+  if (step.kind === "offer" || step.kind === "featuredOffer") {
     const offer = await db.doc(`subAccounts/${next.subAccountId}/courseOffers/${step.offerId}`).get();
     if (!offer.exists) throw new EmbedError("That Offer doesn’t exist. Choose another next step.", 400);
   }
+  const dest = next.afterSubmit.destination;
+  if (dest.kind === "customPage") {
+    const page = await db.collection("pages").doc(dest.pageId).get();
+    if (!page.exists || page.get("subAccountId") !== next.subAccountId || page.get("pageType") !== "reading_result") {
+      throw new EmbedError("That Reading Result Page doesn’t exist. Choose another, or use the Standard Result.", 400);
+    }
+    // Visitors can only be sent to a published page.
+    if (next.status === "live" && !page.get("puckPublishedData")) {
+      throw new EmbedError("Publish the Reading Result Page before this Reading Tool goes live — visitors can only be sent to a published page.", 400);
+    }
+  }
+}
+
+/** This business's Reading Result Pages, for the Reading Tool editor's picker. */
+export async function listReadingResultPages(subAccountId: string): Promise<{ id: string; name: string; published: boolean }[]> {
+  const snap = await getAdminDb()
+    .collection("pages")
+    .where("subAccountId", "==", subAccountId)
+    .where("pageType", "==", "reading_result")
+    .get();
+  return snap.docs
+    .map((d) => ({ id: d.id, name: (d.get("name") as string) || "Untitled Reading Result Page", published: !!d.get("puckPublishedData") }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function updateEmbedConfig(subAccountId: string, embedId: string, rawPatch: unknown): Promise<EmbedConfig> {
   const current = await getEmbedConfig(subAccountId, embedId);
-  if (!current) throw new EmbedError("Embed not found", 404);
+  if (!current) throw new EmbedError("Reading Tool not found", 404);
   const result = applyEmbedPatch(current, rawPatch);
   if (!result.ok) throw new EmbedError(result.error, 400);
   const next = result.next;
@@ -116,9 +139,9 @@ export async function updateEmbedConfig(subAccountId: string, embedId: string, r
 /** An Embed with Readings is kept for history — archive it instead. */
 export async function deleteEmbedConfig(subAccountId: string, embedId: string): Promise<void> {
   const current = await getEmbedConfig(subAccountId, embedId);
-  if (!current) throw new EmbedError("Embed not found", 404);
+  if (!current) throw new EmbedError("Reading Tool not found", 404);
   if (current.stats.readings > 0) {
-    throw new EmbedError("This Embed has Readings. Archive it instead so its history stays intact.", 409);
+    throw new EmbedError("This Reading Tool has Readings. Archive it instead so its history stays intact.", 409);
   }
   // Test runs never count as Readings — clear them with the Embed so a
   // staff QA Embed leaves nothing behind.

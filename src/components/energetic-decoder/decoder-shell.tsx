@@ -16,7 +16,7 @@ import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-dec
  * at the data width. The module identity is never reduced to an eyebrow.
  *
  *   Every top-level tab (Home, Readings, Report Builder, Content, Chart
- *   Designs, Embeds) uses the same large editorial header — the approved
+ *   Designs, Reading Tools) uses the same large editorial header — the approved
  *   Content Sets serif title, icon tile, description and planet art — so the
  *   module reads as one family (owner walkthrough, 2026-10-16).
  *   DecoderIndexPage is the same page with its actions on the tab row.
@@ -33,7 +33,7 @@ export const DECODER_TABS: { key: DecoderTab; label: string; icon: LucideIcon }[
   { key: "builder", label: "Report Builder", icon: LayoutTemplate },
   { key: "content", label: "Content", icon: BookOpen },
   { key: "chartDesigns", label: "Chart Designs", icon: Palette },
-  { key: "embeds", label: "Embeds", icon: Share2 },
+  { key: "embeds", label: "Reading Tools", icon: Share2 },
 ];
 
 type DecoderNav = { tab: DecoderTab; selectTab: (next: DecoderTab) => void };

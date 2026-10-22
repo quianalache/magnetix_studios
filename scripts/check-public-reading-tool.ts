@@ -8,7 +8,7 @@
  *          "emulators":{"auth":{"port":9099},"firestore":{"port":8080}}}' > /tmp/emu/firebase.json
  *   firebase emulators:exec --config /tmp/emu/firebase.json --only firestore,auth \
  *     --project demo-reading-tool \
- *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs --require ./scripts/_next-headers-cookie-jar-shim.cjs --require ./scripts/_swisseph-stub-shim.cjs' AUTOMATIONS_TOKEN_SECRET=test-secret pnpm exec tsx scripts/check-public-reading-tool.ts"
+ *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs --require ./scripts/_next-headers-cookie-jar-shim.cjs --require ./scripts/_swisseph-stub-shim.cjs' AUTOMATIONS_TOKEN_SECRET=test-secret NEXT_PUBLIC_APP_URL=http://localhost:3000 pnpm exec tsx scripts/check-public-reading-tool.ts"
  */
 import assert from "node:assert/strict";
 import { initializeApp } from "firebase-admin/app";
@@ -102,7 +102,7 @@ async function main() {
       .updateEmbedConfig(SA, draft.id, { status: "live", reading: { views: [] } })
       .then(() => "ok")
       .catch((e: Error) => e.message);
-    assert.match(res, /at least one result view/);
+    assert.match(res, /at least one chart/);
   });
 
   await check("Draft Embed: public submission fails closed (404)", async () => {
@@ -332,6 +332,183 @@ async function main() {
     await svc.deleteEmbedConfig(SA, qa.id);
     assert.equal((await db.doc(`energeticDecoderReadings/${body.reading.id}`).get()).exists, false);
     assert.equal(await svc.getEmbedConfig(SA, qa.id), null);
+  });
+
+  // ── Reading result pass, access, Result Pages (2026-10-21) ──
+  const jar = (globalThis as unknown as { __testCookieJar: Map<string, string> }).__testCookieJar;
+  const setHeaders = (h: Record<string, string> | null) => {
+    (globalThis as unknown as { __testHeaders?: Headers }).__testHeaders = h ? new Headers(h) : undefined;
+  };
+  const passLib = await import("../src/lib/server/reading-result-pass");
+  const access = await import("../src/lib/server/reading-access");
+  const result = await import("../src/app/api/decoder/[saId]/result/route");
+  const personAuth = await import("../src/lib/server/person-auth");
+
+  let passReadingId = "";
+  let passToken = "";
+  await check("Standard Result submission: pass-carrying links, no bearer Report link while MyMagnetix is on", async () => {
+    const res = await post({ embedId: live.id, name: "Pass Person", email: "pass@example.com", ...BIRTH });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    passReadingId = body.reading.id;
+    passToken = body.pass;
+    const v = passLib.verifyReadingResultPass(passToken);
+    assert.ok(v && v.readingId === passReadingId && v.subAccountId === SA && v.pageId === null);
+    assert.equal(body.links.report, null, "MyMagnetix is the home — no Reading Report button");
+    assert.match(body.links.pdf, new RegExp(`^/api/decoder/${SA}/result\\?pass=.+&to=pdf$`));
+    assert.equal(body.links.myMagnetixAction, `/api/decoder/${SA}/result`);
+    assert.ok(body.myMagnetix.openUrl.endsWith(`/my/readings/${passReadingId}`));
+    assert.match(body.myMagnetix.maskedEmail, /^p•••@example\.com$/);
+    assert.equal(body.redirect, null);
+    assert.ok(!JSON.stringify(body.links).includes(`/report/${passReadingId}"`), "no bare Reading link");
+  });
+
+  await check("MyMagnetix off: the Reading Report button appears, carrying the pass", async () => {
+    const noMm = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "No MyMagnetix" });
+    await svc.updateEmbedConfig(SA, noMm.id, { status: "live", afterSubmit: { myMagnetix: false, email: true } });
+    const res = await post({ embedId: noMm.id, name: "Report Person", email: "report@example.com", ...BIRTH });
+    const body = await res.json();
+    assert.match(body.links.report, /\/result\?pass=.+&to=report$/);
+    assert.equal(body.links.myMagnetixAction, null);
+    assert.equal(body.myMagnetix, null);
+  });
+
+  await check("Reading access: nothing without a pass, MyMagnetix owner or staff", async () => {
+    jar.clear();
+    setHeaders(null);
+    const { getReadingById } = await import("../src/lib/server/energetic-decoder-service");
+    const reading = (await getReadingById(SA, passReadingId))!;
+    assert.equal(await access.authorizeReadingAccess(SA, reading), null, "a Reading id alone opens nothing");
+  });
+
+  await check("Reading access: the right pass cookie opens exactly that Reading", async () => {
+    const { getReadingById } = await import("../src/lib/server/energetic-decoder-service");
+    const reading = (await getReadingById(SA, passReadingId))!;
+    const other = (await getReadingById(SA, firstReadingId))!;
+    jar.set(passLib.readingPassCookieName(passReadingId), passToken);
+    assert.equal((await access.authorizeReadingAccess(SA, reading))?.kind, "pass");
+    // The same pass copied under another Reading's cookie name opens nothing.
+    jar.set(passLib.readingPassCookieName(firstReadingId), passToken);
+    assert.equal(await access.authorizeReadingAccess(SA, other), null, "pass for Reading A never opens Reading B");
+    // Wrong business.
+    assert.equal(await access.authorizeReadingAccess("sa_elsewhere", reading), null);
+    jar.clear();
+  });
+
+  await check("Reading access: an expired pass opens nothing", async () => {
+    const { getReadingById } = await import("../src/lib/server/energetic-decoder-service");
+    const reading = (await getReadingById(SA, passReadingId))!;
+    const old = passLib.mintReadingResultPass({ readingId: passReadingId, subAccountId: SA, issuedAt: Date.now() - 25 * 60 * 60 * 1000 });
+    jar.set(passLib.readingPassCookieName(passReadingId), old);
+    assert.equal(await access.authorizeReadingAccess(SA, reading), null);
+    jar.clear();
+  });
+
+  await check("Reading access: MyMagnetix owner by verified Contact email; someone else is refused", async () => {
+    const { getReadingById } = await import("../src/lib/server/energetic-decoder-service");
+    const reading = (await getReadingById(SA, passReadingId))!;
+    const owner = await db.collection("people").add({ primaryEmail: "pass@example.com", emailVerified: true });
+    jar.set("mm_session", personAuth.signPersonSessionToken(owner.id, "pass@example.com"));
+    assert.equal((await access.authorizeReadingAccess(SA, reading))?.kind, "owner");
+    const stranger = await db.collection("people").add({ primaryEmail: "stranger@example.com", emailVerified: true });
+    jar.set("mm_session", personAuth.signPersonSessionToken(stranger.id, "stranger@example.com"));
+    assert.equal(await access.authorizeReadingAccess(SA, reading), null, "another person never sees it");
+    const unverified = await db.collection("people").add({ primaryEmail: "pass@example.com", emailVerified: false });
+    jar.set("mm_session", personAuth.signPersonSessionToken(unverified.id, "pass@example.com"));
+    assert.equal(await access.authorizeReadingAccess(SA, reading), null, "an unproven email never sees it");
+    jar.clear();
+  });
+
+  await check("Reading access: staff of this business", async () => {
+    const { getReadingById } = await import("../src/lib/server/energetic-decoder-service");
+    const reading = (await getReadingById(SA, passReadingId))!;
+    setHeaders({ "x-user-uid": STAFF_UID, "x-user-email": STAFF_EMAIL });
+    assert.equal((await access.authorizeReadingAccess(SA, reading))?.kind, "staff");
+    setHeaders(null);
+  });
+
+  await check("Pass exchange: cookie set on this host, redirect to the clean Reading Report URL", async () => {
+    jar.clear();
+    const res = await result.GET(new Request(`http://localhost/api/decoder/${SA}/result?pass=${encodeURIComponent(passToken)}&to=report`), { params: Promise.resolve({ saId: SA }) });
+    assert.equal(res.status, 303);
+    assert.equal(new URL(res.headers.get("location")!).pathname, `/decoder/${SA}/report/${passReadingId}`);
+    assert.ok(!res.headers.get("location")!.includes("pass="), "the clean URL carries no pass");
+    assert.equal(jar.get(passLib.readingPassCookieName(passReadingId)), passToken);
+  });
+
+  await check("Pass exchange: forged / other-business passes go to MyMagnetix, set nothing", async () => {
+    jar.clear();
+    const forged = `${passToken.split(".")[0]}.AAAA`;
+    const res = await result.GET(new Request(`http://localhost/api/decoder/${SA}/result?pass=${encodeURIComponent(forged)}&to=report`), { params: Promise.resolve({ saId: SA }) });
+    assert.equal(new URL(res.headers.get("location")!).pathname, "/my/readings");
+    const res2 = await result.GET(new Request(`http://localhost/api/decoder/sa_elsewhere/result?pass=${encodeURIComponent(passToken)}&to=report`), { params: Promise.resolve({ saId: "sa_elsewhere" }) });
+    assert.equal(new URL(res2.headers.get("location")!).pathname, "/my/readings");
+    assert.equal(jar.size, 0);
+  });
+
+  await check("MyMagnetix button: needs the pass; never signs anyone in", async () => {
+    jar.clear();
+    const call = (body: Record<string, unknown>) =>
+      result.POST(new Request(`http://localhost/api/decoder/${SA}/result`, { method: "POST", body: JSON.stringify(body) }), { params: Promise.resolve({ saId: SA }) });
+    assert.equal((await call({ readingId: passReadingId })).status, 403, "no pass, no email");
+    const other = passLib.mintReadingResultPass({ readingId: firstReadingId, subAccountId: SA });
+    assert.equal((await call({ readingId: passReadingId, pass: other })).status, 403, "another Reading's pass doesn't work");
+    const res = await call({ readingId: passReadingId, pass: passToken });
+    // Email isn't configured in the emulator — the send is honestly refused.
+    assert.equal(res.status, 503);
+    assert.equal(jar.has("mm_session"), false, "submitting/clicking never creates a MyMagnetix session");
+  });
+
+  await check("Custom Result Page: unpublished page can't go live; publish → whole-tab redirect with a page-bound pass", async () => {
+    await db.doc("pages/rr_page").set({ subAccountId: SA, agencyId: AG, name: "My Result", pageType: "reading_result", status: "draft", puckDraftData: { root: { props: {} }, content: [] } });
+    await db.doc("pages/plain_page").set({ subAccountId: SA, agencyId: AG, name: "Plain", pageType: "landing", status: "published", puckPublishedData: { root: { props: {} }, content: [] } });
+    await db.doc("pages/foreign_rr").set({ subAccountId: "someone_else", agencyId: "x", name: "Foreign", pageType: "reading_result", status: "published", puckPublishedData: { root: { props: {} }, content: [] } });
+    const tool = await svc.createEmbedConfig({ agencyId: AG, subAccountId: SA, name: "Custom result" });
+    await assert.rejects(() => svc.updateEmbedConfig(SA, tool.id, { afterSubmit: { destination: { kind: "customPage", pageId: "plain_page" } } }), /Reading Result Page/);
+    await assert.rejects(() => svc.updateEmbedConfig(SA, tool.id, { afterSubmit: { destination: { kind: "customPage", pageId: "foreign_rr" } } }), /Reading Result Page/);
+    await assert.rejects(() => svc.updateEmbedConfig(SA, tool.id, { status: "live", afterSubmit: { destination: { kind: "customPage", pageId: "rr_page" } } }), /Publish the Reading Result Page/);
+    // Staff Test works against the draft.
+    await svc.updateEmbedConfig(SA, tool.id, { afterSubmit: { destination: { kind: "customPage", pageId: "rr_page" } } });
+    const t = await post({ embedId: tool.id, mode: "test", name: "Draft Run", ...BIRTH }, true);
+    const tb = await t.json();
+    assert.equal(t.status, 200, JSON.stringify(tb));
+    const tp = passLib.verifyReadingResultPass(new URL(tb.redirect).searchParams.get("pass"));
+    assert.ok(tp && tp.pageId === "rr_page" && tp.test === true, "Test pass opens the page draft");
+    // Publish, go live, submit as a visitor.
+    await db.doc("pages/rr_page").update({ status: "published", puckPublishedData: { root: { props: {} }, content: [] } });
+    await svc.updateEmbedConfig(SA, tool.id, { status: "live" });
+    const res = await post({ embedId: tool.id, name: "Page Person", email: "page@example.com", ...BIRTH });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    const url = new URL(body.redirect);
+    assert.equal(url.pathname, `/api/decoder/${SA}/result`);
+    assert.equal(url.searchParams.get("to"), "page");
+    const p = passLib.verifyReadingResultPass(url.searchParams.get("pass"));
+    assert.ok(p && p.readingId === body.reading.id && p.pageId === "rr_page" && !p.test);
+    const r = (await db.doc(`energeticDecoderReadings/${body.reading.id}`).get()).data()!;
+    assert.equal(r.embed.resultPageId, "rr_page");
+    // The exchange lands on the clean page URL with a page cookie.
+    jar.clear();
+    const ex = await result.GET(new Request(body.redirect), { params: Promise.resolve({ saId: SA }) });
+    assert.equal(new URL(ex.headers.get("location")!).pathname, "/p/rr_page");
+    assert.equal(jar.get(passLib.resultPagePassCookieName("rr_page")), url.searchParams.get("pass"));
+    // Unpublishing the page later never strands visitors: they get the Standard Result.
+    await db.doc("pages/rr_page").update({ puckPublishedData: null });
+    const fallback = await (await post({ embedId: tool.id, name: "Fallback", email: "fb@example.com", ...BIRTH })).json();
+    assert.equal(fallback.redirect, null);
+    jar.clear();
+  });
+
+  await check("Existing Reading Tool (no destination saved) still behaves exactly as before", async () => {
+    await db.collection("embedConfigs").doc("legacy_tool").set({
+      subAccountId: SA, agencyId: AG, name: "Legacy", status: "live",
+      form: { title: "Old" }, reading: { views: ["humanDesign"] }, afterSubmit: { show: "chartFacts", myMagnetix: true, pdf: true, email: false }, contact: { tags: [] },
+    });
+    const res = await post({ embedId: "legacy_tool", name: "Legacy Person", email: "legacy@example.com", ...BIRTH });
+    const body = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(body));
+    assert.equal(body.redirect, null);
+    assert.ok(body.pass && body.links.pdf);
   });
 
   await check("Archived Embed: new public Readings refused, old Reading still readable", async () => {

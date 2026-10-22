@@ -524,7 +524,9 @@ export async function notifyReadingReady(opts: {
 
   // Lazy link-back for the MyMagnetix Readings list query (see the type's
   // own doc comment) — best-effort, never blocks the notification itself.
-  getAdminDb()
+  // Awaited (2026-10-21): an un-awaited write can be dropped when the
+  // serverless function freezes, and MyMagnetix ownership relies on it.
+  await getAdminDb()
     .doc(`energeticDecoderReadings/${opts.readingId}`)
     .set({ personId }, { merge: true })
     .catch((err) =>
@@ -533,7 +535,9 @@ export async function notifyReadingReady(opts: {
 
   const businessName = await getBusinessName(opts.subAccountId);
   const readingName = deriveReadingName(opts);
-  const destination = `/decoder/${opts.subAccountId}/report/${opts.readingId}`;
+  // MyMagnetix is the Reading's permanent home (2026-10-21) — not the
+  // Reading Report link, which no longer opens on its own.
+  const destination = `/my/readings/${opts.readingId}`;
 
   return createNotification({
     personId,

@@ -8,6 +8,7 @@ import {
   getEmbedConfig,
   listEmbedPlacements,
   listEmbedTestRecords,
+  listReadingResultPages,
   updateEmbedConfig,
 } from "@/lib/server/embed-config-service";
 import { listContentSets } from "@/lib/server/content-set-service";
@@ -27,7 +28,7 @@ export async function GET(request: Request, ctx: Ctx) {
 
   // `?view=tool` — what the Pages & Funnels editor/preview renders.
   if (new URL(request.url).searchParams.get("view") === "tool") {
-    const payload = await resolveReadingToolPayload(subAccountId, embedId);
+    const payload = await resolveReadingToolPayload(subAccountId, embedId, { staff: true });
     if (!payload) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ ok: true, payload });
   }
@@ -35,7 +36,7 @@ export async function GET(request: Request, ctx: Ctx) {
   const embed = await getEmbedConfig(subAccountId, embedId);
   if (!embed) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [placements, test, contentSets, chartSets, courses, offers, systems] = await Promise.all([
+  const [placements, test, contentSets, chartSets, courses, offers, systems, resultPages] = await Promise.all([
     listEmbedPlacements(subAccountId),
     listEmbedTestRecords(subAccountId, embedId),
     listContentSets(subAccountId),
@@ -43,6 +44,7 @@ export async function GET(request: Request, ctx: Ctx) {
     listStandaloneCourses(subAccountId).catch(() => []),
     listCourseOffers(subAccountId).catch(() => []),
     loadReadingSystems(subAccountId),
+    listReadingResultPages(subAccountId),
   ]);
 
   return NextResponse.json({
@@ -54,6 +56,7 @@ export async function GET(request: Request, ctx: Ctx) {
       chartDesigns: chartSets.sets.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault })),
       courses: courses.map((c) => ({ id: c.id, title: c.title, published: !!c.published })),
       offers: offers.map((o) => ({ id: o.id, title: o.title, published: o.visibility === "published" })),
+      resultPages,
       systems: "error" in systems
         ? { humanDesign: false, astrology: false }
         : { humanDesign: !!systems.reportConfig.includeHumanDesign, astrology: !!systems.reportConfig.includeAstrology },

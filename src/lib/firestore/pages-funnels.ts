@@ -21,6 +21,8 @@ import type {
   PageSeo,
 } from "@/types/pages-funnels";
 import { DEFAULT_PAGE_SEO } from "@/types/pages-funnels";
+import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingResultPageSettings } from "@/types/reading-blocks";
+import { buildReadingResultStarterData } from "@/lib/pages-funnels/puck/reading-result-template";
 
 const PAGES = "pages";
 
@@ -139,8 +141,25 @@ export async function createPage(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     publishedAt: null,
+    // A Reading Result Page (2026-10-21) is New Builder-only, so it starts
+    // with a New Builder draft — which also routes it to the New Builder.
+    ...(input.pageType === "reading_result"
+      ? {
+          puckDraftData: buildReadingResultStarterData(),
+          puckDraftUpdatedAt: serverTimestamp(),
+          readingResult: DEFAULT_READING_RESULT_PAGE_SETTINGS,
+        }
+      : {}),
   });
   return ref.id;
+}
+
+/** Reading Result Page defaults — Chart Design + builder sample (2026-10-21). */
+export async function updateReadingResultSettings(id: string, settings: ReadingResultPageSettings): Promise<void> {
+  await updateDoc(doc(getFirebaseDb(), PAGES, id), {
+    readingResult: { chartDesignSetId: settings.chartDesignSetId ?? null, sample: settings.sample },
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /** Persists the full block array — the editor calls this (debounced by the
@@ -205,6 +224,13 @@ export async function duplicatePage(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     publishedAt: null,
+    // New Builder content travels with the copy (as a draft — the copy is
+    // never published), and so do a Reading Result Page's settings
+    // (2026-10-21). Without this a copied New Builder page came out empty.
+    ...((source.puckDraftData ?? source.puckPublishedData)
+      ? { puckDraftData: source.puckDraftData ?? source.puckPublishedData, puckDraftUpdatedAt: serverTimestamp() }
+      : {}),
+    ...(source.readingResult ? { readingResult: source.readingResult } : {}),
   });
   return ref.id;
 }

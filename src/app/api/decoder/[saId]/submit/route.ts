@@ -115,5 +115,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ saI
   });
 
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
-  return NextResponse.json({ ok: true, reading: result.reading, links: result.links, email: result.email, mode });
+  return NextResponse.json({
+    ok: true,
+    reading: result.reading,
+    links: result.links,
+    pass: result.pass,
+    myMagnetix: result.myMagnetix,
+    redirect: result.redirect,
+    previewPageId: result.previewPageId,
+    email: result.email,
+    mode,
+  });
 }

@@ -6,6 +6,8 @@ import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 import type { Metadata } from "next";
 import { publicTitle } from "@/lib/server/public-identity";
+import { authorizeReadingAccess } from "@/lib/server/reading-access";
+import { ReadingAccessGate } from "@/components/energetic-decoder/reading-access-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +20,13 @@ export const dynamic = "force-dynamic";
  * here right after someone generates their own reading) — the direct
  * equivalent of bodygraph.com's emailed "download link to your report."
  *
- * No auth — the reading ID (an unguessable Firestore doc ID) is the access
- * key, matching how every other public link in this app works. Scoped to
- * saId via getReadingById so a reading can't be opened under the wrong
- * sub-account even if the ID were somehow guessed.
+ * ACCESS (2026-10-21): the Reading id is no longer the key. The page renders
+ * only for the person who just submitted the Reading Tool (24-hour result
+ * pass), the Reading's owner signed into MyMagnetix, or staff of this
+ * business — see reading-access.ts. Everyone else, including anyone holding
+ * an old shared link, gets the "Open your Reading in MyMagnetix" gate, where
+ * the rightful owner signs in with their email and lands on it. MyMagnetix
+ * is the permanent home; this page stays as the saved Reading Report.
  */
 /** Browser title: a neutral label + business — the person's name stays out of the tab. */
 export async function generateMetadata({ params }: { params: Promise<{ saId: string }> }): Promise<Metadata> {
@@ -51,6 +56,10 @@ export default async function EnergeticDecoderReportPage({
   // was saved before chartDefinedColor existed still gets the default
   // value for it, instead of an undefined color reaching the chart.
   const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
+
+  if (!(await authorizeReadingAccess(saId, reading))) {
+    return <ReadingAccessGate businessName={businessName} logoUrl={theme.logoUrl} readingId={readingId} />;
+  }
 
   const hasAnySystem = reading.spheres.length > 0 || !!reading.humanDesign || !!reading.astrology;
 

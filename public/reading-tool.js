@@ -46,8 +46,27 @@
   window.addEventListener("message", function (event) {
     if (event.source !== frame.contentWindow) return;
     var data = event.data;
-    if (!data || data.type !== "magnetix:reading-tool:height") return;
-    var h = Number(data.height);
-    if (h > 0 && h < 20000) frame.style.height = h + "px";
+    if (!data) return;
+    if (data.type === "magnetix:reading-tool:height") {
+      var h = Number(data.height);
+      if (h > 0 && h < 20000) frame.style.height = h + "px";
+      return;
+    }
+    // A Reading Tool that uses a custom Reading Result Page moves the whole
+    // tab there after submitting (2026-10-21) — the Reading isn't trapped in
+    // this iframe. Only Magnetix's own Reading result handoff is followed:
+    // an https link to /api/decoder/…/result, sent by our own iframe.
+    if (data.type === "magnetix:reading-tool:navigate" && typeof data.url === "string") {
+      var target;
+      try {
+        target = new URL(data.url);
+      } catch (e) {
+        return;
+      }
+      var local = target.hostname === "localhost" || target.hostname === "127.0.0.1";
+      if ((target.protocol === "https:" || local) && /^\/api\/decoder\/[A-Za-z0-9_-]+\/result$/.test(target.pathname)) {
+        window.location.href = target.toString();
+      }
+    }
   });
 })();

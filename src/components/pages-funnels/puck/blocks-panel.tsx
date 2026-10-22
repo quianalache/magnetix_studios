@@ -31,16 +31,25 @@ import { BLOCK_ICONS } from "@/components/pages-funnels/puck/block-icons";
  * config.tsx put it there.
  */
 
-const CATEGORY_ORDER = [
+const BASE_CATEGORY_ORDER = [
   "layout",
   "elements",
   "prebuiltSections",
   "business",
 ] as const;
 
-export function MagnetixBlocksPanel({ config }: { config: Config }) {
+/** Reading Result Pages (2026-10-21) lead with the Reading blocks, then the usual blocks to mix in. */
+const READING_RESULT_CATEGORY_ORDER = ["reading", "nextSteps", ...BASE_CATEGORY_ORDER] as const;
+
+export function MagnetixBlocksPanel({ config, readingResult = false }: { config: Config; readingResult?: boolean }) {
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
+  const CATEGORY_ORDER: readonly string[] = readingResult ? READING_RESULT_CATEGORY_ORDER : BASE_CATEGORY_ORDER;
+  const matches = (name: string) => {
+    if (!query) return true;
+    const label = config.components?.[name]?.label;
+    return name.toLowerCase().includes(query) || (typeof label === "string" && label.toLowerCase().includes(query));
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -62,7 +71,7 @@ export function MagnetixBlocksPanel({ config }: { config: Config }) {
             const category = config.categories?.[categoryKey];
             if (!category) return null;
             const names = (category.components ?? []).filter((name) =>
-              query ? name.toLowerCase().includes(query) : true
+              matches(name)
             );
             if (names.length === 0) return null;
 
@@ -113,7 +122,7 @@ export function MagnetixBlocksPanel({ config }: { config: Config }) {
         {CATEGORY_ORDER.every((key) => {
           const category = config.categories?.[key];
           const names = (category?.components ?? []).filter((name) =>
-            query ? name.toLowerCase().includes(query) : true
+            matches(name)
           );
           return names.length === 0;
         }) && (

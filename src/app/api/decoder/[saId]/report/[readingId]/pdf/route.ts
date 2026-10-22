@@ -3,6 +3,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { renderReadingPdfStream, readingPdfFilename } from "@/lib/energetics/reading-pdf-render";
+import { authorizeReadingAccess } from "@/lib/server/reading-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,11 +11,10 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/decoder/[saId]/report/[readingId]/pdf
  *
- * Public download — same no-auth model as the report page itself
- * (/decoder/[saId]/report/[readingId]): the reading ID is an unguessable
- * Firestore doc ID, that's the access key. Scoped to saId via
- * getReadingById so a reading can't be pulled under the wrong sub-account
- * even if the ID were somehow guessed.
+ * Same access rule as the Reading Report page (2026-10-21): a result pass
+ * for this Reading, its MyMagnetix owner, or staff of this business
+ * (reading-access.ts). Anyone else is sent to the Reading Report URL, which
+ * shows the "Open your Reading in MyMagnetix" gate.
  */
 export async function GET(
   request: Request,
@@ -25,6 +25,9 @@ export async function GET(
   if (!reading) return NextResponse.json({ error: "Reading not found" }, { status: 404 });
   // The Embed this Reading came through turned the PDF off.
   if (reading.embed?.pdf === false) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await authorizeReadingAccess(saId, reading))) {
+    return NextResponse.redirect(new URL(`/decoder/${saId}/report/${readingId}`, request.url), 303);
+  }
 
   const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists || subSnap.data()?.status === "archived") {

@@ -9,6 +9,8 @@ import { ContentSetError, getContentSet } from "@/lib/server/content-set-service
 import { attachReportChartDesigns } from "@/lib/server/report-chart-designs";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
 import type { ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
+import { authorizeReadingAccess } from "@/lib/server/reading-access";
+import { ReadingAccessGate } from "@/components/energetic-decoder/reading-access-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +19,10 @@ export const dynamic = "force-dynamic";
  * the report-page visibility picker): the Report Builder could design a
  * page, but nothing ever delivered that design to a real reader — clients
  * only ever saw the fixed layout at /decoder/[saId]/report/[readingId].
- * This is that missing delivery page: same no-auth "the reading ID is the
- * access key" model, plus the report design ID naming which saved design
- * to render this specific reading through.
+ * This is that missing delivery page: the same access rule as the Reading
+ * Report (result pass, MyMagnetix owner or staff — reading-access.ts, since
+ * 2026-10-21), plus the report design ID naming which saved design to
+ * render this specific reading through.
  *
  * The plain fixed-layout page still exists and still works — this is
  * additive, a practitioner shares THIS link once they've actually built a
@@ -42,6 +45,11 @@ export default async function EnergeticDecoderReportDesignPage({
   const sub = subSnap.data() ?? {};
   const businessName = (sub.name as string) || "Your reading";
   const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
+
+  // Same access rule as the Reading Report (2026-10-21, reading-access.ts).
+  if (!(await authorizeReadingAccess(saId, reading))) {
+    return <ReadingAccessGate businessName={businessName} logoUrl={theme.logoUrl} readingId={readingId} />;
+  }
 
   // Interpretation shortcodes resolve against the design's Content Set,
   // exactly like Preview PDF and generated reports (2026-10-11). A set that

@@ -633,7 +633,7 @@ export function WorkflowBuilder({
                     }
                     className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
                   >
-                    <option value="">Any Embed</option>
+                    <option value="">Any Reading Tool</option>
                     {embeds.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.name}
@@ -641,7 +641,7 @@ export function WorkflowBuilder({
                     ))}
                   </select>
                   <p className="text-muted-foreground mt-1.5 text-xs">
-                    Fires every time someone gets a Reading through an Embed —
+                    Fires every time someone gets a Reading through a Reading Tool —
                     new and returning Contacts alike. Readings you create
                     yourself and Test runs don&apos;t trigger it.
                   </p>

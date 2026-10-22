@@ -19,8 +19,17 @@ export const dynamic = "force-dynamic";
  */
 async function redeemLink(request: Request) {
   const url = new URL(request.url);
+  // First-time-access loop fix: `/api/my/login` embedded this — already
+  // validated as a relative path there, but re-validated here too since
+  // this URL is the one that actually goes out in an email and could in
+  // principle be hand-edited before being clicked.
+  const nextParam = url.searchParams.get("next");
+  const safeNext = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
+  const next = safeNext ?? "/gateway";
+  // An expired/used link keeps its destination (e.g. their Reading), so a
+  // fresh link from the login page still lands there (2026-10-21).
   const loginUrl = (error: string) =>
-    NextResponse.redirect(new URL(`/my/login?error=${error}`, url));
+    NextResponse.redirect(new URL(`/my/login?error=${error}${safeNext ? `&next=${encodeURIComponent(safeNext)}` : ""}`, url));
 
   const token = url.searchParams.get("token");
   if (!token) return loginUrl("missing_token");
@@ -29,13 +38,6 @@ async function redeemLink(request: Request) {
   if (!verified) return loginUrl("expired");
   // Each emailed link signs someone in once — see magic-link-once.ts.
   if (!(await redeemMagicLinkOnce(token, verified.expiresAt))) return loginUrl("used");
-
-  // First-time-access loop fix: `/api/my/login` embedded this — already
-  // validated as a relative path there, but re-validated here too since
-  // this URL is the one that actually goes out in an email and could in
-  // principle be hand-edited before being clicked.
-  const nextParam = url.searchParams.get("next");
-  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/gateway";
 
   try {
     const { sessionToken } = await establishPersonSessionForEmail(verified.email);

@@ -27,6 +27,9 @@ import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
 import { usePuckPersistence } from "@/components/pages-funnels/puck/use-puck-persistence";
 import type { PuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
+import type { ReadingResultPageSettings } from "@/types/reading-blocks";
+import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
+import { ReadingResultSettingsButton } from "@/components/pages-funnels/puck/reading-result-settings";
 
 /**
  * The REAL, CRM-integrated, Magnetix-styled Puck editor shell (master spec
@@ -123,6 +126,9 @@ export interface MagnetixPuckEditorShellProps {
    *  logic. */
   liveUrl: string;
   initialData: Data;
+  /** Reading Result Pages only (2026-10-21) — the page's Reading settings.
+   *  Null on every other page type. */
+  readingResult?: ReadingResultPageSettings | null;
 }
 
 export function MagnetixPuckEditorShell({
@@ -136,8 +142,11 @@ export function MagnetixPuckEditorShell({
   hasLivePage,
   liveUrl,
   initialData,
+  readingResult = null,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
+  const [readingSettings, setReadingSettings] = useState<ReadingResultPageSettings | null>(readingResult);
+  const { readingContext, readingBuilder } = useReadingResultBuilder({ subAccountId, pageId, settings: readingSettings, data });
   // Read fresh at click-time by openPreview (below) so that callback can
   // stay referentially stable (empty/near-empty dep array) without ever
   // reading a stale `data` snapshot — same "ref always holds latest value"
@@ -175,8 +184,8 @@ export function MagnetixPuckEditorShell({
   // form-client.tsx) rather than depending on pre-resolved metadata, which
   // is the server/<Render>-only path (used by the Preview route instead).
   const metadata: PuckPageMetadata = useMemo(
-    () => ({ subAccountId }),
-    [subAccountId]
+    () => ({ subAccountId, pageId, readingContext, readingBuilder }),
+    [subAccountId, pageId, readingContext, readingBuilder]
   );
 
   useEffect(() => {
@@ -304,6 +313,9 @@ export function MagnetixPuckEditorShell({
     () => (
       <div className="flex items-center gap-2">
         <SaveStateIndicator state={saveState} error={saveError} />
+        {readingSettings && (
+          <ReadingResultSettingsButton subAccountId={subAccountId} pageId={pageId} settings={readingSettings} onChange={setReadingSettings} />
+        )}
         {/* Live published-page link UX (real user QA blocker) — only
             rendered once this page genuinely has a live public page (see
             `hasLivePage`'s own doc comment). "View Live Page" opens the
@@ -312,15 +324,21 @@ export function MagnetixPuckEditorShell({
             path. */}
         {hasLivePage && (
           <>
+            {/* Reading Result Pages add "Reading settings" to this row, so
+                these two go icon-only below 2xl to keep Publish on screen. */}
             <Button
               variant="outline"
               size="sm"
+              aria-label="View Live Page"
+              title="View Live Page"
               render={<a href={liveUrl} target="_blank" rel="noreferrer" />}
             >
-              <ExternalLink className="h-4 w-4" /> View Live Page
+              <ExternalLink className="h-4 w-4" />
+              <span className={readingSettings ? "hidden 2xl:inline" : undefined}>View Live Page</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={copyLiveLink}>
-              <Copy className="h-4 w-4" /> Copy Link
+            <Button variant="outline" size="sm" onClick={copyLiveLink} aria-label="Copy Link" title="Copy Link">
+              <Copy className="h-4 w-4" />
+              <span className={readingSettings ? "hidden 2xl:inline" : undefined}>Copy Link</span>
             </Button>
           </>
         )}
@@ -356,6 +374,9 @@ export function MagnetixPuckEditorShell({
     [
       saveState,
       saveError,
+      readingSettings,
+      subAccountId,
+      pageId,
       hasLivePage,
       liveUrl,
       copyLiveLink,
@@ -367,9 +388,10 @@ export function MagnetixPuckEditorShell({
     ]
   );
 
+  const isReadingResult = !!readingResult;
   const renderDrawer = useCallback(
-    () => <MagnetixBlocksPanel config={clientPuckConfig} />,
-    []
+    () => <MagnetixBlocksPanel config={clientPuckConfig} readingResult={isReadingResult} />,
+    [isReadingResult]
   );
   const renderOutline = useCallback(
     ({ children }: { children: React.ReactNode }) => (

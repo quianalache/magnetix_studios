@@ -2,18 +2,25 @@ import type {
   EmbedConfig,
   EmbedFieldMode,
   EmbedNextStep,
+  EmbedResultDestination,
   EmbedResultView,
   EmbedSettings,
   EmbedShowOnPage,
   EmbedStatus,
   PublicEmbedConfig,
 } from "@/types/embed-config";
+import type { FeaturedOfferLayout, FeaturedOfferPresentation } from "@/types/reading-blocks";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
 
 /**
- * Pure Embed rules (Public Reading Tool, Phase 1) — defaults, normalizing
- * stored docs, validating staff edits, the "sensible combinations" rules,
- * and the public projection. Client-safe: no Firestore, no server-only.
+ * Pure Reading Tool rules — defaults, normalizing stored docs, validating
+ * staff edits, the "sensible combinations" rules, and the public
+ * projection. Client-safe: no Firestore, no server-only.
+ *
+ * Naming (2026-10-21): customers see "Reading Tools". The stored collection
+ * (`embedConfigs`), ids, `?embed=` links and these identifiers keep the
+ * original "embed" name — renaming stored data would risk every installed
+ * website snippet for no visitor-facing benefit.
  */
 
 export const EMBED_LIMITS = {
@@ -28,7 +35,22 @@ export const EMBED_LIMITS = {
   url: 500,
   tag: 40,
   tags: 10,
+  offerHeadline: 120,
+  offerBody: 400,
+  offerBadge: 30,
 } as const;
+
+export const FEATURED_OFFER_LAYOUTS: FeaturedOfferLayout[] = ["card", "banner", "sideBySide"];
+
+export const FEATURED_OFFER_LAYOUT_LABEL: Record<FeaturedOfferLayout, string> = {
+  card: "Card",
+  banner: "Banner",
+  sideBySide: "Side by side",
+};
+
+export function defaultFeaturedOfferPresentation(): FeaturedOfferPresentation {
+  return { headline: "", body: "", ctaLabel: "", imageUrl: "", badge: "", layout: "card" };
+}
 
 export const EMBED_STATUSES: EmbedStatus[] = ["draft", "live", "archived"];
 export const EMBED_VIEWS: EmbedResultView[] = ["humanDesign", "mandala", "astrology"];
@@ -55,9 +77,9 @@ export const EMBED_SHOW_LABEL: Record<EmbedShowOnPage, string> = {
 
 /** One line per option, in the editor — what the visitor sees on the page. */
 export const EMBED_SHOW_HELP: Record<EmbedShowOnPage, string> = {
-  full: "The chart, key facts and the full written interpretation, right on the page.",
-  chartFacts: "The chart and a short summary (e.g. Type, Strategy, Authority). The full interpretation stays in their Reading Report.",
-  confirmation: "Your thank-you message and buttons only — no chart here. They open their Reading from the Reading Report button, email or MyMagnetix.",
+  full: "Every section, down the page: chart, At a Glance, Centers, Channels, Gates, Variables, Skills (and the Mandala / Astrology sections).",
+  chartFacts: "The chart and its headline facts (Type, Strategy, Authority…). The full Reading waits in MyMagnetix (or their Reading Report).",
+  confirmation: "Your thank-you message and buttons only — no chart here. They open their Reading in MyMagnetix or from the email.",
 };
 
 export function defaultEmbedSettings(): EmbedSettings {
@@ -76,6 +98,7 @@ export function defaultEmbedSettings(): EmbedSettings {
       views: ["humanDesign", "astrology"],
     },
     afterSubmit: {
+      destination: { kind: "standard" },
       show: "full",
       confirmationMessage: "Your reading is ready.",
       myMagnetix: true,
@@ -129,10 +152,34 @@ function normalizeViews(raw: unknown, fallback: EmbedResultView[]): EmbedResultV
   return views;
 }
 
+/** Creator presentation for a Featured Offer — never price or terms. */
+export function normalizeFeaturedOfferPresentation(raw: unknown): FeaturedOfferPresentation {
+  const n = obj(raw);
+  const imageUrl = str(n.imageUrl, EMBED_LIMITS.url) ?? "";
+  return {
+    headline: str(n.headline, EMBED_LIMITS.offerHeadline) ?? "",
+    body: str(n.body, EMBED_LIMITS.offerBody) ?? "",
+    ctaLabel: str(n.ctaLabel, EMBED_LIMITS.nextStepLabel) ?? "",
+    imageUrl: imageUrl && isHttpUrl(imageUrl) ? imageUrl : "",
+    badge: str(n.badge, EMBED_LIMITS.offerBadge) ?? "",
+    layout: FEATURED_OFFER_LAYOUTS.includes(n.layout as FeaturedOfferLayout) ? (n.layout as FeaturedOfferLayout) : "card",
+  };
+}
+
+function normalizeDestination(raw: unknown): EmbedResultDestination {
+  const d = obj(raw);
+  const pageId = str(d.pageId, 64);
+  return d.kind === "customPage" && pageId && /^[A-Za-z0-9_-]+$/.test(pageId) ? { kind: "customPage", pageId } : { kind: "standard" };
+}
+
 function normalizeNextStep(raw: unknown): EmbedNextStep {
   const n = obj(raw);
   const label = str(n.label, EMBED_LIMITS.nextStepLabel) || "Continue";
   switch (n.kind) {
+    case "featuredOffer": {
+      const offerId = str(n.offerId, 64);
+      return offerId ? { kind: "featuredOffer", offerId, ...normalizeFeaturedOfferPresentation(n) } : { kind: "none" };
+    }
     case "myMagnetix":
       return { kind: "myMagnetix", label: str(n.label, EMBED_LIMITS.nextStepLabel) || "Open MyMagnetix" };
     case "course": {
@@ -174,7 +221,7 @@ export function normalizeEmbedConfig(id: string, raw: Record<string, unknown>): 
     id,
     subAccountId: String(raw.subAccountId ?? ""),
     agencyId: String(raw.agencyId ?? ""),
-    name: str(raw.name, EMBED_LIMITS.name) || "Untitled embed",
+    name: str(raw.name, EMBED_LIMITS.name) || "Untitled Reading Tool",
     placementNote: str(raw.placementNote, EMBED_LIMITS.placementNote) ?? "",
     status,
     access: { mode: "anyone" },
@@ -197,6 +244,9 @@ export function normalizeEmbedConfig(id: string, raw: Record<string, unknown>): 
       views: normalizeViews(reading.views, d.reading.views),
     },
     afterSubmit: {
+      // Absent on Reading Tools saved before 2026-10-21 → Standard Result,
+      // exactly what they did before.
+      destination: normalizeDestination(after.destination),
       show: EMBED_SHOW_OPTIONS.includes(after.show as EmbedShowOnPage) ? (after.show as EmbedShowOnPage) : d.afterSubmit.show,
       confirmationMessage: str(after.confirmationMessage, EMBED_LIMITS.confirmationMessage) || d.afterSubmit.confirmationMessage,
       myMagnetix: typeof after.myMagnetix === "boolean" ? after.myMagnetix : d.afterSubmit.myMagnetix,
@@ -224,14 +274,15 @@ export function normalizeEmbedConfig(id: string, raw: Record<string, unknown>): 
  * Reading somewhere. Returns a staff-facing message, or null when valid.
  */
 export function embedCombinationError(s: EmbedSettings): string | null {
-  if (s.afterSubmit.show !== "confirmation" && s.reading.views.length === 0) {
-    return "Choose at least one result view, or show a confirmation only.";
-  }
-  if (s.afterSubmit.show === "confirmation" && !s.afterSubmit.myMagnetix && !s.afterSubmit.email) {
-    return "Confirmation only needs MyMagnetix or the email turned on, so the visitor can still reach their Reading.";
-  }
-  if (s.afterSubmit.nextStep.kind === "myMagnetix" && !s.afterSubmit.myMagnetix) {
-    return "Turn on “Save to MyMagnetix” to use MyMagnetix as the next step.";
+  // A custom Reading Result Page decides what it shows with its own blocks,
+  // so the Standard Result's display rules don't apply to it.
+  if (s.afterSubmit.destination.kind === "standard") {
+    if (s.afterSubmit.show !== "confirmation" && s.reading.views.length === 0) {
+      return "Choose at least one chart to show, or show a confirmation only.";
+    }
+    if (s.afterSubmit.show === "confirmation" && !s.afterSubmit.myMagnetix && !s.afterSubmit.email) {
+      return "Confirmation only needs MyMagnetix or the email turned on, so the visitor can still reach their Reading.";
+    }
   }
   if (s.afterSubmit.output.kind === "reportDesign") {
     return "Report Design delivery arrives with Reading access. Use the Reading Report for now.";
@@ -264,7 +315,7 @@ export function applyEmbedPatch(
     return { ok: false, error: "Unknown status." };
   }
   if (typeof body.name === "string" && !body.name.trim()) {
-    return { ok: false, error: "Give this Embed a name." };
+    return { ok: false, error: "Give this Reading Tool a name." };
   }
   const next = normalizeEmbedConfig(current.id, merged);
   const nextStep = obj(obj(body.afterSubmit).nextStep);
@@ -289,8 +340,9 @@ export function availableViews(
 
 export function nextStepHref(subAccountId: string, step: EmbedNextStep): { href: string; label: string } | null {
   switch (step.kind) {
+    // MyMagnetix has its own primary button now (see EmbedNextStep).
     case "myMagnetix":
-      return { href: "/my/readings", label: step.label };
+      return null;
     case "course":
       return { href: `/course/${subAccountId}/${step.courseId}`, label: step.label };
     case "offer":
@@ -302,18 +354,25 @@ export function nextStepHref(subAccountId: string, step: EmbedNextStep): { href:
   }
 }
 
+/**
+ * The visitor-safe projection. `featuredOffer` is always null here — the
+ * real Offer can only be read server-side, so `resolvePublicEmbed`
+ * (lib/server/featured-offer-service.ts) fills it in.
+ */
 export function toPublicEmbed(embed: EmbedConfig): PublicEmbedConfig {
   return {
     id: embed.id,
     form: embed.form,
     views: embed.reading.views,
     afterSubmit: {
+      destination: embed.afterSubmit.destination.kind,
       show: embed.afterSubmit.show,
       confirmationMessage: embed.afterSubmit.confirmationMessage,
       myMagnetix: embed.afterSubmit.myMagnetix,
       pdf: embed.afterSubmit.pdf,
       email: embed.afterSubmit.email,
       nextStep: nextStepHref(embed.subAccountId, embed.afterSubmit.nextStep),
+      featuredOffer: null,
     },
   };
 }
@@ -326,19 +385,23 @@ export function legacyPublicEmbed(): PublicEmbedConfig {
     form: d.form,
     views: d.reading.views,
     afterSubmit: {
+      destination: "standard",
       show: "full",
       confirmationMessage: d.afterSubmit.confirmationMessage,
       myMagnetix: true,
       pdf: true,
       email: true,
       nextStep: null,
+      featuredOffer: null,
     },
   };
 }
 
-/** One-line summaries for the Embeds list. */
+/** One-line summaries for the Reading Tools list. */
 export function embedDeliverySummary(e: EmbedConfig): string {
-  const parts: string[] = [EMBED_SHOW_LABEL[e.afterSubmit.show]];
+  const parts: string[] = [
+    e.afterSubmit.destination.kind === "customPage" ? "Custom Result Page" : `Standard Result · ${EMBED_SHOW_LABEL[e.afterSubmit.show]}`,
+  ];
   if (e.afterSubmit.myMagnetix) parts.push("MyMagnetix");
   if (e.afterSubmit.email) parts.push("email");
   return parts.join(" · ");

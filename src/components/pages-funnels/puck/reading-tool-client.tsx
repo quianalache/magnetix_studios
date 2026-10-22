@@ -60,18 +60,18 @@ export function ReadingToolElementClientRender({
 
   let body: React.ReactNode;
   if (!embedId) {
-    body = <Placeholder>Choose an Embed for this Public Reading Tool block</Placeholder>;
+    body = <Placeholder>Choose a Reading Tool for this block</Placeholder>;
   } else if (state === "loading" || state === "idle") {
     body = <Placeholder>Loading the reading tool…</Placeholder>;
   } else if (state === "missing" || !payload) {
-    body = <Placeholder>This Embed no longer exists. Choose another.</Placeholder>;
+    body = <Placeholder>This Reading Tool no longer exists. Choose another.</Placeholder>;
   } else {
     body = (
       <div className="space-y-2" style={baseStyle}>
         {showChrome && (
           <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="font-semibold uppercase tracking-wide">Public Reading Tool</span>
-            <span>· {name || "Embed"}</span>
+            <span className="font-semibold uppercase tracking-wide">Reading Tool</span>
+            <span>· {name || "Reading Tool"}</span>
             {payload.status !== "live" && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700">{payload.status === "draft" ? "Draft — not visible to visitors" : "Archived — not visible to visitors"}</span>}
           </p>
         )}

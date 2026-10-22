@@ -20,6 +20,12 @@ import { BackgroundFieldEditor } from "@/components/pages-funnels/puck/backgroun
 import { StyleFieldEditor } from "@/components/pages-funnels/puck/style-field";
 import { FormFieldEditor } from "@/components/pages-funnels/puck/form-field";
 import { ReadingToolFieldEditor } from "@/components/pages-funnels/puck/reading-tool-field";
+import {
+  ALL_READING_COMPONENT_NAMES,
+  NEXT_STEP_BLOCK_NAMES,
+  READING_BLOCK_NAMES,
+  readingPuckComponents,
+} from "@/components/pages-funnels/puck/reading-components";
 import { ImageFieldEditor } from "@/components/pages-funnels/puck/image-field";
 import {
   SectionRender,
@@ -80,7 +86,7 @@ export interface ReadingToolComponentProps {
  */
 const embedIdField: CustomField<string> = {
   type: "custom",
-  label: "Embed",
+  label: "Reading Tool",
   render: ({ value, onChange }) => <ReadingToolFieldEditor value={value} onChange={onChange} />,
 };
 
@@ -533,8 +539,13 @@ export function createPuckConfig(
       // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
       business: { title: "Business", components: ["Form", "ReadingTool"] },
+      // Reading Result Pages only (2026-10-21) — the Blocks panel shows
+      // these two categories just on that page type.
+      reading: { title: "Reading", components: [...READING_BLOCK_NAMES] },
+      nextSteps: { title: "Next Steps", components: [...NEXT_STEP_BLOCK_NAMES] },
     },
     components: {
+      ...readingPuckComponents,
       Section: {
         label: "Section",
         fields: SECTION_SHARED_FIELDS,
@@ -788,6 +799,7 @@ export function createPuckConfig(
               "Accordion",
               "Form",
               "ReadingTool",
+              ...ALL_READING_COMPONENT_NAMES,
             ],
           },
         },
@@ -1137,7 +1149,7 @@ export function createPuckConfig(
       // Embed natively. The published page renders only the visitor-facing
       // tool; labels like "Public Reading Tool" stay in builder chrome.
       ReadingTool: {
-        label: "Public Reading Tool",
+        label: "Reading Tool",
         fields: {
           embedId: embedIdField,
           style: formStyleField,

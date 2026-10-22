@@ -101,6 +101,12 @@ const PAGE_TYPE_TILES: {
     description: "Deliver next steps after opt-in.",
     icon: CheckCircle2,
   },
+  {
+    type: "reading_result",
+    label: "Reading Result Page",
+    description: "Show a person their Reading after they submit a Reading Tool.",
+    icon: Sparkles,
+  },
 ];
 
 type CreateMethod = "blank" | "template" | "ai";
@@ -388,6 +394,12 @@ function CreatePageFlow({
 
   function pickPageType(type: PageType, opts?: { fromTemplate?: string }) {
     setPageType(type);
+    // A Reading Result Page delivers a Reading — it starts from its own
+    // ready-made New Builder layout, not a V1 template.
+    if (type === "reading_result") {
+      setMethod("blank");
+      setGoal("confirmation");
+    }
     if (opts?.fromTemplate) {
       setMethod("template");
       setTemplateId(opts.fromTemplate);

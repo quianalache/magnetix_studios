@@ -11,6 +11,7 @@ import { collectPuckEmbedIds, collectPuckFormIds } from "@/lib/pages-funnels/puc
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
 import { publicTitle } from "@/lib/server/public-identity";
+import { ReadingResultPageView } from "@/components/pages-funnels/reading-result-page-view";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +47,13 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ pageId: string }> }): Promise<Metadata> {
   try {
     const { pageId } = await params;
-    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as { status?: string; name?: string; seo?: { title?: string } } | undefined;
+    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as { status?: string; name?: string; pageType?: string; seo?: { title?: string } } | undefined;
     if (!page || page.status !== "published") return {};
-    return { title: publicTitle(page.seo?.title || page.name) };
+    // A Reading Result Page shows one person's Reading — never indexed.
+    return {
+      title: publicTitle(page.seo?.title || page.name),
+      ...(page.pageType === "reading_result" ? { robots: { index: false, follow: false } } : {}),
+    };
   } catch {
     return {};
   }
@@ -56,8 +61,10 @@ export async function generateMetadata({ params }: { params: Promise<{ pageId: s
 
 export default async function PublicPagePreview({
   params,
+  searchParams,
 }: {
   params: Promise<{ pageId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { pageId } = await params;
 
@@ -65,6 +72,13 @@ export default async function PublicPagePreview({
   const snap = await db.collection("pages").doc(pageId).get();
   if (!snap.exists) notFound();
   const page = { id: snap.id, ...(snap.data() as Omit<PageDoc, "id">) };
+
+  // Reading Result Pages (2026-10-21) render a Reading — see the component.
+  if (page.pageType === "reading_result") {
+    const sp = (await searchParams) ?? {};
+    return <ReadingResultPageView page={page} wantsDraft={sp.draft === "1"} />;
+  }
+
   if (page.status !== "published") notFound();
 
   if (page.puckPublishedData) {

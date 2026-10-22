@@ -19,7 +19,7 @@ import {
   ScanEye,
 } from "lucide-react";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
+import { ActivationsList } from "@/components/energetic-decoder/reading-blocks/chart-blocks";
 import type { HumanDesignReadingContent } from "@/types/energetic-decoder";
 import type { ChartDesign } from "@/types/chart-design";
 import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
@@ -129,36 +129,14 @@ function HumanDesignCard({ profile }: { profile: HumanDesignProfile }) {
 
 /** "Your Activations" — the same real gate.line data ActivationColumn (human-design-full-chart.tsx) shows, just both sides in one compact list instead of two separate columns (more useful at this panel's narrower width). Uses the same HD_BODY_LABELS order/order-of-truth as every other activation list in the app. */
 function ActivationsCard({ profile, mandalaDesign }: { profile: HumanDesignProfile; mandalaDesign: ChartDesign }) {
-  const byPersonality = new Map<string, (typeof profile.personality)[number]>(profile.personality.map((a) => [a.body, a]));
-  const byDesign = new Map<string, (typeof profile.design)[number]>(profile.design.map((a) => [a.body, a]));
+  // The list itself is the shared Reading block (reading-blocks/chart-blocks.tsx).
   return (
     <div className="rounded-2xl border bg-card p-4">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your Activations</p>
         <Info className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
       </div>
-      <div className="mb-1.5 flex items-center justify-end gap-4 text-[10px] font-semibold uppercase tracking-wide">
-        <span style={{ color: mandalaDesign.personalityActivationColor }}>Personality</span>
-        <span style={{ color: mandalaDesign.designActivationColor }}>Design</span>
-      </div>
-      <div className="divide-y">
-        {HD_BODY_LABELS.map(({ body, label, symbol }) => {
-          const p = byPersonality.get(body);
-          const d = byDesign.get(body);
-          return (
-            <div key={body} className="flex items-center justify-between gap-2 py-1.5 text-xs">
-              <span className="flex min-w-0 items-center gap-1.5 text-foreground">
-                <span aria-hidden="true">{symbol}</span>
-                <span className="truncate">{label}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-4 font-semibold tabular-nums">
-                <span style={{ color: mandalaDesign.personalityActivationColor }}>{p ? `${p.gate}.${p.line}` : "—"}</span>
-                <span style={{ color: mandalaDesign.designActivationColor }}>{d ? `${d.gate}.${d.line}` : "—"}</span>
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <ActivationsList profile={profile} design={mandalaDesign} />
     </div>
   );
 }

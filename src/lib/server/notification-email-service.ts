@@ -9,6 +9,7 @@ import {
   emailIsConfigured,
 } from "@/lib/comms/resend";
 import { resolveBrandName } from "@/lib/landing/resolve-brand";
+import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
 import type {
   NotificationDoc,
   NotificationEventType,
@@ -183,7 +184,8 @@ export async function dispatchNotificationEmail(
 
     const rendered = renderNotificationEmail(
       { ...notification, eventType: notification.eventType },
-      businessName
+      businessName,
+      recipientEmail
     );
 
     try {
@@ -283,7 +285,7 @@ const CTA_LABELS: Record<EmailEligibleEventType, string> = {
   "community.access.granted": "View in MyMagnetix",
   "community.reply": "View reply",
   "community.mention": "View mention",
-  "reading.ready": "View your reading",
+  "reading.ready": "Open your Reading in MyMagnetix",
 };
 
 // Reading Ready's subject needs the reading's own name ("Your Human
@@ -309,14 +311,23 @@ const SUBJECT_BY_CATEGORY: Partial<
 
 function renderNotificationEmail(
   n: Omit<DispatchInput, "eventType"> & { eventType: EmailEligibleEventType },
-  businessName: string
+  businessName: string,
+  recipientEmail: string
 ): { subject: string; text: string; html: string } {
   const subject = (
     SUBJECT_BY_CATEGORY[n.eventType] ?? ((b: string) => `Update from ${b}`)
   )(businessName, n.meta);
   const ctaLabel = CTA_LABELS[n.eventType];
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const ctaHref = `${appUrl}${n.destination}`;
+  // Reading Ready (2026-10-21): the Reading now lives in MyMagnetix, so the
+  // button is a one-time MyMagnetix sign-in link that lands on it — the
+  // same hardened 15-minute magic link as MyMagnetix's own sign-in (opening
+  // it only shows a continue page). An expired link falls back to the
+  // sign-in page with this Reading still as the destination.
+  const ctaHref =
+    n.eventType === "reading.ready" && n.destination.startsWith("/my/")
+      ? `${appUrl}/api/my/login/verify?token=${encodeURIComponent(signPersonMagicLinkToken(recipientEmail))}&next=${encodeURIComponent(n.destination)}`
+      : `${appUrl}${n.destination}`;
 
   const text = [n.title, "", `${ctaLabel}: ${ctaHref}`, "", businessName].join(
     "\n"

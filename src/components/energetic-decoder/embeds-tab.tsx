@@ -17,7 +17,7 @@ import { EMBED_STATUS_LABEL, embedAccessLabel, embedDeliverySummary } from "@/li
 import type { EmbedConfig } from "@/types/embed-config";
 
 /**
- * Embeds — the Public Reading Tool's configured experiences (Phase 1,
+ * Reading Tools (shown to customers; stored as "embeds") — each one a configured public Reading experience (Phase 1,
  * 2026-10-19). `?tab=embeds` lists them; `&embed=ID` opens the editor.
  * Counts are lifetime totals and exclude Test records.
  */
@@ -55,7 +55,7 @@ function EmbedsList() {
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/embeds`)
       .then((r) => r.json())
       .then((d) => !cancelled && setEmbeds(d.embeds ?? []))
-      .catch(() => toast.error("Couldn't load embeds."));
+      .catch(() => toast.error("Couldn't load Reading Tools."));
     return () => {
       cancelled = true;
     };
@@ -69,7 +69,7 @@ function EmbedsList() {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/embeds`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() || "Untitled embed" }),
+        body: JSON.stringify({ name: name.trim() || "Untitled Reading Tool" }),
       });
       const data = await res.json();
       if (!res.ok || !data.embed) throw new Error();
@@ -77,7 +77,7 @@ function EmbedsList() {
       setName("");
       openEditor(data.embed.id);
     } catch {
-      toast.error("Couldn't create embed.");
+      toast.error("Couldn't create Reading Tool.");
     } finally {
       setCreating(false);
     }
@@ -86,17 +86,17 @@ function EmbedsList() {
   return (
     <DecoderIndexPage
       icon={Share2}
-      title="Embeds"
-      description="Each Embed is a complete reading experience — place it on a Pages & Funnels page or install it on any website."
+      title="Reading Tools"
+      description="Each Reading Tool is a complete Reading experience — the form, the Reading and what happens after. Share it on a Pages & Funnels page, any website, or a direct link."
       actions={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            New embed
+            New Reading Tool
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>New embed</DialogTitle>
+              <DialogTitle>New Reading Tool</DialogTitle>
             </DialogHeader>
             <form
               className="space-y-4 py-2"
@@ -123,8 +123,8 @@ function EmbedsList() {
       ) : embeds.length === 0 ? (
         <EmptyState
           icon={Share2}
-          title="No embeds yet"
-          description="Create an Embed to put the Public Reading Tool on a Pages & Funnels page or your website."
+          title="No Reading Tools yet"
+          description="Create a Reading Tool to let people get their Reading from a Pages & Funnels page, your website or a direct link."
           className="rounded-card border border-dashed border-border bg-card"
         />
       ) : (
@@ -133,10 +133,10 @@ function EmbedsList() {
           <table className="hidden w-full text-left text-body-sm md:table">
             <thead className="border-b border-border bg-muted/40 text-caption text-muted-foreground">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Embed</th>
+                <th className="px-4 py-2.5 font-medium">Reading Tool</th>
                 <th className="px-3 py-2.5 font-medium">Status</th>
                 <th className="px-3 py-2.5 font-medium">Access</th>
-                <th className="px-3 py-2.5 font-medium">After submission</th>
+                <th className="px-3 py-2.5 font-medium">After submitting</th>
                 <th className="px-3 py-2.5 font-medium">Placed on</th>
                 <th className="px-3 py-2.5 text-right font-medium">Readings</th>
                 <th className="px-3 py-2.5 text-right font-medium">Contacts</th>

@@ -1,4 +1,5 @@
 import type { ReadingToolPayload } from "@/types/embed-config";
+import type { ReadingBlockContext } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
 import type { BlockAlignment } from "@/types/pages-funnels";
 import type { ColumnWidth } from "@/types/pages-funnels-v2";
@@ -121,6 +122,18 @@ export interface PuckPageMetadata {
   /** Public Reading Tool blocks, pre-resolved by the published route
    *  (undefined in the editor/preview, which fetch on demand). */
   resolvedEmbeds?: Record<string, ReadingToolPayload | null>;
+  /**
+   * Reading Result Page (2026-10-21): the Reading every Reading block shows.
+   * Undefined on ordinary pages; null on a Reading Result Page with no
+   * authorized Reading (blocks then render nothing). In the builder it's a
+   * fictional sample chart — see ReadingBlockContext.
+   */
+  readingContext?: ReadingBlockContext | null;
+  /** Set only in the New Builder: whether the sample Reading is loading,
+   *  ready, or unavailable (e.g. not a Reading Result Page). Published
+   *  pages never set it, so Reading blocks there render nothing without a
+   *  Reading instead of a placeholder. */
+  readingBuilder?: { status: "loading" | "ready" | "unavailable"; message?: string };
 }
 
 // ---------- Background (Phase 2D — production-grade color/gradient/blur) ----------

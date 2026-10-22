@@ -41,25 +41,25 @@ export function ReadingToolFieldEditor({ value, onChange }: { value: string | un
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-semibold">Choose Embed</Label>
+      <Label className="text-xs font-semibold">Choose Reading Tool</Label>
       {!sub ? (
-        <p className="text-muted-foreground rounded-md border border-dashed p-3 text-xs">Embeds aren&apos;t available in this preview context.</p>
+        <p className="text-muted-foreground rounded-md border border-dashed p-3 text-xs">Reading Tools aren&apos;t available in this preview context.</p>
       ) : embeds === null ? (
         <div className="text-muted-foreground flex items-center gap-2 rounded-md border p-2.5 text-xs">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading embeds…
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading Reading Tools…
         </div>
       ) : embeds.length === 0 ? (
         <div className="border-border bg-muted/40 flex flex-col items-start gap-2 rounded-md border border-dashed p-3">
-          <p className="text-muted-foreground text-xs">No embeds yet</p>
+          <p className="text-muted-foreground text-xs">No Reading Tools yet</p>
           <a href={embedsHref} target="_blank" rel="noreferrer" className="text-primary flex items-center gap-1 text-xs font-medium hover:underline">
-            <Share2 className="h-3.5 w-3.5" /> Create an Embed
+            <Share2 className="h-3.5 w-3.5" /> Create a Reading Tool
           </a>
         </div>
       ) : (
         <>
           <Select value={value || null} onValueChange={(v) => onChange(v ?? "")} items={Object.fromEntries(embeds.map((e) => [e.id, optionLabel(e)]))}>
-            <SelectTrigger aria-label="Embed">
-              <SelectValue placeholder="Select an embed…" />
+            <SelectTrigger aria-label="Reading Tool">
+              <SelectValue placeholder="Select a Reading Tool…" />
             </SelectTrigger>
             <SelectContent>
               {embeds.map((e) => (
@@ -70,7 +70,7 @@ export function ReadingToolFieldEditor({ value, onChange }: { value: string | un
             </SelectContent>
           </Select>
           <a href={embedsHref} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs">
-            <Settings2 className="h-3 w-3" /> Manage Embeds
+            <Settings2 className="h-3 w-3" /> Manage Reading Tools
           </a>
         </>
       )}

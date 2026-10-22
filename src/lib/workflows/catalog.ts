@@ -52,7 +52,7 @@ export const TRIGGER_LABELS: Record<WorkflowTriggerType, string> = {
   "community.event.ended": "Community event ended",
   "community.live.ended": "Community live session ended",
   "community.replay.ready": "Community replay ready",
-  "reading.created": "Reading created (Public Reading Tool)",
+  "reading.created": "Reading created (Reading Tool)",
   "message.sent": "Message sent",
   "conversation.assigned": "Conversation assigned",
   "conversation.closed": "Conversation closed",

@@ -49,7 +49,7 @@ export function EnergeticDecoderHomeTab({ onGoto }: { onGoto: (t: EnergeticDecod
     { target: "builder", label: "Report Builder", desc: "Edit a personalized report design", icon: LayoutTemplate, tone: "pink" },
     { target: "content", label: "Content", desc: "Rewrite what a gate or type says", icon: BookOpen, tone: "gold" },
     { target: "chartDesigns", label: "Chart Designs", desc: "Manage saved chart color presets", icon: Palette, tone: "aqua" },
-    { target: "embeds", label: "Embeds", desc: "Manage embed codes for your site", icon: Share2, tone: "blue" },
+    { target: "embeds", label: "Reading Tools", desc: "Share your Reading on pages, websites and links", icon: Share2, tone: "blue" },
   ];
 
   return (
@@ -62,7 +62,7 @@ export function EnergeticDecoderHomeTab({ onGoto }: { onGoto: (t: EnergeticDecod
         <MetricCard icon={ScrollText} tone="violet" label="Total readings" value={stats?.totalReadings ?? "—"} hint={stats ? `+${stats.readingsToday} today` : undefined} loading={!stats} />
         <MetricCard icon={LayoutTemplate} tone="pink" label="Report designs" value={stats?.reportDesignCount ?? "—"} hint="in Report Builder" loading={!stats} />
         <MetricCard icon={Palette} tone="aqua" label="Chart designs" value={stats?.chartDesignCount ?? "—"} hint="saved color presets" loading={!stats} />
-        <MetricCard icon={Share2} tone="gold" label="Embeds" value={stats?.embedCount ?? "—"} hint="links you've created" loading={!stats} />
+        <MetricCard icon={Share2} tone="gold" label="Reading Tools" value={stats?.embedCount ?? "—"} hint="ways people get their Reading" loading={!stats} />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">

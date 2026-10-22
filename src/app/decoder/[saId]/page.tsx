@@ -4,7 +4,8 @@ import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getDefaultChartDesign, resolveChartDesignsForEmbed } from "@/lib/server/chart-design-service";
 import { getEmbedConfig } from "@/lib/server/embed-config-service";
 import { getStaffForSubAccount } from "@/lib/auth/current-staff";
-import { legacyPublicEmbed, toPublicEmbed } from "@/lib/energetic-decoder/embeds";
+import { legacyPublicEmbed } from "@/lib/energetic-decoder/embeds";
+import { resolvePublicEmbed } from "@/lib/server/featured-offer-service";
 import { PublicReadingTool, type ReadingToolMode } from "@/components/energetic-decoder/public-reading-tool";
 import type { Metadata } from "next";
 import type { ReadingPlacement } from "@/types/embed-config";
@@ -85,7 +86,7 @@ export default async function PublicDecoderPage({
     <PublicReadingTool
       saId={saId}
       embedId={embed?.id ?? null}
-      embed={embed ? toPublicEmbed(embed) : legacyPublicEmbed()}
+      embed={embed ? await resolvePublicEmbed(embed, { includeDraftOffer: mode !== "live" }) : legacyPublicEmbed()}
       accent={theme.accent}
       hdDesign={designs.hdDesign}
       mandalaDesign={designs.mandalaDesign}

@@ -32,7 +32,7 @@ import type { EnergeticProfile } from "@/types/energetic-profile";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { ReportDesign } from "@/types/report-blocks";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
+import { buildDecoderReportUrl, buildDecoderReportDesignUrl, platformOrigin } from "@/lib/domains/public-url";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { HumanDesignSummary, SphereList } from "@/components/energetic-decoder/reading-summary";
 import { AstrologyReadingView } from "@/components/energetic-decoder/astrology-reading-view";
@@ -236,7 +236,7 @@ export function HumanDesignReadingWorkspace({
   const reportDesignLinkFor = (reportId: string) => {
     const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: reading.id, reportId });
     navigator.clipboard.writeText(url);
-    toast.success("Report design link copied.");
+    toast.success("Report design link copied. Your client opens it by signing into MyMagnetix with the email on their Contact.");
   };
 
   return (
@@ -359,13 +359,15 @@ export function HumanDesignReadingWorkspace({
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => {
-                  const url = buildDecoderReportUrl({ subAccount, subAccountId, readingId: reading.id });
-                  navigator.clipboard.writeText(url);
-                  toast.success("Report link copied — this is the actual deliverable, safe to send to the client.");
+                  // MyMagnetix is the permanent home (2026-10-21): the
+                  // client signs in with their Contact's email and lands
+                  // on this Reading. A Reading link alone no longer opens it.
+                  navigator.clipboard.writeText(`${platformOrigin()}/my/readings/${reading.id}`);
+                  toast.success("MyMagnetix link copied. Your client signs in with the email on their Contact to open this Reading.");
                 }}
               >
                 <Copy className="mr-2 h-3.5 w-3.5" />
-                Share report
+                Share in MyMagnetix
               </DropdownMenuItem>
               <DropdownMenuItem render={<a href={`/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${reading.id}/pdf`} download />}>
                 <Download className="mr-2 h-3.5 w-3.5" />

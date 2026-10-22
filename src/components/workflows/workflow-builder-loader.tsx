@@ -93,7 +93,7 @@ export function WorkflowBuilderLoader({
         if (alive)
           setEmbeds((d.embeds ?? []).map((e) => ({ id: e.id, name: e.name })));
       } catch {
-        /* optional — the Reading-created picker just shows "Any Embed" */
+        /* optional — the Reading-created picker just shows "Any Reading Tool" */
       }
       try {
         const snap = await getDocs(

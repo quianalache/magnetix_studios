@@ -9,6 +9,7 @@ import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1
 import { derivePuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
 import type { PageDoc } from "@/types/pages-funnels";
+import { DEFAULT_READING_RESULT_PAGE_SETTINGS } from "@/types/reading-blocks";
 
 /**
  * Phase 2A — the first REAL, CRM-integrated Puck editor route (master spec
@@ -134,6 +135,11 @@ export default function NewBuilderPage({
       hasLivePage={hasLivePage}
       liveUrl={liveUrl}
       initialData={initialData}
+      readingResult={
+        page.pageType === "reading_result"
+          ? { ...DEFAULT_READING_RESULT_PAGE_SETTINGS, ...(page.readingResult ?? {}) }
+          : null
+      }
     />
   );
 }
