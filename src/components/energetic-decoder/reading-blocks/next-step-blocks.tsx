@@ -66,7 +66,7 @@ export function FeaturedOfferCard({
     </a>
   );
   const badge = presentation.badge ? (
-    <span className="inline-flex w-fit rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: accent }}>
+    <span className="inline-flex w-fit rounded-full px-2.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: accent }}>
       {presentation.badge}
     </span>
   ) : null;
@@ -252,7 +252,7 @@ function SampleButton({ icon: Icon, label, note }: { icon: typeof Download; labe
         <Icon className="h-4 w-4" />
         {label}
       </span>
-      <span className="text-[11px] text-muted-foreground">{note}</span>
+      <span className="text-micro text-muted-foreground">{note}</span>
     </div>
   );
 }

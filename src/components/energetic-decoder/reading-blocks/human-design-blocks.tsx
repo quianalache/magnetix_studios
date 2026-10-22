@@ -1,5 +1,6 @@
 "use client";
 
+import { ACTIVATED_TEXT, DESIGN_FILL, PERSONALITY_FILL } from "@/lib/energetics/human-design-chart-constants";
 import { useMemo, useState } from "react";
 import {
   CircleDot,
@@ -58,14 +59,14 @@ const ICONS: Record<AtAGlanceFact, React.ComponentType<{ className?: string }>> 
   notSelfTheme: CloudRain,
 };
 
-const FALLBACK_COLORS = { personality: "#18181b", design: "#dc2626", both: "#7c3aed" };
-
+/** The Reading's Chart Design colours, falling back to the chart's own
+ *  defaults (and the Reading Tool's accent for "both"). */
 function hdColors(ctx: ReadingBlockContext) {
   const d = ctx.designs.hdDesign;
   return {
-    personality: d?.personalityActivationColor || FALLBACK_COLORS.personality,
-    design: d?.designActivationColor || FALLBACK_COLORS.design,
-    both: d?.chartDefinedColor || FALLBACK_COLORS.both,
+    personality: d?.personalityActivationColor || PERSONALITY_FILL,
+    design: d?.designActivationColor || DESIGN_FILL,
+    both: d?.chartDefinedColor || ctx.accent,
   };
 }
 
@@ -166,7 +167,7 @@ export function AtAGlanceBlock({
                 <p className="text-xs text-muted-foreground">{AT_A_GLANCE_FACT_LABEL[r.fact]}</p>
                 {/* Values wrap — never truncated or hover-only. */}
                 <p className="text-sm font-semibold text-pretty break-words text-foreground">{r.value}</p>
-                {descriptions && r.description && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{r.description}</p>}
+                {descriptions && r.description && <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">{r.description}</p>}
               </div>
             </div>
           );
@@ -220,12 +221,12 @@ export function CentersBlock({
           <div key={c} className={layout === "list" ? "px-4 py-3 sm:px-5" : cn("rounded-2xl border p-4", isDefined ? "border-primary/40 bg-primary/5" : "bg-card")}>
             <p className="flex items-center justify-between gap-2 text-sm font-semibold text-foreground">
               <span>{CENTER_LABELS[c]}</span>
-              <span className={cn("inline-flex items-center gap-1.5 text-[11px] font-medium", isDefined ? "text-primary" : "text-muted-foreground")}>
+              <span className={cn("inline-flex items-center gap-1.5 text-micro font-medium", isDefined ? "text-primary" : "text-muted-foreground")}>
                 <span className={cn("h-2 w-2 rounded-full", isDefined ? "bg-primary" : "border border-muted-foreground/50")} />
                 {isDefined ? "Defined" : "Open"}
               </span>
             </p>
-            {descriptions && text && <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{text}</p>}
+            {descriptions && text && <p className="mt-1.5 text-body-sm leading-relaxed text-muted-foreground">{text}</p>}
           </div>
         ))}
       </div>
@@ -283,7 +284,7 @@ export function ChannelsBlock({
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Connects {CENTER_LABELS[ch.centers[0]]} and {CENTER_LABELS[ch.centers[1]]}
               </p>
-              {talent?.description && <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{talent.description}</p>}
+              {talent?.description && <p className="mt-1.5 text-body-sm leading-relaxed text-muted-foreground">{talent.description}</p>}
             </div>
           );
         })}
@@ -431,7 +432,7 @@ export function GatesBlock({
                   !color && "bg-card text-muted-foreground",
                   open === g && "ring-2 ring-primary ring-offset-1",
                 )}
-                style={color ? { backgroundColor: color, borderColor: color, color: "#ffffff" } : undefined}
+                style={color ? { backgroundColor: color, borderColor: color, color: ACTIVATED_TEXT } : undefined}
               >
                 {g}
               </button>
@@ -497,7 +498,7 @@ export function VariablesBlock({
                   {arrow ? <span> · arrow {arrow.arrow === "Left" ? "left ←" : "right →"}</span> : null}
                 </p>
                 <p className="text-sm font-semibold text-pretty break-words text-foreground">{field.value}</p>
-                {descriptions && field.description && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{field.description}</p>}
+                {descriptions && field.description && <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">{field.description}</p>}
               </div>
             </div>
           );
@@ -520,7 +521,7 @@ function SkillList({ title, entries }: { title: string; entries: LocalSkillEntry
               {e.headline}
               {e.meta && <span className="font-normal text-muted-foreground"> · {e.meta}</span>}
             </p>
-            {e.description && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{e.description}</p>}
+            {e.description && <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">{e.description}</p>}
           </div>
         ))}
       </div>

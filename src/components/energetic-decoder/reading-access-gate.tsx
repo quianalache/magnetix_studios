@@ -1,5 +1,6 @@
 import { Lock, Sparkles } from "lucide-react";
 import { platformOrigin } from "@/lib/domains/public-url";
+import { PublicAction, PublicStateShell } from "@/components/public/public-shell";
 
 /**
  * Shown instead of a Reading to anyone without access (2026-10-21) — a
@@ -24,35 +25,25 @@ export function ReadingAccessGate({
   // even when this gate is served on a business's own domain.
   const origin = platformOrigin();
   return (
-    <div className="tenant-surface public-plain min-h-screen px-4 py-10 sm:px-6" data-reading-access-gate>
-      <div className="mx-auto w-full max-w-md">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={businessName} className="h-6 w-auto" />
-          ) : null}
-          <span className="font-medium text-foreground">{businessName}</span>
-        </div>
-        <div className="rounded-2xl border bg-card p-6 text-center shadow-sm sm:p-8">
-          <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-            <Lock className="h-5 w-5 text-muted-foreground" />
-          </span>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {reason === "expired" ? "This Reading link has expired" : "Your Reading is saved privately"}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Open it in MyMagnetix — sign in with the email you used when you got your Reading. First time? We&apos;ll email you a link to
-            finish setting up access.
-          </p>
-          <a
-            href={`${origin}/my/login?next=${encodeURIComponent(next)}`}
-            className="mt-5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:opacity-90"
-          >
-            <Sparkles className="h-4 w-4" />
-            Open your Reading in MyMagnetix
-          </a>
-        </div>
-      </div>
-    </div>
+    <PublicStateShell
+      variant={{ kind: "tenant", brand: { name: businessName, logoUrl: logoUrl ?? null } }}
+      icon={Lock}
+      tone="brand"
+      title={reason === "expired" ? "This Reading link has expired" : "Your Reading is saved privately"}
+      description={
+        <>
+          Open it in MyMagnetix — sign in with the email you used when you got your Reading. First time? We&apos;ll email you a link
+          to finish setting up access.
+        </>
+      }
+      action={
+        <PublicAction href={`${origin}/my/login?next=${encodeURIComponent(next)}`}>
+          <Sparkles className="h-4 w-4" />
+          Open your Reading in MyMagnetix
+        </PublicAction>
+      }
+    >
+      <span data-reading-access-gate hidden />
+    </PublicStateShell>
   );
 }

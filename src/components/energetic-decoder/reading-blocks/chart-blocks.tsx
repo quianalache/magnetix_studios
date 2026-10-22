@@ -1,5 +1,6 @@
 "use client";
 
+import { DESIGN_FILL, PERSONALITY_FILL } from "@/lib/energetics/human-design-chart-constants";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
@@ -52,11 +53,11 @@ export function MandalaBlock({ ctx, heading, size = "large" }: { ctx: ReadingBlo
 export function ActivationsList({ profile, design }: { profile: HumanDesignProfile; design: ChartDesign | null | undefined }) {
   const byP = new Map<string, (typeof profile.personality)[number]>(profile.personality.map((a) => [a.body, a]));
   const byD = new Map<string, (typeof profile.design)[number]>(profile.design.map((a) => [a.body, a]));
-  const pColor = design?.personalityActivationColor || "#18181b";
-  const dColor = design?.designActivationColor || "#dc2626";
+  const pColor = design?.personalityActivationColor || PERSONALITY_FILL;
+  const dColor = design?.designActivationColor || DESIGN_FILL;
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-end gap-4 text-[10px] font-semibold uppercase tracking-wide">
+      <div className="mb-1.5 flex items-center justify-end gap-4 text-overline font-semibold uppercase tracking-wide">
         <span style={{ color: pColor }}>Personality</span>
         <span style={{ color: dColor }}>Design</span>
       </div>
@@ -145,7 +146,7 @@ export function AstrologyKeyFactsBlock({
             <p className="text-base font-semibold text-foreground">
               {r.sign} <span className="text-sm font-medium text-muted-foreground">{deg(r.deg)}</span>
             </p>
-            {descriptions && r.text && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{r.text}</p>}
+            {descriptions && r.text && <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">{r.text}</p>}
           </div>
         ))}
       </div>
@@ -175,7 +176,7 @@ export function AstrologyHousesBlock({ ctx, heading, descriptions = true }: { ct
                 </span>
               </p>
               {h?.theme && <p className="mt-0.5 text-xs font-medium text-foreground/80">{h.theme}</p>}
-              {descriptions && h?.description && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{h.description}</p>}
+              {descriptions && h?.description && <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">{h.description}</p>}
             </div>
           );
         })}
@@ -202,7 +203,7 @@ export function AstrologyPlacementsBlock({ ctx, heading, descriptions = true }: 
                 {deg(p.degInSign)} · House {p.house}
               </p>
             </div>
-            {descriptions && signs?.[p.sign] && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{signs[p.sign]}</p>}
+            {descriptions && signs?.[p.sign] && <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">{signs[p.sign]}</p>}
           </div>
         ))}
       </div>
@@ -240,7 +241,7 @@ export function AstrologyAspectsBlock({
               <span className="text-xs text-muted-foreground"> · {a.orb.toFixed(1)}° from exact</span>
             </p>
             {descriptions && (types?.[a.type] || ASPECT_TYPE_CONTENT[a.type]) && (
-              <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{types?.[a.type] || ASPECT_TYPE_CONTENT[a.type]}</p>
+              <p className="mt-0.5 text-body-sm leading-relaxed text-muted-foreground">{types?.[a.type] || ASPECT_TYPE_CONTENT[a.type]}</p>
             )}
           </div>
         ))}

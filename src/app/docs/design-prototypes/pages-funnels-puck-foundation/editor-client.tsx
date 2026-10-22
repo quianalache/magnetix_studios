@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Puck } from "@puckeditor/core";
-import "@puckeditor/core/puck.css";
+import "@puckeditor/core/no-external.css";
 import type { Data } from "@puckeditor/core";
 import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
 import { VIEWPORTS, IFRAME_CONFIG } from "@/lib/pages-funnels/puck/constants";

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
+import { PageHeader } from "@/components/system/page-header";
 import { ReadingSections } from "@/components/energetic-decoder/reading-blocks/standard-result";
 import { PdfButton } from "@/components/energetic-decoder/reading-blocks/next-step-blocks";
 import type { ReadingBlockContext } from "@/types/reading-blocks";
@@ -22,35 +23,31 @@ export function MyMagnetixReadingView({ ctx, businessName }: { ctx: ReadingBlock
     }
   })();
   return (
-    <div className="min-h-screen bg-[#F5F4FB]">
-      <header className="border-b border-[#ECE9F5] bg-white">
-        <div className="mx-auto flex w-full max-w-[1100px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link href="/my/readings" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#6B7280] hover:text-[#111827]">
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <Link
+            href="/my/readings"
+            className="inline-flex items-center gap-1.5 text-body-sm font-medium text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft className="h-4 w-4" />
             My Readings
           </Link>
           <Link href="/my" className="flex items-center gap-2">
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-[12px] font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #A855F7, #5E2574)" }}
-            >
-              M
+            <span className="flex size-7 items-center justify-center rounded-chip bg-primary text-primary-foreground">
+              <Sparkles className="size-4" aria-hidden="true" />
             </span>
-            <span className="text-[14px] font-bold text-[#202124]">MyMagnetix</span>
+            <span className="text-body font-bold text-foreground">MyMagnetix</span>
           </Link>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[1100px] space-y-8 px-4 py-6 sm:px-6 sm:py-8" data-mymagnetix-reading>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[12px] font-medium uppercase tracking-wide text-[#84809A]">{businessName}</p>
-            <h1 className="text-2xl font-bold tracking-tight text-pretty text-[#1D1B27]">{r.name}&rsquo;s Reading</h1>
-            <p className="mt-1 text-sm text-[#84809A]">
-              {r.birthPlace} · {date} · {r.birthTime}
-            </p>
-          </div>
-          <PdfButton ctx={ctx} />
-        </div>
+      <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:px-6 sm:py-8" data-mymagnetix-reading>
+        <PageHeader
+          eyebrow={businessName}
+          title={`${r.name}’s Reading`}
+          description={`${r.birthPlace} · ${date} · ${r.birthTime}`}
+          actions={<PdfButton ctx={ctx} />}
+        />
         <ReadingSections ctx={ctx} views={["humanDesign", "mandala", "astrology"]} full />
       </main>
     </div>

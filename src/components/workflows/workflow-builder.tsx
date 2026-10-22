@@ -67,6 +67,16 @@ import type {
   WorkflowTrigger,
   WorkflowTriggerType,
 } from "@/types/workflows";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+/** Select value for "Any Reading Tool" (a Select item can't be empty). */
+const ANY_READING_TOOL = "__any";
 
 const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "form.submitted",
@@ -626,20 +636,31 @@ export function WorkflowBuilder({
 
               {trigger?.type === "reading.created" && (
                 <>
-                  <select
-                    value={trigger.embedId ?? ""}
-                    onChange={(e) =>
-                      setTrigger({ ...trigger, embedId: e.target.value || null })
+                  <Select
+                    value={trigger.embedId ?? ANY_READING_TOOL}
+                    onValueChange={(v) =>
+                      setTrigger({
+                        ...trigger,
+                        embedId: !v || v === ANY_READING_TOOL ? null : v,
+                      })
                     }
-                    className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+                    items={{
+                      [ANY_READING_TOOL]: "Any Reading Tool",
+                      ...Object.fromEntries(embeds.map((e) => [e.id, e.name])),
+                    }}
                   >
-                    <option value="">Any Reading Tool</option>
-                    {embeds.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="mt-2 w-full" aria-label="Reading Tool">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY_READING_TOOL}>Any Reading Tool</SelectItem>
+                      {embeds.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-muted-foreground mt-1.5 text-xs">
                     Fires every time someone gets a Reading through a Reading Tool —
                     new and returning Contacts alike. Readings you create

@@ -172,3 +172,65 @@
   --puck-button-primary-color-text: var(--primary-foreground);
   --puck-button-radius: calc(var(--radius) * 0.6);
 }
+
+/* Responsive header (2026-10-22). Puck lays its header out as
+   `1fr auto 1fr`, where the `auto` title column never shrinks and the
+   actions column can't wrap — so on laptop widths a long page title (or the
+   Magnetix back/status cluster beside it) pushed Publish off the right edge.
+   Here the title column takes only the space that's left and truncates to
+   one line; the actions always get their full width. Puck's own phone
+   layout (< 638px, actions in its menu) is untouched. Selectors match the
+   stable CSS-module name prefix, not the build hash. */
+@media (min-width: 638px) {
+  /* Puck pads its header 67px to line up with its plugin rail; the Magnetix
+     back/status cluster already sits there, so that gap was dead space the
+     title needs on tablets and small laptops. */
+  [class*="_PuckHeader_"] {
+    padding-left: 0;
+  }
+  [class*="_PuckHeader-inner_"] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  [class*="_PuckHeader-title_"] {
+    min-width: 0;
+    max-width: 100%;
+    justify-self: center;
+  }
+  [class*="_PuckHeader-title_"] > h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Phones (< 638px): Puck's actions live in a drop-down menu positioned
+   `left: 0; right: 0` against Puck's own header — which here is only the
+   part to the right of the Magnetix back/status cluster, so the menu was
+   too narrow and its buttons ran off the left edge. Anchor it to the full
+   Magnetix header row instead (that row is `position: relative`). */
+@media (max-width: 637.98px) {
+  [class*="_PuckHeader_"] {
+    position: static;
+  }
+}
+
+/* Phones: a long page title wrapped one word per line and made the header
+   most of the screen. Let the title column shrink and cap it at two lines. */
+@media (max-width: 637.98px) {
+  [class*="_PuckHeader-inner_"] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  [class*="_PuckHeader-title_"] {
+    min-width: 0;
+  }
+  [class*="_PuckHeader-title_"] > h2 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+}

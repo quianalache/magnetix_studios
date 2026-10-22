@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Puck } from "@puckeditor/core";
-import "@puckeditor/core/puck.css";
+import "@puckeditor/core/no-external.css";
 import type { Config, Data } from "@puckeditor/core";
 
 /**

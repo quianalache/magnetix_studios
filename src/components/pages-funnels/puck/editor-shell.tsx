@@ -10,13 +10,27 @@ import {
   ExternalLink,
   Eye,
   Loader2,
+  MoreHorizontal,
 } from "lucide-react";
 import { Puck } from "@puckeditor/core";
-import "@puckeditor/core/puck.css";
+// Puck's `no-external.css` is its own build of puck.css without the
+// `@import "https://rsms.me/inter/inter.css"` line. That remote import made
+// the editor's CSS chunk fail whenever rsms.me was unreachable (blocked
+// network, ad blocker, outage), which rejected this dynamic import and
+// crashed the whole editor. The builder never used Inter anyway —
+// magnetix-theme.css sets --puck-font-family to the Magnetix system stack.
+// `pnpm lint` (scripts/check-no-remote-css.mjs) keeps it this way.
+import "@puckeditor/core/no-external.css";
 import "./magnetix-theme.css";
 import type { Data } from "@puckeditor/core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
 import { VIEWPORTS, IFRAME_CONFIG } from "@/lib/pages-funnels/puck/constants";
 import { MagnetixBlocksPanel } from "@/components/pages-funnels/puck/blocks-panel";
@@ -29,7 +43,10 @@ import type { PuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status"
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
-import { ReadingResultSettingsButton } from "@/components/pages-funnels/puck/reading-result-settings";
+import {
+  ReadingResultSettingsButton,
+  ReadingResultSettingsContext,
+} from "@/components/pages-funnels/puck/reading-result-settings";
 
 /**
  * The REAL, CRM-integrated, Magnetix-styled Puck editor shell (master spec
@@ -145,8 +162,24 @@ export function MagnetixPuckEditorShell({
   readingResult = null,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
-  const [readingSettings, setReadingSettings] = useState<ReadingResultPageSettings | null>(readingResult);
-  const { readingContext, readingBuilder } = useReadingResultBuilder({ subAccountId, pageId, settings: readingSettings, data });
+  const [readingSettings, setReadingSettings] =
+    useState<ReadingResultPageSettings | null>(readingResult);
+  // Stable for the page's lifetime, so the header actions (and Puck's
+  // `overrides`) don't rebuild when a Reading setting changes.
+  const hasReadingSettings = readingResult != null;
+  const readingSettingsValue = useMemo(
+    () =>
+      readingSettings
+        ? { settings: readingSettings, onChange: setReadingSettings }
+        : null,
+    [readingSettings]
+  );
+  const { readingContext, readingBuilder } = useReadingResultBuilder({
+    subAccountId,
+    pageId,
+    settings: readingSettings,
+    data,
+  });
   // Read fresh at click-time by openPreview (below) so that callback can
   // stay referentially stable (empty/near-empty dep array) without ever
   // reading a stale `data` snapshot — same "ref always holds latest value"
@@ -272,7 +305,7 @@ export function MagnetixPuckEditorShell({
   // report).
   const renderHeader = useCallback(
     ({ children }: { children: React.ReactNode }) => (
-      <div className="border-border bg-card flex items-center gap-3 border-b px-4 py-2.5">
+      <div className="border-border bg-card relative flex items-center gap-3 border-b px-4 py-2.5">
         {/* System B Auto Hierarchy (master spec §24.1/§6/§11–15) — a
             non-rendering watcher, mounted here (not anywhere in the visual
             layout) purely because this is a real descendant of `<Puck>`'s
@@ -280,11 +313,17 @@ export function MagnetixPuckEditorShell({
             `createUsePuck()` requires. See that component's own doc
             comment for the full mechanism. */}
         <AutoHierarchyWatcher />
+        {/* Responsive header (2026-10-22): below 2xl the back link is the
+            arrow alone (accessible name + tooltip kept) so Publish never
+            runs off the edge on laptop widths. */}
         <a
           href={backHref}
+          aria-label="Back to Pages & Funnels"
+          title="Back to Pages & Funnels"
           className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Pages &amp; Funnels
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden 2xl:inline">Back to Pages &amp; Funnels</span>
         </a>
         <PageStatusBadge
           pageStatus={pageStatus}
@@ -299,9 +338,10 @@ export function MagnetixPuckEditorShell({
             no longer needs calling out. */}
         <Badge
           variant="outline"
-          className="border-primary/40 text-primary shrink-0 border-dashed"
+          title="New Builder Preview"
+          className="border-primary/40 text-primary hidden shrink-0 border-dashed lg:inline-flex"
         >
-          New Builder Preview
+          New Builder<span className="hidden 2xl:inline">&nbsp;Preview</span>
         </Badge>
         <div className="min-w-0 flex-1">{children}</div>
       </div>
@@ -313,8 +353,11 @@ export function MagnetixPuckEditorShell({
     () => (
       <div className="flex items-center gap-2">
         <SaveStateIndicator state={saveState} error={saveError} />
-        {readingSettings && (
-          <ReadingResultSettingsButton subAccountId={subAccountId} pageId={pageId} settings={readingSettings} onChange={setReadingSettings} />
+        {hasReadingSettings && (
+          <ReadingResultSettingsButton
+            subAccountId={subAccountId}
+            pageId={pageId}
+          />
         )}
         {/* Live published-page link UX (real user QA blocker) — only
             rendered once this page genuinely has a live public page (see
@@ -324,22 +367,50 @@ export function MagnetixPuckEditorShell({
             path. */}
         {hasLivePage && (
           <>
-            {/* Reading Result Pages add "Reading settings" to this row, so
-                these two go icon-only below 2xl to keep Publish on screen. */}
+            {/* Secondary live-page actions: inline at 2xl, otherwise in a
+                "More actions" menu so Preview / Save Draft / Publish always
+                keep their full labels and stay on screen. */}
             <Button
               variant="outline"
               size="sm"
-              aria-label="View Live Page"
-              title="View Live Page"
+              className="hidden 2xl:inline-flex"
               render={<a href={liveUrl} target="_blank" rel="noreferrer" />}
             >
-              <ExternalLink className="h-4 w-4" />
-              <span className={readingSettings ? "hidden 2xl:inline" : undefined}>View Live Page</span>
+              <ExternalLink className="h-4 w-4" /> View Live Page
             </Button>
-            <Button variant="outline" size="sm" onClick={copyLiveLink} aria-label="Copy Link" title="Copy Link">
-              <Copy className="h-4 w-4" />
-              <span className={readingSettings ? "hidden 2xl:inline" : undefined}>Copy Link</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden 2xl:inline-flex"
+              onClick={copyLiveLink}
+            >
+              <Copy className="h-4 w-4" /> Copy Link
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="2xl:hidden"
+                    aria-label="More actions"
+                    title="More actions"
+                  />
+                }
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem
+                  render={<a href={liveUrl} target="_blank" rel="noreferrer" />}
+                >
+                  <ExternalLink className="h-4 w-4" /> View Live Page
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={copyLiveLink}>
+                  <Copy className="h-4 w-4" /> Copy Link
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
         <Button variant="outline" size="sm" onClick={openPreview}>
@@ -374,7 +445,7 @@ export function MagnetixPuckEditorShell({
     [
       saveState,
       saveError,
-      readingSettings,
+      hasReadingSettings,
       subAccountId,
       pageId,
       hasLivePage,
@@ -390,7 +461,12 @@ export function MagnetixPuckEditorShell({
 
   const isReadingResult = !!readingResult;
   const renderDrawer = useCallback(
-    () => <MagnetixBlocksPanel config={clientPuckConfig} readingResult={isReadingResult} />,
+    () => (
+      <MagnetixBlocksPanel
+        config={clientPuckConfig}
+        readingResult={isReadingResult}
+      />
+    ),
     [isReadingResult]
   );
   const renderOutline = useCallback(
@@ -426,16 +502,18 @@ export function MagnetixPuckEditorShell({
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
       <div className="min-h-0 flex-1">
-        <Puck
-          config={clientPuckConfig}
-          data={data}
-          onChange={setData}
-          headerTitle={pageName}
-          viewports={VIEWPORTS}
-          iframe={IFRAME_CONFIG}
-          metadata={metadata}
-          overrides={overrides}
-        />
+        <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
+          <Puck
+            config={clientPuckConfig}
+            data={data}
+            onChange={setData}
+            headerTitle={pageName}
+            viewports={VIEWPORTS}
+            iframe={IFRAME_CONFIG}
+            metadata={metadata}
+            overrides={overrides}
+          />
+        </ReadingResultSettingsContext.Provider>
       </div>
     </div>
   );

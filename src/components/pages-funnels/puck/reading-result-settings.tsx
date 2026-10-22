@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,17 +17,19 @@ import { READING_SAMPLE_KINDS, READING_SAMPLE_LABEL, type ReadingResultPageSetti
  * purpose: it always comes from the Reading's own saved Content Set, so this
  * page can never show text that disagrees with the person's Reading.
  */
-export function ReadingResultSettingsButton({
-  subAccountId,
-  pageId,
-  settings,
-  onChange,
-}: {
-  subAccountId: string;
-  pageId: string;
+/**
+ * The page's Reading settings, provided around `<Puck>` by the editor shell.
+ * The button reads them from here rather than from props so a change never
+ * rebuilds Puck's `overrides` — that remounted the whole header, which
+ * unmounted this button and closed its dialog the moment a choice was made.
+ */
+export const ReadingResultSettingsContext = createContext<{
   settings: ReadingResultPageSettings;
   onChange: (next: ReadingResultPageSettings) => void;
-}) {
+} | null>(null);
+
+export function ReadingResultSettingsButton({ subAccountId, pageId }: { subAccountId: string; pageId: string }) {
+  const ctx = useContext(ReadingResultSettingsContext);
   const [open, setOpen] = useState(false);
   const [designs, setDesigns] = useState<{ id: string; name: string }[] | null>(null);
   useEffect(() => {
@@ -37,6 +39,9 @@ export function ReadingResultSettingsButton({
       .then((d) => setDesigns(((d.sets ?? []) as { id: string; name: string }[]).map((s) => ({ id: s.id, name: s.name }))))
       .catch(() => setDesigns([]));
   }, [open, designs, subAccountId]);
+
+  if (!ctx) return null;
+  const { settings, onChange } = ctx;
 
   async function save(next: ReadingResultPageSettings) {
     onChange(next);
@@ -49,8 +54,9 @@ export function ReadingResultSettingsButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Sparkles className="h-4 w-4" /> Reading settings
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} aria-label="Reading settings" title="Reading settings">
+        <Sparkles className="h-4 w-4" />
+        <span className="hidden xl:inline">Reading settings</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">

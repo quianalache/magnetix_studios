@@ -12,6 +12,7 @@ import { passGrants, resultPagePassCookieName, verifyReadingResultPass } from "@
 import { buildReadingBlockContext, collectFeaturedOfferIds } from "@/lib/server/reading-block-context";
 import { buildSampleReading } from "@/lib/server/reading-samples";
 import { platformOrigin } from "@/lib/domains/public-url";
+import { PublicAction, PublicStateShell } from "@/components/public/public-shell";
 import type { PageDoc } from "@/types/pages-funnels";
 import type { LeadForm } from "@/types/forms";
 import type { ReadingBlockContext } from "@/types/reading-blocks";
@@ -72,7 +73,10 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
     }
   }
 
-  if (!readingContext) return <ResultPassExpired />;
+  if (!readingContext) {
+    const businessName = ((await getAdminDb().doc(`subAccounts/${subAccountId}`).get()).get("name") as string | undefined) || "";
+    return <ResultPassExpired businessName={businessName} />;
+  }
 
   const db = getAdminDb();
   const formIds = collectPuckFormIds(data);
@@ -107,23 +111,22 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
 }
 
 /** No valid result pass on this browser — the permanent home is MyMagnetix. */
-function ResultPassExpired() {
+function ResultPassExpired({ businessName }: { businessName: string }) {
   return (
-    <div className="tenant-surface public-plain flex min-h-screen items-center justify-center px-4 py-10" data-result-pass-expired>
-      <div className="w-full max-w-md rounded-2xl border bg-card p-6 text-center shadow-sm sm:p-8">
-        <h1 className="text-xl font-semibold tracking-tight">Find your Reading in MyMagnetix</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This page shows a Reading right after it’s created, on the device where it was made. Your Reading is saved in MyMagnetix —
-          sign in with the email you used.
-        </p>
-        <a
-          href={`${platformOrigin()}/my/readings`}
-          className="mt-5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:opacity-90"
-        >
+    <PublicStateShell
+      variant={{ kind: "tenant", brand: { name: businessName } }}
+      icon={Sparkles}
+      tone="brand"
+      title="Find your Reading in MyMagnetix"
+      description="This page shows a Reading right after it’s created, on the device where it was made. Your Reading is saved in MyMagnetix — sign in with the email you used."
+      action={
+        <PublicAction href={`${platformOrigin()}/my/readings`}>
           <Sparkles className="h-4 w-4" />
           Open MyMagnetix
-        </a>
-      </div>
-    </div>
+        </PublicAction>
+      }
+    >
+      <span data-result-pass-expired hidden />
+    </PublicStateShell>
   );
 }

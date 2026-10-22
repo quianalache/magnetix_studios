@@ -12,7 +12,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "node scripts/check-capability-tenancy.mjs && node scripts/gen-api-dispatch.mjs --check && node scripts/check-design-drift.mjs && eslint",
+    "lint": "node scripts/check-capability-tenancy.mjs && node scripts/gen-api-dispatch.mjs --check && node scripts/check-design-drift.mjs && node scripts/check-no-remote-css.mjs && eslint",
     "check:design-drift": "node scripts/check-design-drift.mjs",
     "qa:visual": "node scripts/qa/visual-pass.mjs",
     "qa:serve": "node scripts/qa/serve-local-qa.mjs",
