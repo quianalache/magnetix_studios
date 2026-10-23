@@ -2,9 +2,8 @@ import type { Data, ComponentData } from "@puckeditor/core";
 
 /**
  * Collects every unique, non-empty `formId` referenced by a `Form` element
- * anywhere in a Puck `Data` tree — the Puck-Data equivalent of V2's
- * `collectFormIds` (src/lib/pages-funnels/v2/tree-utils.ts), used the same
- * way: a server route calls this BEFORE calling `<Render>`, resolves each
+ * anywhere in a Puck `Data` tree — a server route calls this BEFORE calling
+ * `<Render>`, resolves each
  * id via the Admin SDK (mirroring `/p/[pageId]`'s pattern), and passes the
  * result as `PuckPageMetadata.resolvedForms` so `form-server.tsx` never has
  * to fetch (master spec §11).

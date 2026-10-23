@@ -88,15 +88,15 @@ export async function savePuckDraft(
  * for both fields. This is deliberate, not a shortcut: it's what makes
  * "Publish must ensure the current draft is durably saved first" atomic
  * rather than two sequential writes that could race with a concurrent edit
- * landing between them (the exact non-atomicity V1's own publish handler
- * has — `updatePageBlocks()` then `publishPage()` as two separate
+ * landing between them (the exact non-atomicity of the former legacy publish
+ * handler — content write followed by publish as two separate
  * `updateDoc` calls — deliberately not repeated here). A single Firestore
  * document `.update()` is atomic at the document level, so this genuinely
  * cannot leave `puckPublishedData` pointing at anything other than exactly
  * what `puckDraftData` was set to in the same call.
  *
- * Also sets the SAME top-level `status`/`publishedAt` fields V1's own
- * `publishPage()` sets — deliberately, not a V1 side-effect leaking in:
+ * Also sets the SAME top-level `status`/`publishedAt` fields the former
+ * legacy publish flow set — deliberately, not a legacy side-effect leaking in:
  * `/p/[pageId]`'s existing gate (`if (page.status !== "published")
  * notFound()`) is the one thing this task was told to reuse rather than
  * duplicate (§10 "use the actual production public `<Render>` path"), so

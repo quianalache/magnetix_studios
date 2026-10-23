@@ -24,8 +24,8 @@ import type { BackgroundStyle, BlockAlignment, BlockSpacing, ButtonStyle } from 
 // ---------- ids ----------
 
 /** Every node at every level (Section/Row/Column/Element) gets one of
- *  these — see src/lib/pages-funnels/v2/nodes.ts for the generator, which
- *  reuses the V1 `newBlockId()` scheme rather than inventing a new one.
+ *  these — production Puck nodes use the shared id helpers rather than
+ *  inventing a new generator.
  *  Deliberately flat/opaque — NOT path-encoded (e.g. not
  *  "section1.row0.col1") — the tree's fixed, shallow depth makes walking
  *  from any id to its ancestors cheap on demand, so a path never needs to

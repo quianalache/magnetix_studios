@@ -2,9 +2,8 @@ import { newBlockId } from "@/lib/pages-funnels/blocks";
 
 /**
  * Id generation for the production Puck foundation. Reuses the exact V1 id
- * scheme (`newBlockId`) rather than inventing a third generator — the same
- * choice V2's `nodes.ts` already made (`export const newNodeId = newBlockId`).
- * Ids are opaque everywhere in this stack; uniqueness is all that matters.
+ * scheme (`newBlockId`) rather than inventing another generator. Ids are
+ * opaque everywhere in this stack; uniqueness is all that matters.
  *
  * Explicit, stable ids are required on EVERY nested Puck node, at every
  * depth — not optional despite `ComponentDataOptionalId`'s types — per the

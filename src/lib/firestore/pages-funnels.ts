@@ -16,7 +16,6 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import type { TenantScope } from "@/types";
 import type {
   CreatePageInput,
-  PageBlock,
   PageDoc,
   PageSeo,
 } from "@/types/pages-funnels";
@@ -165,16 +164,6 @@ export async function updateReadingResultSettings(id: string, settings: ReadingR
 /** Persists the full block array — the editor calls this (debounced by the
  *  caller) on every content/reorder edit while in "draft" review, and again
  *  explicitly for "Save Draft". */
-export async function updatePageBlocks(
-  id: string,
-  blocks: PageBlock[]
-): Promise<void> {
-  await updateDoc(doc(getFirebaseDb(), PAGES, id), {
-    blocks,
-    updatedAt: serverTimestamp(),
-  });
-}
-
 export async function updatePageMeta(
   id: string,
   data: Partial<Pick<PageDoc, "name" | "seo" | "funnelId">>
@@ -183,21 +172,6 @@ export async function updatePageMeta(
   if (data.name) patch.slug = slugify(data.name);
   await updateDoc(doc(getFirebaseDb(), PAGES, id), {
     ...patch,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function publishPage(id: string): Promise<void> {
-  await updateDoc(doc(getFirebaseDb(), PAGES, id), {
-    status: "published",
-    publishedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function unpublishPage(id: string): Promise<void> {
-  await updateDoc(doc(getFirebaseDb(), PAGES, id), {
-    status: "draft",
     updatedAt: serverTimestamp(),
   });
 }

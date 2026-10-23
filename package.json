@@ -23,6 +23,8 @@
     "vercel:sanity": "node scripts/vercel-guard.mjs sanity",
     "deploy:preview": "node scripts/vercel-guard.mjs deploy",
     "deploy:production": "node scripts/vercel-guard.mjs deploy --prod",
+    "deploy:promote": "node scripts/vercel-guard.mjs promote",
+    "deploy:rollback": "node scripts/vercel-guard.mjs rollback",
     "check:vercel-guard": "node scripts/check-vercel-guard.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\""
   },

@@ -38,11 +38,8 @@ import { BackgroundLayer } from "@/components/pages-funnels/puck/background-laye
  * comment — so nothing in THIS file needs a client boundary at all.
  *
  * Visual style intentionally reuses the same shadcn/Tailwind theme tokens
- * (`border-border`, `bg-muted`, `text-muted-foreground`, etc.) the V2
- * reference renderer already uses (see
- * src/components/pages-funnels/renderer-v2/tree-view.tsx) — one visual
- * vocabulary across the V2 reference tree and the new Puck primitives, not
- * a third dialect. This is placeholder styling, not the Magnetix visual
+ * (`border-border`, `bg-muted`, `text-muted-foreground`, etc.) used by the
+ * public Puck renderer. This is placeholder styling, not the Magnetix visual
  * reskin (master spec §13 defers full pixel-polish).
  *
  * System A (master spec §24.3/§24.20): every element below except Spacer
@@ -444,11 +441,9 @@ export interface AccordionItemData {
 
 /**
  * General-purpose expand/collapse list — deliberately NOT FAQ-specific
- * (same rule as V2's `AccordionElement`: FAQ becomes a Section *template*
- * that inserts one of these, not a dedicated element type). Native
- * `<details>`/`<summary>`, identical markup/behavior to V2's proven
- * renderer (renderer-v2/tree-view.tsx's "accordion" case) — zero-JS,
- * keyboard-accessible by default, ported as-is rather than reinvented.
+ * FAQ becomes a Section *template* that inserts one of these, not a dedicated
+ * element type. Native `<details>`/`<summary>` keeps the behavior zero-JS
+ * and keyboard-accessible by default.
  */
 export function AccordionRender({
   id,

@@ -16,10 +16,30 @@
  *                    never calls `vercel link`, so it can't create a project.
  *   sanity           Read-only account check: exactly one Vercel project may
  *                    be Git-connected to the Magnetix repo (the canonical one).
- *   deploy [--prod]  check + sanity (+ clean tree and HEAD == origin/main for
- *                    --prod), then runs the pinned Vercel CLI with
- *                    VERCEL_ORG_ID / VERCEL_PROJECT_ID forced to the canonical
- *                    ids, so the CLI can only ever target that project.
+ *   deploy [--prod]  check + sanity (+ for --prod: on branch main, clean,
+ *                    HEAD == origin/main, local main not behind), then runs
+ *                    the pinned Vercel CLI with VERCEL_ORG_ID /
+ *                    VERCEL_PROJECT_ID forced to the canonical ids, so the CLI
+ *                    can only ever target that project.
+ *   promote <deployment>
+ *                    The production release step while production domains are
+ *                    assigned manually (2026-10-23 rule, owner-approved). Same
+ *                    checkout checks as deploy --prod, plus: the deployment
+ *                    belongs to the canonical project + team, is READY, is a
+ *                    production build of ref `main` whose SHA equals
+ *                    origin/main, and the project still has the production-ref
+ *                    build check and manual domain assignment. Then promotes
+ *                    and verifies production points at it.
+ *   rollback <deployment>
+ *                    Emergency switch to an earlier production deployment of
+ *                    the canonical project. Shows its SHA/ref first and refuses
+ *                    anything outside the canonical project/team, not READY or
+ *                    not a production build.
+ *
+ * Why promote exists (2026-10-23): five production deployments were uploaded
+ * straight from a stale branch with the raw CLI. Production now only changes
+ * through `promote` (or `rollback`), and the project's build command refuses
+ * any production build whose Git ref isn't main (PRODUCTION_REF_CHECK below).
  *
  * Env: VERCEL_TOKEN (optional; falls back to the Vercel CLI's stored login),
  *      VERCEL_GUARD_DRY_RUN=1 prints the deploy command instead of running it.
@@ -31,9 +51,31 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const CANONICAL = JSON.parse(readFileSync(join(REPO_ROOT, "vercel.canonical.json"), "utf8"));
-
 export class GuardError extends Error {}
+
+function loadCanonical() {
+  const file = join(REPO_ROOT, "vercel.canonical.json");
+  if (!existsSync(file)) throw new GuardError(`Missing ${file} — the guard's canonical project config. Refusing.`);
+  const c = JSON.parse(readFileSync(file, "utf8"));
+  for (const k of ["projectName", "projectId", "orgId", "githubRepo", "vercelCliVersion"]) {
+    if (!c[k]) throw new GuardError(`vercel.canonical.json is missing "${k}". Refusing.`);
+  }
+  return c;
+}
+export const CANONICAL = loadCanonical();
+
+/**
+ * The canonical project's Build Command (Vercel → Settings → Build and
+ * Deployment), set 2026-10-23 with owner approval. It runs before every build
+ * on Vercel — whatever code was uploaded, since it lives in the PROJECT, not
+ * the repo — and fails a production build unless its Git ref is main. Preview
+ * builds are unaffected. `promote` refuses if the live setting drifts from it.
+ */
+export const PRODUCTION_REF_CHECK =
+  '[ "$VERCEL_ENV" != production ] || [ "$VERCEL_GIT_COMMIT_REF" = main ] || { echo "Magnetix: no production build from ref ${VERCEL_GIT_COMMIT_REF:-none}" >&2; exit 1; }; echo "ref ok: ${VERCEL_ENV:-local} ${VERCEL_GIT_COMMIT_REF:-none}"';
+/** Vercel rejects a Build Command longer than 256 characters. */
+export const BUILD_COMMAND_MAX = 256;
+export const PROJECT_BUILD_COMMAND = `${PRODUCTION_REF_CHECK} && pnpm run build`;
 
 /** Throws GuardError unless `dir/.vercel/project.json` names the canonical project + team. */
 export function verifyLink(dir, canonical = CANONICAL) {
@@ -134,14 +176,106 @@ function git(args) {
   return { ok: r.status === 0, out: (r.stdout || "").trim() };
 }
 
-/** For --prod: the worktree must be clean and exactly at origin/main (Git is the record of what's live). */
+/**
+ * Pure: problems with a checkout as the source of a production release.
+ * `localMain` is the local `main` ref (null when absent). Empty list = OK.
+ */
+export function assessCheckout({ branch, head, originMain, localMain, dirty }) {
+  const problems = [];
+  if (!originMain) problems.push("origin/main could not be resolved.");
+  if (dirty) problems.push("Uncommitted changes to tracked files — commit or stash first.");
+  if (branch !== "main") problems.push(`Current branch is ${branch || "(detached HEAD)"}, not main. Production releases only from main.`);
+  if (!head || head !== originMain) problems.push(`HEAD ${(head || "").slice(0, 7)} is not origin/main ${(originMain || "").slice(0, 7)}.`);
+  if (localMain && localMain !== originMain) problems.push(`Local main ${localMain.slice(0, 7)} is not origin/main ${(originMain || "").slice(0, 7)} — update it (git pull) first.`);
+  return problems;
+}
+
+/** For --prod / promote: on main, clean, and exactly at origin/main (Git is the record of what's live). */
 export function verifyProductionCheckout() {
-  if (!git(["fetch", "--quiet", "origin", "main"]).ok) throw new GuardError("git fetch origin main failed — refusing a production deploy.");
-  if (git(["status", "--porcelain", "--untracked-files=no"]).out) throw new GuardError("Uncommitted changes to tracked files — commit or stash before a production deploy.");
-  const head = git(["rev-parse", "HEAD"]).out;
-  const main = git(["rev-parse", "origin/main"]).out;
-  if (!head || head !== main) throw new GuardError(`HEAD ${head.slice(0, 7)} is not origin/main ${main.slice(0, 7)}. Production ships from main: push to main (the canonical project's Git integration deploys it), or check out origin/main first.`);
-  return head;
+  if (!git(["fetch", "--quiet", "origin", "main"]).ok) throw new GuardError("git fetch origin main failed — refusing a production release.");
+  const state = {
+    branch: git(["rev-parse", "--abbrev-ref", "HEAD"]).out,
+    head: git(["rev-parse", "HEAD"]).out,
+    originMain: git(["rev-parse", "origin/main"]).out,
+    localMain: git(["rev-parse", "--verify", "--quiet", "refs/heads/main"]).out || null,
+    dirty: !!git(["status", "--porcelain", "--untracked-files=no"]).out,
+  };
+  const problems = assessCheckout(state);
+  if (problems.length) throw new GuardError(`Not a production release checkout:\n  - ${problems.join("\n  - ")}`);
+  return state.head;
+}
+
+/**
+ * Pure: problems with a Vercel deployment (v13 deployment JSON) as the
+ * target of `promote`. Empty list = OK.
+ */
+export function assessPromotionTarget(d, { originMain, canonical = CANONICAL }) {
+  const problems = [];
+  const meta = d?.meta ?? {};
+  if (!d?.id) return ["Deployment not found."];
+  if (d.projectId !== canonical.projectId) problems.push(`Deployment belongs to project ${d.projectId ?? "(unknown)"}, not ${canonical.projectName} (${canonical.projectId}).`);
+  const team = d.team?.id ?? d.ownerId;
+  if (team !== canonical.orgId) problems.push(`Deployment belongs to team ${team ?? "(unknown)"}, not ${canonical.orgId}.`);
+  if (d.readyState !== "READY") problems.push(`Deployment is ${d.readyState ?? "(unknown)"}, not READY.`);
+  if (d.target !== "production") problems.push(`Deployment target is ${d.target ?? "preview"}, not production.`);
+  if (meta.githubCommitRef !== "main") problems.push(`Deployment was built from ref ${meta.githubCommitRef ?? "(none)"}, not main.`);
+  if (!meta.githubCommitSha || meta.githubCommitSha !== originMain) problems.push(`Deployment SHA ${(meta.githubCommitSha ?? "(none)").slice(0, 7)} is not origin/main ${(originMain ?? "").slice(0, 7)}.`);
+  const repo = meta.githubCommitOrg && meta.githubCommitRepo ? `${meta.githubCommitOrg}/${meta.githubCommitRepo}` : null;
+  if (repo && repo !== canonical.githubRepo) problems.push(`Deployment came from repo ${repo}, not ${canonical.githubRepo}.`);
+  return problems;
+}
+
+/** Pure: problems with a deployment as a `rollback` target (any earlier SHA is allowed). */
+export function assessRollbackTarget(d, { canonical = CANONICAL }) {
+  if (!d?.id) return ["Deployment not found."];
+  const problems = [];
+  if (d.projectId !== canonical.projectId) problems.push(`Deployment belongs to project ${d.projectId ?? "(unknown)"}, not ${canonical.projectName}.`);
+  const team = d.team?.id ?? d.ownerId;
+  if (team !== canonical.orgId) problems.push(`Deployment belongs to team ${team ?? "(unknown)"}, not ${canonical.orgId}.`);
+  if (d.readyState !== "READY") problems.push(`Deployment is ${d.readyState ?? "(unknown)"}, not READY.`);
+  if (d.target !== "production") problems.push(`Deployment target is ${d.target ?? "preview"}, not production.`);
+  return problems;
+}
+
+/** Pure: problems with the project's production safety settings. */
+export function assessProjectSettings(project) {
+  const problems = [];
+  if (project?.buildCommand !== PROJECT_BUILD_COMMAND) problems.push("The project's Build Command is not the production-ref check (PROJECT_BUILD_COMMAND). Restore it before promoting.");
+  if (project?.autoAssignCustomDomains !== false) problems.push("Production domains are set to auto-assign; the release rule is manual promotion (autoAssignCustomDomains: false).");
+  return problems;
+}
+
+export function describeDeployment(d) {
+  const meta = d?.meta ?? {};
+  return `${d?.id} · ${d?.url ?? ""} · ${d?.target ?? "preview"} · ${d?.readyState} · ref ${meta.githubCommitRef ?? "(none)"} · SHA ${(meta.githubCommitSha ?? "(none)").slice(0, 12)} · source ${d?.source ?? "?"} · created ${d?.createdAt ? new Date(d.createdAt).toISOString() : "?"}`;
+}
+
+async function api(path, { method = "GET", body, token = vercelToken(), fetchImpl = fetch } = {}) {
+  if (!token) throw new GuardError("No Vercel token (set VERCEL_TOKEN or sign in with the Vercel CLI) — refusing.");
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetchImpl(`https://api.vercel.com${path}${sep}teamId=${CANONICAL.orgId}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) throw new GuardError(`Vercel API ${res.status} on ${method} ${path} — refusing.${res.status === 401 || res.status === 403 ? ` ${REFRESH_HINT}` : ""}`);
+  return res.json();
+}
+
+function deploymentRef(arg) {
+  if (!arg) throw new GuardError("Name the deployment: its id (dpl_…) or URL.");
+  return encodeURIComponent(arg.replace(/^https?:\/\//, "").replace(/\/.*$/, ""));
+}
+
+function runPinnedCli(argv) {
+  const line = `VERCEL_ORG_ID=${CANONICAL.orgId} VERCEL_PROJECT_ID=${CANONICAL.projectId} npx --yes vercel@${CANONICAL.vercelCliVersion} ${argv.join(" ")}`;
+  if (process.env.VERCEL_GUARD_DRY_RUN === "1") {
+    console.log(`[dry run] ${line}`);
+    return 0;
+  }
+  console.log(`→ ${line}`);
+  const run = spawnSync("npx", ["--yes", `vercel@${CANONICAL.vercelCliVersion}`, ...argv], { stdio: "inherit", env: { ...process.env, VERCEL_ORG_ID: CANONICAL.orgId, VERCEL_PROJECT_ID: CANONICAL.projectId } });
+  return run.status ?? 1;
 }
 
 const FORBIDDEN_ARGS = ["--project", "--name", "--scope", "--team", "-S", "-T", "--cwd", "link"];
@@ -200,8 +334,51 @@ async function main() {
       process.exitCode = run.status ?? 1;
       return;
     }
+    case "promote": {
+      verifyLink(cwd);
+      const r = await sanity();
+      if (!r.ok) throw new GuardError(`Account sanity check failed (canonical linked: ${r.canonicalLinked}; extra: ${r.extra.join(", ") || "none"}). Run \`pnpm vercel:sanity\`.`);
+      const originMain = verifyProductionCheckout();
+      const project = await api(`/v9/projects/${CANONICAL.projectId}`);
+      const settings = assessProjectSettings(project);
+      if (settings.length) throw new GuardError(`Project safety settings:\n  - ${settings.join("\n  - ")}`);
+      const d = await api(`/v13/deployments/${deploymentRef(args[0])}`);
+      console.log(`Target: ${describeDeployment(d)}`);
+      console.log(`origin/main: ${originMain}`);
+      const problems = assessPromotionTarget(d, { originMain });
+      if (problems.length) throw new GuardError(`Refusing to promote:\n  - ${problems.join("\n  - ")}`);
+      const status = runPinnedCli(["promote", d.id, "--yes"]);
+      if (status !== 0) throw new GuardError(`vercel promote exited ${status}.`);
+      if (process.env.VERCEL_GUARD_DRY_RUN === "1") return;
+      const after = await api(`/v9/projects/${CANONICAL.projectId}`);
+      if (after.targets?.production?.id !== d.id) throw new GuardError(`Promote finished but production points at ${after.targets?.production?.id ?? "(unknown)"}, not ${d.id}. Investigate.`);
+      if (after.autoAssignCustomDomains !== false) {
+        await api(`/v9/projects/${CANONICAL.projectId}`, { method: "PATCH", body: { autoAssignCustomDomains: false } });
+        console.log("Re-set production domains to manual assignment (autoAssignCustomDomains: false).");
+      }
+      console.log(`✓ Production now serves ${d.id} (SHA ${d.meta.githubCommitSha.slice(0, 12)}, main). Domains stay on manual assignment.`);
+      return;
+    }
+    case "rollback": {
+      verifyLink(cwd);
+      const d = await api(`/v13/deployments/${deploymentRef(args[0])}`);
+      console.log(`Target: ${describeDeployment(d)}`);
+      const problems = assessRollbackTarget(d, {});
+      if (problems.length) throw new GuardError(`Refusing to roll back:\n  - ${problems.join("\n  - ")}`);
+      git(["fetch", "--quiet", "origin", "main"]);
+      const originMain = git(["rev-parse", "origin/main"]).out;
+      if (d.meta?.githubCommitSha !== originMain) console.log(`⚠ This deployment is SHA ${(d.meta?.githubCommitSha ?? "(none)").slice(0, 12)} (ref ${d.meta?.githubCommitRef ?? "(none)"}), not origin/main ${originMain.slice(0, 12)} — production will run older code until the next promote.`);
+      if (!args.includes("--confirm")) throw new GuardError("Check the target above, then re-run with --confirm.");
+      const status = runPinnedCli(["rollback", d.id, "--yes"]);
+      if (status !== 0) throw new GuardError(`vercel rollback exited ${status}.`);
+      if (process.env.VERCEL_GUARD_DRY_RUN === "1") return;
+      const after = await api(`/v9/projects/${CANONICAL.projectId}`);
+      if (after.targets?.production?.id !== d.id) throw new GuardError(`Rollback finished but production points at ${after.targets?.production?.id ?? "(unknown)"}. Investigate.`);
+      console.log(`✓ Production rolled back to ${d.id}. Production domains are now assigned manually; release forward with \`pnpm deploy:promote\`.`);
+      return;
+    }
     default:
-      throw new GuardError("Usage: vercel-guard.mjs <check|link|sanity|deploy [--prod]>");
+      throw new GuardError("Usage: vercel-guard.mjs <check|link|sanity|deploy [--prod]|promote <deployment>|rollback <deployment> [--confirm]>");
   }
 }
 

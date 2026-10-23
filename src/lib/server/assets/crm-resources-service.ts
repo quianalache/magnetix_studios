@@ -120,7 +120,7 @@ const MODULES: {
           description: text(d.seo?.description) || (d.pageType ? `${String(d.pageType)[0].toUpperCase()}${String(d.pageType).slice(1)} page` : ""),
           sourceModule: "Pages & Funnels", delivery: "Page URL",
           status: published ? "active" : "draft", statusLabel: published ? "Published" : "Draft",
-          updatedAt: isoOf(d.updatedAt ?? d.createdAt), href: `/pages-funnels/${s.id}`,
+          updatedAt: isoOf(d.updatedAt ?? d.createdAt), href: `/pages-funnels/${s.id}/new-builder`,
           publicUrl: published ? `/p/${s.id}` : null, byUid: byUid(d),
         };
       });

@@ -7,12 +7,9 @@ import { migratedNodeId } from "@/lib/pages-funnels/puck/ids";
 
 /**
  * DIRECT, deterministic V1 -> Puck Data converter — master spec §16/§18's
- * approved migration path: `PageBlock[] -> Puck Data`, NOT the two-hop
- * `PageBlock[] -> SectionNode[] -> Puck Data` V2 already proved is possible.
- * `src/lib/pages-funnels/v2/migrate.ts` (`migrateBlocksToSections`) is used
- * as a DESIGN reference only, per the master spec — its actual
- * block-by-block mapping decisions are echoed here, but this function does
- * not call it or depend on V2 types at all.
+ * approved migration path: `PageBlock[] -> Puck Data`. This is the canonical
+ * deterministic converter used by the New Builder and does not depend on
+ * the retired V2 tree types.
  *
  * NOT persisted anywhere yet, NOT wired into any live route yet (master
  * spec §16/§17 — this is Phase 1 foundation only, not a migration script).

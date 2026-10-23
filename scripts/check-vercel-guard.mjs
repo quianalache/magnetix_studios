@@ -9,7 +9,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANONICAL, GuardError, buildDeployCommand, classifyProjects, sanity, storedLogin, vercelToken, verifyLink, writeLink } from "./vercel-guard.mjs";
+import { BUILD_COMMAND_MAX, CANONICAL, GuardError, PRODUCTION_REF_CHECK, PROJECT_BUILD_COMMAND, assessCheckout, assessProjectSettings, assessPromotionTarget, assessRollbackTarget, buildDeployCommand, classifyProjects, sanity, storedLogin, vercelToken, verifyLink, writeLink } from "./vercel-guard.mjs";
 
 const GUARD = resolve(dirname(fileURLToPath(import.meta.url)), "vercel-guard.mjs");
 let passed = 0;
@@ -156,6 +156,81 @@ try {
     const r = runGuard(d, ["check"]);
     assert.equal(r.status, 0);
     assert.match(r.stdout, /canonical Vercel project magnetix-studios/);
+  });
+
+  // ── Production release rule (2026-10-23) ────────────────────────────────
+  const MAIN = "c72ba883a9244f5aa46a550600dc08c6fefb198e";
+  const okCheckout = { branch: "main", head: MAIN, originMain: MAIN, localMain: MAIN, dirty: false };
+  await test("checkout: on main at origin/main, clean → OK", () => {
+    assert.deepEqual(assessCheckout(okCheckout), []);
+  });
+  await test("checkout: a stale branch is refused even at the same commit (branch is not main)", () => {
+    assert.match(assessCheckout({ ...okCheckout, branch: "codex/production-content-sets-reading-integration" }).join(" "), /not main/);
+  });
+  await test("checkout: HEAD behind origin/main, local main behind, dirty, detached → each refused", () => {
+    assert.match(assessCheckout({ ...okCheckout, head: "f8534f93df7e" }).join(" "), /is not origin\/main/);
+    assert.match(assessCheckout({ ...okCheckout, localMain: "245e0df1234" }).join(" "), /Local main/);
+    assert.match(assessCheckout({ ...okCheckout, dirty: true }).join(" "), /Uncommitted/);
+    assert.match(assessCheckout({ ...okCheckout, branch: "HEAD" }).join(" "), /not main/);
+  });
+  const goodDeployment = { id: "dpl_good", projectId: CANONICAL.projectId, ownerId: CANONICAL.orgId, readyState: "READY", target: "production", source: "git",
+    meta: { githubCommitRef: "main", githubCommitSha: MAIN, githubCommitOrg: "quianalache", githubCommitRepo: "magnetix_studios" } };
+  await test("promote target: READY production build of main at origin/main → OK", () => {
+    assert.deepEqual(assessPromotionTarget(goodDeployment, { originMain: MAIN }), []);
+  });
+  await test("promote target: the stale-branch CLI upload (dpl_9eaF6…, f8534f9) is refused", () => {
+    const codex = { ...goodDeployment, id: "dpl_9eaF6Wtd5udZ1VCQwRXrYa3KKHEQ", source: "cli", meta: { githubCommitRef: "codex/production-content-sets-reading-integration", githubCommitSha: "f8534f93df7e6cd7bf3cb68e2662b52accd006ef" } };
+    const p = assessPromotionTarget(codex, { originMain: MAIN }).join(" ");
+    assert.match(p, /not main/);
+    assert.match(p, /is not origin\/main/);
+  });
+  await test("promote target: other project / other team / not READY / preview / other repo → each refused", () => {
+    assert.match(assessPromotionTarget({ ...goodDeployment, projectId: "prj_other" }, { originMain: MAIN }).join(" "), /belongs to project/);
+    assert.match(assessPromotionTarget({ ...goodDeployment, ownerId: "team_other" }, { originMain: MAIN }).join(" "), /belongs to team/);
+    assert.match(assessPromotionTarget({ ...goodDeployment, readyState: "ERROR" }, { originMain: MAIN }).join(" "), /not READY/);
+    assert.match(assessPromotionTarget({ ...goodDeployment, target: null }, { originMain: MAIN }).join(" "), /not production/);
+    assert.match(assessPromotionTarget({ ...goodDeployment, meta: { ...goodDeployment.meta, githubCommitOrg: "someone", githubCommitRepo: "fork" } }, { originMain: MAIN }).join(" "), /came from repo/);
+  });
+  await test("rollback target: an older canonical production deployment is allowed; other projects / previews are not", () => {
+    assert.deepEqual(assessRollbackTarget({ ...goodDeployment, meta: { githubCommitRef: "main", githubCommitSha: "65611f0" } }, {}), []);
+    assert.match(assessRollbackTarget({ ...goodDeployment, projectId: "prj_other" }, {}).join(" "), /belongs to project/);
+    assert.match(assessRollbackTarget({ ...goodDeployment, target: null }, {}).join(" "), /not production/);
+  });
+  await test("project settings: promote refuses without the build check or with auto-assigned domains", () => {
+    assert.deepEqual(assessProjectSettings({ buildCommand: PROJECT_BUILD_COMMAND, autoAssignCustomDomains: false }), []);
+    assert.match(assessProjectSettings({ buildCommand: null, autoAssignCustomDomains: false }).join(" "), /Build Command/);
+    assert.match(assessProjectSettings({ buildCommand: PROJECT_BUILD_COMMAND, autoAssignCustomDomains: true }).join(" "), /auto-assign/);
+  });
+  const runCheck = (env) => spawnSync("sh", ["-c", PRODUCTION_REF_CHECK], { encoding: "utf8", env: { PATH: process.env.PATH, ...env } });
+  await test("build check: production from a non-main ref FAILS the build", () => {
+    const r = runCheck({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "codex/production-content-sets-reading-integration" });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /no production build from ref codex\/production-content-sets-reading-integration/);
+  });
+  await test("build check: production with no Git ref (e.g. a non-Git upload) FAILS the build", () => {
+    const r = runCheck({ VERCEL_ENV: "production" });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /from ref none/);
+  });
+  await test("build check: production from main, previews from any branch, and local builds pass", () => {
+    assert.equal(runCheck({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }).status, 0);
+    assert.equal(runCheck({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "claude/reconcile-codex-consolidation" }).status, 0);
+    assert.equal(runCheck({}).status, 0);
+  });
+  await test("build check: the project command runs the check BEFORE the real build", () => {
+    assert.ok(PROJECT_BUILD_COMMAND.startsWith(PRODUCTION_REF_CHECK + " && "));
+    assert.ok(PROJECT_BUILD_COMMAND.endsWith("pnpm run build"));
+    assert.ok(PROJECT_BUILD_COMMAND.length <= BUILD_COMMAND_MAX, `Build Command is ${PROJECT_BUILD_COMMAND.length} chars; Vercel allows ${BUILD_COMMAND_MAX}`);
+  });
+  await test("CLI: promote / rollback with no token refuse before touching Vercel", () => {
+    const d = tmp();
+    dirs.push(d);
+    writeLink(d);
+    for (const args of [["promote", "dpl_x"], ["rollback", "dpl_x", "--confirm"]]) {
+      const r = runGuard(d, args, { VERCEL_GUARD_DRY_RUN: "1", HOME: d });
+      assert.equal(r.status, 1, args.join(" "));
+      assert.match(r.stderr, /No Vercel token/);
+    }
   });
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });

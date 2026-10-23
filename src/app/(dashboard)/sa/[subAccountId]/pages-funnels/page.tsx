@@ -22,7 +22,6 @@ import {
   Trash2,
   Loader2,
   Check,
-  FlaskConical,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -38,7 +37,6 @@ import { PAGE_TEMPLATES, getTemplate } from "@/lib/pages-funnels/templates";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
-import { pageEditorPath } from "@/lib/pages-funnels/editor-route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -175,7 +173,7 @@ export default function PagesFunnelsPage() {
         page
       );
       toast.success("Page duplicated");
-      router.push(saPath(`/pages-funnels/${id}`));
+      router.push(saPath(`/pages-funnels/${id}/new-builder`));
     } catch (err) {
       console.error(err);
       toast.error("Couldn't duplicate page.");
@@ -186,7 +184,7 @@ export default function PagesFunnelsPage() {
     return (
       <CreatePageFlow
         onCancel={() => setMode("library")}
-        onCreated={(id) => router.push(saPath(`/pages-funnels/${id}`))}
+        onCreated={(id) => router.push(saPath(`/pages-funnels/${id}/new-builder`))}
       />
     );
   }
@@ -229,8 +227,7 @@ export default function PagesFunnelsPage() {
               key={page.id}
               page={page}
               subAccount={subAccount}
-              editHref={saPath(pageEditorPath(page))}
-              newBuilderHref={saPath(`/pages-funnels/${page.id}/new-builder`)}
+              editHref={saPath(`/pages-funnels/${page.id}/new-builder`)}
               onDuplicate={() => handleDuplicate(page)}
               onDelete={() => handleDelete(page)}
             />
@@ -245,14 +242,12 @@ function PageCard({
   page,
   subAccount,
   editHref,
-  newBuilderHref,
   onDuplicate,
   onDelete,
 }: {
   page: PageDoc;
   subAccount: SubAccountDoc | null;
   editHref: string;
-  newBuilderHref: string;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
@@ -316,18 +311,6 @@ function PageCard({
                 </DropdownMenuItem>
               </>
             )}
-            {/* Phase 2A temporary testing entry point (master spec §6/§13,
-                Phase 2A task §5) — the real, CRM-integrated, Magnetix-styled
-                Puck editor, session-local safe-testing only. Not gated
-                behind any admin/internal-user check: no such pattern exists
-                elsewhere in this repo, this CRM currently has a single
-                real user, and the entry is clearly labeled/non-destructive
-                (reads the real page, writes nothing). Remove this item (and
-                only this item) once Puck is approved for production
-                cutover and V1's own "Edit" becomes the Puck editor. */}
-            <DropdownMenuItem render={<a href={newBuilderHref} />}>
-              <FlaskConical className="h-3.5 w-3.5" /> Try New Builder
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={onDuplicate}>
               <Copy className="h-3.5 w-3.5" /> Duplicate
             </DropdownMenuItem>
@@ -353,24 +336,6 @@ function PageCard({
       <p className="text-muted-foreground mt-3 text-xs">
         Edited {updated ? updated.toLocaleDateString() : "just now"}
       </p>
-
-      {/* Always-visible (not hidden in the ⋮ menu) temporary QA entry point
-          for the Phase 2A Puck editor — the hidden dropdown-only version
-          shipped in the prior task was confirmed, via real user QA, to be
-          too easy to miss: a user naturally clicked the page title above
-          (which correctly goes to V1's "Edit") and never discovered the
-          new builder existed. This button is a second, clearly distinct
-          entry alongside — not instead of — V1's own "Edit"; the dropdown
-          item (below) is kept too, per this task's explicit instruction.
-          Remove this whole block (and only this block) once Puck is
-          approved for production cutover and "Edit" itself becomes the
-          Puck editor. */}
-      <a
-        href={newBuilderHref}
-        className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 mt-3 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-colors"
-      >
-        <FlaskConical className="h-3.5 w-3.5" /> Try New Builder
-      </a>
     </div>
   );
 }

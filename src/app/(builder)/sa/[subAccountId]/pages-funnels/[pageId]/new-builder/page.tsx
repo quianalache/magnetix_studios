@@ -2,9 +2,13 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { subscribeToPage } from "@/lib/firestore/pages-funnels";
+import { getPagesOnce, subscribeToPage } from "@/lib/firestore/pages-funnels";
+import {
+  classifyPageLoadError,
+  PageLoadStateView,
+  type PageLoadState,
+} from "@/components/pages-funnels/page-load-state";
 import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1";
 import { derivePuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
@@ -19,12 +23,9 @@ import { DEFAULT_READING_RESULT_PAGE_SETTINGS } from "@/types/reading-blocks";
  * real `subAccountId`/`pageId`, "Back to Pages & Funnels" as the only way
  * out, matching the already-approved builder-takeover pattern exactly.
  *
- * `/new-builder` is deliberately a SIBLING of the real V1 editor route
- * (`.../pages-funnels/[pageId]`), not a replacement — the V1 route, its
- * Canvas/BlocksPanel/SettingsPanel, and its Firestore persistence are
- * completely untouched by this file. This route is reachable from the real
- * Pages & Funnels list via a "Try New Builder" entry point (added to that
- * list's PageCard dropdown), not just a hidden docs URL.
+ * `/new-builder` is the canonical (and only) editor route. The sibling
+ * legacy URL (`.../pages-funnels/[pageId]`) is kept only as a redirect here
+ * so old bookmarks keep working, without a second editor or write path.
  *
  * DATA MODEL (originally Phase 2A task §6 "safe-testing, nothing written
  * back"; superseded by the Puck Persistence + Publish Foundation task,
@@ -39,9 +40,9 @@ import { DEFAULT_READING_RESULT_PAGE_SETTINGS } from "@/types/reading-blocks";
  *
  * Once a page has a persisted Puck draft, reopening this route uses THAT
  * — it never re-runs V1 migration again and silently discards prior Puck
- * edits. `blocks` (V1) is still read here (for the migration fallback) but
- * NEVER written by this route or by anything downstream of it — V1's own
- * persistence stays completely untouched. `MagnetixPuckEditorShell` is what
+ * edits. `blocks` (legacy) is still read here only for the in-memory
+ * migration fallback and is NEVER written by this route or anything
+ * downstream of it. `MagnetixPuckEditorShell` is what
  * actually performs Save Draft/autosave/Publish now (via
  * `use-puck-persistence.ts`), each writing ONLY the new `puckDraftData`/
  * `puckPublishedData` fields via a dedicated Admin-SDK API route — this
@@ -56,15 +57,36 @@ export default function NewBuilderPage({
   const { saPath, subAccount } = useSubAccount();
 
   const [page, setPage] = useState<PageDoc | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<PageLoadState>("loading");
 
   useEffect(() => {
-    const unsub = subscribeToPage(pageId, (p) => {
-      setPage(p);
-      setLoaded(true);
-    });
+    const unsub = subscribeToPage(
+      pageId,
+      (p) => {
+        setPage(p);
+        setLoadState(p ? "ready" : "not-found");
+      },
+      async (error) => {
+        setPage(null);
+        const state = classifyPageLoadError(error);
+        if (state !== "access-denied" || !subAccount?.agencyId) {
+          setLoadState(state);
+          return;
+        }
+        // The pages rule can report a MISSING document as permission-denied.
+        // A tenant-scoped list read (allowed for anyone who may use this
+        // sub-account) tells a mistyped/removed id apart from a real page
+        // this person can't open.
+        try {
+          const pages = await getPagesOnce({ agencyId: subAccount.agencyId, subAccountId });
+          setLoadState(pages.some((candidate) => candidate.id === pageId) ? "access-denied" : "not-found");
+        } catch {
+          setLoadState("access-denied");
+        }
+      }
+    );
     return () => unsub();
-  }, [pageId]);
+  }, [pageId, subAccount?.agencyId, subAccountId]);
 
   // Load priority (master spec §24.12): a real persisted Puck draft always
   // wins over re-migrating V1 `blocks` — otherwise every reopen of this
@@ -101,26 +123,8 @@ export default function NewBuilderPage({
     [subAccount, pageId]
   );
 
-  if (!loaded) {
-    return (
-      <div className="flex h-dvh items-center justify-center">
-        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!page || !initialData) {
-    return (
-      <div className="flex h-dvh flex-col items-center justify-center gap-3 text-center">
-        <p className="text-muted-foreground text-sm">Page not found.</p>
-        <a
-          href={saPath("/pages-funnels")}
-          className="text-primary text-sm font-medium underline"
-        >
-          Back to Pages &amp; Funnels
-        </a>
-      </div>
-    );
+  if (loadState !== "ready" || !page || !initialData) {
+    return <PageLoadStateView state={loadState === "ready" ? "not-found" : loadState} backHref={saPath("/pages-funnels")} />;
   }
 
   return (
