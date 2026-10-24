@@ -519,6 +519,11 @@ export function createPuckConfig(
   ReadingToolComponent: React.ComponentType<ReadingToolComponentProps>
 ): Config {
   return {
+    // The page root has no editable fields: Puck's default `title` field was
+    // never read by anything (page name, address and SEO live in Pages &
+    // Funnels). An empty field set hides that dead control; root rendering
+    // and the stored data are unchanged.
+    root: { fields: {} },
     categories: {
       layout: { title: "Layout", components: ["Section", "Row", "Column"] },
       elements: {

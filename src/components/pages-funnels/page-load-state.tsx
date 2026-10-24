@@ -1,5 +1,7 @@
 import React from "react";
-import { AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/system/empty-state";
 
 export type PageLoadState =
   | "loading"
@@ -54,21 +56,22 @@ export function PageLoadStateView({
       ? "The page may have been removed or the link may be incorrect."
       : "Please try again. If the problem continues, contact your workspace administrator.";
 
+  // Shared empty-state card (Visual Direction 2, 2026-10-24) on the plain
+  // canvas — same states, copy and back link as before.
   return (
-    <div className="bg-background flex h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
-      {accessDenied ? (
-        <ShieldAlert className="text-primary h-7 w-7" aria-hidden="true" />
-      ) : (
-        <AlertTriangle
-          className="text-muted-foreground h-7 w-7"
-          aria-hidden="true"
-        />
-      )}
-      <p className="text-foreground text-sm font-semibold">{title}</p>
-      <p className="text-muted-foreground max-w-sm text-sm">{detail}</p>
-      <a href={backHref} className="text-primary text-sm font-medium underline">
-        Back to Pages &amp; Funnels
-      </a>
+    <div className="bg-background flex h-dvh items-center justify-center px-4">
+      <EmptyState
+        className="w-full max-w-md"
+        icon={accessDenied ? ShieldAlert : AlertTriangle}
+        title={title}
+        description={detail}
+        action={
+          <Button variant="outline" render={<a href={backHref} />}>
+            <ArrowLeft />
+            Back to Pages &amp; Funnels
+          </Button>
+        }
+      />
     </div>
   );
 }

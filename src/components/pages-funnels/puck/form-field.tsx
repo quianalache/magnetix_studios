@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { subscribeToForms } from "@/lib/firestore/forms";
 import type { LeadForm } from "@/types/forms";
+import { OptionSelect } from "@/components/system/option-select";
 
 /**
  * Form element's Settings field editor (real user QA blocker — the Form
@@ -91,18 +92,15 @@ export function FormFieldEditor({
         </div>
       ) : (
         <>
-          <select
-            value={formId}
-            onChange={(e) => onChange(e.target.value)}
-            className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
-          >
-            <option value="">Select a form…</option>
-            {forms.map((form) => (
-              <option key={form.id} value={form.id}>
-                {form.name}
-              </option>
-            ))}
-          </select>
+          <OptionSelect
+            size="sm"
+            className="w-full"
+            aria-label="Form"
+            value={formId || null}
+            onChange={(v) => onChange(v ?? "")}
+            options={forms.map((form) => ({ value: form.id, label: form.name }))}
+            noneLabel="Select a form…"
+          />
           <a
             href={sub.saPath("/forms")}
             target="_blank"

@@ -65,7 +65,7 @@ export function MagnetixBlocksPanel({ config, readingResult = false }: { config:
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-3">
         <Drawer>
           {CATEGORY_ORDER.map((categoryKey) => {
             const category = config.categories?.[categoryKey];
@@ -76,11 +76,11 @@ export function MagnetixBlocksPanel({ config, readingResult = false }: { config:
             if (names.length === 0) return null;
 
             return (
-              <div key={categoryKey} className="mb-5">
-                <p className="text-muted-foreground mb-2 px-1 text-[11px] font-semibold tracking-wider uppercase">
+              <div key={categoryKey} className="mb-4 last:mb-0">
+                <p className="text-muted-foreground mb-1.5 px-1 text-overline font-semibold tracking-[0.12em] uppercase">
                   {category.title ?? categoryKey}
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(6.75rem,1fr))] gap-1.5">
                   {names.map((name) => {
                     const Icon = BLOCK_ICONS[name];
                     const label = config.components?.[name]?.label ?? name;
@@ -93,12 +93,12 @@ export function MagnetixBlocksPanel({ config, readingResult = false }: { config:
                         {({ children, name: itemName }) => (
                           <div
                             data-puck-drawer-item={itemName}
-                            className="border-border bg-card hover:border-primary/40 hover:bg-primary/5 flex cursor-grab flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-center text-xs font-medium transition-colors active:cursor-grabbing"
+                            className="group/block border-border bg-card hover:border-border-strong hover:bg-muted flex min-h-10 cursor-grab items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-caption font-medium transition-colors active:cursor-grabbing"
                           >
                             {Icon && (
-                              <Icon className="text-muted-foreground h-4 w-4" />
+                              <Icon className="text-muted-foreground group-hover/block:text-tag-violet-fg size-4 shrink-0" />
                             )}
-                            <span className="text-foreground">
+                            <span className="text-foreground min-w-0 leading-tight">
                               {typeof label === "string" ? label : itemName}
                             </span>
                             {/* `children` is Drawer.Item's own drag-affordance
@@ -126,13 +126,13 @@ export function MagnetixBlocksPanel({ config, readingResult = false }: { config:
           );
           return names.length === 0;
         }) && (
-          <p className="text-muted-foreground px-1 text-sm">
+          <p className="text-muted-foreground px-1 text-body-sm">
             No blocks match &ldquo;{search}&rdquo;.
           </p>
         )}
       </div>
 
-      <div className="border-border text-muted-foreground border-t p-3 text-center text-[11px]">
+      <div className="border-border text-muted-foreground border-t px-3 py-2 text-center text-micro">
         Drag a block onto the canvas.
       </div>
     </div>

@@ -92,7 +92,7 @@ export function FeaturedOfferPickerField({ value, onChange }: { value: string | 
           </SelectContent>
         </Select>
       )}
-      <p className="text-muted-foreground text-[11px] leading-snug">
+      <p className="text-muted-foreground text-micro leading-snug">
         Price, billing terms and what it includes always come from the Offer itself — this block can’t change them.
       </p>
       {sub && (

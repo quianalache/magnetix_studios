@@ -24,7 +24,7 @@ import "@puckeditor/core/no-external.css";
 import "./magnetix-theme.css";
 import type { Data } from "@puckeditor/core";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/system/status-pill";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -146,6 +146,8 @@ export interface MagnetixPuckEditorShellProps {
   /** Reading Result Pages only (2026-10-21) — the page's Reading settings.
    *  Null on every other page type. */
   readingResult?: ReadingResultPageSettings | null;
+  /** Human page-type label shown in the header ("Landing Page", "Reading Result Page"…). */
+  pageTypeLabel?: string;
 }
 
 export function MagnetixPuckEditorShell({
@@ -160,6 +162,7 @@ export function MagnetixPuckEditorShell({
   liveUrl,
   initialData,
   readingResult = null,
+  pageTypeLabel,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [readingSettings, setReadingSettings] =
@@ -305,7 +308,7 @@ export function MagnetixPuckEditorShell({
   // report).
   const renderHeader = useCallback(
     ({ children }: { children: React.ReactNode }) => (
-      <div className="border-border bg-card relative flex items-center gap-3 border-b px-4 py-2.5">
+      <div className="border-border bg-card relative flex items-center gap-3 border-b px-4 py-1.5">
         {/* System B Auto Hierarchy (master spec §24.1/§6/§11–15) — a
             non-rendering watcher, mounted here (not anywhere in the visual
             layout) purely because this is a real descendant of `<Puck>`'s
@@ -329,24 +332,17 @@ export function MagnetixPuckEditorShell({
           pageStatus={pageStatus}
           puckPublishStatus={puckPublishStatus}
         />
-        {/* Self-identifying QA badge (added after real user QA confirmed a
-            user could land in V1 and not realize it — this makes which
-            editor is on screen unambiguous at a glance, without reading
-            anything else). "New Builder Preview" per this task's explicit
-            naming guidance — not "Puck", which isn't customer-facing product
-            naming. Remove once Puck is the only editor and this distinction
-            no longer needs calling out. */}
-        <Badge
-          variant="outline"
-          title="New Builder Preview"
-          className="border-primary/40 text-primary hidden shrink-0 border-dashed lg:inline-flex"
-        >
-          New Builder<span className="hidden 2xl:inline">&nbsp;Preview</span>
-        </Badge>
+        {/* Page type (2026-10-24) — replaces the migration-era "New
+            Builder" badge now that this is the only editor. */}
+        {pageTypeLabel && (
+          <span className="text-muted-foreground hidden shrink-0 text-caption font-medium xl:inline">
+            {pageTypeLabel}
+          </span>
+        )}
         <div className="min-w-0 flex-1">{children}</div>
       </div>
     ),
-    [backHref, pageStatus, puckPublishStatus]
+    [backHref, pageStatus, puckPublishStatus, pageTypeLabel]
   );
 
   const renderHeaderActions = useCallback(
@@ -499,6 +495,16 @@ export function MagnetixPuckEditorShell({
     ]
   );
 
+  // Tablets (638–999px): open with the Blocks sidebar collapsed so the
+  // canvas isn't squeezed to ~250px between two panels (the header's panel
+  // toggle brings it back). Phones keep Puck's own tabbed layout; laptops
+  // and up keep both panels. Read once — this component is client-only.
+  const [initialUi] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 638 && window.innerWidth < 1000
+      ? { leftSideBarVisible: false }
+      : undefined
+  );
+
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
       <div className="min-h-0 flex-1">
@@ -512,6 +518,7 @@ export function MagnetixPuckEditorShell({
             iframe={IFRAME_CONFIG}
             metadata={metadata}
             overrides={overrides}
+            ui={initialUi}
           />
         </ReadingResultSettingsContext.Provider>
       </div>
@@ -535,28 +542,20 @@ function PageStatusBadge({
   pageStatus: "draft" | "published";
   puckPublishStatus: PuckPublishStatus;
 }) {
+  // Shared CRM status pill (Visual Direction 2): the same word always
+  // gets the same tone across the app — Published green, Draft neutral,
+  // Unpublished changes amber.
   if (puckPublishStatus === "v1-only") {
-    return (
-      <Badge
-        variant={pageStatus === "published" ? "default" : "secondary"}
-        className="shrink-0"
-      >
-        {pageStatus === "published" ? "Published" : "Draft"}
-      </Badge>
+    return pageStatus === "published" ? (
+      <StatusPill tone="success" className="shrink-0">Published</StatusPill>
+    ) : (
+      <StatusPill tone="neutral" className="shrink-0">Draft</StatusPill>
     );
   }
   if (puckPublishStatus === "published-outdated") {
-    return (
-      <Badge variant="outline" className="shrink-0">
-        Unpublished changes
-      </Badge>
-    );
+    return <StatusPill tone="warning" className="shrink-0">Unpublished changes</StatusPill>;
   }
-  return (
-    <Badge variant="default" className="shrink-0">
-      Published
-    </Badge>
-  );
+  return <StatusPill tone="success" className="shrink-0">Published</StatusPill>;
 }
 
 /**

@@ -12,7 +12,7 @@ import {
 import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1";
 import { derivePuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
-import type { PageDoc } from "@/types/pages-funnels";
+import { PAGE_TYPE_LABELS, type PageDoc } from "@/types/pages-funnels";
 import { DEFAULT_READING_RESULT_PAGE_SETTINGS } from "@/types/reading-blocks";
 
 /**
@@ -132,6 +132,7 @@ export default function NewBuilderPage({
       pageId={page.id}
       pageName={page.name}
       pageStatus={page.status}
+      pageTypeLabel={PAGE_TYPE_LABELS[page.pageType] ?? undefined}
       puckPublishStatus={puckPublishStatus}
       subAccountId={subAccountId}
       backHref={saPath("/pages-funnels")}

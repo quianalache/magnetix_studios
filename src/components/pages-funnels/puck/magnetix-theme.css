@@ -84,9 +84,11 @@
   );
   --puck-color-interactive-neutral-hover: var(--muted);
   --puck-color-focus-ring: var(--ring);
+  /* Visual Direction 2 (2026-10-24): selection is a whisper of plum, not a
+     lavender wash over whole sections — "denser work, quieter art". */
   --puck-color-selection-bg: color-mix(
     in srgb,
-    var(--primary) 16%,
+    var(--primary) 5%,
     transparent
   );
   --puck-color-selection-border: var(--primary);
@@ -126,6 +128,12 @@
   --puck-field-radius: calc(var(--radius) * 0.6);
   --puck-field-label-color-text: var(--foreground);
   --puck-field-label-color-icon: var(--muted-foreground);
+  /* Visual Direction 2 (2026-10-24): Puck's own field labels/inputs on the
+     same type scale as the Magnetix style controls beside them (13px labels,
+     14px inputs) instead of 15px headings. */
+  --puck-field-label-font-size: 0.8125rem;
+  --puck-field-font-size: 0.875rem;
+  --puck-field-label-space-y: 6px;
 
   /* ---------- icon buttons (undo/redo, toolbar icons) ---------- */
   --puck-iconbutton-color-icon: var(--muted-foreground);
@@ -150,12 +158,14 @@
   --puck-outline-radius: calc(var(--radius) * 0.5);
 
   /* ---------- slot / drag-drop indicators on canvas ---------- */
-  --puck-slot-color-border: var(--primary);
+  --puck-slot-color-border: color-mix(in srgb, var(--primary) 40%, transparent);
+  /* Empty and selected areas: barely tinted, so content stays the focus. */
+  --puck-slot-color-bg: color-mix(in srgb, var(--primary) 3%, transparent);
   --puck-slot-component-color-border-selected: var(--primary);
   --puck-slot-component-color-border-dragging: var(--primary);
   --puck-slot-component-color-overlay: color-mix(
     in srgb,
-    var(--primary) 10%,
+    var(--primary) 4%,
     transparent
   );
   --puck-slot-component-color-overlay-border: var(--primary);
@@ -233,4 +243,30 @@
     overflow: hidden;
     overflow-wrap: anywhere;
   }
+}
+
+/* Visual Direction 2 (2026-10-24): the Magnetix header row owns the chrome
+   rule. Puck's own header border and the divider beside its toggles drew a
+   second, inset line inside it; and its padding stacked on ours. */
+[class*="_PuckHeader_"] {
+  border-bottom: 0;
+}
+[class*="_PuckHeader-inner_"] {
+  border-left: 0;
+  padding-block: 6px;
+}
+
+/* Empty canvas: a quiet hint instead of a blank tinted slab. Root zone
+   only (nested empty slots keep Puck's own drop affordance). */
+[class*="_DropZone--isRootZone_"]:empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[class*="_DropZone--isRootZone_"]:empty::after {
+  content: "Drag a block from the left to start building";
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  /* The canvas is drawn scaled (≈58% on a laptop), so this reads as ~13px. */
+  font-size: 1.375rem;
 }

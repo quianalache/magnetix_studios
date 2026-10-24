@@ -5,6 +5,8 @@ import { Render } from "@puckeditor/core";
 import type { Data } from "@puckeditor/core";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/system/empty-state";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { collectPuckFeaturedOfferIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
@@ -181,22 +183,18 @@ export default function NewBuilderPreviewPage({
 
   if (state.status === "missing") {
     return (
-      <div className="flex h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
-        <AlertTriangle className="text-muted-foreground h-6 w-6" />
-        <p className="text-foreground text-sm font-medium">
-          No preview data found.
-        </p>
-        <p className="text-muted-foreground max-w-sm text-sm">
-          Open Preview from inside the editor — this tab only shows whatever was
-          on the canvas the moment you clicked it, and that hand-off is scoped
-          to this browser session.
-        </p>
-        <a
-          href={saPath(`/pages-funnels/${pageId}/new-builder`)}
-          className="text-primary text-sm font-medium underline"
-        >
-          Go to the editor
-        </a>
+      <div className="bg-background flex h-dvh items-center justify-center px-4">
+        <EmptyState
+          className="w-full max-w-md"
+          icon={AlertTriangle}
+          title="Nothing to preview yet"
+          description="Open Preview from the editor — it shows the canvas as it was when you clicked Preview, in this browser."
+          action={
+            <Button variant="outline" render={<a href={saPath(`/pages-funnels/${pageId}/new-builder`)} />}>
+              Go to the editor
+            </Button>
+          }
+        />
       </div>
     );
   }

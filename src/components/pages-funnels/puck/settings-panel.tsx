@@ -109,7 +109,10 @@ function splitFieldsByGroup(
  */
 export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
   const selectedItem = useTypedPuck((s) => s.selectedItem);
+  const config = useTypedPuck((s) => s.config);
   const type = selectedItem?.type;
+  // The component's own label ("Featured Offer"), not its internal key.
+  const label = type ? (config.components[type]?.label ?? type) : null;
   const Icon = type ? BLOCK_ICONS[type] : undefined;
 
   const groups = splitFieldsByGroup(children);
@@ -123,16 +126,20 @@ export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col">
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
         {Icon && (
-          <span className="bg-primary/10 text-primary flex h-6 w-6 items-center justify-center rounded-md">
+          <span className="bg-tag-violet-bg text-tag-violet-fg flex h-6 w-6 items-center justify-center rounded-md">
             <Icon className="h-3.5 w-3.5" />
           </span>
         )}
         <p className="text-foreground text-sm font-semibold">
-          {type ?? "Page"} Settings
+          {label ?? "Page"} Settings
         </p>
       </div>
 
-      {groups ? (
+      {!selectedItem ? (
+        <EmptyTabNote>
+          Select a block on the canvas to edit it. The page&rsquo;s name, address and SEO are in Pages &amp; Funnels.
+        </EmptyTabNote>
+      ) : groups ? (
         <Tabs
           value={activeTab}
           onValueChange={(value) => {
@@ -172,7 +179,7 @@ export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
             className="min-h-0 flex-1 overflow-y-auto"
           >
             <EmptyTabNote>
-              No animation controls yet — Very Soon (master spec §24.19).
+              Animations are coming soon.
             </EmptyTabNote>
           </TabsContent>
         </Tabs>
@@ -188,7 +195,7 @@ export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
 
 function EmptyTabNote({ children }: { children: ReactNode }) {
   return (
-    <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+    <p className="text-muted-foreground px-4 py-6 text-center text-body-sm">
       {children}
     </p>
   );

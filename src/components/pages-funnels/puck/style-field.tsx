@@ -12,6 +12,7 @@ import {
   CollapsibleGroupTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { OptionSelect } from "@/components/system/option-select";
 import type {
   StyleConfig,
   StyleCompatibility,
@@ -52,11 +53,13 @@ const FONT_STYLE_OPTIONS = [
   { label: "Italic", value: "italic" },
 ] as const;
 
+// Compact design-tool labels (AA / aa / Aa) so all four fit the settings
+// panel at laptop widths; the stored values are unchanged.
 const TEXT_TRANSFORM_OPTIONS = [
   { label: "None", value: "none" },
-  { label: "UPPER", value: "uppercase" },
-  { label: "lower", value: "lowercase" },
-  { label: "Cap", value: "capitalize" },
+  { label: "AA", value: "uppercase" },
+  { label: "aa", value: "lowercase" },
+  { label: "Aa", value: "capitalize" },
 ] as const;
 
 const TEXT_ALIGN_OPTIONS: { label: string; value: PuckAlignment }[] = [
@@ -268,11 +271,13 @@ function Group({
 /** Compact labeled row — shared layout for every small control in this file. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Label className="text-muted-foreground text-xs font-medium">
+    // Wraps the controls under the label when the panel is too narrow for
+    // both (e.g. the four-option Transform control), instead of clipping.
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+      <Label className="text-muted-foreground text-caption font-medium">
         {label}
       </Label>
-      <div className="flex items-center gap-1.5">{children}</div>
+      <div className="ml-auto flex max-w-full min-w-0 items-center gap-1.5">{children}</div>
     </div>
   );
 }
@@ -307,7 +312,7 @@ function NumberField({
           const raw = e.target.value;
           onChange(raw === "" ? undefined : Number(raw));
         }}
-        className="h-8 w-20 text-xs"
+        className="h-8 w-24 text-caption"
       />
       {suffix && (
         <span className="text-muted-foreground text-xs">{suffix}</span>
@@ -316,9 +321,9 @@ function NumberField({
   );
 }
 
-/** Plain native `<select>` — no dedicated Select component exists in this
- *  repo's ui/ yet (checked before building this file); styled to match
- *  Input's density rather than introducing a new dependency for one field. */
+/** Style dropdowns use the shared system Select (OptionSelect, 2026-10-24 —
+ *  was a native <select>). `undefined` ↔ the "Default" choice, exactly as
+ *  before, so saved style data is unchanged. */
 function NativeSelect<T extends string>({
   value,
   onChange,
@@ -331,18 +336,14 @@ function NativeSelect<T extends string>({
   placeholder?: string;
 }) {
   return (
-    <select
-      value={value ?? ""}
-      onChange={(e) => onChange((e.target.value || undefined) as T | undefined)}
-      className="border-input bg-background h-8 rounded-md border px-2 text-xs"
-    >
-      <option value="">{placeholder ?? "Default"}</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <OptionSelect
+      size="sm"
+      className="w-full text-caption"
+      value={value ?? null}
+      onChange={(v) => onChange(v ?? undefined)}
+      options={options}
+      noneLabel={placeholder ?? "Default"}
+    />
   );
 }
 
@@ -520,7 +521,7 @@ function SidesEditor({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-muted-foreground text-[11px]">Linked sides</span>
+        <span className="text-muted-foreground text-micro">Linked sides</span>
         <Switch checked={linked} onCheckedChange={onLinkedChange} />
       </div>
       {linked ? (
@@ -568,7 +569,7 @@ function LabeledSideField({
 }) {
   return (
     <div className="flex items-center justify-between gap-1">
-      <span className="text-muted-foreground text-[11px]">{label}</span>
+      <span className="text-muted-foreground text-micro">{label}</span>
       <NumberField value={value} onChange={onChange} suffix="px" />
     </div>
   );
@@ -693,7 +694,7 @@ function RadiusEditor({
           Radius
         </Label>
         <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground text-[11px]">Linked</span>
+          <span className="text-muted-foreground text-micro">Linked</span>
           <Switch
             checked={radius.linked}
             onCheckedChange={(linked) =>
@@ -882,7 +883,7 @@ function ResponsiveBreakpointEditor({
   const v = override ?? {};
   return (
     <div className="border-border space-y-1.5 rounded-md border p-2">
-      <Label className="text-muted-foreground text-[11px] font-medium">
+      <Label className="text-muted-foreground text-micro font-medium">
         {label}
       </Label>
       <Row label="Font Size">
@@ -966,7 +967,7 @@ function VisibilityEditor({
           }
         />
       </Row>
-      <p className={cn("text-muted-foreground text-[11px]")}>
+      <p className={cn("text-muted-foreground text-micro")}>
         Hidden on a device only affects that device&apos;s rendered page — the
         element stays in Layers and stays editable here regardless of which
         device is currently hidden.
