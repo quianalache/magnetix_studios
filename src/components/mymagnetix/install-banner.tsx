@@ -25,12 +25,9 @@ export function MyMagnetixInstallBanner() {
   if (mode === "hidden") return null;
 
   return (
-    <div className="border-b border-[#ECE9F5] bg-white px-4 py-2.5 md:hidden">
+    <div className="border-b border-border bg-card px-4 py-2.5 md:hidden">
       <div className="flex items-start gap-3">
-        <span
-          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
-          style={{ background: "linear-gradient(135deg, #A855F7, #5E2574)" }}
-        >
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           {mode === "android" ? (
             <Download className="h-3.5 w-3.5" />
           ) : (
@@ -40,15 +37,15 @@ export function MyMagnetixInstallBanner() {
         <div className="min-w-0 flex-1 text-xs">
           {mode === "android" ? (
             <>
-              <p className="font-medium text-[#202124]">
+              <p className="font-medium text-foreground">
                 Add MyMagnetix to your home screen
               </p>
-              <p className="mt-0.5 text-[#909090]">
+              <p className="mt-0.5 text-muted-foreground">
                 Quick access to your communities, courses, bookings, and
                 purchases.{" "}
                 <button
                   onClick={() => void install()}
-                  className="font-medium text-[#5E2574] underline-offset-2 hover:underline"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
                 >
                   Install now
                 </button>
@@ -56,10 +53,10 @@ export function MyMagnetixInstallBanner() {
             </>
           ) : (
             <>
-              <p className="font-medium text-[#202124]">
+              <p className="font-medium text-foreground">
                 Add MyMagnetix to your home screen
               </p>
-              <p className="mt-0.5 text-[#909090]">
+              <p className="mt-0.5 text-muted-foreground">
                 Quick access to your communities, courses, bookings, and
                 purchases: tap Safari&apos;s{" "}
                 <span className="font-medium">Share</span> button, then{" "}
@@ -70,7 +67,7 @@ export function MyMagnetixInstallBanner() {
         </div>
         <button
           onClick={dismiss}
-          className="rounded p-1 text-[#909090] hover:bg-[#F5F4FB] hover:text-[#202124]"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Dismiss"
         >
           <X className="h-3.5 w-3.5" />

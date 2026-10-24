@@ -53,19 +53,48 @@ export function PaymentHistoryTable({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-2xl border border-[#ECE9F5] bg-white">
-        <table className="w-full min-w-[640px] text-left text-[13px]">
+      {/* Phones: a stacked list (a 6-column table can't fit 390px). */}
+      <ul className="divide-y divide-border rounded-card border border-border bg-card shadow-card sm:hidden">
+        {pageItems.map((payment) => {
+          const receiptUrl = payment.receiptUrl || payment.invoiceHostedUrl || payment.invoicePdfUrl;
+          return (
+            <li key={payment.id} className="flex flex-col gap-1.5 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 text-body-sm font-semibold text-foreground">{payment.productName || payment.description || "Payment"}</p>
+                <p className="shrink-0 text-body-sm font-semibold text-foreground tabular-nums">{formatHistoryAmount(payment.amountCents, payment.currency)}</p>
+              </div>
+              <p className="text-caption text-muted-foreground">
+                {paymentDateLabel(payment)} · {payment.businessName}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className={`rounded-full px-2.5 py-0.5 text-micro font-semibold ${paymentStatusClass(payment.status)}`}>{paymentStatusLabel(payment.status)}</span>
+                <button type="button" onClick={() => setSelected(payment)} className="text-caption font-semibold text-link hover:underline">
+                  View details
+                </button>
+                {receiptUrl && (
+                  <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-caption font-semibold text-link hover:underline">
+                    <Download className="size-3" />
+                    Receipt
+                  </a>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card sm:block">
+        <table className="w-full min-w-[640px] text-left text-body-sm">
           <thead>
-            <tr className="border-b border-[#ECE9F5] text-[11px] font-bold tracking-[0.06em] text-[#8A87A0] uppercase">
-              <th className="px-4 py-3 font-bold">Date</th>
-              <th className="px-4 py-3 font-bold">Business</th>
-              <th className="px-4 py-3 font-bold">Purchase</th>
-              <th className="px-4 py-3 text-right font-bold">Amount</th>
-              <th className="px-4 py-3 font-bold">Status</th>
-              <th className="px-4 py-3 font-bold">Receipt</th>
+            <tr className="border-b border-border bg-muted/60 text-th font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              <th className="px-4 py-3 font-semibold">Date</th>
+              <th className="px-4 py-3 font-semibold">Business</th>
+              <th className="px-4 py-3 font-semibold">Purchase</th>
+              <th className="px-4 py-3 text-right font-semibold">Amount</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold">Receipt</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#F3F1FA]">
+          <tbody className="divide-y divide-border">
             {pageItems.map((payment) => {
               const receiptUrl =
                 payment.receiptUrl ||
@@ -73,13 +102,13 @@ export function PaymentHistoryTable({
                 payment.invoicePdfUrl;
               return (
                 <tr key={payment.id}>
-                  <td className="px-4 py-3 whitespace-nowrap text-[#6B6780]">
+                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
                     {paymentDateLabel(payment)}
                   </td>
-                  <td className="max-w-[160px] truncate px-4 py-3 text-[#1D1B27]">
+                  <td className="max-w-[160px] truncate px-4 py-3 text-foreground">
                     {payment.businessName}
                   </td>
-                  <td className="px-4 py-3 text-[#1D1B27]">
+                  <td className="px-4 py-3 text-foreground">
                     <div className="flex items-center gap-2">
                       <span className="max-w-[220px] truncate">
                         {payment.productName ||
@@ -89,18 +118,18 @@ export function PaymentHistoryTable({
                       <button
                         type="button"
                         onClick={() => setSelected(payment)}
-                        className="shrink-0 text-[11.5px] font-semibold text-[#5E2574] hover:underline"
+                        className="shrink-0 text-caption font-semibold text-link hover:underline"
                       >
                         View
                       </button>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold whitespace-nowrap text-[#1D1B27]">
+                  <td className="px-4 py-3 text-right font-semibold whitespace-nowrap text-foreground">
                     {formatHistoryAmount(payment.amountCents, payment.currency)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold ${paymentStatusClass(payment.status)}`}
+                      className={`rounded-full px-2.5 py-0.5 text-micro font-semibold ${paymentStatusClass(payment.status)}`}
                     >
                       {paymentStatusLabel(payment.status)}
                     </span>
@@ -111,13 +140,13 @@ export function PaymentHistoryTable({
                         href={receiptUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#5E2574] hover:underline"
+                        className="inline-flex items-center gap-1 text-caption font-semibold text-link hover:underline"
                       >
                         <Download className="h-3 w-3" />
                         Download receipt
                       </a>
                     ) : (
-                      <span className="text-[11.5px] text-[#C7C4D6]">—</span>
+                      <span className="text-caption text-ink-tertiary">—</span>
                     )}
                   </td>
                 </tr>
@@ -129,7 +158,7 @@ export function PaymentHistoryTable({
 
       {payments.length > PAGE_SIZE && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[12px] text-[#8A87A0]">
+          <p className="text-caption text-muted-foreground">
             Showing {rangeStart}–{rangeEnd} of {payments.length}
           </p>
           <div className="flex items-center gap-1.5">
@@ -137,7 +166,7 @@ export function PaymentHistoryTable({
               type="button"
               disabled={currentPage === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-lg border border-[#E4E4E4] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#5B5B62] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-caption font-semibold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
@@ -148,11 +177,8 @@ export function PaymentHistoryTable({
                 onClick={() => setPage(num)}
                 className={
                   num === currentPage
-                    ? "rounded-lg px-3 py-1.5 text-[12px] font-bold text-white"
-                    : "rounded-lg border border-[#E4E4E4] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#5B5B62] hover:bg-[#F3E4F0]"
-                }
-                style={
-                  num === currentPage ? { background: "#5E2574" } : undefined
+                    ? "rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-primary-foreground"
+                    : "rounded-lg border border-border bg-card px-3 py-1.5 text-caption font-semibold text-muted-foreground hover:bg-accent"
                 }
               >
                 {num}
@@ -162,7 +188,7 @@ export function PaymentHistoryTable({
               type="button"
               disabled={currentPage === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="rounded-lg border border-[#E4E4E4] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#5B5B62] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-caption font-semibold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>

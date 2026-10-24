@@ -9,6 +9,8 @@ import type {
 import { SubscriptionDetailsSheet } from "@/components/mymagnetix/subscription-details-sheet";
 import { SubscriptionCard } from "@/components/mymagnetix/subscription-card";
 import { PaymentHistoryTable } from "@/components/mymagnetix/payment-history-table";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 
 /** Agency-sourced subscriptions (see agency-mymagnetix-billing-service.ts)
  *  aren't in the tenant `externalSubscriptions` ledger the default
@@ -56,32 +58,24 @@ export function PurchasesView({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div>
-        <h1 className="text-[20px] font-bold text-[#1D1B27]">Purchases</h1>
-        <p className="mt-1 text-[13px] text-[#84809A]">
-          View your active subscriptions and purchases across your Magnetix
-          businesses.
-        </p>
-      </div>
+      <PageHeader title="Purchases" description="View your active subscriptions and purchases across your Magnetix businesses." />
 
       <section className="mt-6">
-        <h2 className="text-[15px] font-bold text-[#1D1B27]">
+        <h2 className="text-section font-semibold text-foreground">
           Current subscriptions
         </h2>
         {subscriptionError ? (
-          <div className="mt-3 rounded-2xl border border-[#F3D2D2] bg-white p-6 text-center">
-            <ReceiptText className="mx-auto h-6 w-6 text-[#B91C1C]" />
-            <p className="mt-2 text-[13px] font-semibold text-[#1D1B27]">
+          <div className="mt-3 rounded-card border border-destructive/30 bg-card p-6 text-center">
+            <ReceiptText className="mx-auto h-6 w-6 text-destructive" />
+            <p className="mt-2 text-body-sm font-semibold text-foreground">
               Purchases are temporarily unavailable
             </p>
-            <p className="mt-1 text-[12px] text-[#8A87A0]">
+            <p className="mt-1 text-caption text-muted-foreground">
               Please try again in a moment.
             </p>
           </div>
         ) : current.length === 0 ? (
-          <p className="mt-3 text-[13px] text-[#8A87A0]">
-            No active subscriptions.
-          </p>
+          <EmptyState compact className="mt-3" icon={ReceiptText} title="No active subscriptions." />
         ) : (
           <div className="mt-3.5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {current.map((subscription) => (
@@ -97,22 +91,20 @@ export function PurchasesView({
       </section>
 
       <section className="mt-7">
-        <h2 className="text-[15px] font-bold text-[#1D1B27]">
+        <h2 className="text-section font-semibold text-foreground">
           Payment history
         </h2>
         {paymentHistoryError ? (
-          <div className="mt-3 rounded-2xl border border-[#F3D2D2] bg-white p-6 text-center">
-            <p className="text-[13px] font-semibold text-[#1D1B27]">
+          <div className="mt-3 rounded-card border border-destructive/30 bg-card p-6 text-center">
+            <p className="text-body-sm font-semibold text-foreground">
               Payment history is temporarily unavailable
             </p>
-            <p className="mt-1 text-[12px] text-[#8A87A0]">
+            <p className="mt-1 text-caption text-muted-foreground">
               Please try again in a moment.
             </p>
           </div>
         ) : paymentHistory.length === 0 ? (
-          <p className="mt-3 text-[13px] text-[#8A87A0]">
-            No payment history yet.
-          </p>
+          <EmptyState compact className="mt-3" icon={ReceiptText} title="No payment history yet." />
         ) : (
           <div className="mt-3.5">
             <PaymentHistoryTable payments={paymentHistory} />

@@ -59,6 +59,7 @@ import type { Quote } from "@/types/quotes";
 import { PortalLogoutButton } from "./[saId]/logout-button";
 import { PortalProjectsPanel } from "./[saId]/projects-panel";
 import { SpaceBillingSection } from "./space-billing-section";
+import { toPortalQuoteSummary } from "@/lib/portal/quote-summary";
 
 /**
  * Client Portal Home — approved production visual direction.
@@ -1470,7 +1471,7 @@ function PortalDestination({
         saId={saId}
         subscriptions={subscriptions}
         paymentHistory={paymentHistory}
-        quotes={quotes}
+        quotes={quotes.map(toPortalQuoteSummary)}
       />
     </>
   );

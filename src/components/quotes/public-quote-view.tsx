@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
@@ -189,9 +190,7 @@ export function PublicQuoteView({
               <p
                 className={cn(
                   "mt-2 inline-flex items-center gap-1.5 text-xs",
-                  expired
-                    ? "text-rose-600 dark:text-rose-400"
-                    : "text-muted-foreground",
+                  expired ? "text-status-danger-fg" : "text-muted-foreground",
                 )}
               >
                 <Clock className="h-3 w-3" />
@@ -250,7 +249,7 @@ export function PublicQuoteView({
 
         <Separator className="my-4" />
 
-        <div className="ml-auto max-w-xs space-y-1.5 text-sm">
+        <div className="ml-auto w-full max-w-xs space-y-1.5 text-sm">
           <TotalRow
             label="Subtotal"
             value={formatCurrency(totals.subtotal, quote.currency)}
@@ -322,13 +321,13 @@ export function PublicQuoteView({
                   href={quote.paymentLinkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                  className="tenant-button inline-flex items-center justify-center gap-2 border px-5 py-2.5 text-sm font-semibold"
                 >
                   <CreditCard className="h-4 w-4" />
                   Pay {formatCurrency(totals.total, quote.currency)}
                 </a>
               ) : (
-                <p className="text-sm text-amber-700 dark:text-amber-400">
+                <p className="text-sm text-status-warning-fg">
                   Payment link not yet generated — please ask the sender
                   to re-send.
                 </p>
@@ -369,7 +368,7 @@ export function PublicQuoteView({
               </div>
             </div>
           )}
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="h-3 w-3" />
             Secure link — only the recipient of this email can view it
           </p>
@@ -395,18 +394,18 @@ export function PublicQuoteView({
               >
                 Reason
               </Label>
-              <select
-                id="decline-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value as DeclineReason)}
-                className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_option]:bg-background [&_option]:text-foreground"
-              >
-                {DECLINE_REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+              <Select value={reason} onValueChange={(v) => v && setReason(v as DeclineReason)} items={Object.fromEntries(DECLINE_REASONS.map((r) => [r, r]))}>
+                <SelectTrigger id="decline-reason" className="mt-1 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DECLINE_REASONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -476,76 +475,35 @@ function StatusBanner({
 }) {
   const isInvoice = kind === "invoice";
   if (isInvoice && quoteStatus === "paid") {
-    return (
-      <Card className="border-emerald-500/30 bg-emerald-500/5 p-5">
-        <div className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              Invoice paid — thank you!
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              A receipt has been emailed. You can close this page.
-            </p>
-          </div>
-        </div>
-      </Card>
-    );
+    return <Banner tone="success" icon={CheckCircle2} title="Invoice paid — thank you!" body="A receipt has been emailed. You can close this page." />;
   }
   if (respondedAction === "accept" || quoteStatus === "accepted" || quoteStatus === "paid") {
-    return (
-      <Card className="border-emerald-500/30 bg-emerald-500/5 p-5">
-        <div className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              Quote accepted — thank you!
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The team will be in touch with next steps. You can close
-              this page.
-            </p>
-          </div>
-        </div>
-      </Card>
-    );
+    return <Banner tone="success" icon={CheckCircle2} title="Quote accepted — thank you!" body="The team will be in touch with next steps. You can close this page." />;
   }
   if (respondedAction === "decline" || quoteStatus === "declined") {
-    return (
-      <Card className="border-rose-500/30 bg-rose-500/5 p-5">
-        <div className="flex items-start gap-3">
-          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
-          <div>
-            <p className="text-sm font-semibold text-rose-700 dark:text-rose-400">
-              Quote declined
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Thanks for letting us know. The team can follow up if you
-              change your mind.
-            </p>
-          </div>
-        </div>
-      </Card>
-    );
+    return <Banner tone="error" icon={XCircle} title="Quote declined" body="Thanks for letting us know. The team can follow up if you change your mind." />;
   }
   if (expired) {
-    return (
-      <Card className="border-amber-500/30 bg-amber-500/5 p-5">
-        <div className="flex items-start gap-3">
-          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-              This quote has expired
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Reply to the email to request an updated version.
-            </p>
-          </div>
-        </div>
-      </Card>
-    );
+    return <Banner tone="warning" icon={Clock} title="This quote has expired" body="Reply to the email to request an updated version." />;
   }
   return null;
+}
+
+/** Status banner: semantic tone chip (success / error / warning) on the plain card — never a fixed brand green. */
+function Banner({ tone, icon: Icon, title, body }: { tone: "success" | "error" | "warning"; icon: typeof Clock; title: string; body: string }) {
+  return (
+    <Card className="p-5" role="status">
+      <div className="flex items-start gap-3">
+        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", `public-tone-${tone}`)}>
+          <Icon className="size-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{body}</p>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function formatPaymentDue(days: number): string {
@@ -573,7 +531,7 @@ function TotalRow({
       <span className={cn(strong ? "font-semibold" : "text-muted-foreground")}>
         {label}
       </span>
-      <span className={cn("tabular-nums", strong ? "font-bold" : "font-medium")}>
+      <span className={cn("tabular-nums", strong ? "font-semibold" : "font-medium")}>
         {value}
       </span>
     </div>

@@ -53,32 +53,32 @@ export function PurchaseCompleteStatus({
   }, [saId, courseId, router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4">
-      <div className="max-w-sm space-y-3 rounded-xl border border-[#E4E4E4] bg-white p-6 text-center shadow-sm">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+      <div className="tenant-card w-full max-w-sm space-y-3 p-7 text-center">
         {timedOut ? (
           <>
-            <CheckCircle2 className="mx-auto h-8 w-8 text-[#909090]" />
-            <p className="text-sm font-medium text-[#202124]">
+            <CheckCircle2 className="tenant-text mx-auto h-8 w-8" />
+            <p className="text-sm font-medium public-ink">
               Payment received — finishing up
             </p>
-            <p className="text-xs text-[#909090]">
+            <p className="text-xs public-body">
               This is taking longer than usual. Refresh in a moment, or check
               your email — access unlocks automatically.
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="text-sm font-medium text-[#202124] underline"
+              className="text-sm font-medium public-ink underline"
             >
               Refresh
             </button>
           </>
         ) : (
           <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#202124]" />
-            <p className="text-sm font-medium text-[#202124]">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin tenant-text" />
+            <p className="text-sm font-medium public-ink">
               Payment received — unlocking your course
             </p>
-            <p className="text-xs text-[#909090]">Just a moment…</p>
+            <p className="text-xs public-body">Just a moment…</p>
           </>
         )}
       </div>

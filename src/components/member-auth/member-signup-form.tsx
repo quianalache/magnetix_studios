@@ -98,7 +98,7 @@ export function MemberSignupForm({
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         {message && (
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-[#202124]">
+          <div className="rounded-lg border border-transparent bg-status-success-bg p-4 text-sm text-status-success-fg">
             {message}
           </div>
         )}

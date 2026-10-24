@@ -419,6 +419,7 @@ export function StandaloneLessonPlayer({
                       key={block.id}
                       block={block as InstructorSidebarBlock}
                       instructor={instructor}
+                      hideWhenEmpty={interactive}
                     />
                   );
                 }

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { BookOpen, CheckCircle2, Circle } from "lucide-react";
+import { BookOpen, CheckCircle2, Circle, PlayCircle } from "lucide-react";
 import type { CategoryBlockTheme } from "@/types/course-theme";
 
 /**
@@ -79,8 +79,10 @@ export function CourseCurriculumNav({
             className="h-10 w-16 shrink-0 rounded-md object-cover"
           />
         ) : (
-          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-xs font-semibold text-[#909090]">
-            {l.title.charAt(0).toUpperCase()}
+          // No cover: a neutral lesson icon tile, not a letter placeholder
+          // (matches the sales pages since the public-surfaces pass).
+          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-[#909090]" aria-hidden="true">
+            <PlayCircle className="h-4 w-4" />
           </div>
         )}
         <span className="text-sm font-medium" style={{ color: theme.lessonTitleColor }}>

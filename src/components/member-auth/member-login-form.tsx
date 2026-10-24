@@ -167,7 +167,7 @@ export function MemberLoginForm({
       )}
       {message && (
         <div
-          className={`${compact ? "mb-2 p-3 text-[12px]" : "p-4 text-sm"} rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-[#202124]`}
+          className={`${compact ? "mb-2 p-3 text-[12px]" : "p-4 text-sm"} rounded-lg border border-transparent bg-status-success-bg text-status-success-fg`}
         >
           {message}
         </div>

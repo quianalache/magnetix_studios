@@ -5,14 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signInWithEmail } from "@/lib/firebase/auth";
 import { sendWelcomeEmail } from "@/lib/firestore/mail";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -104,57 +96,55 @@ export function SignupForm() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create Account</CardTitle>
-        <CardDescription>
-          Enter your details to create a new account.
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Create a password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm Password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              placeholder="Confirm your password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div className="flex items-start space-x-2">
-            <Checkbox
-              id="terms"
-              checked={agreedToTerms}
-              onCheckedChange={(checked) =>
-                setAgreedToTerms(checked === true)
-              }
-            />
-            <Label htmlFor="terms" className="text-sm leading-snug">
+    // Rendered inside the shared public auth shell's card (2026-10-24, same
+    // as the staff login): the shell owns the heading, so no inner card.
+    <form onSubmit={handleSubmit}>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Create a password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm Password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            placeholder="Confirm your password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex items-start space-x-2">
+          <Checkbox
+            id="terms"
+            checked={agreedToTerms}
+            onCheckedChange={(checked) =>
+              setAgreedToTerms(checked === true)
+            }
+          />
+          <Label htmlFor="terms" className="text-sm leading-snug">
+            {/* One inline run of text — Label is a flex row, so bare text and
+                links would otherwise wrap as separate columns on phones. */}
+            <span>
               I agree to the{" "}
               <Link href="/terms" className="text-primary underline">
                 Terms of Service
@@ -163,43 +153,43 @@ export function SignupForm() {
               <Link href="/privacy" className="text-primary underline">
                 Privacy Policy
               </Link>
-            </Label>
-          </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-          {existingAccount && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-              <p className="font-medium text-amber-700 dark:text-amber-400">
-                You already have a {CUSTOM_BRAND.name} account.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Sign in with{" "}
-                <span className="font-mono">{email}</span> instead. Any
-                pending invites (including the one that brought you here)
-                will attach to your account automatically.
-              </p>
-              <Link
-                href={`/login?email=${encodeURIComponent(email)}`}
-                className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Go to sign in →
-              </Link>
-            </div>
-          )}
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating account..." : "Create Account"}
-          </Button>
-          <p className="text-sm text-muted-foreground text-center">
-            Already have an account?{" "}
-            <Link href="/login" className="text-primary underline">
-              Log in
+            </span>
+          </Label>
+        </div>
+        {error && (
+          <p className="text-sm text-destructive">{error}</p>
+        )}
+        {existingAccount && (
+          <div className="rounded-md border border-transparent bg-status-warning-bg p-3 text-sm">
+            <p className="font-medium text-status-warning-fg">
+              You already have a {CUSTOM_BRAND.name} account.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sign in with{" "}
+              <span className="font-mono">{email}</span> instead. Any
+              pending invites (including the one that brought you here)
+              will attach to your account automatically.
+            </p>
+            <Link
+              href={`/login?email=${encodeURIComponent(email)}`}
+              className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Go to sign in →
             </Link>
-          </p>
-        </CardFooter>
-      </form>
-    </Card>
+          </div>
+        )}
+      </div>
+      <div className="mt-6 flex flex-col gap-4">
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Creating account..." : "Create Account"}
+        </Button>
+        <p className="text-sm text-muted-foreground text-center">
+          Already have an account?{" "}
+          <Link href="/login" className="text-primary underline">
+            Log in
+          </Link>
+        </p>
+      </div>
+    </form>
   );
 }

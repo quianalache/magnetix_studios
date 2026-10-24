@@ -6,7 +6,8 @@ import { hashQuoteToken, verifyQuoteToken } from "@/lib/quotes/token";
 import { isQuoteExpired } from "@/lib/quotes/calc";
 import { emitQuoteWebhook, recordQuoteActivity } from "@/lib/quotes/lifecycle";
 import { PublicQuoteView } from "@/components/quotes/public-quote-view";
-import { LogoMark } from "@/components/brand/logo-mark";
+import { TenantIdentity } from "@/components/public/public-shell";
+import { tenantBrandStyle } from "@/lib/brand/tenant-brand";
 import { CUSTOM_BRAND } from "@/config/landing";
 import type { Quote } from "@/types/quotes";
 
@@ -94,32 +95,22 @@ export default async function PublicQuotePage({ params }: PageProps) {
       : null;
 
   const expired = isQuoteExpired(quote);
+  const brand = { name: businessName, logoUrl: businessLogoUrl };
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/30">
-      <header className="border-b bg-background">
-        <div className="container mx-auto flex h-14 items-center gap-2 px-4 text-sm">
-          {businessLogoUrl ? (
-            // Sub-account brand override. Capped at 24px tall so it sits
-            // cleanly in the chrome bar.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={businessLogoUrl}
-              alt={businessName}
-              className="h-6 w-auto max-w-[140px] object-contain"
-            />
-          ) : (
-            <LogoMark size={18} idSuffix="-public-quote" />
-          )}
-          <span className="font-medium">{businessName}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono text-xs text-muted-foreground">
-            {quote.quoteNumber}
-          </span>
+    // Tenant surface, plain near-white (a document page). The only brand
+    // source a quote has is its sub-account's name + logo, so the accent
+    // stays the neutral default — never Magnetix's plum.
+    <div className="tenant-surface public-plain flex min-h-screen flex-col" style={tenantBrandStyle(brand)}>
+      <header className="public-line border-b bg-white">
+        <div className="mx-auto flex h-14 w-full max-w-3xl min-w-0 items-center gap-2 px-4 text-sm">
+          <TenantIdentity brand={brand} size={28} className="min-w-0" />
+          <span className="public-faint" aria-hidden="true">·</span>
+          <span className="public-faint shrink-0 font-mono text-xs">{quote.quoteNumber}</span>
         </div>
       </header>
 
-      <main className="container mx-auto flex-1 px-4 py-10">
+      <main className="w-full flex-1 px-4 py-8 sm:py-10">
         <PublicQuoteView
           quote={serializeQuote(quote)}
           token={token}
@@ -129,8 +120,8 @@ export default async function PublicQuotePage({ params }: PageProps) {
         />
       </main>
 
-      <footer className="border-t bg-background py-4">
-        <div className="container mx-auto px-4 text-center text-[11px] text-muted-foreground">
+      <footer className="public-line border-t bg-white py-4">
+        <div className="public-faint mx-auto max-w-3xl px-4 text-center text-xs">
           {quote.kind === "invoice" ? "Invoice" : "Quote"} sent via {CUSTOM_BRAND.name}.
           Reply to the email to reach {businessName}.
         </div>

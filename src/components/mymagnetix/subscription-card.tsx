@@ -39,43 +39,43 @@ export function SubscriptionCard({
 }) {
   const timing = nextChargeText(subscription);
   return (
-    <article className="flex flex-col rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+    <article className="flex flex-col rounded-card border border-border bg-card p-5 shadow-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F3E4F0] text-[#5E2574]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-tag-violet-bg text-primary">
             <CreditCard className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="truncate text-[14px] font-bold text-[#1D1B27]">
+            <h3 className="truncate text-body font-semibold text-foreground">
               {subscription.productName ||
                 subscription.priceName ||
                 "Subscription"}
             </h3>
             {showBusinessName && (
-              <p className="mt-0.5 truncate text-[11.5px] text-[#8A87A0]">
+              <p className="mt-0.5 truncate text-caption text-muted-foreground">
                 {subscription.businessName}
               </p>
             )}
           </div>
         </div>
         <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-bold ${statusClass(subscription.status)}`}
+          className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${statusClass(subscription.status)}`}
         >
           {statusLabel(subscription.status)}
         </span>
       </div>
 
       <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-[18px] font-bold text-[#1D1B27]">
+        <span className="text-title-md font-semibold text-foreground">
           {formatSubscriptionAmount(subscription)}
         </span>
-        <span className="text-[12px] text-[#8A87A0]">
+        <span className="text-caption text-muted-foreground">
           {intervalLabel(subscription)}
         </span>
       </div>
-      {timing && <p className="mt-2 text-[11.5px] text-[#6B6780]">{timing}</p>}
+      {timing && <p className="mt-2 text-caption text-muted-foreground">{timing}</p>}
 
-      <div className="mt-auto flex flex-wrap gap-2 border-t border-[#F1EFF7] pt-4">
+      <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-4">
         {subscription.canManage && (
           <ManageSubscriptionButton
             subscriptionId={subscription.id}

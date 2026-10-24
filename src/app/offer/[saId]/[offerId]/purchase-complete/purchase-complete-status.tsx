@@ -146,24 +146,24 @@ export function PurchaseCompleteStatus({
 
   if (upsell) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4">
-        <div className="max-w-sm space-y-4 rounded-xl border border-[#E4E4E4] bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium tracking-wide text-[#909090] uppercase">
+      <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+        <div className="tenant-card w-full max-w-sm space-y-4 p-7 text-center">
+          <p className="text-sm font-medium tracking-wide public-body uppercase">
             Special one-time offer
           </p>
-          <p className="text-lg font-semibold text-[#202124]">
+          <p className="text-lg font-semibold public-ink">
             Add {upsell.targetTitle}
             {upsell.targetPriceCents != null &&
               ` for ${formatPrice(upsell.targetPriceCents, upsell.targetCurrency)}`}
             ?
           </p>
-          <p className="text-xs text-[#909090]">
+          <p className="text-xs public-body">
             One click — no need to re-enter your card.
           </p>
           <button
             onClick={acceptUpsell}
             disabled={upsellBusy}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#202124] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            className="tenant-button inline-flex h-11 w-full items-center justify-center gap-2 border px-4 text-sm font-semibold disabled:opacity-60"
           >
             {upsellBusy && <Loader2 className="h-4 w-4 animate-spin" />}
             Yes, add it
@@ -172,7 +172,7 @@ export function PurchaseCompleteStatus({
             onClick={() => {
               window.location.href = continueUrl;
             }}
-            className="text-sm font-medium text-[#909090] underline"
+            className="text-sm font-medium public-body underline"
           >
             No thanks, continue
           </button>
@@ -182,32 +182,32 @@ export function PurchaseCompleteStatus({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4">
-      <div className="max-w-sm space-y-3 rounded-xl border border-[#E4E4E4] bg-white p-6 text-center shadow-sm">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+      <div className="tenant-card w-full max-w-sm space-y-3 p-7 text-center">
         {timedOut ? (
           <>
-            <CheckCircle2 className="mx-auto h-8 w-8 text-[#909090]" />
-            <p className="text-sm font-medium text-[#202124]">
+            <CheckCircle2 className="tenant-text mx-auto h-8 w-8" />
+            <p className="text-sm font-medium public-ink">
               Payment received — finishing up
             </p>
-            <p className="text-xs text-[#909090]">
+            <p className="text-xs public-body">
               This is taking longer than usual. Refresh in a moment, or check
               your email — access unlocks automatically.
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="text-sm font-medium text-[#202124] underline"
+              className="text-sm font-medium public-ink underline"
             >
               Refresh
             </button>
           </>
         ) : (
           <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#202124]" />
-            <p className="text-sm font-medium text-[#202124]">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin tenant-text" />
+            <p className="text-sm font-medium public-ink">
               Payment received — unlocking your access
             </p>
-            <p className="text-xs text-[#909090]">Just a moment…</p>
+            <p className="text-xs public-body">Just a moment…</p>
           </>
         )}
       </div>

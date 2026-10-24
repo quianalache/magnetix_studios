@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getCurrentMember } from "@/lib/community/member-session";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { resolveSpaceIdentifier } from "@/lib/server/space-slug-service";
+import { getSubAccountPublicName } from "@/lib/server/public-identity";
+import { publicSurfaceProps } from "@/components/public/public-shell";
 import { PurchaseCompleteStatus } from "./purchase-complete-status";
 
 export const dynamic = "force-dynamic";
@@ -28,13 +30,18 @@ export default async function OfferPurchaseCompletePage({
   // only ever reached via Stripe's own return_url, never customer-typed),
   // so this is a plain lookup, not a slug-or-id resolution.
   const resolved = await resolveSpaceIdentifier(saId);
+  // Same brand source as the offer's own checkout page: its theme's button colour.
+  const businessName = await getSubAccountPublicName(saId).catch(() => null);
+  const surface = publicSurfaceProps({ kind: "tenant", brand: { name: businessName ?? "", primary: offer?.theme?.hero?.buttonColor ?? null } });
 
   return (
-    <PurchaseCompleteStatus
-      saId={saId}
-      spaceSlug={resolved?.canonicalSlug ?? saId}
-      offerId={offerId}
-      firstCourseId={firstCourseId}
-    />
+    <div {...surface}>
+      <PurchaseCompleteStatus
+        saId={saId}
+        spaceSlug={resolved?.canonicalSlug ?? saId}
+        offerId={offerId}
+        firstCourseId={firstCourseId}
+      />
+    </div>
   );
 }

@@ -256,9 +256,13 @@ function main() {
     fixturePayment({ id: `pay-few-${i}` })
   );
   const fewHtml = render({ subscriptions: [], paymentHistory: few });
+  // Each payment renders twice since 2026-10-24: once in the phone list
+  // (sm:hidden) and once in the table (hidden below sm). Count the table.
+  const fewTable = fewHtml.slice(fewHtml.indexOf("<table"));
   check(
     "All 4 rows rendered",
-    countOccurrences(fewHtml, "Creator Pro (Monthly)") === 4
+    countOccurrences(fewTable, "Creator Pro (Monthly)") === 4 &&
+      countOccurrences(fewHtml, "Creator Pro (Monthly)") === 8
   );
   check(
     "'Showing' pagination summary is NOT rendered for <= 10 rows",

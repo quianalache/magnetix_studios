@@ -376,9 +376,14 @@ function resolveInstructor(
 export function InstructorBlockView({
   block,
   instructor,
+  hideWhenEmpty = false,
 }: {
   block: InstructorSidebarBlock;
   instructor: StandaloneCourseInstructor;
+  /** Learner-facing renders pass true: a coach block with nothing filled in
+   *  (no name, photo, title or bio) is hidden instead of showing an empty
+   *  "Your Coach" box. The theme editor keeps it visible to edit. */
+  hideWhenEmpty?: boolean;
 }) {
   if (!block.visible) return null;
   // Fallback for blocks saved before per-field colors existed.
@@ -389,6 +394,7 @@ export function InstructorBlockView({
   const bioColor = block.bioColor ?? fallback.strong;
   const headshotVisible = block.headshotVisible ?? true;
   const resolved = resolveInstructor(block, instructor);
+  if (hideWhenEmpty && !resolved.name.trim() && !resolved.headshotUrl && !resolved.title.trim() && !resolved.bio.trim()) return null;
   return (
     <div
       className="space-y-2 rounded-xl p-4"

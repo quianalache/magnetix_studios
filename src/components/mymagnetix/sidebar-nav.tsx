@@ -28,7 +28,7 @@ const ICONS: Record<MyMagnetixNavItem["icon"], typeof Home> = {
 };
 
 /** Client component so it can highlight the active item via usePathname — a Server Component layout has no reliable equivalent. */
-export function MyMagnetixSidebarNav() {
+export function MyMagnetixSidebarNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
 
   return (
@@ -40,11 +40,11 @@ export function MyMagnetixSidebarNav() {
             <div
               key={item.href}
               title="Coming soon"
-              className="flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-medium text-[#B5B3C2]"
+              className="flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-body-sm font-medium text-ink-tertiary"
             >
               <Icon className="h-4 w-4" />
               {item.label}
-              <span className="ml-auto text-[9.5px] font-semibold uppercase tracking-wide text-[#C7C4D6]">Soon</span>
+              <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-overline font-semibold uppercase tracking-wide text-ink-tertiary">Soon</span>
             </div>
           );
         }
@@ -53,10 +53,12 @@ export function MyMagnetixSidebarNav() {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
             className={
               active
-                ? "flex items-center gap-2.5 rounded-lg bg-[#5E2574] px-3 py-2 text-[13.5px] font-semibold text-white"
-                : "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-medium text-[#5B5B62] transition-colors hover:bg-[#F3E4F0] hover:text-[#5E2574]"
+                ? "flex items-center gap-2.5 rounded-lg bg-selected px-3 py-2 text-body-sm font-semibold text-selected-foreground"
+                : "flex items-center gap-2.5 rounded-lg px-3 py-2 text-body-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             }
           >
             <Icon className="h-4 w-4" />

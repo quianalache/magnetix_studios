@@ -53,28 +53,28 @@ export function SubscriptionDetailsSheet({
           <div className="flex flex-col gap-4 px-4 pb-4">
             <div className="flex items-center justify-between">
               <span
-                className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold ${statusClass(subscription.status)}`}
+                className={`rounded-full px-2.5 py-1 text-micro font-semibold ${statusClass(subscription.status)}`}
               >
                 {statusLabel(subscription.status)}
               </span>
-              <span className="text-[15px] font-bold text-[#1D1B27]">
+              <span className="text-section font-semibold text-foreground">
                 {formatSubscriptionAmount(subscription)}{" "}
-                <span className="text-[11px] font-normal text-[#8A87A0]">
+                <span className="text-micro font-normal text-muted-foreground">
                   {intervalLabel(subscription)}
                 </span>
               </span>
             </div>
 
-            <dl className="space-y-2.5 border-t border-[#F1EFF7] pt-4 text-[13px]">
+            <dl className="space-y-2.5 border-t border-border pt-4 text-body-sm">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-[#8A87A0]">Current period</dt>
-                <dd className="font-medium text-[#1D1B27]">
+                <dt className="text-muted-foreground">Current period</dt>
+                <dd className="font-medium text-foreground">
                   {formatDate(subscription.currentPeriodStart) ?? "—"} –{" "}
                   {formatDate(subscription.currentPeriodEnd) ?? "—"}
                 </dd>
               </div>
               {subscription.cancelAtPeriodEnd && (
-                <div className="flex items-center gap-1.5 text-[12.5px] text-[#B45309]">
+                <div className="flex items-center gap-1.5 text-body-sm text-status-warning-fg">
                   <CalendarClock className="h-3.5 w-3.5 shrink-0" />
                   Set to cancel at the end of the current period.
                 </div>
@@ -82,7 +82,7 @@ export function SubscriptionDetailsSheet({
             </dl>
 
             {subscription.canManage && (
-              <div className="border-t border-[#F1EFF7] pt-4">
+              <div className="border-t border-border pt-4">
                 <ManageSubscriptionButton
                   subscriptionId={subscription.id}
                   {...(manageEndpoint ? { endpoint: manageEndpoint } : {})}

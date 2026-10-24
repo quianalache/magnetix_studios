@@ -71,10 +71,20 @@ export function TenantMark({ brand, size = 32 }: { brand: TenantBrand; size?: nu
   );
 }
 
+/** The platform's own mark: the configured logo (Magnetix's magnet), else the template LogoMark. */
+export function PlatformMark({ size = 28, idSuffix = "-public" }: { size?: number; idSuffix?: string }) {
+  return CUSTOM_BRAND.logoPath ? (
+    // eslint-disable-next-line @next/next/no-img-element -- small static asset in /public
+    <img src={CUSTOM_BRAND.logoPath} alt="" width={size} height={size} className="shrink-0 object-contain" style={{ width: size, height: size }} />
+  ) : (
+    <LogoMark size={size} idSuffix={idSuffix} />
+  );
+}
+
 export function MagnetixIdentity({ size = 28 }: { size?: number }) {
   return (
     <Link href="/" className="inline-flex items-center gap-2.5">
-      <LogoMark size={size} idSuffix="-public" />
+      <PlatformMark size={size} />
       <span className="public-ink text-base font-semibold">{CUSTOM_BRAND.name}</span>
     </Link>
   );

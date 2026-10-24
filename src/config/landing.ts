@@ -44,6 +44,12 @@ export interface CustomBrand {
   shortDescription: string;
   supportEmail: string;
   primaryDomain: string;
+  /**
+   * Optional path (in /public) to this deployment's own mark, used on the
+   * platform-owned public pages (staff + MyMagnetix sign-in, platform
+   * states, MyMagnetix). Absent → the template LogoMark.
+   */
+  logoPath?: string;
   pricing: {
     starter: CustomPricingTier;
     pro: CustomPricingTier;
@@ -92,6 +98,9 @@ export const CUSTOM_BRAND: CustomBrand = {
 
   /** Used in footer, og:url, canonical. No https://, no trailing slash. */
   primaryDomain: "magnetixstudios.com",
+
+  /** The Magnetix horseshoe-magnet mark (also the agency Branding logo). */
+  logoPath: "/magnetix-logo.png",
 
   /**
    * Pricing tiers. HIDDEN BY DEFAULT â€” the custom landing is wired for

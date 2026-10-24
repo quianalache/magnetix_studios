@@ -2,7 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { listReadingsForPerson } from "@/lib/server/mymagnetix-readings-service";
-import { gradientForId } from "@/lib/mymagnetix/visuals";
+import { MailCheck, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { TileCover } from "@/components/mymagnetix/tile-cover";
 import { MyMagnetixBackLink } from "@/components/mymagnetix/back-link";
 
 export const dynamic = "force-dynamic";
@@ -29,45 +33,38 @@ export default async function MyMagnetixReadingsPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <MyMagnetixBackLink />
-      <h1 className="text-[20px] font-bold text-[#1D1B27]">My Readings</h1>
-      <p className="mt-1 text-[13px] text-[#84809A]">
-        Every reading you&rsquo;ve generated, across every Magnetix business.
-      </p>
+      <PageHeader title="My Readings" description="Every reading you&rsquo;ve generated, across every Magnetix business." />
 
       {!person.emailVerified ? (
-        <p className="text-muted-foreground mt-6 text-sm">
-          Confirm your email to see your Readings.{" "}
-          <Link href="/my/login?next=/my/readings" className="text-primary font-medium underline">
-            Email me a sign-in link
-          </Link>
-        </p>
+        <EmptyState
+          className="mt-6"
+          icon={MailCheck}
+          title="Confirm your email to see your Readings"
+          description="Readings are linked to your email address, so they stay private until you confirm it."
+          action={
+            <Button render={<Link href="/my/login?next=/my/readings" />}>Email me a sign-in link</Button>
+          }
+        />
       ) : readings.length === 0 ? (
-        <p className="mt-6 text-[13px] text-[#909090]">No readings yet.</p>
+        <EmptyState className="mt-6" icon={Sparkles} title="No Readings yet" description="When a Magnetix business creates a Reading for you, it appears here." />
       ) : (
-        <div className="mt-5 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {readings.map((reading) => (
             <Link
               key={reading.readingId}
               href={reading.viewHref}
-              className="flex flex-col overflow-hidden rounded-xl border border-[#ECE9F5] bg-white transition-transform hover:-translate-y-0.5 hover:shadow-md"
+              className="flex flex-col overflow-hidden rounded-card border border-border bg-card shadow-card transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop"
             >
-              <div
-                className="flex h-20 items-end p-3"
-                style={{ background: gradientForId(reading.readingId) }}
-              >
-                <span className="text-[15px] leading-tight font-extrabold text-white/95 uppercase">
-                  {reading.readingName}
-                </span>
-              </div>
+              <TileCover id={reading.readingId} icon={Sparkles} className="h-20" />
               <div className="p-3">
-                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">
+                <p className="truncate text-body-sm font-semibold text-foreground">
                   {reading.readingName}
                 </p>
-                <p className="truncate text-[11px] text-[#8A87A0]">
+                <p className="truncate text-micro text-muted-foreground">
                   {reading.businessName}
                 </p>
                 {reading.completedAt && (
-                  <p className="mt-1.5 text-[11px] text-[#B4B0C6]">
+                  <p className="mt-1.5 text-micro text-muted-foreground">
                     {new Date(reading.completedAt).toLocaleDateString(
                       undefined,
                       { month: "short", day: "numeric", year: "numeric" }

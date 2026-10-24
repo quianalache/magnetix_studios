@@ -110,5 +110,45 @@ for (const f of ["src/app/(builder)/sa/[subAccountId]/courses/offers/[offerId]/t
   check(`checkout editor only links the public page once published (${f})`, /(offer\?\.visibility === "published"|course\?\.published) \?/.test(src(f)));
 }
 
+// ── Tenant + Public Surfaces Visual Direction 2 (2026-10-24) ─────────────
+check("Magnetix-owned pages show the configured platform mark (not the template badge)", shell.includes("CUSTOM_BRAND.logoPath") && src("src/config/landing.ts").includes('logoPath: "/magnetix-logo.png"'));
+check("staff sign-up uses the shared auth shell (Magnetix variant), no inner card", src("src/app/(auth)/signup/page.tsx").includes("<PublicAuthShell") && !/CardTitle|<Card\b/.test(code("src/components/auth/signup-form.tsx")));
+{
+  const my = src("src/app/my/(app)/layout.tsx");
+  check("MyMagnetix renders inside the Visual Direction 2 token scope", my.includes("<CrmScope>") && my.includes("min-w-0 flex-1 flex-col"));
+  check("MyMagnetix has no gradient promo slab or disabled Discover button", !/linear-gradient|Explore Discover/.test(code("src/app/my/(app)/layout.tsx")));
+  const home = code("src/app/my/(app)/page.tsx");
+  check("MyMagnetix Home: every 'View all' is a real link (no dead spans)", !/<span[^>]*>View (all|calendar)<\/span>/.test(home));
+  check("MyMagnetix Home: no gradient banners (TileCover instead)", !home.includes("gradientForId") && home.includes("<TileCover"));
+  check("MyMagnetix nav: Your Spaces anchor matches the section id", src("src/lib/mymagnetix/nav.ts").includes('"/my#mymagnetix-spaces"') && src("src/app/my/(app)/page.tsx").includes('id="mymagnetix-spaces"'));
+  check("MyMagnetix Settings: no internal developer copy", !/upcoming member|approved settings surface/.test(src("src/components/mymagnetix/settings-view.tsx")));
+  check("MyMagnetix payment history has a phone list (no 6-column table at 390)", src("src/components/mymagnetix/payment-history-table.tsx").includes("sm:hidden") && src("src/components/mymagnetix/payment-history-table.tsx").includes("hidden overflow-x-auto"));
+}
+for (const f of ["src/app/thank-you/page.tsx", "src/app/founderx/page.tsx", "src/app/affiliate/login/page.tsx", "src/app/affiliate/dashboard/page.tsx", "src/app/affiliate/dashboard/conversions/page.tsx", "src/app/affiliate-program/page.tsx"]) {
+  check(`unbuilt stub renders the branded not-found state, never placeholder text (${f})`, src(f).includes("notFound()") && !src(f).includes("hello world"));
+}
+{
+  const fs = src("src/components/pages-funnels/puck/form-server.tsx");
+  check("published pages never show form editor placeholders", fs.includes("const published = metadata?.resolvedEmbeds !== undefined") && fs.includes("if (published && !resolvedForm) return null"));
+}
+{
+  const q = src("src/app/q/[token]/page.tsx");
+  check("public quote: tenant surface + business identity, not the template badge", q.includes("tenant-surface public-plain") && q.includes("<TenantIdentity") && !q.includes("LogoMark"));
+  const qv = code("src/components/quotes/public-quote-view.tsx");
+  check("public quote: no fixed green/rose/amber, totals block spans its width, shared Select", !/emerald-|rose-|amber-/.test(qv) && qv.includes("ml-auto w-full max-w-xs") && !qv.includes("<select"));
+}
+{
+  const w = src("src/app/webinar/[subAccountId]/[webinarSlug]/page.tsx");
+  check("webinar registration: tenant surface with the webinar's own title, unknown webinar → state page", w.includes("publicSurfaceProps") && w.includes("notFound()") && src("src/app/webinar/[subAccountId]/[webinarSlug]/not-found.tsx").includes("<PublicStateShell"));
+  check("webinar registration: no unapproved Powered by", !/PoweredBy/.test(code("src/app/webinar/[subAccountId]/[webinarSlug]/page.tsx")));
+}
+for (const k of ["course", "offer"]) {
+  const pc = `src/app/${k}/[saId]/[${k}Id]/purchase-complete`;
+  check(`${k} purchase-complete sits on the tenant surface (theme brand), no hard-coded hex`, src(`${pc}/page.tsx`).includes("publicSurfaceProps") && !/\[#[0-9A-Fa-f]{6}\]/.test(src(`${pc}/purchase-complete-status.tsx`)));
+}
+check("portal Billing passes plain quote summaries to its client component", src("src/app/portal/portal-home-view.tsx").includes("quotes={quotes.map(toPortalQuoteSummary)}"));
+check("learner views hide an empty coach block (editor preview keeps it)", src("src/components/standalone-courses/standalone-lesson-player.tsx").includes("hideWhenEmpty={interactive}") && src("src/components/standalone-courses/theme-blocks.tsx").includes("hideWhenEmpty &&"));
+check("course curriculum: no letter placeholders", !/title\.charAt\(0\)/.test(src("src/components/standalone-courses/course-curriculum-nav.tsx")));
+
 console.log(`\nPublic surfaces contract: ${pass} passed, ${fail} failed.`);
 process.exit(fail ? 1 : 0);

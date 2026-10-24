@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   MessageCircle,
@@ -11,7 +12,16 @@ import {
   ArrowLeftRight,
   Settings,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MyMagnetixSidebarNav } from "./sidebar-nav";
+import { MyMagnetixIdentity } from "./identity";
 import { NotificationBell, type BellAttentionItem } from "./notification-bell";
 
 /**
@@ -37,7 +47,6 @@ export function MyMagnetixHeader({
 }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
 
   async function handleLogout() {
@@ -63,102 +72,70 @@ export function MyMagnetixHeader({
   }
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-[#ECE9F5] bg-white/95 px-4 py-3.5 backdrop-blur sm:px-6 lg:px-8">
-      <button
+    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur sm:px-6 lg:px-8">
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         id="mymagnetix-mobile-menu-button"
-        className="lg:hidden"
+        className="-ml-2 lg:hidden"
         onClick={() => setMobileOpen((v) => !v)}
-        aria-label="Toggle menu"
+        aria-label={mobileOpen ? "Close menu" : "Open menu"}
+        aria-expanded={mobileOpen}
       >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
+        {mobileOpen ? <X /> : <Menu />}
+      </Button>
+      <MyMagnetixIdentity size={26} className="lg:hidden" />
 
       <div className="flex-1" />
 
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          title="Search — coming soon"
-          disabled
-          className="flex h-9 w-9 items-center justify-center rounded-full text-[#8A87A0] opacity-70"
-        >
-          <Search className="h-[18px] w-[18px]" />
-        </button>
+        {/* Search and Messages don't exist yet — honest disabled slots. */}
+        <Button type="button" variant="ghost" size="icon" disabled title="Search — coming soon" aria-label="Search (coming soon)" className="max-sm:hidden">
+          <Search />
+        </Button>
         <NotificationBell
           attentionItems={attentionItems}
           initialUnreadCount={attentionItems.length + unreadNotificationCount}
         />
-        <button
-          type="button"
-          disabled
-          title="Messages — coming soon"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-[#B5B3AE] opacity-60"
-        >
-          <MessageCircle className="h-[18px] w-[18px]" />
-        </button>
+        <Button type="button" variant="ghost" size="icon" disabled title="Messages — coming soon" aria-label="Messages (coming soon)" className="max-sm:hidden">
+          <MessageCircle />
+        </Button>
 
-        <div className="relative ml-1">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-full py-1 pr-2 pl-1 hover:bg-[#F3F2EF]"
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button type="button" variant="ghost" className="ml-1 h-10 gap-2 rounded-full px-1 sm:pr-2.5" aria-label="Account menu" />}
           >
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-full text-[12.5px] font-bold text-white"
-              style={{
-                background: "linear-gradient(135deg, #A855F7, #5E2574)",
-              }}
-            >
+            <span className="flex size-8 items-center justify-center rounded-full bg-primary text-body-sm font-semibold text-primary-foreground">
               {primaryEmail[0]?.toUpperCase() ?? "?"}
             </span>
-            <span className="hidden text-[13px] font-medium text-[#202124] sm:inline">
-              {primaryEmail.split("@")[0]}
-            </span>
-          </button>
-          {menuOpen && (
-            <div className="absolute top-11 right-0 w-56 rounded-xl border border-[#ECE9F5] bg-white p-1.5 shadow-lg">
-              <p className="truncate px-2.5 py-2 text-[12px] text-[#909090]">
-                {primaryEmail}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  router.push("/my/settings");
-                }}
-                className="flex w-full items-center gap-2 rounded-lg bg-[#F3E4F0] px-2.5 py-2 text-left text-[13px] font-semibold text-[#202124] hover:bg-[#EBD6E8]"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </button>
-              {hasStaffAccess && (
-                <button
-                  type="button"
-                  onClick={handleSwitchToBusinessCenter}
-                  disabled={switching}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-[#202124] hover:bg-[#F3F2EF]"
-                >
-                  <ArrowLeftRight className="h-4 w-4" />
-                  {switching ? "Switching..." : "Switch to Business Center"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-[#202124] hover:bg-[#F3F2EF]"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
-            </div>
-          )}
-        </div>
+            <span className="hidden max-w-40 truncate text-body-sm font-medium text-foreground sm:inline">{primaryEmail.split("@")[0]}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <p className="truncate px-2 py-1.5 text-caption text-muted-foreground">{primaryEmail}</p>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href="/my/settings" />}>
+              <Settings />
+              Settings
+            </DropdownMenuItem>
+            {hasStaffAccess && (
+              <DropdownMenuItem onClick={handleSwitchToBusinessCenter} disabled={switching}>
+                <ArrowLeftRight />
+                {switching ? "Switching…" : "Switch to Business Center"}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {mobileOpen && (
-        <div className="absolute top-full right-0 left-0 border-b border-[#ECE9F5] bg-white p-3 lg:hidden">
-          <MyMagnetixSidebarNav />
+        <div className="absolute top-full right-0 left-0 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-border bg-card p-3 shadow-pop lg:hidden">
+          <MyMagnetixSidebarNav onNavigate={() => setMobileOpen(false)} />
         </div>
       )}
     </header>

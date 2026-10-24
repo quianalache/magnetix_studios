@@ -37,17 +37,17 @@ export function statusLabel(status: PersonPurchaseStatus): string {
 export function statusClass(status: PersonPurchaseStatus): string {
   switch (status) {
     case "active":
-      return "bg-[#DCFCE7] text-[#15803D]";
+      return "bg-status-success-bg text-status-success-fg";
     case "trialing":
-      return "bg-[#DBEAFE] text-[#1D4ED8]";
+      return "bg-status-info-bg text-status-info-fg";
     case "past_due":
     case "unpaid":
-      return "bg-[#FEF3C7] text-[#B45309]";
+      return "bg-status-warning-bg text-status-warning-fg";
     case "canceled":
     case "ended":
-      return "bg-[#FEE2E2] text-[#B91C1C]";
+      return "bg-status-danger-bg text-status-danger-fg";
     default:
-      return "bg-[#F0EEF7] text-[#6B6780]";
+      return "bg-status-neutral-bg text-status-neutral-fg";
   }
 }
 
@@ -133,19 +133,19 @@ export function paymentStatusClass(
 ): string {
   switch (status) {
     case "succeeded":
-      return "bg-[#DCFCE7] text-[#15803D]";
+      return "bg-status-success-bg text-status-success-fg";
     case "failed":
-      return "bg-[#FEE2E2] text-[#B91C1C]";
+      return "bg-status-danger-bg text-status-danger-fg";
     case "pending":
     case "requires_action":
-      return "bg-[#FEF3C7] text-[#B45309]";
+      return "bg-status-warning-bg text-status-warning-fg";
     case "refunded":
     case "partially_refunded":
-      return "bg-[#EDE9FE] text-[#6D28D9]";
+      return "bg-status-scheduled-bg text-status-scheduled-fg";
     case "canceled":
-      return "bg-[#FEE2E2] text-[#B91C1C]";
+      return "bg-status-danger-bg text-status-danger-fg";
     default:
-      return "bg-[#F0EEF7] text-[#6B6780]";
+      return "bg-status-neutral-bg text-status-neutral-fg";
   }
 }
 

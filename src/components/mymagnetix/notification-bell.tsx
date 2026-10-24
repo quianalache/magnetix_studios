@@ -132,11 +132,11 @@ export function NotificationBell({
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={unreadCount > 0 ? `${unreadCount} item${unreadCount === 1 ? "" : "s"} need attention` : "Nothing needs attention right now"}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#5B5B62] hover:bg-[#F3F2EF]"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
       >
         <Bell className="h-[18px] w-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EF4444] px-1 text-[9px] font-bold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-overline font-semibold text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -145,22 +145,22 @@ export function NotificationBell({
       {open && (
         <div
           className={cn(
-            "z-30 max-h-[70vh] overflow-y-auto rounded-xl border border-[#ECE9F5] bg-white shadow-lg",
+            "z-30 max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card shadow-lg",
             // Desktop: anchored dropdown under the bell. Mobile (<640px):
             // fixed, viewport-clamped panel so it can never overflow
             // horizontally regardless of the bell's own position.
             "fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[380px]",
           )}
         >
-          <div className="flex items-center justify-between border-b border-[#F0F0F0] px-3.5 py-3">
-            <span className="text-[13.5px] font-semibold text-[#202124]">Notifications</span>
+          <div className="flex items-center justify-between border-b border-border px-3.5 py-3">
+            <span className="text-body font-semibold text-foreground">Notifications</span>
             <div className="flex items-center gap-1">
               {notificationUnread > 0 && (
                 <button
                   type="button"
                   onClick={handleMarkAllRead}
                   disabled={markingAll}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium text-[#7C3AED] hover:bg-[#F5F3FF] disabled:opacity-60"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-caption font-medium text-tag-violet-fg hover:bg-muted disabled:opacity-60"
                 >
                   {markingAll ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCheck className="h-3 w-3" />}
                   Mark all read
@@ -169,7 +169,7 @@ export function NotificationBell({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-md p-1 text-[#8A87A0] hover:bg-[#F3F2EF] sm:hidden"
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted sm:hidden"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -179,10 +179,10 @@ export function NotificationBell({
 
           {loading && !loaded ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-[#8A87A0]" />
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : isEmpty ? (
-            <p className="px-4 py-8 text-center text-[13px] text-[#909090]">Nothing needs attention right now.</p>
+            <p className="px-4 py-8 text-center text-body-sm text-muted-foreground">Nothing needs attention right now.</p>
           ) : (
             <>
               {notifications.map((n) => (
@@ -191,21 +191,21 @@ export function NotificationBell({
                   type="button"
                   onClick={() => handleNotificationClick(n)}
                   className={cn(
-                    "flex w-full items-start gap-2.5 border-b border-[#F5F4F2] px-3.5 py-3 text-left hover:bg-[#F8F7FC]",
-                    !n.readAt && "bg-[#FAF9FF]",
+                    "flex w-full items-start gap-2.5 border-b border-border px-3.5 py-3 text-left hover:bg-muted",
+                    !n.readAt && "bg-muted",
                   )}
                 >
                   <span
                     className={cn(
                       "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                      n.readAt ? "bg-transparent" : "bg-[#7C3AED]",
+                      n.readAt ? "bg-transparent" : "bg-primary",
                     )}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className={cn("block text-[13px] leading-snug", n.readAt ? "text-[#3a3a44]" : "font-semibold text-[#202124]")}>
+                    <span className={cn("block text-body-sm leading-snug", n.readAt ? "text-foreground" : "font-semibold text-foreground")}>
                       {n.title}
                     </span>
-                    <span className="mt-0.5 block text-[11.5px] text-[#909090]">
+                    <span className="mt-0.5 block text-caption text-muted-foreground">
                       {(n.meta.communityName || n.meta.courseName || n.meta.businessName) ?? ""}
                       {(n.meta.communityName || n.meta.courseName || n.meta.businessName) ? " • " : ""}
                       {timeAgo(n.createdAt)}
@@ -216,19 +216,19 @@ export function NotificationBell({
 
               {attentionItems.length > 0 && (
                 <>
-                  <p className="border-b border-[#F5F4F2] bg-[#FAFAF9] px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#909090]">
+                  <p className="border-b border-border bg-muted px-3.5 py-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
                     Needs attention
                   </p>
                   {attentionItems.map((item) => (
                     <a
                       key={item.id}
                       href={item.enterHref}
-                      className="flex w-full items-start gap-2.5 border-b border-[#F5F4F2] px-3.5 py-3 text-left last:border-b-0 hover:bg-[#F8F7FC]"
+                      className="flex w-full items-start gap-2.5 border-b border-border px-3.5 py-3 text-left last:border-b-0 hover:bg-muted"
                     >
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#EF4444]" />
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] font-medium leading-snug text-[#202124]">{item.title}</span>
-                        <span className="mt-0.5 block text-[11.5px] text-[#909090]">
+                        <span className="block text-body-sm font-medium leading-snug text-foreground">{item.title}</span>
+                        <span className="mt-0.5 block text-caption text-muted-foreground">
                           {item.businessName} • {item.detail}
                         </span>
                       </span>

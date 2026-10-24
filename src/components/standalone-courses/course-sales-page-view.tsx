@@ -289,7 +289,7 @@ export function CourseSalesPageView({
                   return block.type === "progress" ? (
                     <ProgressBlockView key={block.id} block={block} completedCount={completedCount} totalCount={totalLessons} />
                   ) : (
-                    <InstructorBlockView key={block.id} block={block} instructor={course.instructor} />
+                    <InstructorBlockView key={block.id} block={block} instructor={course.instructor} hideWhenEmpty={interactive} />
                   );
                 }
                 return <CourseBlockView key={block.id} block={block} saId={saId} crossSellTargets={crossSellTargets} />;

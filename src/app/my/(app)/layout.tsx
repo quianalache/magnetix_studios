@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { Sparkles } from "lucide-react";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { personHasStaffAccess } from "@/lib/server/person-identity-service";
 import { listPersonMemberships, listAttentionForPerson } from "@/lib/server/mymagnetix-service";
@@ -10,6 +9,8 @@ import { MEMBER_SESSION_COOKIE } from "@/lib/community/member-auth";
 import { MyMagnetixHeader } from "@/components/mymagnetix/header";
 import { MyMagnetixSidebarNav } from "@/components/mymagnetix/sidebar-nav";
 import { MyMagnetixInstallBanner } from "@/components/mymagnetix/install-banner";
+import { MyMagnetixIdentity } from "@/components/mymagnetix/identity";
+import { CrmScope } from "@/components/theme/crm-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -57,36 +58,17 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
   ]);
 
   return (
-    <div className="min-h-screen bg-[#F5F4FB]">
+    // MyMagnetix is Magnetix-owned, so it uses the Visual Direction 2 token
+    // scope (CrmScope) — with its own lighter member layout, not the CRM's
+    // plum sidebar. Tenant pages it links into keep their own branding.
+    <CrmScope>
+    <div className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-[1440px]">
-        <aside id="mymagnetix-sidebar" className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#ECE9F5] bg-white px-4 py-6 lg:flex">
-          <div className="mb-7 flex items-center gap-2.5 px-2">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-[15px] font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #A855F7, #5E2574)" }}
-            >
-              M
-            </div>
-            <span className="text-[16.5px] font-bold text-[#202124]">MyMagnetix</span>
-          </div>
+        <aside id="mymagnetix-sidebar" className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-card px-3 py-5 lg:flex">
+          <MyMagnetixIdentity className="mb-6 px-2.5" />
           <MyMagnetixSidebarNav />
-          <div className="mt-auto rounded-2xl p-4 text-left text-white" style={{ background: "linear-gradient(150deg, #8B5CF6, #5E2574)" }}>
-            <Sparkles className="h-5 w-5 text-white" />
-            <p className="mt-2.5 text-[13px] font-bold leading-snug">Bring everything you love together.</p>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-white/75">
-              MyMagnetix connects all your communities, courses, projects, and more.
-            </p>
-            <button
-              type="button"
-              disabled
-              title="Discover is coming soon"
-              className="mt-3 w-full cursor-default rounded-lg bg-black/25 px-3 py-2 text-[11.5px] font-semibold text-white/90"
-            >
-              Explore Discover
-            </button>
-          </div>
         </aside>
-        <div className="flex min-h-screen flex-1 flex-col">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           {/*
             Only serializable props (strings/booleans) cross the Server ->
             Client boundary here — the Lucide icon COMPONENT REFERENCES
@@ -106,9 +88,10 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
             unreadNotificationCount={unreadNotificationCount}
           />
           <MyMagnetixInstallBanner />
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         </div>
       </div>
     </div>
+    </CrmScope>
   );
 }

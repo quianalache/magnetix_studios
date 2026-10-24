@@ -10,7 +10,7 @@ import type {
 import { SubscriptionCard } from "@/components/mymagnetix/subscription-card";
 import { SubscriptionDetailsSheet } from "@/components/mymagnetix/subscription-details-sheet";
 import { PaymentHistoryTable } from "@/components/mymagnetix/payment-history-table";
-import type { Quote } from "@/types/quotes";
+import type { PortalQuoteSummary } from "@/lib/portal/quote-summary";
 
 /**
  * Space Billing (2026-09-16 owner QA fix) — the tenant-scoped sibling of
@@ -39,7 +39,7 @@ export function SpaceBillingSection({
   saId: string;
   subscriptions: PersonSubscriptionPurchase[];
   paymentHistory: PersonPaymentHistoryItem[];
-  quotes: Quote[];
+  quotes: PortalQuoteSummary[];
 }) {
   const [selectedSubscription, setSelectedSubscription] =
     useState<PersonSubscriptionPurchase | null>(null);

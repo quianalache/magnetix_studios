@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 import { redirect } from "next/navigation";
 import { MessagesSquare } from "lucide-react";
 import { getCurrentPerson } from "@/lib/server/person-session";
@@ -46,28 +48,25 @@ export default async function MyMagnetixCommunitiesPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <MyMagnetixBackLink />
-      <h1 className="text-[20px] font-bold text-[#1D1B27]">My Communities</h1>
-      <p className="mt-1 text-[13px] text-[#84809A]">
-        Every community you belong to, across every Magnetix business.
-      </p>
+      <PageHeader title="My Communities" description="Every community you belong to, across every Magnetix business." />
 
       {sorted.length === 0 ? (
-        <p className="mt-6 text-[13px] text-[#909090]">No communities yet.</p>
+        <EmptyState className="mt-6" icon={MessagesSquare} title="No communities yet" description="When you join a community with any Magnetix business, it appears here." />
       ) : (
-        <div className="mt-5 flex flex-col gap-2.5">
+        <div className="mt-6 flex flex-col gap-2.5">
           {sorted.map((community) => (
             <div
               key={community.pinKey}
-              className="flex items-center gap-3 rounded-xl border border-[#ECE9F5] bg-white p-3 transition-shadow hover:shadow-md"
+              className="flex items-center gap-3 rounded-card border border-border bg-card p-3 shadow-card transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-pop"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EDE9FE] text-[#6D28D9]">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-tag-violet-fg">
                 <MessagesSquare className="h-5 w-5" />
               </span>
               <Link href={community.enterHref} className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">
+                <p className="truncate text-body-sm font-semibold text-foreground">
                   {community.name}
                 </p>
-                <p className="truncate text-[11px] text-[#8A87A0]">
+                <p className="truncate text-micro text-muted-foreground">
                   {community.businessName} · Level {community.level}
                 </p>
               </Link>

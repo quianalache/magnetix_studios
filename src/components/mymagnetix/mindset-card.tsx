@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Flower2, RefreshCw, Sparkles } from "lucide-react";
+import { Flower2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { MINDSET_LIBRARY, MINDSET_KIND_LABEL, type MindsetEntry } from "@/lib/mymagnetix/mindset";
 
 /**
- * The Magnetix Mindset banner — approved mockup treatment (gradient card,
- * lotus mark, reflection-style pill, "New thought" control). The library
+ * The Magnetix Mindset banner — lotus mark, kind pill and "New thought"
+ * control on the Visual Direction 2 hero wash (2026-10-24). The library
  * itself is a small static array (no AI call, no network request), so
  * cycling through it client-side on click is real, working interactivity,
  * not a decorative dead button.
@@ -24,37 +25,29 @@ export function MindsetCard({ initial }: { initial: MindsetEntry }) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl p-6 text-white sm:p-7" style={{ background: "linear-gradient(120deg, #F0ABFC 0%, #C084FC 45%, #7C3AED 100%)" }}>
-      <Sparkles className="pointer-events-none absolute right-10 top-6 h-5 w-5 text-white/50" />
-      <Sparkles className="pointer-events-none absolute right-28 top-16 h-3 w-3 text-white/40" />
+    // Visual Direction 2 moment treatment: the approved lavender/blush hero
+    // wash (near-white, dark text) instead of a saturated violet slab.
+    <section aria-label="Magnetix Mindset" className="mx-hero-wash relative overflow-hidden rounded-card border border-border p-5 sm:p-6">
       <div className="relative flex items-start gap-4 sm:gap-5">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/90 shadow-sm">
-          <Flower2 className="h-6 w-6 text-[#7C3AED]" />
-        </div>
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-card text-tag-violet-fg shadow-card sm:size-12">
+          <Flower2 className="size-5" aria-hidden="true" />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Magnetix Mindset</p>
-          <p className="mt-1.5 font-serif text-[20px] leading-snug sm:text-[22px]">{entry.text}</p>
-          <span className="mt-3 inline-block rounded-full bg-white/25 px-2.5 py-1 text-[11px] font-medium text-white">
+          <p className="text-micro font-medium tracking-[0.2em] text-ink-secondary uppercase">Magnetix Mindset</p>
+          <p className="mt-1.5 font-display text-title-md leading-snug text-foreground sm:text-title-lg">{entry.text}</p>
+          <span className="mt-3 inline-flex rounded-full bg-tag-violet-bg px-2.5 py-0.5 text-micro font-medium text-tag-violet-fg">
             {MINDSET_KIND_LABEL[entry.kind]}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={nextThought}
-          className="hidden shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-[12.5px] font-semibold text-[#5E2574] shadow-sm transition-opacity hover:opacity-90 sm:flex"
-        >
+        <Button type="button" variant="outline" size="sm" onClick={nextThought} className="hidden shrink-0 bg-card sm:inline-flex">
           New thought
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
+          <RefreshCw />
+        </Button>
       </div>
-      <button
-        type="button"
-        onClick={nextThought}
-        className="relative mt-4 flex w-full items-center justify-center gap-1.5 rounded-full bg-white/20 px-3.5 py-2 text-[12.5px] font-semibold text-white sm:hidden"
-      >
+      <Button type="button" variant="outline" size="sm" onClick={nextThought} className="mt-4 w-full bg-card sm:hidden">
         New thought
-        <RefreshCw className="h-3.5 w-3.5" />
-      </button>
-    </div>
+        <RefreshCw />
+      </Button>
+    </section>
   );
 }

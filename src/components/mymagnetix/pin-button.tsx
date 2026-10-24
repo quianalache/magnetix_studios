@@ -26,7 +26,7 @@ export function PinButton({ pinKey, initialPinned }: { pinKey: string; initialPi
       }}
       disabled={isPending}
       className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-        pinned ? "text-[#5E2574]" : "text-[#B5B3AE] hover:text-[#5E2574]"
+        pinned ? "text-primary" : "text-ink-tertiary hover:text-primary"
       }`}
     >
       <Pin className="h-4 w-4" fill={pinned ? "currentColor" : "none"} />

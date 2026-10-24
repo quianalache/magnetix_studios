@@ -247,6 +247,7 @@ export function CourseHomeView({
                     key={block.id}
                     block={block}
                     instructor={course.instructor}
+                    hideWhenEmpty={interactive}
                   />
                 );
               }

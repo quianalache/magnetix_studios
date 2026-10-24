@@ -49,8 +49,8 @@ function DeviceNotifications() {
       "Verifying browser notification support.",
     ],
     "not-configured": [
-      "Device notifications are being connected",
-      "Member push delivery is not configured on this deployment yet.",
+      "Device notifications aren't available yet",
+      "You'll still get emails for purchases, bookings and Readings.",
     ],
     unsupported: [
       "This browser cannot receive push notifications",
@@ -65,28 +65,28 @@ function DeviceNotifications() {
       "Allow notifications in your browser settings, then return here.",
     ],
     ready: [
-      "This device is ready",
-      "The upcoming member push service will use this device when connected.",
+      "This device can receive notifications",
+      "Device notifications are coming soon. Emails keep arriving as usual.",
     ],
   }[state];
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-[#ECE9F5] bg-[#FBFAFE] p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EEE6FF] text-[#6D28D9]">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tag-violet-bg text-tag-violet-fg">
           <MonitorSmartphone className="h-4 w-4" />
         </span>
         <div>
-          <p className="text-[13px] font-semibold text-[#202124]">
+          <p className="text-body-sm font-semibold text-foreground">
             Push notifications (this device)
           </p>
-          <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-[#858197]">
+          <p className="mt-1 max-w-xl text-micro leading-relaxed text-muted-foreground">
             {copy[1]}
           </p>
         </div>
       </div>
       <span
-        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${state === "ready" ? "bg-[#E5F8ED] text-[#197A46]" : "bg-[#F1EFF7] text-[#716C85]"}`}
+        className={`shrink-0 rounded-full px-2.5 py-1 text-overline font-semibold ${state === "ready" ? "bg-status-success-bg text-status-success-fg" : "bg-muted text-muted-foreground"}`}
       >
         {copy[0]}
       </span>
@@ -102,12 +102,12 @@ function FutureToggle({
   description: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-[#F0EDF7] py-3 first:border-t-0">
+    <div className="flex items-center justify-between gap-4 border-t border-border py-3 first:border-t-0">
       <div>
-        <p className="text-[12px] font-semibold text-[#292535]">{label}</p>
-        <p className="mt-0.5 text-[10px] text-[#918CA0]">{description}</p>
+        <p className="text-caption font-semibold text-foreground">{label}</p>
+        <p className="mt-0.5 text-overline text-muted-foreground">{description}</p>
       </div>
-      <span className="shrink-0 rounded-full bg-[#F1EFF7] px-2 py-1 text-[9px] font-semibold tracking-wide text-[#918CA0] uppercase">
+      <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-overline font-semibold tracking-wide text-muted-foreground uppercase">
         Coming soon
       </span>
     </div>
@@ -123,53 +123,53 @@ export function MyMagnetixSettingsView({
     <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-[#7C3AED] uppercase">
+          <p className="text-micro font-semibold tracking-[0.16em] text-tag-violet-fg uppercase">
             MyMagnetix
           </p>
-          <h1 className="mt-1 text-[26px] font-bold tracking-[-0.03em] text-[#1D1B27]">
+          <h1 className="mt-1 text-title-lg font-semibold tracking-[-0.03em] text-foreground">
             Settings
           </h1>
-          <p className="mt-1 text-[13px] text-[#84809A]">
+          <p className="mt-1 text-body-sm text-muted-foreground">
             Manage your account, notifications, and preferences.
           </p>
         </div>
       </div>
       <div className="grid gap-5 lg:grid-cols-[180px_minmax(0,1fr)]">
         <nav className="flex gap-1 overflow-x-auto lg:block lg:space-y-1">
-          <div className="flex shrink-0 items-center gap-2 rounded-lg bg-[#EEE6FF] px-3 py-2 text-[12px] font-semibold text-[#5E2574]">
+          <div className="flex shrink-0 items-center gap-2 rounded-lg bg-tag-violet-bg px-3 py-2 text-caption font-semibold text-primary">
             <Bell className="h-4 w-4" /> Notifications
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[12px] text-[#8F899F]">
+          <div className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-caption text-muted-foreground">
             <UserRound className="h-4 w-4" /> Profile &amp; Account
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[12px] text-[#8F899F]">
+          <div className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-caption text-muted-foreground">
             <LockKeyhole className="h-4 w-4" /> Privacy &amp; Security
           </div>
         </nav>
         <div className="space-y-5">
-          <section className="rounded-2xl border border-[#ECE9F5] bg-white p-4 shadow-[0_8px_30px_rgba(81,39,130,0.04)] sm:p-5">
+          <section className="rounded-card border border-border bg-card p-4 shadow-card sm:p-5">
             <div className="mb-4 flex items-start gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#EEE6FF] text-[#6D28D9]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-tag-violet-bg text-tag-violet-fg">
                 <Bell className="h-4 w-4" />
               </span>
               <div>
-                <h2 className="text-[15px] font-bold text-[#292535]">
+                <h2 className="text-section font-semibold text-foreground">
                   Notifications
                 </h2>
-                <p className="mt-0.5 text-[11px] text-[#918CA0]">
+                <p className="mt-0.5 text-micro text-muted-foreground">
                   Choose how and when MyMagnetix keeps you informed.
                 </p>
               </div>
             </div>
             <DeviceNotifications />
-            <div className="mt-5 rounded-xl border border-[#ECE9F5] bg-white p-4">
+            <div className="mt-5 rounded-xl border border-border bg-card p-4">
               <div className="mb-2 flex items-center gap-2">
-                <Radio className="h-4 w-4 text-[#7C3AED]" />
-                <h3 className="text-[13px] font-bold text-[#292535]">
+                <Radio className="h-4 w-4 text-tag-violet-fg" />
+                <h3 className="text-body-sm font-semibold text-foreground">
                   Personal notifications
                 </h3>
               </div>
-              <p className="mb-2 text-[11px] text-[#918CA0]">
+              <p className="mb-2 text-micro text-muted-foreground">
                 Account activity independent of any one community.
               </p>
               <FutureToggle
@@ -181,19 +181,19 @@ export function MyMagnetixSettingsView({
                 description="Booking confirmations, reminders, and reading results"
               />
             </div>
-            <div className="mt-5 rounded-xl border border-[#ECE9F5] bg-white p-4">
+            <div className="mt-5 rounded-xl border border-border bg-card p-4">
               <div className="mb-1 flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-[#7C3AED]" />
-                <h3 className="text-[13px] font-bold text-[#292535]">
+                <MessageCircle className="h-4 w-4 text-tag-violet-fg" />
+                <h3 className="text-body-sm font-semibold text-foreground">
                   Community notifications
                 </h3>
               </div>
-              <p className="mb-3 text-[11px] text-[#918CA0]">
+              <p className="mb-3 text-micro text-muted-foreground">
                 Customize notification preferences for each community you belong
                 to.
               </p>
               {communities.length === 0 ? (
-                <p className="rounded-lg bg-[#FBFAFE] p-3 text-[12px] text-[#918CA0]">
+                <p className="rounded-lg bg-muted p-3 text-caption text-muted-foreground">
                   No communities yet.
                 </p>
               ) : (
@@ -201,9 +201,9 @@ export function MyMagnetixSettingsView({
                   {communities.map((community) => (
                     <div
                       key={community.pinKey}
-                      className="flex items-center gap-3 rounded-lg border border-[#F0EDF7] p-2.5"
+                      className="flex items-center gap-3 rounded-lg border border-border p-2.5"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#EEE6FF] text-[12px] font-bold text-[#6D28D9]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-tag-violet-bg text-caption font-semibold text-tag-violet-fg">
                         {community.logoUrl ? (
                           <img
                             src={community.logoUrl}
@@ -215,16 +215,16 @@ export function MyMagnetixSettingsView({
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-semibold text-[#292535]">
+                        <p className="truncate text-caption font-semibold text-foreground">
                           {community.name}
                         </p>
-                        <p className="truncate text-[10px] text-[#918CA0]">
+                        <p className="truncate text-overline text-muted-foreground">
                           {community.businessName}
                         </p>
                       </div>
                       <Link
                         href={`/my/settings/community/${community.groupId}${community.subAccountId ? `?subAccountId=${encodeURIComponent(community.subAccountId)}` : ""}`}
-                        className="flex shrink-0 items-center gap-1 rounded-lg bg-[#F1EBFF] px-2.5 py-2 text-[10px] font-semibold text-[#5E2574] hover:bg-[#E7DBFF]"
+                        className="flex shrink-0 items-center gap-1 rounded-lg bg-tag-violet-bg px-2.5 py-2 text-overline font-semibold text-primary hover:bg-accent"
                       >
                         Customize <ChevronRight className="h-3 w-3" />
                       </Link>
@@ -233,14 +233,12 @@ export function MyMagnetixSettingsView({
                 </div>
               )}
             </div>
-            <div className="mt-5 rounded-xl border border-dashed border-[#D9D0EA] bg-[#FBFAFE] p-4">
+            <div className="mt-5 rounded-xl border border-dashed border-border bg-muted p-4">
               <div className="flex items-start gap-3">
-                <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-[#8B5CF6]" />
-                <p className="text-[11px] leading-relaxed text-[#777187]">
-                  Community and personal event controls are shown here as the
-                  approved settings surface. Their push preference storage will
-                  connect to the upcoming member notification service; existing
-                  email delivery is unchanged.
+                <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-tag-violet-fg" />
+                <p className="text-micro leading-relaxed text-muted-foreground">
+                  Device notifications are coming soon. Until then, email
+                  notifications keep working exactly as they do today.
                 </p>
               </div>
             </div>
@@ -260,13 +258,13 @@ export function CommunityNotificationSettings({
     <div className="mx-auto max-w-4xl">
       <Link
         href="/my/settings"
-        className="mb-5 inline-flex items-center gap-1 text-[11px] font-semibold text-[#6D28D9]"
+        className="mb-5 inline-flex items-center gap-1 text-micro font-semibold text-tag-violet-fg"
       >
         <ChevronLeft className="h-3.5 w-3.5" /> Back to all settings
       </Link>
-      <div className="overflow-hidden rounded-2xl border border-[#ECE9F5] bg-white">
-        <div className="flex items-center gap-4 border-b border-[#ECE9F5] p-5 sm:p-7">
-          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-[#EEE6FF] text-xl font-bold text-[#6D28D9]">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex items-center gap-4 border-b border-border p-5 sm:p-7">
+          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-tag-violet-bg text-xl font-semibold text-tag-violet-fg">
             {community.logoUrl ? (
               <img
                 src={community.logoUrl}
@@ -278,13 +276,13 @@ export function CommunityNotificationSettings({
             )}
           </div>
           <div>
-            <p className="text-[11px] font-semibold tracking-wide text-[#8B5CF6] uppercase">
+            <p className="text-micro font-semibold tracking-wide text-tag-violet-fg uppercase">
               Community notification settings
             </p>
-            <h1 className="mt-1 text-[22px] font-bold text-[#1D1B27]">
+            <h1 className="mt-1 text-title-lg font-semibold text-foreground">
               {community.name}
             </h1>
-            <p className="mt-1 text-[12px] text-[#918CA0]">
+            <p className="mt-1 text-caption text-muted-foreground">
               Choose which community activity you want to be notified about.
             </p>
           </div>

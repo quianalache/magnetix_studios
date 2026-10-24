@@ -55,33 +55,33 @@ export function PaymentDetailsSheet({
           <div className="flex flex-col gap-4 px-4 pb-4">
             <div className="flex items-center justify-between">
               <span
-                className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold ${paymentStatusClass(payment.status)}`}
+                className={`rounded-full px-2.5 py-1 text-micro font-semibold ${paymentStatusClass(payment.status)}`}
               >
                 {paymentStatusLabel(payment.status)}
               </span>
-              <span className="text-[15px] font-bold text-[#1D1B27]">
+              <span className="text-section font-semibold text-foreground">
                 {formatHistoryAmount(payment.amountCents, payment.currency)}
               </span>
             </div>
 
-            <dl className="space-y-2.5 border-t border-[#F1EFF7] pt-4 text-[13px]">
+            <dl className="space-y-2.5 border-t border-border pt-4 text-body-sm">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-[#8A87A0]">Date</dt>
-                <dd className="font-medium text-[#1D1B27]">
+                <dt className="text-muted-foreground">Date</dt>
+                <dd className="font-medium text-foreground">
                   {paymentDateLabel(payment)}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-[#8A87A0]">Type</dt>
-                <dd className="font-medium text-[#1D1B27]">
+                <dt className="text-muted-foreground">Type</dt>
+                <dd className="font-medium text-foreground">
                   {paymentTypeLabel(payment.paymentType)}
                 </dd>
               </div>
               {showRefundBreakdown && (
                 <>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-[#8A87A0]">Original amount</dt>
-                    <dd className="font-medium text-[#1D1B27]">
+                    <dt className="text-muted-foreground">Original amount</dt>
+                    <dd className="font-medium text-foreground">
                       {formatHistoryAmount(
                         payment.amountCents,
                         payment.currency
@@ -89,8 +89,8 @@ export function PaymentDetailsSheet({
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-[#8A87A0]">Refunded</dt>
-                    <dd className="font-medium text-[#1D1B27]">
+                    <dt className="text-muted-foreground">Refunded</dt>
+                    <dd className="font-medium text-foreground">
                       {formatHistoryAmount(
                         payment.amountRefundedCents,
                         payment.currency
@@ -98,8 +98,8 @@ export function PaymentDetailsSheet({
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-[#8A87A0]">Net</dt>
-                    <dd className="font-medium text-[#1D1B27]">
+                    <dt className="text-muted-foreground">Net</dt>
+                    <dd className="font-medium text-foreground">
                       {formatHistoryAmount(
                         payment.netAmountCents,
                         payment.currency
@@ -111,13 +111,13 @@ export function PaymentDetailsSheet({
             </dl>
 
             {payment.status === "failed" && payment.failureMessage && (
-              <p className="rounded-lg bg-[#FFF7F7] px-3 py-2 text-[12.5px] text-[#8B3A3A]">
+              <p className="rounded-lg bg-status-danger-bg px-3 py-2 text-body-sm text-destructive">
                 {payment.failureMessage}
               </p>
             )}
 
             {(payment.receiptUrl || invoiceUrl) && (
-              <div className="flex flex-wrap gap-3 border-t border-[#F1EFF7] pt-4 text-[12.5px] font-semibold text-[#5E2574]">
+              <div className="flex flex-wrap gap-3 border-t border-border pt-4 text-body-sm font-semibold text-primary">
                 {payment.receiptUrl && (
                   <a
                     href={payment.receiptUrl}

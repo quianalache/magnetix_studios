@@ -25,7 +25,7 @@ export function MyMagnetixBackLink({
   return (
     <Link
       href={href}
-      className="mb-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#6B7280] transition-colors hover:text-[#111827]"
+      className="mb-2.5 inline-flex items-center gap-1.5 text-body-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
     >
       <ArrowLeft className="h-3.5 w-3.5" />
       {label}

@@ -42,6 +42,13 @@ export function FormElementServerRender({
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
   const baseStyle = resolveBaseStyleProps(style);
+  // The published routes always pass `resolvedEmbeds` (the staff preview
+  // doesn't) — the same signal reading-tool-server.tsx uses. Visitors never
+  // see editor placeholders: a form block with no form, or a form that no
+  // longer exists, renders nothing on a published page.
+  const published = metadata?.resolvedEmbeds !== undefined;
+  const resolvedForm = formId ? metadata?.resolvedForms?.[formId] : null;
+  if (published && !resolvedForm) return null;
 
   let body: React.ReactNode;
   if (!formId) {
