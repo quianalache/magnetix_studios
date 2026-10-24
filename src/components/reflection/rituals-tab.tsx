@@ -6,19 +6,23 @@ import { Heart, Plus, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SectionHeader } from "@/components/system/section-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { Tag } from "@/components/system/status-pill";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { localDateKey } from "@/lib/reflection/local-date";
 import type { RitualDoc, RitualFrequency, RitualTimeBlock } from "@/types/reflection";
 
 /**
- * Rituals — real "Create New Ritual" modal (Name/Description/Frequency/
- * Time Block) ported verbatim from the compiled app bundle 2026-08-08.
- * The ritual CARD layout below it wasn't in the bundle excerpt captured —
- * only the modal was — so the card follows this app's existing house
- * style (rounded-2xl border-none shadow-sm bg-card) rather than a
- * confirmed-real recipe.
+ * Rituals — Visual Direction 2 (2026-10-23). Create (Name / Description /
+ * Frequency / Time block, the MomentumOS modal), tick off for today, delete.
+ * "Today" is the person's local day.
  */
 const FREQUENCIES: { value: RitualFrequency; label: string }[] = [
   { value: "daily", label: "Daily" },
@@ -31,23 +35,28 @@ const TIME_BLOCKS: { value: RitualTimeBlock; label: string }[] = [
   { value: "PM", label: "PM" },
   { value: "Evening", label: "Evening" },
 ];
-
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+const FREQUENCY_LABEL = Object.fromEntries(FREQUENCIES.map((f) => [f.value, f.label])) as Record<RitualFrequency, string>;
+const TIME_BLOCK_LABEL = Object.fromEntries(TIME_BLOCKS.map((t) => [t.value, t.label])) as Record<RitualTimeBlock, string>;
 
 export function RitualsTab({ subAccountId }: { subAccountId: string }) {
+  const { confirm, dialog } = useConfirm();
   const [rituals, setRituals] = useState<RitualDoc[] | null>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", frequency: "daily" as RitualFrequency, timeBlock: "AM" as RitualTimeBlock });
   const [saving, setSaving] = useState(false);
-  const today = todayStr();
+  const today = localDateKey();
 
   function load() {
     fetch(`/api/sub-accounts/${subAccountId}/reflection/rituals`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((d) => setRituals(d.rituals ?? []))
-      .catch(() => toast.error("Couldn't load rituals."));
+      .catch(() => {
+        setRituals((prev) => prev ?? []);
+        toast.error("Couldn't load rituals.");
+      });
   }
   useEffect(load, [subAccountId]);
 
@@ -81,138 +90,148 @@ export function RitualsTab({ subAccountId }: { subAccountId: string }) {
       ) ?? null,
     );
     try {
-      await fetch(`/api/sub-accounts/${subAccountId}/reflection/rituals/${ritualId}`, {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/reflection/rituals/${ritualId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ toggleDate: today }),
       });
+      if (!res.ok) throw new Error();
     } catch {
       toast.error("Couldn't update ritual.");
       load();
     }
   }
 
-  async function remove(ritualId: string) {
-    setRituals((prev) => prev?.filter((r) => r.id !== ritualId) ?? null);
+  async function remove(r: RitualDoc) {
+    if (!(await confirm({ title: `Delete “${r.name}”?`, description: "Its check-off history goes with it. This can't be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
+    setRituals((prev) => prev?.filter((x) => x.id !== r.id) ?? null);
     try {
-      await fetch(`/api/sub-accounts/${subAccountId}/reflection/rituals/${ritualId}`, { method: "DELETE" });
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/reflection/rituals/${r.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
     } catch {
       toast.error("Couldn't delete ritual.");
       load();
     }
   }
 
+  const doneCount = rituals?.filter((r) => r.completedDates.includes(today)).length ?? 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Rituals</h2>
-          <p className="text-sm text-muted-foreground">Intentional practices for energetic maintenance and embodiment.</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20">
-            <Plus className="h-4 w-4" /> New Ritual
-          </DialogTrigger>
-          <DialogContent className="rounded-3xl max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create New Ritual</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Name</label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Morning Grounding"
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Description</label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="What is the intent of this ritual?"
-                  className="rounded-xl resize-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Frequency</label>
-                  <select
-                    value={form.frequency}
-                    onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value as RitualFrequency }))}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-primary/20"
-                  >
-                    {FREQUENCIES.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Time Block</label>
-                  <select
-                    value={form.timeBlock}
-                    onChange={(e) => setForm((f) => ({ ...f, timeBlock: e.target.value as RitualTimeBlock }))}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-primary/20"
-                  >
-                    {TIME_BLOCKS.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <Button onClick={create} disabled={saving || !form.name.trim()} className="w-full rounded-xl">
-                {saving ? "Creating…" : "Create Ritual"}
-              </Button>
+    <div className="space-y-4">
+      {dialog}
+      <SectionHeader
+        title="Rituals"
+        description="Intentional practices for energetic maintenance and embodiment."
+        action={
+          <Button onClick={() => setOpen(true)}>
+            <Plus />
+            New ritual
+          </Button>
+        }
+      />
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create new ritual</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              create();
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="ritual-name">Name</Label>
+              <Input id="ritual-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Morning grounding" autoFocus />
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ritual-description">Description</Label>
+              <Textarea id="ritual-description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="What is the intent of this ritual?" rows={3} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Frequency</Label>
+                <Select value={form.frequency} onValueChange={(v) => v && setForm((f) => ({ ...f, frequency: v as RitualFrequency }))} items={FREQUENCY_LABEL}>
+                  <SelectTrigger aria-label="Frequency" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCIES.map((f) => (
+                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Time block</Label>
+                <Select value={form.timeBlock} onValueChange={(v) => v && setForm((f) => ({ ...f, timeBlock: v as RitualTimeBlock }))} items={TIME_BLOCK_LABEL}>
+                  <SelectTrigger aria-label="Time block" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_BLOCKS.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button type="submit" disabled={saving || !form.name.trim()} className="w-full">
+              {saving ? "Creating…" : "Create ritual"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {rituals === null ? (
-        <div className="h-40 animate-pulse rounded-3xl border bg-muted/20" />
+        <div className="grid gap-3 md:grid-cols-2" aria-busy="true">
+          <Skeleton className="h-24 rounded-card" />
+          <Skeleton className="h-24 rounded-card" />
+        </div>
       ) : rituals.length === 0 ? (
-        <div className="p-10 text-center bg-muted/20 rounded-3xl border border-dashed border-border/40">
-          <Heart className="mx-auto mb-4 h-8 w-8 text-primary/40" />
-          <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-1">
-            Create intentional practices to ground yourself and maintain your energy.
-          </p>
-        </div>
+        <EmptyState icon={Heart} title="No rituals yet" description="Create intentional practices to ground yourself and maintain your energy." action={<Button onClick={() => setOpen(true)}><Plus />New ritual</Button>} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {rituals.map((r) => {
-            const doneToday = r.completedDates.includes(today);
-            return (
-              <div key={r.id} className="rounded-2xl border-none shadow-sm bg-card p-4 flex items-start gap-3">
-                <button
-                  type="button"
-                  onClick={() => toggle(r.id)}
-                  className={cn(
-                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                    doneToday ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30",
-                  )}
-                  aria-label={doneToday ? "Mark incomplete" : "Mark complete"}
-                >
-                  {doneToday && <Check className="h-3.5 w-3.5" />}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-sm truncate">{r.name}</p>
-                    <button type="button" onClick={() => remove(r.id)} className="text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+        <>
+          <p className="text-body-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{doneCount}</span> of {rituals.length} done today
+          </p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {rituals.map((r) => {
+              const doneToday = r.completedDates.includes(today);
+              return (
+                <Card key={r.id} size="sm" className={cn("flex-row items-start gap-3 p-4", doneToday && "border-primary/30")}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(r.id)}
+                    className={cn(
+                      "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                      doneToday ? "border-primary bg-primary text-primary-foreground" : "border-border-strong hover:border-primary",
+                    )}
+                    aria-pressed={doneToday}
+                    aria-label={doneToday ? `Mark ${r.name} not done today` : `Mark ${r.name} done today`}
+                  >
+                    {doneToday && <Check className="size-3.5" />}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={cn("truncate text-body-sm font-semibold", doneToday && "text-muted-foreground line-through decoration-1")}>{r.name}</p>
+                      <Button variant="ghost" size="icon-xs" onClick={() => remove(r)} aria-label={`Delete ${r.name}`} title="Delete" className="-mt-0.5 shrink-0">
+                        <Trash2 className="text-muted-foreground" />
+                      </Button>
+                    </div>
+                    {r.description && <p className="mt-0.5 text-caption text-muted-foreground">{r.description}</p>}
+                    <div className="mt-2 flex gap-1.5">
+                      <Tag color="violet">{FREQUENCY_LABEL[r.frequency] ?? r.frequency}</Tag>
+                      <Tag color="gold">{TIME_BLOCK_LABEL[r.timeBlock] ?? r.timeBlock}</Tag>
+                    </div>
                   </div>
-                  {r.description && <p className="text-xs text-muted-foreground mt-1">{r.description}</p>}
-                  <div className="mt-2 flex gap-1.5">
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{r.frequency}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{r.timeBlock}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                </Card>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

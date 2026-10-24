@@ -4,31 +4,48 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ScrollText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { SectionHeader } from "@/components/system/section-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { Tag, tagColorFor } from "@/components/system/status-pill";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import type { NoteDoc } from "@/types/reflection";
 
 /**
- * Notes — real "Quick Note" composer ported verbatim from the compiled app
- * bundle 2026-08-08 (title auto-derives from the note's first line, not a
- * separate field — that's real behavior, not a simplification). The saved-
- * notes list below it follows this app's existing card conventions; the
- * bundle excerpt captured the composer but not that list's own markup.
+ * Notes — Visual Direction 2 (2026-10-23). The MomentumOS "Quick note"
+ * composer (the title comes from the note's first line, not a separate
+ * field) and the saved notes list. ⌘/Ctrl + Enter saves.
  */
+/** The note body without its first line when that line IS the title (it's where the title came from). */
+function notePreview(n: NoteDoc): string {
+  const [first, ...rest] = n.content.split("\n");
+  return (first.trim() === n.title.trim() ? rest.join("\n") : n.content).trim();
+}
+
 export function NotesTab({ subAccountId }: { subAccountId: string }) {
+  const { confirm, dialog } = useConfirm();
   const [notes, setNotes] = useState<NoteDoc[] | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
 
   function load() {
     fetch(`/api/sub-accounts/${subAccountId}/reflection/notes`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((d) => setNotes(d.notes ?? []))
-      .catch(() => toast.error("Couldn't load notes."));
+      .catch(() => {
+        setNotes((prev) => prev ?? []);
+        toast.error("Couldn't load notes.");
+      });
   }
   useEffect(load, [subAccountId]);
 
   async function save() {
-    const plain = draft.trim();
-    if (!plain) return;
+    if (!draft.trim() || saving) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/reflection/notes`, {
@@ -39,7 +56,7 @@ export function NotesTab({ subAccountId }: { subAccountId: string }) {
       if (!res.ok) throw new Error();
       setDraft("");
       load();
-      toast.success("Note saved to Reflection > Notes");
+      toast.success("Note saved.");
     } catch {
       toast.error("Couldn't save note.");
     } finally {
@@ -47,10 +64,12 @@ export function NotesTab({ subAccountId }: { subAccountId: string }) {
     }
   }
 
-  async function remove(noteId: string) {
-    setNotes((prev) => prev?.filter((n) => n.id !== noteId) ?? null);
+  async function remove(n: NoteDoc) {
+    if (!(await confirm({ title: `Delete “${n.title}”?`, description: "This can't be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
+    setNotes((prev) => prev?.filter((x) => x.id !== n.id) ?? null);
     try {
-      await fetch(`/api/sub-accounts/${subAccountId}/reflection/notes/${noteId}`, { method: "DELETE" });
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/reflection/notes/${n.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
     } catch {
       toast.error("Couldn't delete note.");
       load();
@@ -58,56 +77,59 @@ export function NotesTab({ subAccountId }: { subAccountId: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold tracking-tight">Notes</h2>
-      </div>
+    <div className="space-y-4">
+      {dialog}
+      <SectionHeader title="Notes" description="Capture thoughts as they come. The first line becomes the title." />
 
-      <div className="rounded-2xl border-none shadow-sm bg-card">
-        <div className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
-          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <ScrollText className="h-4 w-4 text-primary" /> Quick Note
-          </span>
+      <Card className="gap-3 p-4">
+        <label htmlFor="quick-note" className="flex items-center gap-2 text-body-sm font-semibold text-foreground">
+          <ScrollText className="size-4 text-link" aria-hidden="true" />
+          Quick note
+        </label>
+        <Textarea
+          id="quick-note"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              save();
+            }
+          }}
+          placeholder="Jot down a quick thought…"
+          rows={4}
+          className="text-body"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-caption text-muted-foreground">⌘/Ctrl + Enter to save</span>
+          <Button onClick={save} disabled={!draft.trim() || saving}>
+            {saving ? "Saving…" : "Save note"}
+          </Button>
         </div>
-        <div className="px-4 pb-4">
-          <div className="min-h-[80px] rounded-xl bg-muted/30">
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Jot down a quick thought..."
-              className="min-h-[80px] w-full resize-none rounded-xl border-none bg-transparent p-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          </div>
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">Capture thoughts quickly</span>
-            <Button size="sm" className="h-7 rounded-full px-3 text-xs" onClick={save} disabled={!draft.trim() || saving}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </div>
-      </div>
+      </Card>
 
       {notes === null ? (
-        <div className="h-24 animate-pulse rounded-2xl border bg-muted/20" />
+        <div className="space-y-3" aria-busy="true">
+          <Skeleton className="h-20 rounded-card" />
+          <Skeleton className="h-20 rounded-card" />
+        </div>
       ) : notes.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-6">No notes yet.</p>
+        <EmptyState compact icon={ScrollText} title="No notes yet" description="Notes you save appear here, newest first." />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {notes.map((n) => (
-            <div key={n.id} className="rounded-2xl border-none shadow-sm bg-card p-4">
+            <Card key={n.id} size="sm" className="gap-1.5 p-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold truncate">{n.title}</p>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">{n.category}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap line-clamp-4">{n.content}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-body-sm font-semibold">{n.title}</p>
+                  {n.category && <Tag color={tagColorFor(n.category)} className="shrink-0">{n.category}</Tag>}
                 </div>
-                <button type="button" onClick={() => remove(n.id)} className="shrink-0 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <Button variant="ghost" size="icon-xs" onClick={() => remove(n)} aria-label={`Delete ${n.title}`} title="Delete" className="-mt-0.5 shrink-0">
+                  <Trash2 className="text-muted-foreground" />
+                </Button>
               </div>
-            </div>
+              {notePreview(n) && <p className="line-clamp-4 whitespace-pre-wrap text-body-sm text-muted-foreground">{notePreview(n)}</p>}
+            </Card>
           ))}
         </div>
       )}

@@ -19,13 +19,15 @@ export function SectionHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-3", className)}>
+    // Wraps: when a wide action (two buttons, a week picker) doesn't fit beside
+    // the title on a narrow screen, it drops below instead of crushing it.
+    <div className={cn("flex flex-wrap items-start gap-x-3 gap-y-2", className)}>
       {Icon ? (
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tint-violet text-link">
           <Icon className="size-4" aria-hidden="true" />
         </span>
       ) : null}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-48 flex-1">
         <Heading className="text-section font-semibold text-foreground">{title}</Heading>
         {description ? <p className="mt-0.5 text-body-sm text-muted-foreground">{description}</p> : null}
       </div>

@@ -5,12 +5,20 @@ import { toast } from "sonner";
 import {
   BookOpen, Calendar, History, CalendarRange, CircleDollarSign, Heart,
   ScrollText, Images, ChevronLeft, ChevronRight, Zap, CircleCheck,
-  TrendingUp, Clock, Sun, Moon,
+  TrendingUp, Clock, Sun, Moon, Check,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { localDateKey } from "@/lib/reflection/local-date";
 import { AM_PROMPTS, PM_PROMPTS, emptyDailyReflectionFields } from "@/types/reflection";
 import type { DailyReflectionDoc, DailyOperationalStats } from "@/types/reflection";
 import { RitualsTab } from "@/components/reflection/rituals-tab";
@@ -18,21 +26,14 @@ import { NotesTab } from "@/components/reflection/notes-tab";
 import { MemoriesTab } from "@/components/reflection/memories-tab";
 
 /**
- * Reflection — ported from MomentumOS's real "Reflection" tool. Real tool
- * has 8 sub-tabs: Daily, Weekly, Monthly, Quarterly, Money, Rituals,
- * Notes, Memories. Daily was built 2026-08-08 from the saved DOM capture;
- * Rituals/Notes/Memories were built the same day, second wave, once the
- * compiled app bundle (saved alongside that capture) turned out to
- * contain every tab's real component code even though the DOM only
- * rendered Daily — see rituals-tab.tsx / notes-tab.tsx / memories-tab.tsx
- * for the exact real markup each came from. Weekly/Monthly/Quarterly/
- * Money are real "cycle reflection" and "money mindset" components
- * confirmed to exist in that same bundle but not yet built here — next.
+ * Reflection — Magnetix Visual Direction 2 (2026-10-23). Eight sub-tabs from
+ * the MomentumOS original: Daily, Rituals, Notes and Memories are built;
+ * Weekly, Monthly, Quarterly and Money show a "coming soon" state. Daily is
+ * the personal writing surface: a compact date bar with save state, the
+ * day's operational numbers, and the AM / PM prompts.
  *
- * One simplification from the real interaction: the real page gates the
- * AM/PM cards behind a "Start Reflection" click on a fresh day. Every
- * prompt here is just always directly editable instead — same content,
- * simpler interaction, no functional loss.
+ * Dates are the person's LOCAL calendar day (they used to be the UTC day,
+ * so in the evening "today" was already tomorrow).
  */
 const SUB_TABS = [
   { key: "daily", label: "Daily", icon: Calendar, built: true },
@@ -44,44 +45,82 @@ const SUB_TABS = [
   { key: "notes", label: "Notes", icon: ScrollText, built: true },
   { key: "memories", label: "Memories", icon: Images, built: true },
 ] as const;
+type SubTab = (typeof SUB_TABS)[number]["key"];
 
-function todayStr(offsetDays = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
-}
+const COMING_SOON: Partial<Record<SubTab, string>> = {
+  weekly: "Look back on each week — wins, lessons and what to carry forward.",
+  monthly: "A monthly check-in on where your energy and business are heading.",
+  quarterly: "Zoom out every quarter and reset your direction.",
+  money: "Reflect on your relationship with money alongside the numbers.",
+};
 
 function fmtDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
   return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
+function fmtMoney(n: number): string {
+  const abs = Math.abs(n);
+  const cents = Math.round(abs * 100) % 100 !== 0;
+  return `${n < 0 ? "-" : ""}$${abs.toLocaleString(undefined, { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
+type Fields = ReturnType<typeof emptyDailyReflectionFields>;
 
 export default function ReflectionPage() {
   const { subAccountId } = useSubAccount();
-  const [subTab, setSubTab] = useState<(typeof SUB_TABS)[number]["key"]>("daily");
+  const { confirm, dialog } = useConfirm();
+  const [subTab, setSubTab] = useState<SubTab>("daily");
   const [dayOffset, setDayOffset] = useState(0);
   const [reflection, setReflection] = useState<DailyReflectionDoc | null>(null);
   const [stats, setStats] = useState<DailyOperationalStats | null>(null);
-  const [fields, setFields] = useState(emptyDailyReflectionFields());
+  const [fields, setFields] = useState<Fields>(emptyDailyReflectionFields());
+  const [saved, setSaved] = useState<Fields>(emptyDailyReflectionFields());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const date = useMemo(() => todayStr(dayOffset), [dayOffset]);
+  const date = useMemo(() => localDateKey(dayOffset), [dayOffset]);
   const isToday = dayOffset === 0;
+  const dirty = useMemo(() => (Object.keys(fields) as (keyof Fields)[]).some((k) => (fields[k] ?? "") !== (saved[k] ?? "")), [fields, saved]);
 
   useEffect(() => {
     if (!subAccountId) return;
     setLoading(true);
     fetch(`/api/sub-accounts/${subAccountId}/reflection?date=${date}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((data) => {
+        const loaded = { ...emptyDailyReflectionFields(), ...(data.reflection ?? {}) } as Fields;
         setReflection(data.reflection ?? null);
         setStats(data.stats ?? null);
-        setFields({ ...emptyDailyReflectionFields(), ...(data.reflection ?? {}) });
+        setFields(loaded);
+        setSaved(loaded);
       })
       .catch(() => toast.error("Couldn't load that day."))
       .finally(() => setLoading(false));
   }, [subAccountId, date]);
+
+  // Leaving the page with unsaved writing asks first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  async function guardDiscard(): Promise<boolean> {
+    if (!dirty) return true;
+    return confirm({ title: "Discard unsaved reflection?", description: "You've written something for this day that isn't saved yet.", confirmLabel: "Discard", tone: "danger" });
+  }
+  async function goToDay(next: number) {
+    if (await guardDiscard()) setDayOffset(next);
+  }
+  async function goToTab(next: SubTab) {
+    if (subTab === "daily" && next !== "daily" && !(await guardDiscard())) return;
+    if (subTab === "daily" && next !== "daily") setFields(saved);
+    setSubTab(next);
+  }
 
   async function save() {
     setSaving(true);
@@ -94,6 +133,7 @@ export default function ReflectionPage() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setReflection(data.reflection);
+      setSaved(fields);
       toast.success("Reflection saved.");
     } catch {
       toast.error("Couldn't save. Try again.");
@@ -102,47 +142,32 @@ export default function ReflectionPage() {
     }
   }
 
-  return (
-    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-8 rounded-2xl">
-      <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
-        <div>
-          <div className="mb-2 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <BookOpen className="h-5 w-5 text-primary" />
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">Reflection</h1>
-          </div>
-          <p className="max-w-md text-muted-foreground">
-            A sacred space for self-awareness, intentionality, and strategic reset.
-          </p>
-        </div>
-      </div>
+  const status = dirty ? "Unsaved changes" : reflection ? "Saved" : "Not started";
 
-      {/* Real Radix Tabs shape — rounded-2xl bordered container, larger
-          px-5 py-2.5 triggers, active = bg-background (a third distinct
-          tab recipe alongside the Growth pill and AI Agents underline —
-          see Design System tab). */}
-      <div className="scrollbar-hide overflow-x-auto pb-2">
-        <div className="inline-flex h-10 items-center justify-center rounded-2xl border border-border/40 bg-muted/50 p-1">
-          {SUB_TABS.map((t) => {
-            const Icon = t.icon;
-            const isActive = subTab === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setSubTab(t.key)}
-                className={cn(
-                  "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium transition-all",
-                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
-                )}
-              >
-                <Icon className="mr-2 h-4 w-4" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+  return (
+    <PageShell width="data">
+      {dialog}
+      <PageHeader
+        title="Reflection"
+        icon={BookOpen}
+        description="A space for self-awareness, intention and a steady reset."
+      />
+
+      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <Tabs value={subTab} onValueChange={(v) => goToTab(v as SubTab)}>
+          <TabsList variant="underline" className="gap-5">
+            {SUB_TABS.map((t) => {
+              const Icon = t.icon;
+              return (
+                <TabsTrigger key={t.key} value={t.key}>
+                  <Icon aria-hidden="true" />
+                  {t.label}
+                  {!t.built && <span className="rounded-full bg-muted px-1.5 text-micro font-medium text-muted-foreground">Soon</span>}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </Tabs>
       </div>
 
       {subTab === "rituals" ? (
@@ -152,166 +177,156 @@ export default function ReflectionPage() {
       ) : subTab === "memories" ? (
         <MemoriesTab subAccountId={subAccountId} />
       ) : subTab !== "daily" ? (
-        <div className="rounded-3xl border border-dashed border-border/40 bg-muted/20 p-10 text-center">
-          <p className="text-sm font-semibold">
-            {SUB_TABS.find((t) => t.key === subTab)?.label} isn&apos;t built yet
-          </p>
-          <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-            Confirmed to be real in the app&apos;s source — just not wired up here yet. Coming next.
-          </p>
-        </div>
-      ) : loading ? (
-        <div className="h-96 animate-pulse rounded-3xl border bg-muted/20" />
+        <EmptyState
+          icon={SUB_TABS.find((t) => t.key === subTab)?.icon ?? BookOpen}
+          title={`${SUB_TABS.find((t) => t.key === subTab)?.label} reflection is coming soon`}
+          description={COMING_SOON[subTab]}
+          action={<Button variant="secondary" onClick={() => goToTab("daily")}>Go to Daily</Button>}
+        />
       ) : (
-        <div className="space-y-8">
-          <div className="flex items-center justify-between rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setDayOffset((d) => d - 1)}>
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-2 text-lg font-semibold">
-              <Calendar className="h-5 w-5 text-primary" />
-              {fmtDate(date)}
-              {isToday && (
-                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-                  TODAY
-                </span>
+        <div className="space-y-5">
+          <Card size="sm" className="flex-row flex-wrap items-center justify-between gap-3 px-3 sm:px-4">
+            <div className="flex min-w-0 items-center gap-1">
+              <Button variant="ghost" size="icon-sm" onClick={() => goToDay(dayOffset - 1)} aria-label="Previous day">
+                <ChevronLeft />
+              </Button>
+              <div className="flex min-w-0 items-center gap-2 px-1">
+                <Calendar className="size-4 shrink-0 text-link" aria-hidden="true" />
+                <span className="truncate text-section font-semibold">{fmtDate(date)}</span>
+                {isToday && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-micro font-semibold text-accent-foreground">Today</span>}
+              </div>
+              <Button variant="ghost" size="icon-sm" onClick={() => goToDay(dayOffset + 1)} aria-label="Next day">
+                <ChevronRight />
+              </Button>
+              {!isToday && (
+                <Button variant="ghost" size="sm" onClick={() => goToDay(0)}>
+                  Today
+                </Button>
               )}
             </div>
-            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setDayOffset((d) => d + 1)}>
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
+            <div className="flex items-center gap-3">
+              <span className={cn("flex items-center gap-1.5 text-caption font-medium", dirty ? "text-status-warning-fg" : "text-muted-foreground")} aria-live="polite">
+                {!dirty && reflection && <Check className="size-3.5" aria-hidden="true" />}
+                {status}
+              </span>
+              <Button onClick={save} disabled={saving || loading || (!dirty && !!reflection)}>
+                {saving ? "Saving…" : reflection ? "Save" : "Start reflection"}
+              </Button>
+            </div>
+          </Card>
 
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            <div className="space-y-8">
-              <div className="rounded-3xl border border-border/50 bg-gradient-to-br from-background to-muted/30 bg-card p-6 shadow-sm">
-                <h3 className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                  <Zap className="h-4 w-4 text-primary" />
-                  Operational Awareness
-                </h3>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          {loading ? (
+            <div className="grid gap-5 lg:grid-cols-3" aria-busy="true">
+              <Skeleton className="h-64 rounded-card" />
+              <div className="space-y-5 lg:col-span-2">
+                <Skeleton className="h-72 rounded-card" />
+                <Skeleton className="h-72 rounded-card" />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+              {/* Phones write first: the day's numbers follow the prompts below lg. */}
+              <Card className="order-last gap-4 p-5 lg:sticky lg:top-4 lg:order-none">
+                <h2 className="flex items-center gap-2 text-overline font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Zap className="size-3.5 text-link" aria-hidden="true" />
+                  Operational awareness
+                </h2>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-2">
                   <MiniStat icon={CircleCheck} label="Tasks" value={String(stats?.tasksCompleted ?? 0)} />
                   <MiniStat icon={Heart} label="Rituals" value={String(stats?.ritualsCompleted ?? 0)} />
-                  <MiniStat
-                    icon={CircleDollarSign}
-                    label="Income"
-                    value={`$${(stats?.income ?? 0).toLocaleString()}`}
-                    tone="text-primary"
-                  />
-                  <MiniStat
-                    icon={CircleDollarSign}
-                    label="Net Flow"
-                    value={`$${(stats?.netFlow ?? 0).toLocaleString()}`}
-                    tone="text-accent-foreground"
-                    dim
-                  />
+                  <MiniStat icon={CircleDollarSign} label="Income" value={fmtMoney(stats?.income ?? 0)} />
+                  <MiniStat icon={CircleDollarSign} label="Net flow" value={fmtMoney(stats?.netFlow ?? 0)} negative={(stats?.netFlow ?? 0) < 0} />
                   <MiniStat icon={TrendingUp} label="Content" value={String(stats?.contentPublished ?? 0)} />
                   <MiniStat icon={Clock} label="Time" value={`${stats?.hoursTracked ?? 0}h`} />
                 </div>
+                <p className="text-caption text-muted-foreground">What actually happened {isToday ? "today" : "that day"}, pulled from your workspace.</p>
+              </Card>
+
+              <div className="space-y-5 lg:col-span-2">
+                <ReflectionCard
+                  icon={Sun}
+                  chip="bg-tag-gold-bg text-tag-gold-fg"
+                  title="AM reflection + intentions"
+                  prompts={AM_PROMPTS}
+                  fields={fields}
+                  onChange={(key, val) => setFields((f) => ({ ...f, [key]: val }))}
+                />
+                <ReflectionCard
+                  icon={Moon}
+                  chip="bg-tag-violet-bg text-tag-violet-fg"
+                  title="PM reflection + review"
+                  prompts={PM_PROMPTS}
+                  fields={fields}
+                  onChange={(key, val) => setFields((f) => ({ ...f, [key]: val }))}
+                />
+                <div className="flex items-center justify-end gap-3">
+                  <span className={cn("text-caption font-medium", dirty ? "text-status-warning-fg" : "text-muted-foreground")}>{status}</span>
+                  <Button onClick={save} disabled={saving || (!dirty && !!reflection)}>
+                    {saving ? "Saving…" : reflection ? "Save reflection" : "Start reflection"}
+                  </Button>
+                </div>
               </div>
             </div>
-
-            <div className="space-y-8 lg:col-span-2">
-              <ReflectionCard
-                icon={Sun}
-                iconBg="bg-secondary/20"
-                iconTone="text-secondary-foreground"
-                title="AM Reflection + Intentions"
-                prompts={AM_PROMPTS}
-                fields={fields}
-                onChange={(key, val) => setFields((f) => ({ ...f, [key]: val }))}
-              />
-              <ReflectionCard
-                icon={Moon}
-                iconBg="bg-primary/10"
-                iconTone="text-primary"
-                title="PM Reflection + Review"
-                prompts={PM_PROMPTS}
-                fields={fields}
-                onChange={(key, val) => setFields((f) => ({ ...f, [key]: val }))}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-4">
-            <Button onClick={save} disabled={saving} className="rounded-xl px-6">
-              {saving ? "Saving…" : reflection ? "Save Reflection" : "Start Reflection"}
-            </Button>
-          </div>
+          )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }
 
-function MiniStat({
-  icon: Icon,
-  label,
-  value,
-  tone,
-  dim,
-}: {
-  icon: typeof CircleCheck;
-  label: string;
-  value: string;
-  tone?: string;
-  dim?: boolean;
-}) {
+function MiniStat({ icon: Icon, label, value, negative }: { icon: typeof CircleCheck; label: string; value: string; negative?: boolean }) {
   return (
-    <div className="rounded-2xl border border-border/40 bg-background p-4">
-      <div className="mb-1 flex items-center gap-2 text-muted-foreground">
-        <Icon className={cn("h-3.5 w-3.5", dim && "opacity-50")} />
-        <span className="text-[10px] font-bold uppercase">{label}</span>
+    <div className="rounded-lg border border-border bg-background p-3">
+      <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+        <Icon className="size-3.5" aria-hidden="true" />
+        <span className="text-overline font-semibold uppercase tracking-wide">{label}</span>
       </div>
-      <p className={cn("text-2xl font-bold", tone)}>{value}</p>
+      <p className={cn("text-title-md font-bold tabular-nums", negative ? "text-destructive" : "text-foreground")}>{value}</p>
     </div>
   );
 }
 
 function ReflectionCard({
   icon: Icon,
-  iconBg,
-  iconTone,
+  chip,
   title,
   prompts,
   fields,
   onChange,
 }: {
   icon: typeof Sun;
-  iconBg: string;
-  iconTone: string;
+  chip: string;
   title: string;
   prompts: typeof AM_PROMPTS;
-  fields: ReturnType<typeof emptyDailyReflectionFields>;
-  onChange: (key: keyof ReturnType<typeof emptyDailyReflectionFields>, value: string) => void;
+  fields: Fields;
+  onChange: (key: keyof Fields, value: string) => void;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-border/50 bg-card p-8 shadow-sm">
-      <div className="pointer-events-none absolute right-0 top-0 p-8 opacity-5">
-        <Icon className="h-24 w-24 text-primary" />
+    <Card className="gap-5 p-5 sm:p-6">
+      <div className="flex items-center gap-3">
+        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", chip)}>
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+        <h2 className="text-title-md font-semibold tracking-tight">{title}</h2>
       </div>
-      <div className="mb-8 flex items-center gap-3">
-        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", iconBg)}>
-          <Icon className={cn("h-5 w-5", iconTone)} />
-        </div>
-        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-      </div>
-      <div className="space-y-8">
+      <div className="space-y-5">
         {prompts.map((p) => (
-          <div key={p.key} className="space-y-2">
-            <div className="flex flex-col">
-              <label className="text-sm font-bold text-foreground">{p.label}</label>
-              <span className="text-[10px] italic text-muted-foreground">{p.hint}</span>
-            </div>
+          <div key={p.key} className="space-y-1.5">
+            <label htmlFor={`reflection-${p.key}`} className="block text-body-sm font-semibold text-foreground">
+              {p.label}
+              <span className="mt-0.5 block text-caption font-normal text-muted-foreground">{p.hint}</span>
+            </label>
             <Textarea
+              id={`reflection-${p.key}`}
               value={fields[p.key]}
               onChange={(e) => onChange(p.key, e.target.value)}
-              placeholder="No entry yet."
-              className="min-h-[60px] rounded-xl border-dashed border-border/40 bg-muted/20 text-sm"
+              placeholder="Write freely…"
+              rows={3}
+              className="min-h-20 text-body"
             />
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
