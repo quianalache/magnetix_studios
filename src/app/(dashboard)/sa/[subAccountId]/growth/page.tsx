@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   Plus, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Trash2,
@@ -827,9 +828,7 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
 
-  const totalImpressions = pages.reduce((s, p) => s + p.impressions, 0);
-  const totalConversions = pages.reduce((s, p) => s + p.conversions, 0);
-  const avgRate = totalImpressions > 0 ? ((totalConversions / totalImpressions) * 100).toFixed(1) : "0.0";
+  const { saPath } = useSubAccount();
 
   async function addPage() {
     if (!title.trim()) return;
@@ -846,10 +845,20 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
     <div className="space-y-4">
       {dialog}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <MetricCard className="col-span-2 sm:col-span-1" icon={Activity} tone="violet" label="Total impressions" value={totalImpressions.toLocaleString()} />
-        <MetricCard icon={TrendingUp} tone="green" label="Total conversions" value={totalConversions.toLocaleString()} />
-        <MetricCard icon={Percent} tone="aqua" label="Avg. conversion rate" value={`${avgRate}%`} />
+        {/* Nothing records impressions or conversions for pages tracked here
+            (rows are hand-entered links, not tied to a Magnetix page), so
+            these show "—", never a measured-looking 0. */}
+        <MetricCard className="col-span-2 sm:col-span-1" icon={Activity} tone="violet" label="Total impressions" value="—" hint="Not tracked yet" />
+        <MetricCard icon={TrendingUp} tone="green" label="Total conversions" value="—" hint="Not tracked yet" />
+        <MetricCard icon={Percent} tone="aqua" label="Avg. conversion rate" value="—" hint="Not tracked yet" />
       </div>
+      <p className="text-caption text-muted-foreground">
+        Impressions and conversions aren&apos;t measured for pages added here yet. Measured visits and conversions for booking pages, Offers and Reading Tools are in{" "}
+        <Link href={saPath("/reports")} className="font-medium text-link hover:underline">
+          Reports → Attribution
+        </Link>
+        .
+      </p>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SegmentedControl
@@ -900,7 +909,6 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
             <Card className="gap-0 p-0">
               <ul className="divide-y divide-border">
                 {pages.map((p) => {
-                  const rate = p.impressions > 0 ? ((p.conversions / p.impressions) * 100).toFixed(1) : null;
                   return (
                     <li key={p.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
@@ -914,9 +922,9 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
                       </div>
                       <div className="flex shrink-0 items-center gap-4">
                         <dl className="flex gap-4 text-caption">
-                          <div><dt className="text-muted-foreground">Impressions</dt><dd className="font-semibold tabular-nums">{p.impressions.toLocaleString()}</dd></div>
-                          <div><dt className="text-muted-foreground">Conversions</dt><dd className="font-semibold tabular-nums">{p.conversions.toLocaleString()}</dd></div>
-                          <div><dt className="text-muted-foreground">Rate</dt><dd className="font-semibold tabular-nums">{rate ? `${rate}%` : "—"}</dd></div>
+                          <div><dt className="text-muted-foreground">Impressions</dt><dd className="font-semibold text-muted-foreground" title="Not tracked yet">—</dd></div>
+                          <div><dt className="text-muted-foreground">Conversions</dt><dd className="font-semibold text-muted-foreground" title="Not tracked yet">—</dd></div>
+                          <div><dt className="text-muted-foreground">Rate</dt><dd className="font-semibold text-muted-foreground" title="Not tracked yet">—</dd></div>
                         </dl>
                         <Button variant="ghost" size="icon-sm" onClick={() => removePage(p)} aria-label={`Stop tracking ${p.title}`} title="Remove">
                           <Trash2 className="text-muted-foreground" />

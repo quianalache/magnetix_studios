@@ -273,8 +273,6 @@ export async function addPagePerformance(opts: {
     title: opts.title,
     url: opts.url,
     pageType: opts.pageType,
-    impressions: 0,
-    conversions: 0,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });

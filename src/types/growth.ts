@@ -86,8 +86,15 @@ export interface PagePerformance {
   title: string;
   url: string;
   pageType: string;
-  impressions: number;
-  conversions: number;
+  /**
+   * Legacy placeholders. Nothing has ever recorded these: rows are
+   * hand-entered links, not tied to a Magnetix page, so older docs carry a
+   * stored 0 that was never measured. New rows don't write them, and Business
+   * Pulse shows "Not tracked yet" instead. Measured visits/conversions live in
+   * `attributionVisits` (Reports → Attribution).
+   */
+  impressions?: number;
+  conversions?: number;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
