@@ -3,11 +3,11 @@
   "updated": "2026-10-24",
   "counts": {
     "hexInTsx": 1510,
-    "arbitraryFontSize": 825,
+    "arbitraryFontSize": 823,
     "nativeSelect": 187,
     "windowConfirm": 12,
     "rawH1ClassName": 129,
-    "momentumScope": 17,
+    "momentumScope": 4,
     "brandTokenInCrm": 0,
     "legacyThemeClass": 2
   }

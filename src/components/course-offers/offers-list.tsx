@@ -230,7 +230,7 @@ export function OffersList({
                         className={cn(
                           "focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground rounded-full border-0 px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase focus-visible:ring-1 focus-visible:outline-none [&>option]:normal-case",
                           offer.visibility === "published"
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                            ? "bg-status-success-bg text-status-success-fg"
                             : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400"
                         )}
                       >

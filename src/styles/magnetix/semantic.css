@@ -359,3 +359,33 @@
 .mx-crm .mx-hero-quote {
   color: #4b3e6e;
 }
+
+/* Native <select> in the CRM (Visual Direction 2 final cleanup, 2026-10-24).
+   ~190 operational forms still use a native <select> for simple pick-lists.
+   Rather than rewriting every form, the CRM scope draws them like the system
+   inputs: no OS-specific chrome, the same muted chevron and padding as the
+   shared Select trigger, plum focus ring from each field's own classes. The
+   native picker itself is kept — it's accessible and best on phones.
+   Unlayered on purpose so it wins over per-element padding utilities.
+   Multi-row selects (multiple / size) keep their native list rendering. */
+.mx-crm select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23736d8f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem;
+  padding-right: 2.25rem;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.mx-crm select:not([multiple]):not([size]):disabled {
+  cursor: not-allowed;
+}
+
+/* Native checkboxes / radios in the CRM take the plum action colour instead
+   of the browser's default blue (same cleanup; shared <Checkbox> unaffected). */
+.mx-crm input[type="checkbox"],
+.mx-crm input[type="radio"] {
+  accent-color: var(--primary);
+}

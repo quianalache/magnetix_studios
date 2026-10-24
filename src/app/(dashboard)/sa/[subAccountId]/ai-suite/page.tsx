@@ -48,7 +48,7 @@ export default function SubAccountAiSuitePage() {
 
   if (!gate.enabled) {
     return (
-      <div className="momentum-scope mx-auto w-full max-w-3xl rounded-2xl">
+      <div className="mx-auto w-full max-w-3xl">
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <h1 className="text-lg font-semibold">Workspace Assistant is locked</h1>
@@ -63,7 +63,7 @@ export default function SubAccountAiSuitePage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto flex h-full max-w-3xl flex-col gap-4 rounded-2xl">
+    <div className="mx-auto flex h-full max-w-3xl flex-col gap-4">
       {!chatActive && (
         <AiSuiteScopeBanner
           level="sub-account"

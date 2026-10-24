@@ -101,7 +101,7 @@ export function DefaultBookingLinkCard({ pages }: { pages: BookingPage[] }) {
   return (
     <section className="rounded-2xl border bg-card p-5">
       <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tag-aqua-bg text-tag-aqua-fg">
           <Link2 className="h-4 w-4" />
         </span>
         <div>

@@ -1,3 +1,4 @@
+import { BookOpen } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 
 /**
@@ -44,15 +45,17 @@ export function CoursePreviewCard({
             className="aspect-video w-full object-cover"
           />
         ) : (
-          <div className="flex aspect-video w-full items-center justify-center bg-muted text-xl font-semibold text-muted-foreground">
-            {title.trim() ? title.trim().charAt(0).toUpperCase() : "?"}
+          <div className="flex aspect-video w-full items-center justify-center bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true">
+            <span className="flex size-11 items-center justify-center rounded-full bg-card/70">
+              <BookOpen className="size-5" />
+            </span>
           </div>
         )}
         <span
           className={
             access === "open"
-              ? "absolute bottom-2 right-2 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-semibold text-white"
-              : "absolute bottom-2 right-2 rounded-full bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-white/80 dark:text-zinc-900"
+              ? "absolute bottom-2 right-2 rounded-full bg-status-success-bg px-2 py-0.5 text-micro font-semibold text-status-success-fg"
+              : "absolute bottom-2 right-2 rounded-full bg-foreground/80 px-2 py-0.5 text-micro font-semibold text-background"
           }
         >
           {priceLabel}

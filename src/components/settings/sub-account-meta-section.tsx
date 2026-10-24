@@ -370,7 +370,7 @@ function CapabilityBadge({ label, ok }: { label: string; ok: boolean }) {
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
         ok
-          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          ? "bg-status-success-bg text-status-success-fg"
           : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
       }`}
     >

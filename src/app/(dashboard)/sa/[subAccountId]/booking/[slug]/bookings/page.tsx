@@ -303,7 +303,7 @@ function BookingRow({
         onClick={onClick}
         className="flex w-full flex-wrap items-start gap-3 rounded-xl border bg-card p-4 text-left transition hover:bg-muted/40"
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tag-aqua-bg text-tag-aqua-fg">
           <CalendarClock className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1 space-y-0.5">

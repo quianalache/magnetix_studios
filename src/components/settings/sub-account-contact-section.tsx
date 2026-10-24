@@ -16,7 +16,7 @@ type AccessStatus = "active" | "pending" | "none";
  *  "provisioned" means. */
 function AccessStatusBadge({ status }: { status: AccessStatus }) {
   const styles: Record<AccessStatus, string> = {
-    active: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    active: "bg-status-success-bg text-status-success-fg",
     pending: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
     none: "bg-muted text-muted-foreground",
   };
@@ -149,7 +149,7 @@ export function SubAccountContactSection() {
   return (
     <section className="bg-card rounded-2xl border p-5">
       <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tag-aqua-bg text-tag-aqua-fg">
           <Building2 className="h-4 w-4" />
         </span>
         <div>

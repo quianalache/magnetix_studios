@@ -275,7 +275,7 @@ export default function ClientPortalSettingsPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-4xl space-y-6 rounded-2xl">
+    <div className="mx-auto w-full max-w-4xl space-y-6">
       <div>
         <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
           Memberships &middot; Client Portal

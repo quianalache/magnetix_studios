@@ -43,7 +43,7 @@ const STATUS_STYLES: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
   submitting: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   pending: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  approved: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  approved: "bg-status-success-bg text-status-success-fg",
   rejected: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
   failed: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
   paused: "bg-orange-500/10 text-orange-700 dark:text-orange-400",

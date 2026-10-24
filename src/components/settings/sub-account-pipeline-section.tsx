@@ -202,7 +202,7 @@ export function SubAccountPipelineSection() {
                 className={cn(
                   "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
                   r.terminal === "won"
-                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    ? "bg-status-success-bg text-status-success-fg"
                     : "bg-rose-500/10 text-rose-700 dark:text-rose-400",
                 )}
                 title="Closed state — drives reports + automations"

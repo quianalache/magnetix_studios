@@ -73,7 +73,7 @@ export function SubAccountCalendarSyncSection() {
   return (
     <section className="rounded-2xl border bg-card p-6">
       <header className="mb-4 flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tag-aqua-bg text-tag-aqua-fg">
           <CalendarCheck className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">

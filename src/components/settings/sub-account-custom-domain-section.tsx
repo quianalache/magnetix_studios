@@ -41,7 +41,7 @@ import { Label } from "@/components/ui/label";
 function StatusBadge({ status }: { status: "pending" | "verified" | "error" }) {
   const tone =
     status === "verified"
-      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+      ? "bg-status-success-bg text-status-success-fg"
       : status === "error"
         ? "bg-rose-500/10 text-rose-700 dark:text-rose-400"
         : "bg-amber-500/10 text-amber-700 dark:text-amber-400";

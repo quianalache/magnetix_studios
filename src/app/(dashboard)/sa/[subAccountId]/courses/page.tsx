@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
+import { BookOpen, Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
 import { useResilientList } from "@/hooks/use-resilient-list";
@@ -69,7 +69,7 @@ export default function StandaloneCoursesPage() {
 
   if (!gateOn) {
     return (
-      <div className="momentum-scope mx-auto w-full max-w-5xl rounded-2xl p-6">
+      <div className="mx-auto w-full max-w-5xl">
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <h1 className="text-lg font-semibold">Courses is locked</h1>
@@ -175,8 +175,11 @@ function CourseCard({
             className="aspect-video w-full object-cover"
           />
         ) : (
-          <div className="flex aspect-video w-full items-center justify-center bg-muted text-xl font-semibold text-muted-foreground">
-            {c.title.charAt(0).toUpperCase()}
+          // No cover: a soft accent tile with the course icon (not a letter).
+          <div className="flex aspect-video w-full items-center justify-center bg-tag-violet-bg text-tag-violet-fg" aria-hidden="true">
+            <span className="flex size-11 items-center justify-center rounded-full bg-card/70">
+              <BookOpen className="size-5" />
+            </span>
           </div>
         )}
       </Link>
@@ -193,7 +196,7 @@ function CourseCard({
             className={cn(
               "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
               c.published
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                ? "bg-status-success-bg text-status-success-fg"
                 : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
             )}
           >

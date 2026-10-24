@@ -251,10 +251,10 @@ export default function ContentLibraryPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-6 rounded-2xl">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">Content Pipeline</h1>
+          <h1 className="text-title-lg font-semibold tracking-tight text-foreground">Content Pipeline</h1>
           <p className="mt-1 text-sm text-muted-foreground">Your creator workflow — from idea to impact.</p>
         </div>
         {isAdmin && (

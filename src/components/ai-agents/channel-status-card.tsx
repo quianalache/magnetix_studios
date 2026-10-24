@@ -32,7 +32,7 @@ export function ChannelStatusCard({
   const statusClass = channel.comingSoon
     ? "bg-muted text-muted-foreground"
     : enabled
-      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+      ? "bg-status-success-bg text-status-success-fg"
       : "bg-amber-500/10 text-amber-700 dark:text-amber-400";
 
   return (

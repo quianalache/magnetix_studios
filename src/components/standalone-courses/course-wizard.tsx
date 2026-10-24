@@ -243,7 +243,7 @@ export function CourseWizard({
               {step === "details" && (
                 <>
                   <div>
-                    <h1 className="text-3xl font-semibold tracking-tight">
+                    <h1 className="text-title-lg font-semibold tracking-tight">
                       Start with the basics
                     </h1>
                     <p className="mt-2 text-muted-foreground">
@@ -333,7 +333,7 @@ export function CourseWizard({
               {step === "thumbnail" && (
                 <>
                   <div>
-                    <h1 className="text-3xl font-semibold tracking-tight">
+                    <h1 className="text-title-lg font-semibold tracking-tight">
                       Add a visual identity
                     </h1>
                     <p className="mt-2 text-muted-foreground">
@@ -360,7 +360,7 @@ export function CourseWizard({
               {step === "pricing" && (
                 <>
                   <div>
-                    <h1 className="text-3xl font-semibold tracking-tight">
+                    <h1 className="text-title-lg font-semibold tracking-tight">
                       Set up pricing
                     </h1>
                     <p className="mt-2 text-muted-foreground">

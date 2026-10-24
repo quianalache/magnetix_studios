@@ -47,7 +47,7 @@ function statusLabel(status: string): string {
 function statusClass(status: string): string {
   switch (status) {
     case "active":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+      return "border-emerald-500/30 bg-status-success-bg text-status-success-fg";
     case "trialing":
       return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400";
     case "past_due":

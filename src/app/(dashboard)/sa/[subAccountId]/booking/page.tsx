@@ -99,7 +99,7 @@ export default function BookingListPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Booking</h1>
@@ -153,7 +153,7 @@ export default function BookingListPage() {
               key={p.id}
               className="flex flex-wrap items-start gap-3 rounded-2xl border bg-card p-4"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tag-aqua-bg text-tag-aqua-fg">
                 <CalendarClock className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1 space-y-0.5">
@@ -270,7 +270,7 @@ function EmptyState({
 }) {
   return (
     <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
-      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400">
+      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-tag-aqua-bg text-tag-aqua-fg">
         <CalendarClock className="h-6 w-6" />
       </span>
       <h2 className="mt-4 text-base font-semibold">
