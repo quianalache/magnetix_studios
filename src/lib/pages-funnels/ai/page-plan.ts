@@ -4,7 +4,9 @@ import { DEFAULT_BACKGROUND } from "@/lib/pages-funnels/puck/background";
 import { DEFAULT_STYLE_CONFIG } from "@/lib/pages-funnels/puck/style";
 
 /** One server-side model switch for the controlled bake-off. */
-export const AI_PAGE_MODEL = process.env.AI_PAGE_GENERATION_MODEL?.trim() || "anthropic/claude-sonnet-4-6";
+/** Verified against the OpenRouter model catalog during the V1 QA pass. */
+export const AI_PAGE_DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
+export const AI_PAGE_MODEL = process.env.AI_PAGE_GENERATION_MODEL?.trim() || AI_PAGE_DEFAULT_MODEL;
 export const AI_PAGE_SCHEMA_VERSION = "page-plan.v1";
 export const AI_PAGE_GENERATION_VERSION = "ai-page.v1";
 
@@ -118,6 +120,40 @@ export function parsePagePlan(value: unknown): PagePlan {
 
 type BoundObject = { id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string };
 
+const SAFE_PUCK_COMPONENTS = new Set(["Section", "Row", "Column", "Heading", "Text", "Button", "Accordion", "Form", "Image", "Video", "Divider", "Spacer", "RichText"]);
+const PAGE_ACTION_TYPES = new Set(["none", "url", "next_funnel_step", "selected_funnel_step", "scroll", "open_popup", "close_popup", "show_hide", "submit_form", "download", "call", "sms", "email", "purchase", "accept_upsell", "decline_continue"]);
+const SAFE_URL = /^\/(?!\/)|^https:\/\//;
+
+function assertPageAction(action: unknown): void {
+  if (!action || typeof action !== "object" || Array.isArray(action)) throw new Error("Generated page contained an invalid action.");
+  const value = action as Record<string, unknown>;
+  if (typeof value.type !== "string" || !PAGE_ACTION_TYPES.has(value.type)) throw new Error("Generated page contained an unsupported action.");
+  if (value.type === "url") {
+    if (typeof value.url !== "string" || !SAFE_URL.test(value.url)) throw new Error("Generated page contained an unsafe URL.");
+    if (value.openInNewTab !== undefined && typeof value.openInNewTab !== "boolean") throw new Error("Generated page contained an invalid URL action.");
+  }
+}
+
+/** Validate actual Puck nodes without mistaking nested prop descriptors for nodes. */
+export function assertSafePuck(data: PuckData): void {
+  const walk = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    const record = value as Record<string, unknown>;
+    const hasNodeShape = typeof record.type === "string" && Object.prototype.hasOwnProperty.call(record, "props");
+    if (hasNodeShape) {
+      if (!SAFE_PUCK_COMPONENTS.has(record.type as string)) throw new Error("Generated page used an unsupported component.");
+      const props = record.props;
+      if (!props || typeof props !== "object" || Array.isArray(props) || typeof (props as Record<string, unknown>).id !== "string") throw new Error("Generated page contained an unstable component id.");
+      if (typeof (props as Record<string, unknown>).text === "string" && ((props as Record<string, unknown>).text as string).length > 5000) throw new Error("Generated copy exceeded the page limit.");
+      const action = (props as Record<string, unknown>).action;
+      if (action !== undefined) assertPageAction(action);
+    }
+    Object.values(record).forEach(walk);
+  };
+  walk(data);
+}
+
 function node(type: string, props: Record<string, unknown>): ComponentData {
   return { type, props: { id: newPuckNodeId(), ...props } } as ComponentData;
 }
@@ -157,7 +193,7 @@ export function compilePagePlan(plan: PagePlan, bound: BoundObject | null): Puck
     }
     content.push(section(elements, plan));
   });
-  if (plan.outcome === "collect_leads" && bound?.id) {
+  if ((plan.outcome === "collect_leads" || plan.outcome === "waitlist") && bound?.id) {
     content.push(section([node("Form", { formId: bound.id, formName: bound.formName || bound.title, style: DEFAULT_STYLE_CONFIG })], plan));
   }
   return { root: { props: {} }, content };

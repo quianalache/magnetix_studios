@@ -13,6 +13,7 @@ import {
   AI_PAGE_MODEL,
   AI_PAGE_SCHEMA_VERSION,
   compilePagePlan,
+  assertSafePuck,
   pageTypeForOutcome,
   parsePagePlan,
   type AiBindingType,
@@ -106,27 +107,6 @@ async function resolveBinding(subAccountId: string, binding: Binding): Promise<B
   return { id: binding.id, title: binding.id };
 }
 
-function assertSafePuck(data: ReturnType<typeof compilePagePlan>): void {
-  const allowed = new Set(["Section", "Row", "Column", "Heading", "Text", "Button", "Accordion", "Form", "Image", "Video", "Divider", "Spacer", "RichText"]);
-  const walk = (value: unknown) => {
-    if (!value || typeof value !== "object") return;
-    if (Array.isArray(value)) return value.forEach(walk);
-    const record = value as Record<string, unknown>;
-    if (typeof record.type === "string") {
-      if (!allowed.has(record.type)) throw new AiPageGenerationError("Generated page used an unsupported component.", 422);
-      const props = record.props as Record<string, unknown> | undefined;
-      if (!props?.id || typeof props.id !== "string") throw new AiPageGenerationError("Generated page contained an unstable component id.", 422);
-      if (typeof props.text === "string" && props.text.length > 5000) throw new AiPageGenerationError("Generated copy exceeded the page limit.", 422);
-      if (props.action && typeof props.action === "object") {
-        const action = props.action as Record<string, unknown>;
-        if (action.type === "url" && typeof action.url === "string" && !/^\/(?!\/)|^https:\/\//.test(action.url)) throw new AiPageGenerationError("Generated page contained an unsafe URL.", 422);
-      }
-    }
-    Object.values(record).forEach(walk);
-  };
-  walk(data);
-}
-
 function buildPrompt(outcome: AiPageOutcome, prompt: string, useBrain: boolean, context: unknown, bound: BoundObject | null, brandName: string): string {
   return [
     "You are Magnetix PagePlan, a strict semantic planner. Return JSON only. Do not return Markdown, Puck JSON, HTML, scripts, arbitrary component names, or URLs.",
@@ -181,7 +161,8 @@ export async function generateAiPage(input: { subAccountId: string; agencyId: st
   const generated = await generatePlan(prompt, input.outcome, !!context, context, bound, brandName);
   if (generated.plan.boundObject && input.binding && (generated.plan.boundObject.type !== input.binding.type || generated.plan.boundObject.id !== input.binding.id)) throw new AiPageGenerationError("AI changed the selected binding.", 422);
   const compiled = compilePagePlan(generated.plan, bound);
-  assertSafePuck(compiled);
+  try { assertSafePuck(compiled); }
+  catch (error) { throw new AiPageGenerationError(error instanceof Error ? error.message : "Generated page failed safety validation.", 422); }
   const mapped = pageTypeForOutcome(input.outcome);
   const requestId = randomUUID();
   const metadata: AiGenerationMetadata = {

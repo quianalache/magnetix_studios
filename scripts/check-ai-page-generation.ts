@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { compilePagePlan, pageTypeForOutcome, parsePagePlan } from "../src/lib/pages-funnels/ai/page-plan";
+import { AI_PAGE_DEFAULT_MODEL, AI_PAGE_MODEL, assertSafePuck, compilePagePlan, pageTypeForOutcome, parsePagePlan } from "../src/lib/pages-funnels/ai/page-plan";
 
 const plan = parsePagePlan({
   outcome: "sell_offer",
@@ -15,10 +15,20 @@ const plan = parsePagePlan({
   mediaIntent: "none",
 });
 const compiled = compilePagePlan(plan, { id: "offer-1", title: "Real Offer", href: "/offer/sa/offer-1" });
+assertSafePuck(compiled);
 assert.equal(compiled.content.length, 2);
 assert.equal((compiled.content[0] as { type: string }).type, "Section");
+const waitlistPlan = parsePagePlan({ ...plan, outcome: "waitlist", boundObject: { type: "form", id: "waitlist-form" } });
+const waitlistCompiled = compilePagePlan(waitlistPlan, { id: "waitlist-form", title: "Waitlist Form", formName: "Waitlist Form" });
+assert.equal(waitlistCompiled.content.at(-1)?.type, "Section");
+assert.equal((waitlistCompiled.content.at(-1)?.props as { rows?: unknown[] })?.rows !== undefined, true);
+assert.match(JSON.stringify(waitlistCompiled), /waitlist-form/);
 assert.equal(pageTypeForOutcome("sell_offer").pageType, "sales");
 assert.equal(pageTypeForOutcome("collect_leads").pageType, "landing");
 assert.throws(() => parsePagePlan({ ...plan, outcome: "unknown" }));
 assert.throws(() => parsePagePlan({ ...plan, sections: [] }));
+assert.equal(AI_PAGE_DEFAULT_MODEL, "anthropic/claude-sonnet-4.6");
+assert.equal(AI_PAGE_MODEL, process.env.AI_PAGE_GENERATION_MODEL?.trim() || AI_PAGE_DEFAULT_MODEL);
+assert.throws(() => assertSafePuck({ ...compiled, content: [{ type: "Evil", props: { id: "evil" } }] } as never));
+assert.throws(() => assertSafePuck({ ...compiled, content: [{ type: "Button", props: { id: "button", action: { type: "url", url: "javascript:alert(1)" } } }] } as never));
 console.log("AI PagePlan/compiler checks passed.");
