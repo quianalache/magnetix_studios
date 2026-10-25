@@ -1,6 +1,7 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
+import type { AiGenerationMetadata } from "@/lib/pages-funnels/ai/page-plan";
 
 /**
  * Native Pages & Funnels builder — the data model for a block-based visual
@@ -321,6 +322,8 @@ export interface PageDoc {
   /** Reading Result Pages only — page-level Chart Design + builder sample.
    *  Absent = DEFAULT_READING_RESULT_PAGE_SETTINGS. */
   readingResult?: ReadingResultPageSettings;
+  /** Redacted generation telemetry for AI-created drafts; raw prompts are never stored. */
+  aiGeneration?: AiGenerationMetadata;
 }
 
 export type CreatePageInput = {

@@ -56,6 +56,7 @@ import type {
 } from "@/types/pages-funnels";
 import { PAGE_GOAL_LABELS, PAGE_TYPE_LABELS } from "@/types/pages-funnels";
 import type { SubAccountDoc } from "@/types";
+import { CreateWithAiFlow } from "@/components/pages-funnels/create-with-ai-flow";
 
 const PAGE_TYPE_TILES: {
   type: PageType;
@@ -350,12 +351,23 @@ function CreatePageFlow({
   const { user } = useAuth();
   const { subAccountId, agencyId } = useSubAccount();
 
-  const [method, setMethod] = useState<CreateMethod>("blank");
+  const [method, setMethod] = useState<CreateMethod>("ai");
   const [pageType, setPageType] = useState<PageType>("landing");
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [name, setName] = useState("New Page");
   const [goal, setGoal] = useState<PageGoal>("lead_generation");
   const [creating, setCreating] = useState(false);
+
+  if (method === "ai") {
+    return (
+      <CreateWithAiFlow
+        onCancel={onCancel}
+        onCreated={onCreated}
+        onChooseBlank={() => setMethod("blank")}
+        onChooseTemplate={() => setMethod("template")}
+      />
+    );
+  }
 
   function pickPageType(type: PageType, opts?: { fromTemplate?: string }) {
     setPageType(type);
@@ -438,9 +450,7 @@ function CreatePageFlow({
             title="Build with AI"
             description="Generate an editable first draft using Magnetix AI."
             selected={false}
-            disabled
-            badge="Coming soon"
-            onClick={() => toast("Build with AI is coming soon.")}
+            onClick={() => setMethod("ai")}
           />
         </div>
 
