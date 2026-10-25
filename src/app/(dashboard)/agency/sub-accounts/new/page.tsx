@@ -30,11 +30,14 @@ export default function NewSubAccountPage() {
   const { agencyRole, loading } = useAuth();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [timezone, setTimezone] = useState(
-    typeof Intl !== "undefined"
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone
-      : "UTC",
-  );
+  // Server and first client render agree on "UTC"; the browser's own zone is
+  // applied after mount (unless the owner already picked one). Reading Intl
+  // during render made the server (UTC) and browser disagree → hydration error.
+  const [timezone, setTimezone] = useState("UTC");
+  useEffect(() => {
+    const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browserZone) setTimezone((current) => (current === "UTC" ? browserZone : current));
+  }, []);
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
