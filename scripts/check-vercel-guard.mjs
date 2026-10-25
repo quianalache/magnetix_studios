@@ -9,7 +9,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BUILD_COMMAND_MAX, CANONICAL, GuardError, PRODUCTION_REF_CHECK, PROJECT_BUILD_COMMAND, assessCheckout, assessProjectSettings, assessPromotionTarget, assessRollbackTarget, buildDeployCommand, classifyProjects, sanity, storedLogin, vercelToken, verifyLink, writeLink } from "./vercel-guard.mjs";
+import { BUILD_COMMAND_MAX, CANONICAL, GuardError, PRODUCTION_REF_CHECK, PROJECT_BUILD_COMMAND, assessCheckout, assessProjectSettings, assessPromotionTarget, assessRollbackTarget, buildDeployCommand, classifyProjects, parseGuardArgs, runPinnedCli, sanity, storedLogin, vercelToken, verifyLink, writeLink } from "./vercel-guard.mjs";
 
 const GUARD = resolve(dirname(fileURLToPath(import.meta.url)), "vercel-guard.mjs");
 let passed = 0;
@@ -221,6 +221,65 @@ try {
     assert.ok(PROJECT_BUILD_COMMAND.startsWith(PRODUCTION_REF_CHECK + " && "));
     assert.ok(PROJECT_BUILD_COMMAND.endsWith("pnpm run build"));
     assert.ok(PROJECT_BUILD_COMMAND.length <= BUILD_COMMAND_MAX, `Build Command is ${PROJECT_BUILD_COMMAND.length} chars; Vercel allows ${BUILD_COMMAND_MAX}`);
+  });
+  await test("dry run: --dry-run is an alias for VERCEL_GUARD_DRY_RUN=1 on deploy / promote / rollback", () => {
+    for (const [cmd, args] of [["promote", ["dpl_x", "--dry-run"]], ["rollback", ["dpl_x", "--confirm", "--dry-run"]], ["deploy", ["--prod", "--dry-run"]]]) {
+      const r = parseGuardArgs(cmd, args, {});
+      assert.equal(r.dryRun, true, cmd);
+      assert.ok(!r.args.includes("--dry-run"), `${cmd}: --dry-run is consumed, never forwarded to the Vercel CLI`);
+    }
+    assert.ok(!buildDeployCommand(parseGuardArgs("deploy", ["--prod", "--dry-run"], {}).args).argv.includes("--dry-run"));
+  });
+  await test("dry run: the existing VERCEL_GUARD_DRY_RUN=1 still works; unset/0 means live", () => {
+    assert.equal(parseGuardArgs("promote", ["dpl_x"], { VERCEL_GUARD_DRY_RUN: "1" }).dryRun, true);
+    assert.equal(parseGuardArgs("promote", ["dpl_x"], {}).dryRun, false);
+    assert.equal(parseGuardArgs("promote", ["dpl_x"], { VERCEL_GUARD_DRY_RUN: "0" }).dryRun, false);
+    assert.throws(() => parseGuardArgs("promote", ["dpl_x"], { VERCEL_GUARD_DRY_RUN: "true" }), /ambiguous/);
+  });
+  await test("dry run: a dry run never spawns the Vercel CLI; a live run does", () => {
+    let spawned = 0;
+    const spawnImpl = () => { spawned++; return { status: 0 }; };
+    const lines = [];
+    assert.equal(runPinnedCli(["promote", "dpl_x", "--yes"], { dryRun: true, spawnImpl, log: (l) => lines.push(l) }), 0);
+    assert.equal(spawned, 0);
+    assert.match(lines[0], /^\[dry run\] .*vercel@.* promote dpl_x --yes$/);
+    assert.equal(runPinnedCli(["promote", "dpl_x", "--yes"], { dryRun: false, spawnImpl, log: () => {} }), 0);
+    assert.equal(spawned, 1);
+    assert.throws(() => runPinnedCli(["promote", "dpl_x", "--yes"], { spawnImpl }), /explicit dryRun/);
+  });
+  await test("live: a normal explicit invocation parses as live with its arguments intact", () => {
+    assert.deepEqual(parseGuardArgs("promote", ["dpl_abc"], {}), { dryRun: false, args: ["dpl_abc"] });
+    assert.deepEqual(parseGuardArgs("rollback", ["dpl_abc", "--confirm"], {}), { dryRun: false, args: ["dpl_abc", "--confirm"] });
+    assert.deepEqual(parseGuardArgs("deploy", ["--prod"], {}), { dryRun: false, args: ["--prod"] });
+  });
+  await test("fail closed: dry-run look-alikes and unknown promote/rollback flags are refused", () => {
+    for (const flag of ["--dryrun", "--dry_run", "-dry-run", "--dry-run=true", "--DRY-RUN", "-n", "--simulate", "--noop", "--plan", "--what-if"]) {
+      for (const cmd of ["promote", "rollback", "deploy"]) {
+        assert.throws(() => parseGuardArgs(cmd, ["dpl_x", flag], {}), /Unsupported flag.*--dry-run/, `${cmd} ${flag}`);
+      }
+    }
+    assert.throws(() => parseGuardArgs("promote", ["dpl_x", "--force"], {}), /Unknown flag/);
+    assert.throws(() => parseGuardArgs("promote", ["dpl_x", "--confirm"], {}), /Unknown flag/);
+    assert.throws(() => parseGuardArgs("rollback", ["dpl_x", "--yes"], {}), /Unknown flag/);
+    assert.throws(() => parseGuardArgs("promote", ["dpl_x", "dpl_y"], {}), /one deployment/);
+  });
+  await test("CLI: a look-alike flag is refused before any Vercel call, with the correct invocation", () => {
+    const d = tmp();
+    dirs.push(d);
+    writeLink(d);
+    const r = runGuard(d, ["promote", "dpl_x", "--dryrun"], { HOME: d });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /Unsupported flag "--dryrun".*--dry-run/);
+    assert.doesNotMatch(r.stderr, /No Vercel token/);
+  });
+  await test("CLI: promote --dry-run announces a dry run, then still runs the safety checks", () => {
+    const d = tmp();
+    dirs.push(d);
+    writeLink(d);
+    const r = runGuard(d, ["promote", "dpl_x", "--dry-run"], { HOME: d });
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /DRY RUN/);
+    assert.match(r.stderr, /No Vercel token/);
   });
   await test("CLI: promote / rollback with no token refuse before touching Vercel", () => {
     const d = tmp();

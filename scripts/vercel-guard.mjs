@@ -42,7 +42,10 @@
  * any production build whose Git ref isn't main (PRODUCTION_REF_CHECK below).
  *
  * Env: VERCEL_TOKEN (optional; falls back to the Vercel CLI's stored login),
- *      VERCEL_GUARD_DRY_RUN=1 prints the deploy command instead of running it.
+ *      VERCEL_GUARD_DRY_RUN=1 (or the `--dry-run` flag on deploy / promote /
+ *      rollback) runs every check and prints the CLI command instead of
+ *      running it. Any other dry-run-looking flag, and any unknown flag on
+ *      promote / rollback, is refused before Vercel is touched.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -267,15 +270,52 @@ function deploymentRef(arg) {
   return encodeURIComponent(arg.replace(/^https?:\/\//, "").replace(/\/.*$/, ""));
 }
 
-function runPinnedCli(argv) {
-  const line = `VERCEL_ORG_ID=${CANONICAL.orgId} VERCEL_PROJECT_ID=${CANONICAL.projectId} npx --yes vercel@${CANONICAL.vercelCliVersion} ${argv.join(" ")}`;
-  if (process.env.VERCEL_GUARD_DRY_RUN === "1") {
-    console.log(`[dry run] ${line}`);
+/**
+ * Runs the pinned Vercel CLI — or, when `dryRun`, only prints it. `dryRun` is
+ * required (never read from the environment here) so no caller can reach a
+ * live production action without having decided dry-run vs live.
+ */
+export function runPinnedCli(argv, { dryRun, spawnImpl = spawnSync, log = console.log, canonical = CANONICAL }) {
+  if (typeof dryRun !== "boolean") throw new GuardError("Internal: runPinnedCli needs an explicit dryRun decision.");
+  const line = `VERCEL_ORG_ID=${canonical.orgId} VERCEL_PROJECT_ID=${canonical.projectId} npx --yes vercel@${canonical.vercelCliVersion} ${argv.join(" ")}`;
+  if (dryRun) {
+    log(`[dry run] ${line}`);
     return 0;
   }
-  console.log(`→ ${line}`);
-  const run = spawnSync("npx", ["--yes", `vercel@${CANONICAL.vercelCliVersion}`, ...argv], { stdio: "inherit", env: { ...process.env, VERCEL_ORG_ID: CANONICAL.orgId, VERCEL_PROJECT_ID: CANONICAL.projectId } });
+  log(`→ ${line}`);
+  const run = spawnImpl("npx", ["--yes", `vercel@${canonical.vercelCliVersion}`, ...argv], { stdio: "inherit", env: { ...process.env, VERCEL_ORG_ID: canonical.orgId, VERCEL_PROJECT_ID: canonical.projectId } });
   return run.status ?? 1;
+}
+
+const DRY_RUN_USAGE = "For a dry run use `--dry-run` (e.g. `pnpm deploy:promote <deployment> --dry-run`) or `VERCEL_GUARD_DRY_RUN=1`.";
+/** Anything that LOOKS like a dry-run request: --dryrun, --dry_run, -dry-run, --dry-run=…, -n, --simulate, --noop, --plan… */
+const DRY_RUN_LOOKALIKE = /^-{1,2}(?:dry|simulate|noop|no-?op|plan|whatif|what-if|n$)/i;
+const COMMAND_FLAGS = { promote: ["--dry-run"], rollback: ["--dry-run", "--confirm"] };
+
+/**
+ * Parses guard arguments BEFORE anything touches Vercel. `--dry-run` is an
+ * alias for VERCEL_GUARD_DRY_RUN=1. Any other dry-run-looking flag fails
+ * closed (it must never be silently ignored and followed by a live action),
+ * and promote/rollback refuse every flag they don't know.
+ */
+export function parseGuardArgs(command, args, env = process.env) {
+  const flagDryRun = args.includes("--dry-run");
+  for (const a of args) {
+    if (a !== "--dry-run" && DRY_RUN_LOOKALIKE.test(a)) throw new GuardError(`Unsupported flag "${a}" — refusing rather than risk a live action. ${DRY_RUN_USAGE}`);
+  }
+  if (env.VERCEL_GUARD_DRY_RUN !== undefined && env.VERCEL_GUARD_DRY_RUN !== "" && env.VERCEL_GUARD_DRY_RUN !== "1" && env.VERCEL_GUARD_DRY_RUN !== "0") {
+    throw new GuardError(`VERCEL_GUARD_DRY_RUN="${env.VERCEL_GUARD_DRY_RUN}" is ambiguous — use 1 for a dry run. ${DRY_RUN_USAGE}`);
+  }
+  const dryRun = flagDryRun || env.VERCEL_GUARD_DRY_RUN === "1";
+  const rest = args.filter((a) => a !== "--dry-run");
+  const allowed = COMMAND_FLAGS[command];
+  if (allowed) {
+    const unknown = rest.filter((a) => a.startsWith("-") && !allowed.includes(a));
+    if (unknown.length) throw new GuardError(`Unknown flag(s) for ${command}: ${unknown.join(", ")} — refusing. Allowed: ${allowed.join(", ")}. ${DRY_RUN_USAGE}`);
+    const positionals = rest.filter((a) => !a.startsWith("-"));
+    if (positionals.length > 1) throw new GuardError(`${command} takes one deployment; got ${positionals.join(", ")}.`);
+  }
+  return { dryRun, args: rest };
 }
 
 const FORBIDDEN_ARGS = ["--project", "--name", "--scope", "--team", "-S", "-T", "--cwd", "link"];
@@ -295,7 +335,9 @@ export function buildDeployCommand(args, canonical = CANONICAL) {
 }
 
 async function main() {
-  const [command, ...args] = process.argv.slice(2);
+  const [command, ...rawArgs] = process.argv.slice(2);
+  const { dryRun, args } = parseGuardArgs(command, rawArgs);
+  if (dryRun) console.log("DRY RUN — no deployment, promotion or rollback will be performed.");
   const cwd = process.cwd();
   switch (command) {
     case "check": {
@@ -325,7 +367,7 @@ async function main() {
       if (!r.ok) throw new GuardError(`Account sanity check failed (canonical linked: ${r.canonicalLinked}; extra: ${r.extra.join(", ") || "none"}). Run \`pnpm vercel:sanity\`.`);
       if (plan.prod) verifyProductionCheckout();
       const line = `VERCEL_ORG_ID=${plan.env.VERCEL_ORG_ID} VERCEL_PROJECT_ID=${plan.env.VERCEL_PROJECT_ID} ${plan.cmd} ${plan.argv.join(" ")}`;
-      if (process.env.VERCEL_GUARD_DRY_RUN === "1") {
+      if (dryRun) {
         console.log(`[dry run] ${line}`);
         return;
       }
@@ -347,9 +389,12 @@ async function main() {
       console.log(`origin/main: ${originMain}`);
       const problems = assessPromotionTarget(d, { originMain });
       if (problems.length) throw new GuardError(`Refusing to promote:\n  - ${problems.join("\n  - ")}`);
-      const status = runPinnedCli(["promote", d.id, "--yes"]);
+      const status = runPinnedCli(["promote", d.id, "--yes"], { dryRun });
       if (status !== 0) throw new GuardError(`vercel promote exited ${status}.`);
-      if (process.env.VERCEL_GUARD_DRY_RUN === "1") return;
+      if (dryRun) {
+        console.log("✓ Dry run passed every promotion check. Re-run without --dry-run to promote.");
+        return;
+      }
       const after = await api(`/v9/projects/${CANONICAL.projectId}`);
       if (after.targets?.production?.id !== d.id) throw new GuardError(`Promote finished but production points at ${after.targets?.production?.id ?? "(unknown)"}, not ${d.id}. Investigate.`);
       if (after.autoAssignCustomDomains !== false) {
@@ -369,16 +414,19 @@ async function main() {
       const originMain = git(["rev-parse", "origin/main"]).out;
       if (d.meta?.githubCommitSha !== originMain) console.log(`⚠ This deployment is SHA ${(d.meta?.githubCommitSha ?? "(none)").slice(0, 12)} (ref ${d.meta?.githubCommitRef ?? "(none)"}), not origin/main ${originMain.slice(0, 12)} — production will run older code until the next promote.`);
       if (!args.includes("--confirm")) throw new GuardError("Check the target above, then re-run with --confirm.");
-      const status = runPinnedCli(["rollback", d.id, "--yes"]);
+      const status = runPinnedCli(["rollback", d.id, "--yes"], { dryRun });
       if (status !== 0) throw new GuardError(`vercel rollback exited ${status}.`);
-      if (process.env.VERCEL_GUARD_DRY_RUN === "1") return;
+      if (dryRun) {
+        console.log("✓ Dry run passed every rollback check. Re-run without --dry-run to roll back.");
+        return;
+      }
       const after = await api(`/v9/projects/${CANONICAL.projectId}`);
       if (after.targets?.production?.id !== d.id) throw new GuardError(`Rollback finished but production points at ${after.targets?.production?.id ?? "(unknown)"}. Investigate.`);
       console.log(`✓ Production rolled back to ${d.id}. Production domains are now assigned manually; release forward with \`pnpm deploy:promote\`.`);
       return;
     }
     default:
-      throw new GuardError("Usage: vercel-guard.mjs <check|link|sanity|deploy [--prod]|promote <deployment>|rollback <deployment> [--confirm]>");
+      throw new GuardError("Usage: vercel-guard.mjs <check|link|sanity|deploy [--prod] [--dry-run]|promote <deployment> [--dry-run]|rollback <deployment> [--confirm] [--dry-run]>");
   }
 }
 

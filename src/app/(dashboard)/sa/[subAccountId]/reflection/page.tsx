@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import {
   BookOpen, Calendar, History, CalendarRange, CircleDollarSign, Heart,
@@ -58,6 +58,8 @@ function fmtDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
   return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
+const noopSubscribe = () => () => {};
+
 function fmtMoney(n: number): string {
   const abs = Math.abs(n);
   const cents = Math.round(abs * 100) % 100 !== 0;
@@ -78,12 +80,17 @@ export default function ReflectionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const date = useMemo(() => localDateKey(dayOffset), [dayOffset]);
+  // The person's local day is only knowable in the browser: the server renders
+  // in UTC, which from ~8 PM Eastern is already tomorrow. Server render and
+  // hydration both use `null` (no date yet); the browser's local day follows
+  // immediately after, so the two renders always agree.
+  const localToday = useSyncExternalStore(noopSubscribe, () => localDateKey(), () => null);
+  const date = useMemo(() => (localToday ? localDateKey(dayOffset) : null), [localToday, dayOffset]);
   const isToday = dayOffset === 0;
   const dirty = useMemo(() => (Object.keys(fields) as (keyof Fields)[]).some((k) => (fields[k] ?? "") !== (saved[k] ?? "")), [fields, saved]);
 
   useEffect(() => {
-    if (!subAccountId) return;
+    if (!subAccountId || !date) return;
     setLoading(true);
     fetch(`/api/sub-accounts/${subAccountId}/reflection?date=${date}`)
       .then((r) => {
@@ -123,6 +130,7 @@ export default function ReflectionPage() {
   }
 
   async function save() {
+    if (!date) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/reflection`, {
@@ -192,7 +200,7 @@ export default function ReflectionPage() {
               </Button>
               <div className="flex min-w-0 items-center gap-2 px-1">
                 <Calendar className="size-4 shrink-0 text-link" aria-hidden="true" />
-                <span className="truncate text-section font-semibold">{fmtDate(date)}</span>
+                <span className="truncate text-section font-semibold">{date ? fmtDate(date) : "\u00a0"}</span>
                 {isToday && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-micro font-semibold text-accent-foreground">Today</span>}
               </div>
               <Button variant="ghost" size="icon-sm" onClick={() => goToDay(dayOffset + 1)} aria-label="Next day">
