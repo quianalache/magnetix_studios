@@ -26,6 +26,7 @@ export interface PagePlanSection {
   body: string;
   bullets?: string[];
   ctaLabel?: string;
+  sourceId?: string;
 }
 
 export interface PagePlan {
@@ -58,6 +59,7 @@ export interface AiGenerationMetadata {
   providerCost?: number;
   durationMs: number;
   validationRetry: boolean;
+  validationRetryCause?: string | null;
 }
 
 const OUTCOMES = new Set<AiPageOutcome>(["sell_offer", "collect_leads", "waitlist", "registration", "follow_up", "something_else"]);
@@ -65,6 +67,47 @@ const BINDINGS = new Set<AiBindingType>(["offer", "form", "webinar", "previous_a
 
 function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+const PROOF_ROLES = new Set(["proof", "testimonial", "social_proof", "case_study", "results", "credibility"]);
+const UNSOURCED_PROOF_LANGUAGE = /\b(trusted by|one creator|our clients?|our customers?|used by|proven|testimonial|case stud(?:y|ies)|reviews?|ratings?|thousands?|hundreds?|award-winning|guarantee|guaranteed|revenue|conversion rate)\b/i;
+
+export function assertPagePlanProofPolicy(plan: PagePlan, allowedSourceIds: ReadonlySet<string>): void {
+  for (const section of plan.sections) {
+    const sourceId = section.sourceId?.trim();
+    if (sourceId && !allowedSourceIds.has(sourceId)) throw new Error("AI used an unavailable proof source.");
+    const copy = [section.heading, section.body, ...(section.bullets ?? [])].join(" ");
+    if (PROOF_ROLES.has(section.role.trim().toLowerCase()) && !sourceId) throw new Error("Proof-bearing sections require a source.");
+    if (!sourceId && UNSOURCED_PROOF_LANGUAGE.test(copy)) throw new Error("AI included unsupported social proof or outcome claims.");
+  }
+}
+
+/** Parse the deliberately small model response; deterministic tenant facts are added server-side. */
+export function parseGeneratedPagePlan(value: unknown, outcome: AiPageOutcome): PagePlan {
+  if (!value || typeof value !== "object") throw new Error("AI returned no semantic page plan.");
+  const raw = value as Record<string, unknown>;
+  const rawSections = Array.isArray(raw.sections) ? raw.sections : [];
+  if (rawSections.length < 2 || rawSections.length > 8) throw new Error("AI returned an invalid section count.");
+  const sections = rawSections.map((item) => {
+    if (!item || typeof item !== "object") throw new Error("AI returned an invalid section.");
+    const section = item as Record<string, unknown>;
+    const parsed = {
+      role: text(section.role, 60), heading: text(section.heading, 180), body: text(section.body, 1200),
+      bullets: Array.isArray(section.bullets) ? section.bullets.map((b) => text(b, 240)).filter(Boolean).slice(0, 6) : undefined,
+      ctaLabel: text(section.ctaLabel, 80) || undefined,
+      sourceId: text(section.sourceId, 120) || undefined,
+    };
+    if (!parsed.role || !parsed.heading || !parsed.body) throw new Error("AI returned an incomplete section.");
+    return parsed;
+  });
+  const rawCta = raw.cta && typeof raw.cta === "object" ? raw.cta as Record<string, unknown> : {};
+  const label = text(rawCta.label, 80);
+  if (!label) throw new Error("AI semantic plan is missing its CTA.");
+  return {
+    outcome, primaryConversion: outcome, boundObject: null,
+    designDirection: "Clear, confident, intentional composition", sections,
+    cta: { intent: outcome, label }, composition: { alignment: "left", maxWidth: "contained" }, mediaIntent: "none",
+  };
 }
 
 export function parsePagePlan(value: unknown): PagePlan {
@@ -118,7 +161,7 @@ export function parsePagePlan(value: unknown): PagePlan {
   };
 }
 
-type BoundObject = { id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string };
+export type BoundObject = { id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string; eventDetails?: string };
 
 const SAFE_PUCK_COMPONENTS = new Set(["Section", "Row", "Column", "Heading", "Text", "Button", "Accordion", "Form", "Image", "Video", "Divider", "Spacer", "RichText"]);
 const PAGE_ACTION_TYPES = new Set(["none", "url", "next_funnel_step", "selected_funnel_step", "scroll", "open_popup", "close_popup", "show_hide", "submit_form", "download", "call", "sms", "email", "purchase", "accept_upsell", "decline_continue"]);
@@ -195,6 +238,9 @@ export function compilePagePlan(plan: PagePlan, bound: BoundObject | null): Puck
   });
   if ((plan.outcome === "collect_leads" || plan.outcome === "waitlist") && bound?.id) {
     content.push(section([node("Form", { formId: bound.id, formName: bound.formName || bound.title, style: DEFAULT_STYLE_CONFIG })], plan));
+  }
+  if (plan.outcome === "registration" && bound?.eventDetails) {
+    content.push(section([node("Text", { text: bound.eventDetails, alignment: plan.composition.alignment, style: DEFAULT_STYLE_CONFIG }), ...(bound.href ? [node("Button", { text: plan.cta.label, action: { type: "url", url: bound.href }, style: "primary", alignment: plan.composition.alignment, background: DEFAULT_BACKGROUND, styleConfig: DEFAULT_STYLE_CONFIG })] : [])], plan));
   }
   return { root: { props: {} }, content };
 }

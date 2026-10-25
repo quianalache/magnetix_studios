@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
-import { generateAiPage, listAiPageSources, AiPageGenerationError } from "@/lib/server/ai-page-generation-service";
+import { generateAiPage, listAiPageSources, recordAiGenerationTelemetry, AiPageGenerationError } from "@/lib/server/ai-page-generation-service";
+import { AI_PAGE_MODEL } from "@/lib/pages-funnels/ai/page-plan";
 import type { AiPageOutcome, AiBindingType } from "@/lib/pages-funnels/ai/page-plan";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const key = `${access.uid}:${id}`;
   if (activeGenerations.has(key)) return NextResponse.json({ error: "A page is already being generated for this workspace." }, { status: 429 });
   activeGenerations.set(key, Date.now());
+  const requestId = randomUUID();
+  const started = Date.now();
   try {
     const body = await request.json() as Record<string, unknown>;
     const outcome = typeof body.outcome === "string" ? body.outcome as AiPageOutcome : null;
@@ -41,11 +45,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       name: typeof body.name === "string" ? body.name : "AI Page",
       outcome, binding, prompt: typeof body.prompt === "string" ? body.prompt : "",
       useBusinessBrain: body.useBusinessBrain !== false,
+      requestId,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const message = error instanceof AiPageGenerationError ? error.message : error instanceof Error ? error.message : "Page generation failed.";
     const status = error instanceof AiPageGenerationError ? error.status : 502;
+    await recordAiGenerationTelemetry({ requestId, subAccountId: id, uid: access.uid, model: AI_PAGE_MODEL, status: "failure", durationMs: Date.now() - started, errorCode: error instanceof AiPageGenerationError ? error.code : "provider", errorMessage: message }).catch(() => undefined);
     return NextResponse.json({ error: message }, { status });
   } finally { activeGenerations.delete(key); }
 }
