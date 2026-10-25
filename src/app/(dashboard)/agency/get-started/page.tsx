@@ -5,6 +5,9 @@ import { Compass } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useAgency } from "@/hooks/use-agency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 import { OverviewTab } from "@/components/agency/getting-started/overview-tab";
 import { FeaturesTab } from "@/components/agency/getting-started/features-tab";
 import { NextStepsTab } from "@/components/agency/getting-started/next-steps-tab";
@@ -26,44 +29,32 @@ export default function GetStartedPage() {
   }, [agency.name]);
 
   if (loading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-4">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-64 animate-pulse rounded-2xl bg-muted/40" />
-      </div>
-    );
+    return <PageShellLoading width="data" />;
   }
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-5xl rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">
-        Sign in to view this page.
-      </div>
+      <PageShell width="data">
+        <EmptyState icon={Compass} title="Sign in to view this page" />
+      </PageShell>
     );
   }
 
   if (agencyRole !== "owner") {
     return (
-      <div className="mx-auto max-w-5xl rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">
-        Only the agency owner can view this orientation page.
-      </div>
+      <PageShell width="data">
+        <EmptyState icon={Compass} title="Owner only" description="Only the agency owner can view this orientation page." />
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <header className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
-          <Compass className="h-5 w-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Get started</h1>
-          <p className="text-sm text-muted-foreground">
-            A two-minute tour of {agency.name} and the agency workflow it
-            supports.
-          </p>
-        </div>
-      </header>
+    <PageShell width="data">
+      <PageHeader
+        icon={Compass}
+        title="Get started"
+        description={`A two-minute tour of ${agency.name} and the agency workflow it supports.`}
+      />
 
       <SetupStatusBanner />
 
@@ -84,6 +75,6 @@ export default function GetStartedPage() {
           <NextStepsTab firstSubAccountId={firstSubAccountId} />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

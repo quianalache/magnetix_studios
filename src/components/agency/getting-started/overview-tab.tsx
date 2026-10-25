@@ -34,13 +34,13 @@ import { WorkflowDiagram } from "./workflow-diagram";
 export function OverviewTab({ agencyName }: { agencyName: string }) {
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-6">
+      <section className="rounded-card border border-border bg-card p-6 shadow-card">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
             <PartyPopper className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">
+            <h2 className="text-title-md font-semibold tracking-tight text-foreground">
               Welcome to {agencyName}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -54,7 +54,7 @@ export function OverviewTab({ agencyName }: { agencyName: string }) {
       </section>
 
       <section>
-        <h3 className="mb-3 text-sm font-semibold">How {agencyName} works</h3>
+        <h3 className="mb-3 text-section font-semibold text-foreground">How {agencyName} works</h3>
         <div className="grid gap-4 lg:grid-cols-2">
           <WorkflowCard
             title="Multi-tenant agency model"
@@ -236,9 +236,9 @@ export function OverviewTab({ agencyName }: { agencyName: string }) {
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-card p-5">
+      <section className="rounded-card border border-border bg-card p-5 shadow-card">
         <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-tag-gold-bg text-tag-gold-fg">
             <Workflow className="h-4 w-4" />
           </span>
           <div>
@@ -271,13 +271,13 @@ function WorkflowCard({
     <article
       className={
         highlight
-          ? "rounded-2xl border border-violet-500/30 bg-violet-500/5 p-5 lg:col-span-2"
-          : "rounded-2xl border bg-card p-5"
+          ? "rounded-card border border-border bg-card p-5 shadow-card lg:col-span-2"
+          : "rounded-card border border-border bg-card p-5 shadow-card"
       }
     >
       <header className="mb-3">
-        <h4 className="text-sm font-semibold">{title}</h4>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <h4 className="text-section font-semibold text-foreground">{title}</h4>
+        <p className="mt-1 text-caption text-muted-foreground">{description}</p>
       </header>
       {children}
     </article>

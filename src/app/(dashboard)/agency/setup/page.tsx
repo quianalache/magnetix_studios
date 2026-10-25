@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { KeyRound, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { SetupEnvForm } from "@/components/agency/setup-env-form";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 import { CUSTOM_BRAND } from "@/config/landing";
 
 /**
@@ -16,35 +20,41 @@ export default function AgencySetupPage() {
 
   if (!loading && agencyRole !== "owner") {
     return (
-      <div className="mx-auto w-full max-w-5xl rounded-2xl border bg-card p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Only the agency owner can access guided setup.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href="/agency" />}
-          className="mt-4"
-        >
-          Back to agency
-        </Button>
-      </div>
+      <PageShell width="data">
+        <EmptyState
+          icon={Lock}
+          title="Owner only"
+          description="Only the agency owner can access guided setup."
+          action={
+            <Button variant="outline" size="sm" render={<Link href="/agency" />}>
+              Back to agency
+            </Button>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Guided setup</h1>
-        <p className="text-sm text-muted-foreground">
-          Optionally enter your remaining API keys here and let {CUSTOM_BRAND.name} write
-          them to Vercel (and your local <code>.env.local</code>) for you. This
-          is an alternative to setting environment variables by hand — both
-          paths are fully supported.
-        </p>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        icon={KeyRound}
+        title="Guided setup"
+        breadcrumbs={
+          <Link href="/agency/settings?section=guided-setup" className="hover:text-foreground hover:underline">
+            Agency Settings
+          </Link>
+        }
+        description={
+          <>
+            Optionally enter your remaining API keys here and let {CUSTOM_BRAND.name} write them to Vercel (and your
+            local <code>.env.local</code>) for you. Affects the whole deployment. This is an alternative to setting
+            environment variables by hand — both paths are fully supported.
+          </>
+        }
+      />
 
       <SetupEnvForm />
-    </div>
+    </PageShell>
   );
 }

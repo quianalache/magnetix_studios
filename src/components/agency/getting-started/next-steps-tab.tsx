@@ -40,9 +40,9 @@ const STEPS: NextStep[] = [
   },
   {
     title: "Verify your integrations are working",
-    why: "Open the Status tab on Agency home for a traffic-light health check across all your integrations — Firebase, Stripe, Resend, Twilio, the AI Agents stack (OpenRouter / Firecrawl / Vapi), Meta Inbox, QStash, gitpage, and Mapbox. Anything red or amber needs attention before the dependent features work.",
-    cta: "Open Status",
-    href: "/agency",
+    why: "Open Agency Settings → System status for a traffic-light health check across all your integrations — Firebase, Stripe, Resend, Twilio, the AI Agents stack (OpenRouter / Firecrawl / Vapi), Meta Inbox, QStash, gitpage, and Mapbox. Anything red or amber needs attention before the dependent features work.",
+    cta: "Open System status",
+    href: "/agency/settings?section=status",
     icon: ActivitySquare,
     tone: "emerald",
   },
@@ -184,21 +184,21 @@ function StepCard({
 
 const TONE_CLASSES: Record<NextStep["tone"], { bg: string; text: string }> = {
   indigo: {
-    bg: "bg-indigo-500/10",
-    text: "text-indigo-600 dark:text-indigo-400",
+    bg: "bg-tag-blue-bg",
+    text: "text-tag-blue-fg",
   },
   violet: {
-    bg: "bg-violet-500/10",
-    text: "text-violet-600 dark:text-violet-400",
+    bg: "bg-tag-violet-bg",
+    text: "text-tag-violet-fg",
   },
-  pink: { bg: "bg-pink-500/10", text: "text-pink-600 dark:text-pink-400" },
+  pink: { bg: "bg-tag-pink-bg", text: "text-tag-pink-fg" },
   emerald: {
-    bg: "bg-emerald-500/10",
-    text: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-tag-aqua-bg",
+    text: "text-tag-aqua-fg",
   },
   amber: {
-    bg: "bg-amber-500/10",
-    text: "text-amber-600 dark:text-amber-400",
+    bg: "bg-tag-gold-bg",
+    text: "text-tag-gold-fg",
   },
-  sky: { bg: "bg-sky-500/10", text: "text-sky-600 dark:text-sky-400" },
+  sky: { bg: "bg-tag-blue-bg", text: "text-tag-blue-fg" },
 };

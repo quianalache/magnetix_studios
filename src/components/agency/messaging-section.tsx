@@ -39,7 +39,7 @@ function Toggle({
       onClick={() => onChange(!checked)}
       className={
         "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 " +
-        (checked ? "bg-emerald-500" : "bg-muted-foreground/30")
+        (checked ? "bg-primary" : "bg-muted-foreground/30")
       }
     >
       <span
@@ -57,16 +57,16 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium " +
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-micro font-medium " +
         (ok
-          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-          : "bg-red-500/10 text-red-600 dark:text-red-400")
+          ? "bg-status-success-bg text-status-success-fg"
+          : "bg-status-danger-bg text-status-danger-fg")
       }
     >
       <span
         className={
           "inline-block h-1.5 w-1.5 rounded-full " +
-          (ok ? "bg-emerald-500" : "bg-red-500")
+          (ok ? "bg-status-success-dot" : "bg-status-danger-dot")
         }
       />
       {label}
@@ -141,7 +141,7 @@ export function MessagingSection() {
   return (
     <section className="space-y-5 rounded-2xl border bg-card p-5">
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-status-info-bg text-status-info-fg">
           <Radio className="h-4 w-4" />
         </span>
         <div>
@@ -197,7 +197,7 @@ export function MessagingSection() {
                 <p className="text-xs font-medium">
                   Allow sub-accounts to use this shared sender
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   On by default. Turn off to require every sub-account to
                   configure its own dedicated Twilio number — SMS steps and
                   sends are blocked until they do.
@@ -237,14 +237,14 @@ export function MessagingSection() {
             </div>
           </div>
 
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-micro text-muted-foreground">
             To change these, update the environment variables
             (<code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>,{" "}
             <code>TWILIO_FROM_NUMBER</code>, <code>RESEND_API_KEY</code>,{" "}
             <code>EMAIL_FROM</code>) in your hosting provider and redeploy. Live
             reachability (credential + webhook checks) is shown on{" "}
-            <Link href="/agency" className="underline underline-offset-2">
-              Agency → Status
+            <Link href="/agency/settings?section=status" className="font-medium text-link underline-offset-2 hover:underline">
+              System status
             </Link>
             .
           </p>

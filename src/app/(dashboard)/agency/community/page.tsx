@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { StatusPill, Tag } from "@/components/system/status-pill";
 import type { CommunityGroup } from "@/types/community";
 
 /**
@@ -75,95 +80,81 @@ export default function AgencyCommunityPage() {
   }
 
   if (authLoading) {
-    return (
-      <div className="mx-auto w-full max-w-5xl space-y-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted/50" />
-      </div>
-    );
+    return <PageShellLoading width="data" />;
   }
 
   if (!isOwner) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-          <Users className="mx-auto mb-2 h-6 w-6" />
-          Community is managed by the agency owner.
-        </div>
-      </div>
+      <PageShell width="data">
+        <EmptyState icon={Users} title="Owner only" description="Community is managed by the agency owner." />
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Community</h1>
-          <p className="text-sm text-muted-foreground">
-            Communities Magnetix Studios itself owns and runs — separate from
-            any sub-account&apos;s own Community.
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1 h-4 w-4" />
-          Create community
-        </Button>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        title="Community"
+        description="Communities Magnetix Studios itself owns and runs — separate from any sub-account's own Community."
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus />
+            Create community
+          </Button>
+        }
+      />
 
-      <section className="rounded-2xl border bg-card p-5">
-        {groups === null ? (
-          <div className="space-y-2">
-            <div className="h-16 animate-pulse rounded-xl bg-muted/50" />
-            <div className="h-16 animate-pulse rounded-xl bg-muted/50" />
-          </div>
-        ) : groups.length === 0 ? (
-          <div className="rounded-lg border border-dashed bg-background p-8 text-center text-sm text-muted-foreground">
-            No Agency communities yet.{" "}
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="text-primary underline"
-            >
-              Create one
-            </button>{" "}
-            to get started — e.g. a Magnetix customer community or an
-            affiliate community.
-          </div>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {groups.map((g) => (
-              <li key={g.id} className="rounded-xl border bg-background p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{g.name}</p>
-                    <p className="text-xs text-muted-foreground">
+      {groups === null ? (
+        <div className="grid gap-3 sm:grid-cols-2" aria-busy="true">
+          <Skeleton className="h-28 rounded-card" />
+          <Skeleton className="h-28 rounded-card" />
+        </div>
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No Agency communities yet"
+          description="Create one to get started — e.g. a Magnetix customer community or an affiliate community."
+          action={
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus />
+              Create community
+            </Button>
+          }
+        />
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {groups.map((g) => (
+            <li key={g.id} className="flex min-w-0 flex-col gap-3 rounded-card border border-border bg-card p-4 shadow-card">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
+                  <Users className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-section font-semibold text-foreground">{g.name}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
+                    <StatusPill status={g.status === "published" ? "published" : "draft"}>
                       {g.status === "published" ? "Published" : "Draft"}
-                      {" · "}
+                    </StatusPill>
+                    <Tag color={g.access === "paid" ? "gold" : "gray"}>{g.access === "paid" ? "Paid" : "Free"}</Tag>
+                    <span>
                       {g.memberCount} {g.memberCount === 1 ? "member" : "members"}
-                      {" · "}
-                      {g.access === "paid" ? "Paid" : "Free"}
-                    </p>
+                    </span>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <Link
-                    href={`/agency/community/${g.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                  >
-                    Open <ArrowRight className="h-3 w-3" />
-                  </Link>
-                  <Link
-                    href={`/agency/community/${g.id}/settings`}
-                    className="text-xs font-medium text-muted-foreground hover:underline"
-                  >
-                    Manage
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" render={<Link href={`/agency/community/${g.id}`} />}>
+                  Open
+                  <ArrowRight />
+                </Button>
+                <Button size="sm" variant="outline" render={<Link href={`/agency/community/${g.id}/settings`} />}>
+                  Manage
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
@@ -200,7 +191,7 @@ export default function AgencyCommunityPage() {
             <Button onClick={handleCreate} disabled={creating || !name.trim()}>
               {creating ? (
                 <>
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="animate-spin" />
                   Creating…
                 </>
               ) : (
@@ -210,6 +201,6 @@ export default function AgencyCommunityPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

@@ -7,6 +7,9 @@ import { ArrowLeft, Building2, Hash, Layers, Mail, Phone, User as UserIcon } fro
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { EmptyState } from "@/components/system/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TimezoneSelect } from "@/components/ui/timezone-select";
@@ -64,19 +67,18 @@ export default function NewSubAccountPage() {
 
   if (!loading && agencyRole !== "owner") {
     return (
-      <div className="mx-auto w-full max-w-5xl rounded-2xl border bg-card p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Only the agency owner can create sub-accounts.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href="/agency" />}
-          className="mt-4"
-        >
-          Back to agency
-        </Button>
-      </div>
+      <PageShell width="data">
+        <EmptyState
+          icon={Building2}
+          title="Owner only"
+          description="Only the agency owner can create sub-accounts."
+          action={
+            <Button variant="outline" size="sm" render={<Link href="/agency" />}>
+              Back to agency
+            </Button>
+          }
+        />
+      </PageShell>
     );
   }
 
@@ -206,26 +208,21 @@ export default function NewSubAccountPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div>
-        <Link
-          href="/agency/sub-accounts"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Back to sub-accounts
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">
-          New sub-account
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Stand up an isolated workspace for a client.
-        </p>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        breadcrumbs={
+          <Link href="/agency/sub-accounts" className="inline-flex items-center gap-1 hover:text-foreground">
+            <ArrowLeft className="size-3" aria-hidden="true" />
+            Back to sub-accounts
+          </Link>
+        }
+        title="New sub-account"
+        description="Stand up an isolated workspace for a client. It starts comped (not billed) until you assign a plan under Billing."
+      />
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-5 rounded-2xl border bg-card p-5"
+        className="space-y-5 rounded-card border border-border bg-card p-5 shadow-card"
       >
         <div className="space-y-1.5">
           <Label htmlFor="account-number">Account number</Label>
@@ -239,7 +236,7 @@ export default function NewSubAccountPage() {
               className="cursor-not-allowed pl-8 font-mono text-muted-foreground"
             />
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Auto-assigned. The next sub-account in your agency receives this
             number; subsequent ones increment by one.
           </p>
@@ -254,7 +251,7 @@ export default function NewSubAccountPage() {
             onChange={(e) => setName(e.target.value)}
             required
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Shown to your team in the sub-account switcher.
           </p>
         </div>
@@ -267,7 +264,7 @@ export default function NewSubAccountPage() {
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Lowercase letters, numbers, and dashes. Used in some links.
           </p>
         </div>
@@ -279,7 +276,7 @@ export default function NewSubAccountPage() {
             value={timezone}
             onChange={setTimezone}
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             Defaults to your browser&apos;s timezone. Used for send-window
             and reporting in this sub-account.
           </p>
@@ -312,7 +309,7 @@ export default function NewSubAccountPage() {
               )}
             </select>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {snapshots.length === 0 ? (
               <>
                 Pre-load a new client from a proven setup. Capture one first
@@ -337,7 +334,7 @@ export default function NewSubAccountPage() {
               Account contact (optional)
             </h2>
           </div>
-          <p className="-mt-2 text-[11px] text-muted-foreground">
+          <p className="-mt-2 text-caption text-muted-foreground">
             Primary point of contact at the client. Skip for internal or
             personal sub-accounts — you can also add or edit this later from
             sub-account settings.
@@ -400,6 +397,6 @@ export default function NewSubAccountPage() {
           </Button>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

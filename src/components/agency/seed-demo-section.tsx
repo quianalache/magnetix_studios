@@ -76,9 +76,9 @@ export function SeedDemoSection() {
   }
 
   return (
-    <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+    <section className="rounded-2xl border border-status-warning-fg/20 bg-status-warning-bg p-5">
       <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-status-warning-bg text-status-warning-fg">
           <Database className="h-4 w-4" />
         </span>
         <div>
@@ -98,7 +98,7 @@ export function SeedDemoSection() {
             <p className="text-xs text-muted-foreground">
               300 contacts (200 London, 100 worldwide), ~80 deals across all
               pipeline stages, plus activities and notes. Tagged{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+              <code className="rounded bg-muted px-1 py-0.5 text-overline">
                 seed
               </code>{" "}
               for cleanup.
@@ -130,7 +130,7 @@ export function SeedDemoSection() {
               <p className="text-sm font-medium">Remove seed data</p>
               <p className="text-xs text-muted-foreground">
                 Deletes every contact tagged{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                <code className="rounded bg-muted px-1 py-0.5 text-overline">
                   seed
                 </code>{" "}
                 in #1004, along with their deals, notes, and activities.

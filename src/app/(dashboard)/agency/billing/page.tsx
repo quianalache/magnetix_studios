@@ -8,6 +8,22 @@ import { Archive, ArchiveRestore, Copy, CreditCard, Globe2, Loader2, Pencil, Plu
 import { useAuth } from "@/hooks/use-auth";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert } from "@/components/ui/alert";
+import { useConfirm } from "@/components/system/confirm-dialog";
+import { cn } from "@/lib/utils";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SectionHeader } from "@/components/system/section-header";
+import { EmptyState } from "@/components/system/empty-state";
+import { StatusPill, Tag } from "@/components/system/status-pill";
+import {
+  DATA_TABLE_HEAD_ROW,
+  DATA_TABLE_ROW,
+  DATA_TABLE_TD,
+  DATA_TABLE_TH,
+  DataTableShell,
+} from "@/components/system/data-table";
 import { PlanEditorDialog } from "@/components/agency/plan-editor-dialog";
 import { BillingStatusBadge } from "@/components/agency/billing-status-badge";
 import { SubAccountManageDialog } from "@/components/agency/sub-account-manage-dialog";
@@ -35,6 +51,7 @@ import type { SubAccountDoc } from "@/types";
 
 export default function AgencyBillingPage() {
   const { agencyId, agencyRole, loading: authLoading } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const isOwner = agencyRole === "owner";
 
   const [plans, setPlans] = useState<BillingPlanResponse[] | null>(null);
@@ -120,9 +137,11 @@ export default function AgencyBillingPage() {
 
   async function handleArchive(plan: BillingPlanResponse) {
     if (
-      !window.confirm(
-        `Archive "${plan.name}"? Clients already on it keep their subscription; it just can't be assigned anymore.`,
-      )
+      !(await confirm({
+        title: `Archive “${plan.name}”?`,
+        description: "Clients already on it keep their subscription; it just can't be assigned anymore.",
+        confirmLabel: "Archive plan",
+      }))
     ) {
       return;
     }
@@ -194,169 +213,129 @@ export default function AgencyBillingPage() {
   }
 
   if (authLoading) {
-    return (
-      <div className="mx-auto w-full max-w-5xl space-y-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted/50" />
-      </div>
-    );
+    return <PageShellLoading width="data" />;
   }
 
   if (!isOwner) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-          <CreditCard className="mx-auto mb-2 h-6 w-6" />
-          Billing is managed by the agency owner.
-        </div>
-      </div>
+      <PageShell width="data">
+        <EmptyState
+          icon={CreditCard}
+          title="Owner only"
+          description="Billing is managed by the agency owner."
+        />
+      </PageShell>
     );
   }
 
+  // Active plans first, archived last — presentation only.
+  const orderedPlans = plans
+    ? [...plans].sort((a, b) => Number(a.status === "archived") - Number(b.status === "archived"))
+    : null;
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+    <PageShell width="data">
+      {dialog}
+      <PageHeader
+        title={
+          <span className="flex flex-wrap items-center gap-2">
             Billing
-            {/* Same Beta pill as the beta feature gates in the Manage dialog. */}
-            <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
-              Beta
-            </span>
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Package features into monthly plans and charge your clients through
-            your own Stripe account.
-          </p>
-        </div>
-        <Button
-          onClick={() => {
-            setEditingPlan(null);
-            setEditorOpen(true);
-          }}
-          disabled={!stripeConfigured}
-        >
-          <Plus className="mr-1 h-4 w-4" />
-          New plan
-        </Button>
-      </div>
+            {/* Same Beta tag as the beta feature gates in the Manage dialog. */}
+            <Tag color="pink">Beta</Tag>
+          </span>
+        }
+        description="Package features into plans and charge your clients through your own Stripe account. Applies to every client workspace you assign a plan to."
+        actions={
+          <Button
+            onClick={() => {
+              setEditingPlan(null);
+              setEditorOpen(true);
+            }}
+            disabled={!stripeConfigured}
+          >
+            <Plus />
+            New plan
+          </Button>
+        }
+      />
 
       {!stripeConfigured && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
-          Stripe isn&apos;t configured on this deployment. Set{" "}
-          <code>STRIPE_SECRET_KEY</code> (and the webhook secret) to create
-          plans and charge clients — payments land in <em>your</em> Stripe
-          account.
-        </div>
+        <Alert tone="warning" title="Stripe isn't configured on this deployment">
+          Set <code>STRIPE_SECRET_KEY</code> (and the webhook secret) to create plans and charge clients — payments
+          land in <em>your</em> Stripe account.
+        </Alert>
       )}
 
       {/* Plans */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Plans
-        </h2>
-        {plans === null ? (
-          <div className="h-28 animate-pulse rounded-2xl bg-muted/50" />
-        ) : plans.length === 0 ? (
-          <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-            No plans yet. Create your first plan — e.g.{" "}
-            <span className="font-medium text-foreground">Starter $97/mo</span>{" "}
-            or{" "}
-            <span className="font-medium text-foreground">Pro $297/mo</span> —
-            then assign it to a client from the table below.
-          </div>
+      <section className="flex flex-col gap-3">
+        <SectionHeader title="Plans" description="Priced feature bundles. Editing a plan's features re-applies them to every client on it." />
+        {orderedPlans === null ? (
+          <Skeleton className="h-40 w-full rounded-card" />
+        ) : orderedPlans.length === 0 ? (
+          <EmptyState
+            compact
+            icon={CreditCard}
+            title="No plans yet"
+            description="Create your first plan — e.g. Starter or Pro — then assign it to a client from the table below."
+          />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => {
-              const gateCount = PLAN_GATE_KEYS.filter(
-                (k) => plan.gates[k],
-              ).length;
+            {orderedPlans.map((plan) => {
+              const gateCount = PLAN_GATE_KEYS.filter((k) => plan.gates[k]).length;
               const clientCount = subs.filter(
-                (s) =>
-                  s.billing?.planId === plan.id &&
-                  effectiveBillingState(s.billing) !== "comped",
+                (s) => s.billing?.planId === plan.id && effectiveBillingState(s.billing) !== "comped",
               ).length;
+              const archived = plan.status === "archived";
               return (
                 <div
                   key={plan.id}
-                  className={
-                    plan.status === "archived"
-                      ? "rounded-2xl border bg-card p-4 opacity-60"
-                      : "rounded-2xl border bg-card p-4"
-                  }
+                  className={cn(
+                    "flex min-w-0 flex-col gap-3 rounded-card border border-border bg-card p-4 shadow-card",
+                    archived && "bg-surface-sunken shadow-none",
+                  )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold">{plan.name}</p>
-                      <p className="mt-0.5 text-xl font-bold tracking-tight">
-                        {formatBillingPrice(
-                          plan.priceMonthlyCents,
-                          plan.currency,
-                        )}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          /mo
-                        </span>
+                      <p className={cn("line-clamp-2 text-section font-semibold", archived ? "text-muted-foreground" : "text-foreground")}>
+                        {plan.name}
+                      </p>
+                      <p className={cn("mt-1 text-title-md font-semibold tracking-tight tabular-nums", archived ? "text-muted-foreground" : "text-foreground")}>
+                        {formatBillingPrice(plan.priceMonthlyCents, plan.currency)}
+                        <span className="text-caption font-normal text-muted-foreground">/mo</span>
                       </p>
                       {plan.priceAnnualCents != null && (
-                        <p className="text-xs text-muted-foreground">
-                          or{" "}
-                          {formatBillingPrice(
-                            plan.priceAnnualCents,
-                            plan.currency,
-                          )}
-                          /yr
+                        <p className="text-caption text-muted-foreground">
+                          or {formatBillingPrice(plan.priceAnnualCents, plan.currency)}/yr
                         </p>
                       )}
                     </div>
-                    {plan.status === "archived" && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        Archived
-                      </span>
-                    )}
+                    {archived && <StatusPill tone="neutral">Archived</StatusPill>}
                   </div>
-                  {plan.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {plan.description}
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {gateCount} feature{gateCount === 1 ? "" : "s"} ·{" "}
-                    {clientCount} client{clientCount === 1 ? "" : "s"}
+                  {plan.description && <p className="line-clamp-2 text-caption text-muted-foreground">{plan.description}</p>}
+                  <p className="text-caption text-muted-foreground">
+                    {gateCount} feature{gateCount === 1 ? "" : "s"} · {clientCount} client{clientCount === 1 ? "" : "s"}
                   </p>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2.5 text-xs"
                       onClick={() => {
                         setEditingPlan(plan);
                         setEditorOpen(true);
                       }}
                     >
-                      <Pencil className="mr-1 h-3 w-3" />
+                      <Pencil />
                       Edit
                     </Button>
                     {plan.status === "active" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2.5 text-xs text-muted-foreground"
-                        onClick={() => handleArchive(plan)}
-                      >
-                        <Archive className="mr-1 h-3 w-3" />
+                      <Button type="button" size="sm" variant="ghost" className="text-muted-foreground" onClick={() => handleArchive(plan)}>
+                        <Archive />
                         Archive
                       </Button>
                     ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2.5 text-xs"
-                        onClick={() => handleUnarchive(plan)}
-                      >
-                        <ArchiveRestore className="mr-1 h-3 w-3" />
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleUnarchive(plan)}>
+                        <ArchiveRestore />
                         Unarchive
                       </Button>
                     )}
@@ -369,55 +348,48 @@ export default function AgencyBillingPage() {
                       AFTER being made public stays public until switched
                       off, matching "Edit"'s own don't-surprise-the-owner
                       behavior elsewhere on this page. */}
-                  <div className="mt-3 rounded-md border border-dashed p-2.5">
-                    <label className="flex cursor-pointer items-start gap-2 text-xs">
+                  <div className="mt-auto rounded-lg border border-border bg-surface-sunken p-3">
+                    <label className="flex cursor-pointer items-start gap-2.5 text-caption">
                       <input
                         type="checkbox"
                         checked={plan.publiclyPurchasable}
                         onChange={() => handleTogglePublic(plan)}
-                        disabled={
-                          togglingPlanId === plan.id ||
-                          (plan.status === "archived" && !plan.publiclyPurchasable)
-                        }
-                        className="mt-0.5 h-3.5 w-3.5 cursor-pointer"
+                        disabled={togglingPlanId === plan.id || (archived && !plan.publiclyPurchasable)}
+                        className="mt-0.5 size-3.5 shrink-0 cursor-pointer"
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5 font-medium text-foreground">
-                          <Globe2 className="h-3 w-3" />
+                        <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                          <Globe2 className="size-3.5" aria-hidden="true" />
                           Public signup
-                          {togglingPlanId === plan.id && (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          )}
+                          {togglingPlanId === plan.id && <Loader2 className="size-3 animate-spin" />}
                         </span>
-                        <span className="text-muted-foreground">
+                        <span className="mt-0.5 block text-muted-foreground">
                           {plan.publiclyPurchasable
                             ? "Anyone with the link below can self-serve purchase this plan."
-                            : "Off — this plan is manually-assignment only."}
+                            : "Off — this plan is assigned manually only."}
                         </span>
+                        {plan.publiclyPurchasable && (
+                          <span className="mt-1 block text-micro text-muted-foreground">
+                            {plan.priceAnnualCents != null
+                              ? "Monthly and annual both available at signup."
+                              : "Monthly only — no annual price set on this plan."}
+                          </span>
+                        )}
                       </span>
                     </label>
 
-                    {plan.publiclyPurchasable && (
-                      <p className="mt-1.5 pl-[22px] text-[10.5px] text-muted-foreground">
-                        {plan.priceAnnualCents != null
-                          ? "Monthly and annual both available at signup."
-                          : "Monthly only — no annual price set on this plan."}
-                      </p>
-                    )}
-
                     {plan.publiclyPurchasable && plan.publicSaleUrl && (
-                      <div className="mt-2 flex items-center gap-1.5 border-t border-dashed pt-2 pl-[22px]">
-                        <code className="min-w-0 flex-1 truncate text-[11px]">
-                          {plan.publicSaleUrl}
-                        </code>
+                      <div className="mt-2 flex min-w-0 items-center gap-1.5 border-t border-border-subtle pt-2">
+                        <code className="min-w-0 flex-1 truncate text-micro text-foreground">{plan.publicSaleUrl}</code>
                         <Button
                           type="button"
-                          size="sm"
+                          size="icon-xs"
                           variant="ghost"
-                          className="h-6 shrink-0 px-1.5"
+                          aria-label={`Copy the ${plan.name} sale link`}
+                          title="Copy link"
                           onClick={() => handleCopySaleLink(plan.publicSaleUrl!)}
                         >
-                          <Copy className="h-3 w-3" />
+                          <Copy />
                         </Button>
                       </div>
                     )}
@@ -430,122 +402,102 @@ export default function AgencyBillingPage() {
       </section>
 
       {/* Clients */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Clients
-          </h2>
-          {mrr && (
-            <p className="text-sm text-muted-foreground">
-              MRR: <span className="font-semibold text-foreground">{mrr}</span>
+      <section className="flex flex-col gap-3">
+        <SectionHeader
+          title="Clients"
+          description="Every sub-account with its plan and live billing state."
+          action={
+            mrr ? (
+              <p className="text-body-sm whitespace-nowrap text-muted-foreground">
+                MRR <span className="font-semibold text-foreground tabular-nums">{mrr}</span>
+              </p>
+            ) : null
+          }
+        />
+        <DataTableShell
+          minWidth="44rem"
+          footer={
+            <p className="text-caption text-muted-foreground">
+              &quot;Comped&quot; clients aren&apos;t billed through the platform — every workspace starts comped until
+              you assign a plan. Payments, invoices, and payout timing live in your{" "}
+              <a href="https://dashboard.stripe.com" target="_blank" rel="noreferrer" className="font-medium text-link hover:underline">
+                Stripe dashboard
+              </a>
+              .
             </p>
-          )}
-        </div>
-        <div className="overflow-hidden rounded-2xl border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+          }
+        >
+          <thead>
+            <tr className={DATA_TABLE_HEAD_ROW}>
+              <th className={`${DATA_TABLE_TH} w-20`}>#</th>
+              <th className={DATA_TABLE_TH}>Client</th>
+              <th className={DATA_TABLE_TH}>Plan</th>
+              <th className={DATA_TABLE_TH}>Billing</th>
+              <th className={`${DATA_TABLE_TH} text-right`}>Price</th>
+              <th className={DATA_TABLE_TH}>
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {subsLoading ? (
               <tr>
-                <th className="w-20 px-4 py-2.5 text-left font-medium">#</th>
-                <th className="px-4 py-2.5 text-left font-medium">Client</th>
-                <th className="px-4 py-2.5 text-left font-medium">Plan</th>
-                <th className="px-4 py-2.5 text-left font-medium">Billing</th>
-                <th className="px-4 py-2.5 text-right font-medium">Monthly</th>
-                <th className="px-4 py-2.5"></th>
+                <td colSpan={6} className="px-4 py-6">
+                  <Skeleton className="h-8 w-full" />
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {subsLoading ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-8 text-center text-muted-foreground"
-                  >
-                    Loading…
-                  </td>
-                </tr>
-              ) : subs.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-12 text-center text-muted-foreground"
-                  >
-                    No sub-accounts yet.{" "}
-                    <Link
-                      href="/agency/sub-accounts/new"
-                      className="text-primary hover:underline"
-                    >
-                      Create one
-                    </Link>
-                    .
-                  </td>
-                </tr>
-              ) : (
-                subs.map((s) => {
-                  const billing = s.billing ?? null;
-                  const billed =
-                    billing && billing.status !== "comped";
-                  return (
-                    <tr key={s.id} className="border-t">
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {s.accountNumber !== undefined
-                          ? `#${s.accountNumber}`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 font-medium">{s.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {billed ? (billing.planName ?? "—") : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <BillingStatusBadge billing={billing} />
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {billed
-                          ? formatBillingPriceWithInterval(
-                              billing.priceCents,
-                              billing.currency,
-                              billing.billingInterval,
-                            )
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-7 rounded-full px-3 text-xs"
-                          onClick={() => setManagingId(s.id)}
-                        >
-                          Manage
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          &quot;Comped&quot; clients aren&apos;t billed through the platform —
-          every workspace starts comped until you assign a plan. Payments,
-          invoices, and payout timing live in your{" "}
-          <a
-            href="https://dashboard.stripe.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary hover:underline"
-          >
-            Stripe dashboard
-          </a>
-          .
-        </p>
+            ) : subs.length === 0 ? (
+              <tr>
+                <td colSpan={6}>
+                  <EmptyState
+                    compact
+                    icon={CreditCard}
+                    title="No sub-accounts yet"
+                    action={
+                      <Button size="sm" variant="outline" render={<Link href="/agency/sub-accounts/new" />}>
+                        Create one
+                      </Button>
+                    }
+                  />
+                </td>
+              </tr>
+            ) : (
+              subs.map((s) => {
+                const billing = s.billing ?? null;
+                const billed = billing && billing.status !== "comped";
+                return (
+                  <tr key={s.id} className={DATA_TABLE_ROW}>
+                    <td className={`${DATA_TABLE_TD} font-mono text-caption text-muted-foreground`}>
+                      {s.accountNumber !== undefined ? `#${s.accountNumber}` : "—"}
+                    </td>
+                    <td className={`${DATA_TABLE_TD} max-w-64 font-medium text-foreground`}>
+                      <span className="line-clamp-2">{s.name}</span>
+                    </td>
+                    <td className={`${DATA_TABLE_TD} max-w-56 text-muted-foreground`}>
+                      <span className="line-clamp-2">{billed ? (billing.planName ?? "—") : "—"}</span>
+                    </td>
+                    <td className={DATA_TABLE_TD}>
+                      <BillingStatusBadge billing={billing} />
+                    </td>
+                    <td className={`${DATA_TABLE_TD} text-right whitespace-nowrap tabular-nums`}>
+                      {billed
+                        ? formatBillingPriceWithInterval(billing.priceCents, billing.currency, billing.billingInterval)
+                        : "—"}
+                    </td>
+                    <td className={`${DATA_TABLE_TD} text-right`}>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setManagingId(s.id)}>
+                        Manage
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </DataTableShell>
       </section>
 
-      <PlanEditorDialog
-        plan={editingPlan}
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        onSaved={refreshPlans}
-      />
+      <PlanEditorDialog plan={editingPlan} open={editorOpen} onOpenChange={setEditorOpen} onSaved={refreshPlans} />
 
       <SubAccountManageDialog
         subAccount={managing}
@@ -554,6 +506,6 @@ export default function AgencyBillingPage() {
           if (!open) setManagingId(null);
         }}
       />
-    </div>
+    </PageShell>
   );
 }

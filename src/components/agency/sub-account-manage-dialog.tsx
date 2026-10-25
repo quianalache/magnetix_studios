@@ -1,10 +1,10 @@
 "use client";
 
+import * as React from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CUSTOM_BRAND } from "@/config/landing";
 import {
-  AlertTriangle,
   Bot,
   FlaskConical,
   Globe,
@@ -35,6 +35,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { Tag } from "@/components/system/status-pill";
+import { BillingStatusBadge } from "@/components/agency/billing-status-badge";
 import { cn } from "@/lib/utils";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
 import { SubAccountBillingSection } from "@/components/agency/sub-account-billing-section";
@@ -644,11 +647,19 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Manage {subAccount.name}</DialogTitle>
+          <DialogTitle className="pr-6">Manage {subAccount.name}</DialogTitle>
           <DialogDescription>
             Agency-level controls for this sub-account. Sub-account admins
-            can&apos;t flip these — that&apos;s the point.
+            can&apos;t change these — that&apos;s the point.
           </DialogDescription>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+            <Tag color="violet">Agency control</Tag>
+            {subAccount.accountNumber !== undefined && (
+              <span className="font-mono">#{subAccount.accountNumber}</span>
+            )}
+            <BillingStatusBadge billing={subAccount.billing} />
+            <span>Changes here affect only this sub-account.</span>
+          </div>
         </DialogHeader>
 
         {/* Workspace / business name — the display name shown across the
@@ -657,14 +668,14 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
             sourced dynamically). Editing this does NOT touch the doc id,
             the `slug` (the public Space URL stays put), Stripe Connect
             config, or billing records — see PATCH /api/agency/sub-accounts/[id]. */}
-        <div className="rounded-lg border bg-card p-3">
+        <div className="rounded-lg border border-border bg-card p-4">
           <label
             htmlFor="sub-account-name"
-            className="text-sm font-medium text-foreground"
+            className="text-body-sm font-semibold text-foreground"
           >
             Workspace / business name
           </label>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-caption text-muted-foreground">
             Shown wherever this sub-account&apos;s name appears. The public
             Space URL (
             <code className="rounded bg-muted px-1">
@@ -679,12 +690,12 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
               onChange={(e) => setName(e.target.value)}
               disabled={savingName}
               maxLength={120}
-              className="h-8 text-sm sm:max-w-xs"
+              className="sm:max-w-xs"
             />
             <Button
               size="sm"
               variant="outline"
-              className="h-8 shrink-0"
+              className="shrink-0"
               disabled={savingName || !nameDirty || trimmedName.length === 0}
               onClick={handleSaveName}
             >
@@ -712,7 +723,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
           const billingState = effectiveBillingState(subAccount.billing);
           if (billingState === "comped") return null;
           return (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               This client is on a plan — the toggles below are applied from the
               plan bundle at activation and whenever the plan is edited. Manual
               changes still work but a plan edit re-applies the bundle.
@@ -720,401 +731,395 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
           );
         })()}
 
-        <div className="space-y-3">
-          <GateToggle
-            checked={emailDomainEnabled}
-            onChange={setEmailDomainEnabled}
-            disabled={saving}
-            icon={<Mail className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
-            title="Dedicated email sending domain"
-          >
-            When enabled, this sub-account can register its own subdomain so its
-            email sends from its own brand. Consumes one slot on your Resend plan
-            (Free = 1 domain total, Pro = 10, Scale = 1,000).
-          </GateToggle>
-
-          <GateToggle
-            checked={apiAccessEnabled}
-            onChange={setApiAccessEnabled}
-            disabled={saving}
-            icon={<KeyRound className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
-            title="Public API access"
-          >
-            When enabled, this sub-account can mint API keys + webhooks for
-            Zapier, Make, custom landing pages, etc. Disabling immediately stops
-            all <code>/api/v1/*</code> traffic from their existing keys but keeps
-            the keys + subscriptions intact, so re-enabling later doesn&apos;t
-            force the client to re-rotate their integrations.
-          </GateToggle>
-
-          <GateToggle
-            checked={broadcastsEnabled}
-            onChange={setBroadcastsEnabled}
-            disabled={saving}
-            icon={<Send className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
-            title="Broadcasts"
-            hideOption={{
-              hidden: broadcastsHidden,
-              onHiddenChange: setBroadcastsHidden,
-              disabled: saving,
-            }}
-          >
-            When enabled, this sub-account can send bulk email broadcasts (up to
-            25,000 recipients per send) to filtered audiences. Disabling locks
-            the Broadcasts sidebar entry and returns 403 on new send attempts;
-            historical broadcast docs and in-flight QStash messages are preserved.
-          </GateToggle>
-
-          <GateToggle
-            checked={websiteEnabled}
-            onChange={setWebsiteEnabled}
-            disabled={saving}
-            icon={<Globe className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />}
-            title="Website"
-            hideOption={{
-              hidden: websiteHidden,
-              onHiddenChange: setWebsiteHidden,
-              disabled: saving,
-            }}
-          >
-            When enabled, this sub-account can build and publish a marketing
-            site through the website builder (gitpage.site). Builds draw on your
-            agency&apos;s shared gitpage quota (30 builds/hour across all
-            sub-accounts). Disabling locks the Website sidebar entry and returns
-            403 on new build attempts; the existing config and any published
-            site are preserved, so re-enabling resumes instantly.
-          </GateToggle>
-
-          <GateToggle
-            checked={outboundVoiceEnabled}
-            onChange={setOutboundVoiceEnabled}
-            disabled={saving}
-            icon={<PhoneOutgoing className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />}
-            title="Outbound AI calling"
-          >
-            When enabled, this sub-account can place outbound AI voice calls to
-            contacts (&quot;Call with AI&quot;). Reuses the same Vapi number as
-            inbound voice. Consumes call minutes and carries compliance weight —
-            a built-in gate enforces opt-out, calling hours, and rate limits, but
-            you control whether the feature is available at all. Disabling blocks
-            new calls; no resources are torn down.
-          </GateToggle>
-
-          <GateToggle
-            checked={whatsappEnabled}
-            onChange={setWhatsappEnabled}
-            disabled={saving}
-            icon={<MessageCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />}
-            title="WhatsApp"
-          >
-            When enabled, this sub-account can turn on the WhatsApp AI channel
-            (inbound auto-replies via their Twilio WhatsApp sender). Reuses the
-            same Twilio credentials as SMS. Disabling silences the channel and
-            makes the inbound webhook ignore this sub-account; no credentials are
-            torn down, so re-enabling resumes instantly.
-          </GateToggle>
-
-          <GateToggle
-            checked={smsAgentEnabled}
-            onChange={setSmsAgentEnabled}
-            disabled={saving}
-            icon={<MessageSquareText className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />}
-            title="SMS AI auto-reply"
-          >
-            When enabled, this sub-account can turn on the AI agent that
-            auto-replies to inbound SMS on its dedicated Twilio number. Each
-            reply spends your agency&apos;s shared OpenRouter credits, which is
-            why you control who gets it. This gates the AI bot ONLY — manual SMS
-            sends from a contact profile are unaffected. Disabling silences the
-            bot; the persona + Twilio creds are preserved, so re-enabling resumes
-            instantly.
-          </GateToggle>
-
-          <GateToggle
-            checked={webChatEnabled}
-            onChange={setWebChatEnabled}
-            disabled={saving}
-            icon={<Bot className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
-            title="Web Chat AI"
-          >
-            When enabled, this sub-account can embed the AI web-chat widget on
-            its clients&apos; sites and the bot answers visitors. Each exchange
-            spends your agency&apos;s shared OpenRouter credits. Disabling makes
-            the widget go silent (it silently no-ops on the client&apos;s page);
-            the channel config + session history are preserved, so re-enabling
-            resumes instantly.
-          </GateToggle>
-
-          <GateToggle
-            checked={inboundVoiceEnabled}
-            onChange={setInboundVoiceEnabled}
-            disabled={saving}
-            icon={<PhoneIncoming className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
-            title="Inbound Voice AI"
-          >
-            When enabled, this sub-account can turn on the Vapi-powered AI that
-            answers inbound phone calls on its dedicated Twilio number. Spends
-            both Vapi call minutes AND OpenRouter tokens, which is why it&apos;s
-            controlled here (like outbound calling). Disabling stops the AI from
-            answering; re-enable to resume. Outbound AI calling is gated
-            separately above.
-          </GateToggle>
-
-          <GateToggle
-            checked={metaInboxEnabled}
-            onChange={setMetaInboxEnabled}
-            disabled={saving || (metaUnconfigured && !initialMetaInbox)}
-            icon={<MessagesSquare className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />}
-            title="Facebook + Instagram inbox"
-            beta
-          >
-            When enabled, this sub-account can connect a Facebook Page +
-            Instagram business account so Messenger and IG DMs land in the
-            unified inbox alongside SMS/WhatsApp. <strong>Beta</strong> — both
-            channels ride one Meta connection and stay completely hidden until
-            you switch this on; off is the default for every sub-account.
-            Disabling silences and hides the channels; nothing is torn down, so
-            re-enabling resumes instantly. Leave off for any client that doesn&apos;t
-            actively use Facebook/Instagram messaging.
-            {metaUnconfigured && (
-              <span className="mt-1 block font-medium text-amber-600 dark:text-amber-400">
-                Unavailable — set <code>META_APP_ID</code> and{" "}
-                <code>META_APP_SECRET</code> on the deployment to enable.
-              </span>
-            )}
-          </GateToggle>
-
-          <GateToggle
-            checked={metaAgentEnabled}
-            onChange={setMetaAgentEnabled}
-            disabled={saving || (metaUnconfigured && !initialMetaAgent)}
-            icon={<MessagesSquare className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />}
-            title="Messenger & Instagram AI auto-reply"
-            beta
-          >
-            When enabled, this sub-account can turn on the AI agent for its
-            Messenger and Instagram DMs — the same persona that answers SMS
-            and Web Chat replies to inbound DMs automatically. Each reply
-            spends your agency&apos;s shared OpenRouter credits. Requires the
-            Facebook + Instagram inbox (above) to be enabled and a connected
-            Meta Page. Disabling silences the bot; manual replies from the
-            inbox are unaffected.
-            {metaUnconfigured && (
-              <span className="mt-1 block font-medium text-amber-600 dark:text-amber-400">
-                Unavailable — set <code>META_APP_ID</code> and{" "}
-                <code>META_APP_SECRET</code> on the deployment to enable.
-              </span>
-            )}
-          </GateToggle>
-
-          <GateToggle
-            checked={socialPlannerEnabled}
-            onChange={setSocialPlannerEnabled}
-            disabled={saving || (metaUnconfigured && !initialSocial)}
-            icon={<Share2 className="h-3.5 w-3.5 text-fuchsia-600 dark:text-fuchsia-400" />}
-            title="Social Planner"
-            beta
-            hideOption={{
-              hidden: socialHidden,
-              onHiddenChange: setSocialHidden,
-              disabled: saving,
-            }}
-          >
-            When enabled, this sub-account can connect a Facebook Page +
-            Instagram business account and schedule posts that auto-publish at
-            the chosen time. <strong>Beta</strong> — posting reuses the same
-            Meta connection as the inbox plus extra publish permissions
-            (requires Meta App Review). Disabling locks the Social Planner
-            sidebar entry and 403s the connect/publish routes; scheduled posts
-            and the connection are preserved, so re-enabling resumes instantly.
-            {metaUnconfigured && (
-              <span className="mt-1 block font-medium text-amber-600 dark:text-amber-400">
-                Unavailable — set <code>META_APP_ID</code> and{" "}
-                <code>META_APP_SECRET</code> on the deployment to enable.
-              </span>
-            )}
-          </GateToggle>
-
-          <GateToggle
-            checked={communityEnabled}
-            onChange={setCommunityEnabled}
-            disabled={saving}
-            icon={<GraduationCap className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />}
-            title="Community + Courses"
-            hideOption={{
-              hidden: communityHidden,
-              onHiddenChange: setCommunityHidden,
-              disabled: saving,
-            }}
-          >
-            When enabled, this sub-account can run Skool-style community groups —
-            a member feed, courses, and a leaderboard at a branded public link
-            (<code>/c/…</code>). Members sign in with a magic link and become
-            CRM contacts. Disabling locks the Community sidebar entry AND takes
-            the public group pages offline; members, posts, and courses are
-            preserved, so re-enabling resumes instantly.
-          </GateToggle>
-
-          <GateToggle
-            checked={standaloneCoursesEnabled}
-            onChange={setStandaloneCoursesEnabled}
-            disabled={saving}
-            icon={<BookOpen className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />}
-            title="Standalone Courses"
-            hideOption={{
-              hidden: standaloneCoursesHidden,
-              onHiddenChange: setStandaloneCoursesHidden,
-              disabled: saving,
-            }}
-          >
-            When enabled, this sub-account can sell a course on its own simple
-            public sales page (<code>/course/…</code>) — independent of
-            Community, no group required. Buyers sign in with a magic link and
-            become CRM contacts, same as Community. Disabling locks the
-            Courses sidebar entry AND takes the public sales pages offline;
-            courses, enrollments, and purchases are preserved, so re-enabling
-            resumes instantly.
-          </GateToggle>
-
-          <GateToggle
-            checked={missedCallEnabled}
-            onChange={setMissedCallEnabled}
-            disabled={saving}
-            icon={<PhoneMissed className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />}
-            title="Missed Call Text Back"
-            beta
-          >
-            When enabled, this sub-account can point its dedicated Twilio
-            number&apos;s voice line at {CUSTOM_BRAND.name}: inbound calls forward to the
-            business&apos;s phone and, if unanswered, the caller is
-            automatically texted back. Requires a dedicated Twilio number and is
-            mutually exclusive with the AI inbound Voice agent (which answers
-            calls itself). Disabling stops the sub-account re-enabling it; the
-            sub-account&apos;s own toggle restores the number&apos;s prior voice
-            settings.
-          </GateToggle>
-
-          {/* Get Leads is PARKED — toggle hidden while the flag is on. */}
-          {!GET_LEADS_PARKED && (
+        <div className="flex flex-col gap-5">
+          <div>
+            <h3 className="text-section font-semibold text-foreground">Feature access</h3>
+            <p className="text-caption text-muted-foreground">
+              Turn features on or off for this sub-account only. Changes apply when you click Save.
+            </p>
+          </div>
+          <GateGroup label="Messaging & email" description="Sending, inboxes and phone features.">
             <GateToggle
-              checked={getLeadsEnabled}
-              onChange={setGetLeadsEnabled}
+              checked={emailDomainEnabled}
+              onChange={setEmailDomainEnabled}
               disabled={saving}
-              icon={<Radar className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />}
-              title="Get Leads"
-              beta
+              icon={<Mail className="size-3.5" />}
+              title="Dedicated email sending domain"
+            >
+              When enabled, this sub-account can register its own subdomain so its
+              email sends from its own brand. Consumes one slot on your Resend plan
+              (Free = 1 domain total, Pro = 10, Scale = 1,000).
+            </GateToggle>
+            <GateToggle
+              checked={broadcastsEnabled}
+              onChange={setBroadcastsEnabled}
+              disabled={saving}
+              icon={<Send className="size-3.5" />}
+              title="Broadcasts"
               hideOption={{
-                hidden: getLeadsHidden,
-                onHiddenChange: setGetLeadsHidden,
+                hidden: broadcastsHidden,
+                onHiddenChange: setBroadcastsHidden,
                 disabled: saving,
               }}
             >
-              When enabled, this sub-account can prospect local businesses —
-              search Google Maps listings by business type + location, see them
-              on a map with enriched contact details (phone, website, email),
-              and import the good ones as contacts. <strong>Experimental</strong>{" "}
-              — every search spends your agency&apos;s shared Outscraper credits
-              (roughly $0.10–0.20 per search), which is why you control who gets
-              it. Disabling blocks new searches; nothing is torn down.
+              When enabled, this sub-account can send bulk email broadcasts (up to
+              25,000 recipients per send) to filtered audiences. Disabling locks
+              the Broadcasts sidebar entry and blocks new sends; past broadcasts
+              and sends already in progress are preserved.
             </GateToggle>
-          )}
-
-          <GateToggle
-            checked={aiSuiteEnabled}
-            onChange={setAiSuiteEnabled}
-            disabled={saving}
-            icon={<Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
-            title="Workspace Assistant"
-            beta
-            hideOption={{
-              hidden: aiSuiteHidden,
-              onHiddenChange: setAiSuiteHidden,
-              disabled: saving,
-            }}
-            enabledExtras={
-              <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">AI model</span>
-                <select
-                  value={aiSuiteModel}
-                  onChange={(e) =>
-                    setAiSuiteModel(e.target.value as "opus" | "sonnet")
-                  }
-                  disabled={saving}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-xs [&_option]:bg-background [&_option]:text-foreground"
-                  aria-label="Workspace Assistant model"
-                >
-                  <option value="opus">
-                    Opus — default (most reliable)
-                  </option>
-                  <option value="sonnet">
-                    Sonnet — lower cost
-                  </option>
-                </select>
-                <span>
-                  Opus is the most reliable at multi-step actions; Sonnet costs
-                  roughly half per reply but can be less sure-footed on complex
-                  requests.
+            <GateToggle
+              checked={whatsappEnabled}
+              onChange={setWhatsappEnabled}
+              disabled={saving}
+              icon={<MessageCircle className="size-3.5" />}
+              title="WhatsApp"
+            >
+              When enabled, this sub-account can turn on the WhatsApp AI channel
+              (inbound auto-replies via their Twilio WhatsApp sender). Reuses the
+              same Twilio credentials as SMS. Disabling silences the channel and
+              makes the inbound webhook ignore this sub-account; no credentials are
+              torn down, so re-enabling resumes instantly.
+            </GateToggle>
+            <GateToggle
+              checked={metaInboxEnabled}
+              onChange={setMetaInboxEnabled}
+              disabled={saving || (metaUnconfigured && !initialMetaInbox)}
+              icon={<MessagesSquare className="size-3.5" />}
+              title="Facebook + Instagram inbox"
+              beta
+            >
+              When enabled, this sub-account can connect a Facebook Page +
+              Instagram business account so Messenger and IG DMs land in the
+              unified inbox alongside SMS/WhatsApp. <strong>Beta</strong> — both
+              channels ride one Meta connection and stay completely hidden until
+              you switch this on; off is the default for every sub-account.
+              Disabling silences and hides the channels; nothing is torn down, so
+              re-enabling resumes instantly. Leave off for any client that doesn&apos;t
+              actively use Facebook/Instagram messaging.
+              {metaUnconfigured && (
+                <span className="mt-1 block font-medium text-status-warning-fg">
+                  Unavailable — set <code>META_APP_ID</code> and{" "}
+                  <code>META_APP_SECRET</code> on the deployment to enable.
                 </span>
-              </label>
-            }
-          >
-            The Workspace Assistant — the sub-account&apos;s in-app assistant
-            that answers &quot;how do I…&quot; questions about the app and can
-            perform a few actions (create a contact, task, or workflow), each of
-            which the operator confirms before it runs.{" "}
-            <strong>Off by default.</strong> Each reply spends your
-            agency&apos;s OpenRouter credits, which is why you control who gets
-            it. While off, the sidebar entry shows Locked and the assistant
-            403s; nothing is torn down, so enabling/disabling is instant.
-          </GateToggle>
-
-          <GateToggle
-            checked={labsEnabled}
-            onChange={setLabsEnabled}
-            disabled={saving}
-            icon={<FlaskConical className="h-3.5 w-3.5 text-lime-600 dark:text-lime-400" />}
-            title="Labs"
-            beta
-            hideOption={{
-              hidden: labsHidden,
-              onHiddenChange: setLabsHidden,
-              disabled: saving,
-            }}
-          >
-            When enabled, this sub-account gets a <strong>Labs</strong> section
-            in its sidebar — the home for pre-release, experimental features
-            (first up: the Inbox Follow-up Watchdog agent). Experimental means
-            exactly that: features may change or be withdrawn, so switch it on
-            only for workspaces that opt in to trying new things. Individual
-            Labs features keep their own safeguards on top. Disabling locks the
-            section; nothing is torn down.
-          </GateToggle>
+              )}
+            </GateToggle>
+            <GateToggle
+              checked={missedCallEnabled}
+              onChange={setMissedCallEnabled}
+              disabled={saving}
+              icon={<PhoneMissed className="size-3.5" />}
+              title="Missed Call Text Back"
+              beta
+            >
+              When enabled, this sub-account can point its dedicated Twilio
+              number&apos;s voice line at {CUSTOM_BRAND.name}: inbound calls forward to the
+              business&apos;s phone and, if unanswered, the caller is
+              automatically texted back. Requires a dedicated Twilio number and is
+              mutually exclusive with the AI inbound Voice agent (which answers
+              calls itself). Disabling stops the sub-account re-enabling it; the
+              sub-account&apos;s own toggle restores the number&apos;s prior voice
+              settings.
+            </GateToggle>
+          </GateGroup>
+          <GateGroup label="AI agents" description="Each reply or call spends your agency's AI credits.">
+            <GateToggle
+              checked={smsAgentEnabled}
+              onChange={setSmsAgentEnabled}
+              disabled={saving}
+              icon={<MessageSquareText className="size-3.5" />}
+              title="SMS AI auto-reply"
+            >
+              When enabled, this sub-account can turn on the AI agent that
+              auto-replies to inbound SMS on its dedicated Twilio number. Each
+              reply spends your agency&apos;s shared OpenRouter credits, which is
+              why you control who gets it. This gates the AI bot ONLY — manual SMS
+              sends from a contact profile are unaffected. Disabling silences the
+              bot; the persona + Twilio creds are preserved, so re-enabling resumes
+              instantly.
+            </GateToggle>
+            <GateToggle
+              checked={webChatEnabled}
+              onChange={setWebChatEnabled}
+              disabled={saving}
+              icon={<Bot className="size-3.5" />}
+              title="Web Chat AI"
+            >
+              When enabled, this sub-account can embed the AI web-chat widget on
+              its clients&apos; sites and the bot answers visitors. Each exchange
+              spends your agency&apos;s shared OpenRouter credits. Disabling makes
+              the widget go silent (it silently no-ops on the client&apos;s page);
+              the channel config + session history are preserved, so re-enabling
+              resumes instantly.
+            </GateToggle>
+            <GateToggle
+              checked={inboundVoiceEnabled}
+              onChange={setInboundVoiceEnabled}
+              disabled={saving}
+              icon={<PhoneIncoming className="size-3.5" />}
+              title="Inbound Voice AI"
+            >
+              When enabled, this sub-account can turn on the Vapi-powered AI that
+              answers inbound phone calls on its dedicated Twilio number. Spends
+              both Vapi call minutes AND OpenRouter tokens, which is why it&apos;s
+              controlled here (like outbound calling). Disabling stops the AI from
+              answering; re-enable to resume. Outbound AI calling is gated
+              separately below.
+            </GateToggle>
+            <GateToggle
+              checked={outboundVoiceEnabled}
+              onChange={setOutboundVoiceEnabled}
+              disabled={saving}
+              icon={<PhoneOutgoing className="size-3.5" />}
+              title="Outbound AI calling"
+            >
+              When enabled, this sub-account can place outbound AI voice calls to
+              contacts (&quot;Call with AI&quot;). Reuses the same Vapi number as
+              inbound voice. Consumes call minutes and carries compliance weight —
+              a built-in gate enforces opt-out, calling hours, and rate limits, but
+              you control whether the feature is available at all. Disabling blocks
+              new calls; no resources are torn down.
+            </GateToggle>
+            <GateToggle
+              checked={metaAgentEnabled}
+              onChange={setMetaAgentEnabled}
+              disabled={saving || (metaUnconfigured && !initialMetaAgent)}
+              icon={<MessagesSquare className="size-3.5" />}
+              title="Messenger & Instagram AI auto-reply"
+              beta
+            >
+              When enabled, this sub-account can turn on the AI agent for its
+              Messenger and Instagram DMs — the same persona that answers SMS
+              and Web Chat replies to inbound DMs automatically. Each reply
+              spends your agency&apos;s shared OpenRouter credits. Requires the
+              Facebook + Instagram inbox (above) to be enabled and a connected
+              Meta Page. Disabling silences the bot; manual replies from the
+              inbox are unaffected.
+              {metaUnconfigured && (
+                <span className="mt-1 block font-medium text-status-warning-fg">
+                  Unavailable — set <code>META_APP_ID</code> and{" "}
+                  <code>META_APP_SECRET</code> on the deployment to enable.
+                </span>
+              )}
+            </GateToggle>
+            <GateToggle
+              checked={aiSuiteEnabled}
+              onChange={setAiSuiteEnabled}
+              disabled={saving}
+              icon={<Sparkles className="size-3.5" />}
+              title="Workspace Assistant"
+              beta
+              hideOption={{
+                hidden: aiSuiteHidden,
+                onHiddenChange: setAiSuiteHidden,
+                disabled: saving,
+              }}
+              enabledExtras={
+                <label className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+                  <span className="font-medium text-foreground">AI model</span>
+                  <select
+                    value={aiSuiteModel}
+                    onChange={(e) =>
+                      setAiSuiteModel(e.target.value as "opus" | "sonnet")
+                    }
+                    disabled={saving}
+                    className="h-8 rounded-md border border-input bg-card px-2 text-caption"
+                    aria-label="Workspace Assistant model"
+                  >
+                    <option value="opus">
+                      Opus — default (most reliable)
+                    </option>
+                    <option value="sonnet">
+                      Sonnet — lower cost
+                    </option>
+                  </select>
+                  <span>
+                    Opus is the most reliable at multi-step actions; Sonnet costs
+                    roughly half per reply but can be less sure-footed on complex
+                    requests.
+                  </span>
+                </label>
+              }
+            >
+              The Workspace Assistant — the sub-account&apos;s in-app assistant
+              that answers &quot;how do I…&quot; questions about the app and can
+              perform a few actions (create a contact, task, or workflow), each of
+              which the operator confirms before it runs.{" "}
+              <strong>Off by default.</strong> Each reply spends your
+              agency&apos;s OpenRouter credits, which is why you control who gets
+              it. While off, the sidebar entry shows Locked and the assistant
+              is unavailable; nothing is torn down, so enabling/disabling is instant.
+            </GateToggle>
+          </GateGroup>
+          <GateGroup label="Growth & content" description="Sites, social, community and courses.">
+            <GateToggle
+              checked={websiteEnabled}
+              onChange={setWebsiteEnabled}
+              disabled={saving}
+              icon={<Globe className="size-3.5" />}
+              title="Website"
+              hideOption={{
+                hidden: websiteHidden,
+                onHiddenChange: setWebsiteHidden,
+                disabled: saving,
+              }}
+            >
+              When enabled, this sub-account can build and publish a marketing
+              site through the website builder (gitpage.site). Builds draw on your
+              agency&apos;s shared gitpage quota (30 builds/hour across all
+              sub-accounts). Disabling locks the Website sidebar entry and blocks
+              new builds; the existing config and any published
+              site are preserved, so re-enabling resumes instantly.
+            </GateToggle>
+            <GateToggle
+              checked={socialPlannerEnabled}
+              onChange={setSocialPlannerEnabled}
+              disabled={saving || (metaUnconfigured && !initialSocial)}
+              icon={<Share2 className="size-3.5" />}
+              title="Social Planner"
+              beta
+              hideOption={{
+                hidden: socialHidden,
+                onHiddenChange: setSocialHidden,
+                disabled: saving,
+              }}
+            >
+              When enabled, this sub-account can connect a Facebook Page +
+              Instagram business account and schedule posts that auto-publish at
+              the chosen time. <strong>Beta</strong> — posting reuses the same
+              Meta connection as the inbox plus extra publish permissions
+              (requires Meta App Review). Disabling locks the Social Planner
+              sidebar entry and blocks connecting and publishing; scheduled posts
+              and the connection are preserved, so re-enabling resumes instantly.
+              {metaUnconfigured && (
+                <span className="mt-1 block font-medium text-status-warning-fg">
+                  Unavailable — set <code>META_APP_ID</code> and{" "}
+                  <code>META_APP_SECRET</code> on the deployment to enable.
+                </span>
+              )}
+            </GateToggle>
+            <GateToggle
+              checked={communityEnabled}
+              onChange={setCommunityEnabled}
+              disabled={saving}
+              icon={<GraduationCap className="size-3.5" />}
+              title="Community + Courses"
+              hideOption={{
+                hidden: communityHidden,
+                onHiddenChange: setCommunityHidden,
+                disabled: saving,
+              }}
+            >
+              When enabled, this sub-account can run Skool-style community groups —
+              a member feed, courses, and a leaderboard at a branded public link
+              (<code>/c/…</code>). Members sign in with a magic link and become
+              CRM contacts. Disabling locks the Community sidebar entry AND takes
+              the public group pages offline; members, posts, and courses are
+              preserved, so re-enabling resumes instantly.
+            </GateToggle>
+            <GateToggle
+              checked={standaloneCoursesEnabled}
+              onChange={setStandaloneCoursesEnabled}
+              disabled={saving}
+              icon={<BookOpen className="size-3.5" />}
+              title="Standalone Courses"
+              hideOption={{
+                hidden: standaloneCoursesHidden,
+                onHiddenChange: setStandaloneCoursesHidden,
+                disabled: saving,
+              }}
+            >
+              When enabled, this sub-account can sell a course on its own simple
+              public sales page (<code>/course/…</code>) — independent of
+              Community, no group required. Buyers sign in with a magic link and
+              become CRM contacts, same as Community. Disabling locks the
+              Courses sidebar entry AND takes the public sales pages offline;
+              courses, enrollments, and purchases are preserved, so re-enabling
+              resumes instantly.
+            </GateToggle>
+            {/* Get Leads is PARKED — toggle hidden while the flag is on. */}
+            {!GET_LEADS_PARKED && (
+              <GateToggle
+                checked={getLeadsEnabled}
+                onChange={setGetLeadsEnabled}
+                disabled={saving}
+                icon={<Radar className="size-3.5" />}
+                title="Get Leads"
+                beta
+                hideOption={{
+                  hidden: getLeadsHidden,
+                  onHiddenChange: setGetLeadsHidden,
+                  disabled: saving,
+                }}
+              >
+                When enabled, this sub-account can prospect local businesses —
+                search Google Maps listings by business type + location, see them
+                on a map with enriched contact details (phone, website, email),
+                and import the good ones as contacts. <strong>Experimental</strong>{" "}
+                — every search spends your agency&apos;s shared Outscraper credits
+                (roughly $0.10–0.20 per search), which is why you control who gets
+                it. Disabling blocks new searches; nothing is torn down.
+              </GateToggle>
+            )}
+          </GateGroup>
+          <GateGroup label="Platform" description="Integrations and pre-release features.">
+            <GateToggle
+              checked={apiAccessEnabled}
+              onChange={setApiAccessEnabled}
+              disabled={saving}
+              icon={<KeyRound className="size-3.5" />}
+              title="Public API access"
+            >
+              When enabled, this sub-account can mint API keys + webhooks for
+              Zapier, Make, custom landing pages, etc. Disabling immediately stops
+              all API requests from their existing keys but keeps
+              the keys + subscriptions intact, so re-enabling later doesn&apos;t
+              force the client to re-rotate their integrations.
+            </GateToggle>
+            <GateToggle
+              checked={labsEnabled}
+              onChange={setLabsEnabled}
+              disabled={saving}
+              icon={<FlaskConical className="size-3.5" />}
+              title="Labs"
+              beta
+              hideOption={{
+                hidden: labsHidden,
+                onHiddenChange: setLabsHidden,
+                disabled: saving,
+              }}
+            >
+              When enabled, this sub-account gets a <strong>Labs</strong> section
+              in its sidebar — the home for pre-release, experimental features
+              (first up: the Inbox Follow-up Watchdog agent). Experimental means
+              exactly that: features may change or be withdrawn, so switch it on
+              only for workspaces that opt in to trying new things. Individual
+              Labs features keep their own safeguards on top. Disabling locks the
+              section; nothing is torn down.
+            </GateToggle>
+          </GateGroup>
         </div>
 
         {willTearDown && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              This will remove the live sending domain{" "}
-              <code className="rounded bg-amber-500/10 px-1">
-                {subAccount.resendConfig?.domainName}
-              </code>{" "}
-              from Resend and revert this sub-account to the shared sender. In-flight
-              broadcasts and automations will fall back automatically.
-            </span>
-          </div>
+          <Alert tone="warning" title="This removes the live sending domain">
+            Saving removes{" "}
+            <code className="rounded bg-status-warning-fg/10 px-1">
+              {subAccount.resendConfig?.domainName}
+            </code>{" "}
+            from Resend and reverts this sub-account to the shared sender.
+            In-progress broadcasts and automations fall back automatically.
+          </Alert>
         )}
 
         {/* Danger zone — permanently delete a clean (unused) sub-account. The
             server refuses (409) if it holds real data, so this is safe to offer
             even though the button is destructive. Type-to-confirm guards fat
             fingers; account numbers are never reused after a delete. */}
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete sub-account
+        <div className="rounded-lg border border-status-danger-fg/20 bg-status-danger-bg p-4">
+          <div className="flex items-center gap-2 text-body-sm font-semibold text-status-danger-fg">
+            <Trash2 className="size-4" aria-hidden="true" />
+            Danger zone · Delete sub-account
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-caption text-muted-foreground">
             Permanently deletes <strong>{subAccount.name}</strong> and its
             settings, members, and templates. Only works if it&apos;s empty — if
             it has any contacts, deals, tasks, or other records, deletion is
@@ -1127,13 +1132,13 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
               disabled={deleting || saving}
               placeholder={`Type "${subAccount.name}" to confirm`}
               aria-label="Type the sub-account name to confirm deletion"
-              className="h-8 text-sm sm:max-w-xs"
+              className="bg-card sm:max-w-xs"
             />
             <Button
               type="button"
               variant="destructive"
               size="sm"
-              className="h-8 shrink-0"
+              className="shrink-0"
               disabled={
                 deleting || saving || deleteConfirm.trim() !== subAccount.name
               }
@@ -1180,6 +1185,36 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   );
 }
 
+/** One labelled group of feature gates, with an "n of m on" count. */
+function GateGroup({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  const items = React.Children.toArray(children).filter(
+    (c): c is React.ReactElement<{ checked?: boolean }> => React.isValidElement(c),
+  );
+  const on = items.filter((c) => c.props.checked).length;
+  return (
+    <section className="flex flex-col gap-2" aria-label={label}>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-overline font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</h4>
+          <p className="text-caption text-muted-foreground">{description}</p>
+        </div>
+        <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
+          {on} of {items.length} on
+        </span>
+      </div>
+      <div className="flex flex-col gap-2">{children}</div>
+    </section>
+  );
+}
+
 function GateToggle({
   checked,
   onChange,
@@ -1196,7 +1231,7 @@ function GateToggle({
   disabled: boolean;
   icon: React.ReactNode;
   title: string;
-  /** When true, renders a fuchsia "Beta" pill after the title. */
+  /** When true, renders a "Beta" tag after the title. */
   beta?: boolean;
   children: React.ReactNode;
   /**
@@ -1223,7 +1258,7 @@ function GateToggle({
     <div
       className={cn(
         "rounded-lg border bg-card transition-colors",
-        checked ? "border-primary/40 bg-primary/5" : "hover:bg-muted/40",
+        checked ? "border-primary/30 bg-tint-violet" : "border-border hover:bg-surface-sunken",
       )}
     >
       <label className="flex cursor-pointer items-start gap-3 p-3">
@@ -1232,34 +1267,32 @@ function GateToggle({
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
-          className="mt-0.5 h-4 w-4 cursor-pointer"
+          className="mt-0.5 size-4 shrink-0 cursor-pointer"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            {icon}
+          <div className="flex flex-wrap items-center gap-2 text-body-sm font-semibold text-foreground">
+            <span className={cn("flex", checked ? "text-primary" : "text-muted-foreground")} aria-hidden="true">
+              {icon}
+            </span>
             {title}
-            {beta && (
-              <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
-                Beta
-              </span>
-            )}
+            {beta && <Tag color="pink">Beta</Tag>}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{children}</p>
+          <p className="mt-1 text-caption text-muted-foreground">{children}</p>
         </div>
       </label>
       {enabledExtras && checked && (
-        <div className="border-t border-dashed px-3 py-2 pl-10">
+        <div className="border-t border-border-subtle px-3 py-2 pl-10">
           {enabledExtras}
         </div>
       )}
       {hideOption && !checked && (
-        <label className="flex cursor-pointer items-start gap-2 border-t border-dashed px-3 py-2 pl-10 text-xs text-muted-foreground">
+        <label className="flex cursor-pointer items-start gap-2 border-t border-border-subtle px-3 py-2 pl-10 text-caption text-muted-foreground">
           <input
             type="checkbox"
             checked={hideOption.hidden}
             onChange={(e) => hideOption.onHiddenChange(e.target.checked)}
             disabled={hideOption.disabled}
-            className="mt-0.5 h-3.5 w-3.5 cursor-pointer"
+            className="mt-0.5 size-3.5 shrink-0 cursor-pointer"
           />
           <span>
             <span className="font-medium text-foreground">

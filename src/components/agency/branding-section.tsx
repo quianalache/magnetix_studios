@@ -190,9 +190,9 @@ export function BrandingSection() {
       title="Brand identity"
       description={
         <>
-          What clients see in the sidebar, browser tab, AND the public landing
-          page when LANDING_VARIANT is &ldquo;custom&rdquo;. Blank fields fall
-          back to the defaults in src/config/landing.ts.
+          What clients see in the sidebar, the browser tab and your public
+          landing page. Blank fields fall back to your platform&apos;s default
+          brand.
         </>
       }
       footer={

@@ -61,16 +61,16 @@ export function SetupStatusBanner() {
   // ── Required incomplete — amber, always shown ────────────────────────────
   if (!summary.requiredComplete) {
     return (
-      <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 rounded-xl border border-status-warning-fg/20 bg-status-warning-bg p-4 sm:flex-row sm:items-center">
         <div className="flex flex-1 items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-card text-status-warning-fg">
             <TriangleAlert className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            <p className="text-body font-semibold text-status-warning-fg">
               Required setup incomplete
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-caption text-muted-foreground">
               {summary.requiredIssues.join(", ")}{" "}
               {summary.requiredIssues.length === 1 ? "needs" : "need"} attention
               {summary.missingRequiredKeys > 0 &&
@@ -101,17 +101,17 @@ export function SetupStatusBanner() {
   const shown = remaining.slice(0, 3).join(", ");
   const more = remaining.length - 3;
   return (
-    <div className="relative flex flex-col gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-4 pr-10 sm:flex-row sm:items-center">
+    <div className="relative flex flex-col gap-3 rounded-card border border-border bg-card p-4 pr-10 shadow-card sm:flex-row sm:items-center">
       <div className="flex flex-1 items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-tag-aqua-bg text-tag-aqua-fg">
           <Sparkles className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-sky-700 dark:text-sky-400">
+          <p className="text-body font-semibold text-foreground">
             Core setup complete — {summary.featuresConfigured} of{" "}
             {summary.featuresTotal} optional integrations configured
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-caption text-muted-foreground">
             Still available: {shown}
             {more > 0 && ` +${more} more`}. Each unlocks a feature — add them
             anytime in Guided setup.

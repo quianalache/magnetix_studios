@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { Copy, CreditCard, Loader2, Mail, Receipt, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { StatusPill, Tag } from "@/components/system/status-pill";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { BillingStatusBadge } from "@/components/agency/billing-status-badge";
 import {
   effectiveBillingState,
@@ -33,6 +37,7 @@ interface Props {
 export function SubAccountBillingSection({ subAccount, disabled }: Props) {
   const billing = subAccount.billing ?? null;
   const state = effectiveBillingState(billing);
+  const { confirm, dialog } = useConfirm();
 
   const [plans, setPlans] = useState<BillingPlanResponse[] | null>(null);
   const [stripeConfigured, setStripeConfigured] = useState(true);
@@ -306,7 +311,15 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
   }
 
   async function handleCancelCharge(chargeId: string) {
-    if (!window.confirm("Cancel this charge? Its payment link goes dead immediately.")) {
+    if (
+      !(await confirm({
+        title: "Cancel this charge?",
+        description: "Its payment link stops working immediately.",
+        confirmLabel: "Cancel charge",
+        cancelLabel: "Keep charge",
+        tone: "danger",
+      }))
+    ) {
       return;
     }
     setChargeBusy(chargeId);
@@ -328,11 +341,14 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
 
   async function handleComp() {
     if (
-      !window.confirm(
-        hasLiveSubscription
-          ? "Mark this client comped? Their Stripe subscription is canceled immediately and no further charges occur."
-          : "Mark this client comped? They won't be billed through the platform.",
-      )
+      !(await confirm({
+        title: "Mark this client comped?",
+        description: hasLiveSubscription
+          ? "Their Stripe subscription is canceled immediately and no further charges occur."
+          : "They won't be billed through the platform.",
+        confirmLabel: "Mark comped",
+        tone: hasLiveSubscription ? "danger" : "default",
+      }))
     ) {
       return;
     }
@@ -349,19 +365,18 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
   }
 
   return (
-    <div className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <CreditCard className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      {dialog}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-sunken px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2 text-body-sm font-semibold text-foreground">
+          <CreditCard className="size-4 text-muted-foreground" aria-hidden="true" />
           Billing
-          {/* Same Beta pill as the beta feature gates below. */}
-          <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
-            Beta
-          </span>
+          {/* Same Beta tag as the beta feature gates below. */}
+          <Tag color="pink">Beta</Tag>
           <BillingStatusBadge billing={billing} />
         </div>
         {billing && billing.status !== "comped" && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {billing.planName ?? "—"} ·{" "}
             {formatBillingPriceWithInterval(
               billing.priceCents,
@@ -372,30 +387,29 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
         )}
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="flex flex-col gap-3 p-4">
         {!stripeConfigured ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
+          <p className="text-caption font-medium text-status-warning-fg">
             Stripe isn&apos;t configured on this deployment — set{" "}
             <code>STRIPE_SECRET_KEY</code> to bill clients.
           </p>
         ) : plans === null ? (
-          <p className="text-xs text-muted-foreground">Loading plans…</p>
+          <Skeleton className="h-9 w-full" />
         ) : activePlans.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             No plans yet — create one under{" "}
-            <span className="font-medium text-foreground">
-              Agency → Billing
-            </span>{" "}
+            <span className="font-medium text-foreground">Agency → Billing</span>{" "}
             first.
           </p>
         ) : (
           <>
-            <div className="grid gap-2 sm:grid-cols-[1fr_130px]">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
               <select
                 value={planId}
                 onChange={(e) => setPlanId(e.target.value)}
                 disabled={anyBusy}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground"
+                aria-label="Plan"
+                className="h-9 w-full rounded-md border border-input bg-card px-3 text-body disabled:opacity-60"
               >
                 <option value="">Choose a plan…</option>
                 {activePlans.map((p) => (
@@ -412,6 +426,7 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                 value={specialPrice}
                 onChange={(e) => setSpecialPrice(e.target.value)}
                 placeholder="Special price"
+                aria-label="Special price (optional)"
                 inputMode="decimal"
                 disabled={anyBusy}
                 title={`Optional per-client ${
@@ -422,23 +437,22 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
 
             {/* Cadence chooser — only when the selected plan offers annual. */}
             {planHasAnnual && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium text-muted-foreground">
-                  Billing cadence
-                </span>
-                <div className="inline-flex rounded-md border p-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-caption font-medium text-muted-foreground">Billing cadence</span>
+                <div className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-background p-1">
                   {(["month", "year"] as const).map((opt) => (
                     <button
                       key={opt}
                       type="button"
+                      aria-pressed={interval === opt}
                       onClick={() => setInterval(opt)}
                       disabled={anyBusy}
-                      className={
-                        "rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 " +
-                        (interval === opt
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-muted/60")
-                      }
+                      className={cn(
+                        "h-7 shrink-0 rounded-lg px-3 text-caption font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
+                        interval === opt
+                          ? "bg-accent font-semibold text-accent-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
                     >
                       {opt === "month"
                         ? `Monthly · ${formatBillingPrice(selectedPlan?.priceMonthlyCents ?? null, selectedPlan?.currency ?? null)}`
@@ -453,13 +467,12 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
               <Button
                 type="button"
                 size="sm"
-                className="h-8"
                 onClick={handleAssign}
                 disabled={anyBusy || !planId}
               >
                 {busy === "assign" ? (
                   <>
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="animate-spin" />
                     Assigning…
                   </>
                 ) : hasLiveSubscription && billing?.planId !== planId ? (
@@ -474,30 +487,20 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8"
                     onClick={() => handleLink(false)}
                     disabled={anyBusy}
                   >
-                    {busy === "link" ? (
-                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Copy className="mr-1 h-3.5 w-3.5" />
-                    )}
+                    {busy === "link" ? <Loader2 className="animate-spin" /> : <Copy />}
                     Copy link
                   </Button>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8"
                     onClick={() => handleLink(true)}
                     disabled={anyBusy || !emailTo.trim()}
                   >
-                    {busy === "email" ? (
-                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Mail className="mr-1 h-3.5 w-3.5" />
-                    )}
+                    {busy === "email" ? <Loader2 className="animate-spin" /> : <Mail />}
                     Email link
                   </Button>
                 </>
@@ -507,44 +510,43 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-8 text-muted-foreground"
+                  className="text-muted-foreground"
                   onClick={handleComp}
                   disabled={anyBusy}
                 >
-                  {busy === "comp" ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                  ) : null}
+                  {busy === "comp" ? <Loader2 className="animate-spin" /> : null}
                   Mark comped
                 </Button>
               )}
             </div>
 
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+              <label htmlFor={`billing-email-${subAccount.id}`} className="mb-1 block text-caption font-medium text-muted-foreground">
                 Client email for payment links (optional)
               </label>
               <Input
+                id={`billing-email-${subAccount.id}`}
                 value={emailTo}
                 onChange={(e) => setEmailTo(e.target.value)}
                 placeholder="client@business.com"
                 type="email"
                 disabled={anyBusy}
-                className="h-8 text-sm"
               />
             </div>
 
             {lastLink && (
-              <div className="rounded-md border border-dashed bg-muted/30 px-2.5 py-2">
-                <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                  Checkout link (latest — older links are now invalid)
+              <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2">
+                <p className="mb-1 text-caption font-medium text-muted-foreground">
+                  Checkout link (latest — older links no longer work)
                 </p>
-                <div className="flex items-center gap-2">
-                  <code className="min-w-0 flex-1 truncate text-xs">{lastLink}</code>
+                <div className="flex min-w-0 items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate text-caption text-foreground">{lastLink}</code>
                   <Button
                     type="button"
-                    size="sm"
+                    size="icon-xs"
                     variant="ghost"
-                    className="h-7 shrink-0 px-2"
+                    aria-label="Copy checkout link"
+                    title="Copy link"
                     onClick={() => {
                       void navigator.clipboard
                         .writeText(lastLink)
@@ -552,13 +554,13 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                         .catch(() => toast.error("Couldn't copy — select it manually."));
                     }}
                   >
-                    <Copy className="h-3.5 w-3.5" />
+                    <Copy />
                   </Button>
                 </div>
               </div>
             )}
 
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <p className="text-caption leading-relaxed text-muted-foreground">
               {hasLiveSubscription
                 ? "This client has a live subscription — switching plans updates the charge (prorated) and re-applies the plan's features immediately. Card changes happen via “Manage billing” inside their workspace settings."
                 : state === "pending"
@@ -570,30 +572,30 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
 
             {/* ── One-time charges (independent of the plan; works for comped
                 clients too — e.g. a "Web design" fee) ─────────────────── */}
-            <div className="rounded-md border border-dashed p-2.5">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium">
-                <Receipt className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <div className="rounded-lg border border-border p-3">
+              <p className="mb-2 flex flex-wrap items-center gap-1.5 text-body-sm font-semibold text-foreground">
+                <Receipt className="size-4 text-muted-foreground" aria-hidden="true" />
                 One-time charge
-                <span className="font-normal text-muted-foreground">
+                <span className="text-caption font-normal text-muted-foreground">
                   — bill this client once, e.g. “Web design”
                 </span>
               </p>
-              <div className="grid gap-2 sm:grid-cols-[1fr_130px]">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
                 <Input
                   value={chargeDesc}
                   onChange={(e) => setChargeDesc(e.target.value)}
                   placeholder="What for (client sees this at checkout)"
+                  aria-label="Charge description"
                   maxLength={120}
                   disabled={anyBusy || chargeBusy !== null}
-                  className="h-8 text-sm"
                 />
                 <Input
                   value={chargeAmount}
                   onChange={(e) => setChargeAmount(e.target.value)}
                   placeholder={`Amount (${chargeCurrency.toUpperCase()})`}
+                  aria-label="Charge amount"
                   inputMode="decimal"
                   disabled={anyBusy || chargeBusy !== null}
-                  className="h-8 text-sm"
                 />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -601,7 +603,6 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-8"
                   onClick={() => handleCreateCharge(false)}
                   disabled={
                     anyBusy ||
@@ -610,18 +611,13 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                     chargeAmountCents === null
                   }
                 >
-                  {chargeBusy === "create" ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Copy className="mr-1 h-3.5 w-3.5" />
-                  )}
+                  {chargeBusy === "create" ? <Loader2 className="animate-spin" /> : <Copy />}
                   Create &amp; copy link
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-8"
                   onClick={() => handleCreateCharge(true)}
                   disabled={
                     anyBusy ||
@@ -633,67 +629,55 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
                   title={
                     emailTo.trim()
                       ? undefined
-                      : "Enter the client email below first"
+                      : "Enter the client email above first"
                   }
                 >
-                  {chargeBusy === "createEmail" ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Mail className="mr-1 h-3.5 w-3.5" />
-                  )}
+                  {chargeBusy === "createEmail" ? <Loader2 className="animate-spin" /> : <Mail />}
                   Create &amp; email
                 </Button>
               </div>
 
               {charges && charges.length > 0 && (
-                <ul className="mt-2.5 space-y-1.5 border-t border-dashed pt-2">
+                <ul className="mt-3 divide-y divide-border-subtle border-t border-border-subtle">
                   {charges.map((c) => (
-                    <li
-                      key={c.id}
-                      className="flex items-center gap-2 text-xs"
-                    >
-                      <span
-                        className={
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide " +
-                          (c.status === "paid"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : c.status === "canceled"
-                              ? "bg-muted text-muted-foreground line-through"
-                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400")
-                        }
+                    <li key={c.id} className="flex items-center gap-2 py-2 text-body-sm">
+                      <StatusPill
+                        tone={c.status === "paid" ? "success" : c.status === "canceled" ? "neutral" : "warning"}
+                        className="capitalize"
                       >
                         {c.status}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">
+                      </StatusPill>
+                      <span className={cn("min-w-0 flex-1 truncate", c.status === "canceled" && "text-muted-foreground line-through")}>
                         {c.description}
                       </span>
                       <span className="shrink-0 font-medium tabular-nums">
                         {formatBillingPrice(c.amountCents, c.currency)}
                       </span>
                       {c.status === "pending" && (
-                        <span className="flex shrink-0 items-center gap-1">
-                          <button
+                        <span className="flex shrink-0 items-center">
+                          <Button
                             type="button"
+                            size="icon-xs"
+                            variant="ghost"
                             onClick={() => handleCopyChargeLink(c.id)}
                             disabled={chargeBusy !== null}
                             title="Copy a fresh payment link"
-                            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                            aria-label={`Copy a fresh payment link for ${c.description}`}
                           >
-                            {chargeBusy === c.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                          </button>
-                          <button
+                            {chargeBusy === c.id ? <Loader2 className="animate-spin" /> : <Copy />}
+                          </Button>
+                          <Button
                             type="button"
+                            size="icon-xs"
+                            variant="ghost"
                             onClick={() => handleCancelCharge(c.id)}
                             disabled={chargeBusy !== null}
                             title="Cancel this charge"
-                            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                            aria-label={`Cancel the charge for ${c.description}`}
+                            className="hover:text-destructive"
                           >
-                            <X className="h-3 w-3" />
-                          </button>
+                            <X />
+                          </Button>
                         </span>
                       )}
                     </li>

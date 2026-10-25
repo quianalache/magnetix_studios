@@ -98,7 +98,7 @@ export function SalesPageSection() {
   return (
     <div className="bg-card space-y-5 rounded-2xl border p-5">
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tag-blue-bg text-tag-blue-fg">
           <Rocket className="h-4 w-4" />
         </span>
         <div>
@@ -169,7 +169,7 @@ export function SalesPageSection() {
             </>
           )}
         </div>
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground text-micro">
           This doesn&apos;t change or rebuild anything at that URL — it just
           tells Magnetix which page is your storefront, so it shows up here and
           in Agency → Traffic & Signups.
@@ -203,7 +203,7 @@ function TrackingSnippetCard() {
   return (
     <div className="bg-background rounded-xl border border-dashed p-4">
       <p className="text-foreground text-xs font-medium">Tracking snippet</p>
-      <p className="text-muted-foreground mt-1 text-[11px]">
+      <p className="text-muted-foreground mt-1 text-micro">
         Paste this once into your sales page&apos;s HTML (right before{" "}
         <code>&lt;/body&gt;</code>) to see visits, checkout starts, and
         conversions in Agency → Traffic & Signups. It also automatically carries
@@ -211,7 +211,7 @@ function TrackingSnippetCard() {
         button&apos;s link — no extra code needed on the button itself.
       </p>
       <div className="mt-2.5 flex items-start gap-2">
-        <code className="bg-muted min-w-0 flex-1 overflow-x-auto rounded-lg px-3 py-2 text-[11px] whitespace-pre">
+        <code className="bg-muted min-w-0 flex-1 overflow-x-auto rounded-lg px-3 py-2 text-micro whitespace-pre">
           {tag}
         </code>
         <Button

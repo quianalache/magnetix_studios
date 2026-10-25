@@ -71,7 +71,7 @@ export function AppIconSection() {
   return (
     <section className="bg-card space-y-4 rounded-2xl border p-5">
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tag-blue-bg text-tag-blue-fg">
           <Smartphone className="h-4 w-4" />
         </span>
         <div>

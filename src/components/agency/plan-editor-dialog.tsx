@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   PLAN_GATE_KEYS,
@@ -157,7 +158,7 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              <label className="mb-1 block text-caption font-medium text-muted-foreground">
                 Plan name
               </label>
               <Input
@@ -171,7 +172,7 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
             <div className="sm:col-span-2">
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  <label className="mb-1 block text-caption font-medium text-muted-foreground">
                     Monthly price
                   </label>
                   <Input
@@ -183,7 +184,7 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  <label className="mb-1 block text-caption font-medium text-muted-foreground">
                     Annual (optional)
                   </label>
                   <Input
@@ -195,14 +196,14 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  <label className="mb-1 block text-caption font-medium text-muted-foreground">
                     Currency{plan ? " (fixed)" : ""}
                   </label>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
                     disabled={saving || !!plan}
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground"
+                    className="h-9 w-full rounded-md border border-input bg-card px-3 text-body disabled:opacity-60"
                   >
                     {CURRENCIES.map((c) => (
                       <option key={c} value={c}>
@@ -212,7 +213,7 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
                   </select>
                 </div>
               </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
                 Leave annual blank for monthly-only. You set the annual amount
                 directly (e.g. 10× the monthly price = &ldquo;2 months
                 free&rdquo;). Same currency as monthly. The agency picks monthly
@@ -220,7 +221,7 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
               </p>
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              <label className="mb-1 block text-caption font-medium text-muted-foreground">
                 Description (optional)
               </label>
               <Input
@@ -234,14 +235,17 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
+            <p className="mb-2 text-caption font-semibold text-foreground">
               Included features ({gateCount} of {PLAN_GATE_KEYS.length})
             </p>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {PLAN_GATE_KEYS.map((key) => (
                 <label
                   key={key}
-                  className="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition-colors hover:bg-muted/40"
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-body-sm transition-colors",
+                    gates[key] ? "border-primary/30 bg-tint-violet" : "border-border hover:bg-surface-sunken",
+                  )}
                 >
                   <input
                     type="checkbox"
@@ -250,13 +254,13 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
                       setGates((prev) => ({ ...prev, [key]: e.target.checked }))
                     }
                     disabled={saving}
-                    className="h-4 w-4 cursor-pointer"
+                    className="size-4 shrink-0 cursor-pointer"
                   />
                   <span className="min-w-0 truncate">{PLAN_GATE_LABELS[key]}</span>
                 </label>
               ))}
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-caption text-muted-foreground">
               Core CRM (contacts, pipeline, calendar, tasks, forms, quotes) is
               always included. Gate changes re-apply automatically to every
               client currently on this plan.
@@ -278,7 +282,7 @@ export function PlanEditorDialog({ plan, open, onOpenChange, onSaved }: Props) {
           <Button size="sm" onClick={handleSave} disabled={!canSave}>
             {saving ? (
               <>
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="animate-spin" />
                 Saving…
               </>
             ) : plan ? (

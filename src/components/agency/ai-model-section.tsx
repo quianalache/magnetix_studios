@@ -14,16 +14,16 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium " +
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-micro font-medium " +
         (ok
-          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          ? "bg-status-success-bg text-status-success-fg"
           : "bg-muted text-muted-foreground")
       }
     >
       <span
         className={
           "inline-block h-1.5 w-1.5 rounded-full " +
-          (ok ? "bg-emerald-500" : "bg-muted-foreground/50")
+          (ok ? "bg-status-success-dot" : "bg-muted-foreground/50")
         }
       />
       {label}
@@ -73,7 +73,7 @@ export function AiModelSection() {
   return (
     <section className="space-y-4 rounded-2xl border bg-card p-5">
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tag-violet-bg text-tag-violet-fg">
           <Sparkles className="h-4 w-4" />
         </span>
         <div>
@@ -117,7 +117,7 @@ export function AiModelSection() {
             />
           </div>
           {!config.configured && (
-            <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
+            <p className="mt-3 border-t pt-3 text-micro text-muted-foreground">
               Add <code>OPENROUTER_API_KEY</code> to switch AI Agents on. Until
               then this model isn&rsquo;t used and every channel stays silent.
             </p>

@@ -99,13 +99,13 @@ export function StatusTab() {
             {results && (
               <>
                 {" · "}
-                <span className="text-emerald-600 dark:text-emerald-400">
+                <span className="text-status-success-fg">
                   {counts.ok} ok
                 </span>
                 {counts.partial > 0 && (
                   <>
                     {" · "}
-                    <span className="text-amber-600 dark:text-amber-400">
+                    <span className="text-status-warning-fg">
                       {counts.partial} partial
                     </span>
                   </>
@@ -113,7 +113,7 @@ export function StatusTab() {
                 {(counts.criticalMissing > 0 || counts.error > 0) && (
                   <>
                     {" · "}
-                    <span className="text-rose-600 dark:text-rose-400">
+                    <span className="text-status-danger-fg">
                       {counts.criticalMissing + counts.error} need attention
                     </span>
                   </>
@@ -146,19 +146,19 @@ export function StatusTab() {
 
         {/* Colour key — the dot semantics are correct but not self-evident, so
             spell them out (esp. that gray = optional/off, not broken). */}
-        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-[11px] text-muted-foreground">
+        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-micro text-muted-foreground">
           <LegendItem
-            colorClass="bg-emerald-500"
+            colorClass="bg-status-success-dot"
             label="Healthy"
             title="Configured and reachable."
           />
           <LegendItem
-            colorClass="bg-amber-500"
+            colorClass="bg-status-warning-dot"
             label="Needs attention"
             title="Partially set up or degraded — e.g. a credential present but a sender domain / webhook not finished."
           />
           <LegendItem
-            colorClass="bg-rose-500"
+            colorClass="bg-status-danger-dot"
             label="Action required"
             title="A required integration is missing, or a configured one failed its live check."
           />
@@ -171,8 +171,8 @@ export function StatusTab() {
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 text-rose-600 dark:text-rose-400" />
+        <div className="flex items-start gap-2 rounded-2xl border border-status-danger-fg/20 bg-status-danger-bg p-4 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 text-status-danger-fg" />
           <p>{error}</p>
         </div>
       )}
@@ -192,7 +192,7 @@ export function StatusTab() {
         <div className="space-y-5">
           {CATEGORY_ORDER.filter((c) => grouped[c]?.length).map((category) => (
             <section key={category}>
-              <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <h3 className="mb-2 text-micro font-medium uppercase tracking-wide text-muted-foreground">
                 {CATEGORY_LABELS[category]}
               </h3>
               <ul className="space-y-2">
@@ -283,9 +283,9 @@ function SubCheckRow({ check }: { check: SubCheck }) {
         <StatusDot status={check.status} required={false} small />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-mono text-[11px]">{check.label}</p>
+        <p className="font-mono text-micro">{check.label}</p>
         {check.detail && (
-          <p className="text-[11px] text-muted-foreground">{check.detail}</p>
+          <p className="text-micro text-muted-foreground">{check.detail}</p>
         )}
       </div>
     </div>
@@ -332,11 +332,11 @@ function StatusLight({
 
 /** Background colour class for the single status dot — matches the legend. */
 function statusDotClass(status: HealthStatus, required: boolean): string {
-  if (status === "ok") return "bg-emerald-500";
-  if (status === "partial") return "bg-amber-500";
-  if (status === "error") return "bg-rose-500";
+  if (status === "ok") return "bg-status-success-dot";
+  if (status === "partial") return "bg-status-warning-dot";
+  if (status === "error") return "bg-status-danger-dot";
   if (status === "missing") {
-    return required ? "bg-rose-500" : "bg-muted-foreground/40";
+    return required ? "bg-status-danger-dot" : "bg-muted-foreground/40";
   }
   return "bg-muted-foreground/40"; // skipped → gray
 }
@@ -377,31 +377,31 @@ interface ToneClasses {
 function effectiveTone(status: HealthStatus, required: boolean): ToneClasses {
   if (status === "ok") {
     return {
-      text: "text-emerald-600 dark:text-emerald-400",
+      text: "text-status-success-fg",
       bg: "",
-      border: "border-emerald-500/20",
+      border: "",
     };
   }
   if (status === "partial") {
     return {
-      text: "text-amber-600 dark:text-amber-400",
-      bg: "bg-amber-500/5",
-      border: "border-amber-500/30",
+      text: "text-status-warning-fg",
+      bg: "bg-status-warning-bg",
+      border: "border-status-warning-fg/20",
     };
   }
   if (status === "error") {
     return {
-      text: "text-rose-600 dark:text-rose-400",
-      bg: "bg-rose-500/5",
-      border: "border-rose-500/30",
+      text: "text-status-danger-fg",
+      bg: "bg-status-danger-bg",
+      border: "border-status-danger-fg/20",
     };
   }
   if (status === "missing") {
     if (required) {
       return {
-        text: "text-rose-600 dark:text-rose-400",
-        bg: "bg-rose-500/5",
-        border: "border-rose-500/30",
+        text: "text-status-danger-fg",
+        bg: "bg-status-danger-bg",
+        border: "border-status-danger-fg/20",
       };
     }
     return {

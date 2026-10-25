@@ -8,12 +8,25 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { Building2, ChevronRight, Plus } from "lucide-react";
+import { ArrowRight, Building2, ChevronRight, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { SubAccountManageDialog } from "@/components/agency/sub-account-manage-dialog";
 import { SnapshotsSection } from "@/components/agency/snapshots-section";
+import { BillingStatusBadge } from "@/components/agency/billing-status-badge";
+import { PageShell, PageShellLoading } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SearchField } from "@/components/system/search-field";
+import { EmptyState } from "@/components/system/empty-state";
+import { StatusPill } from "@/components/system/status-pill";
+import {
+  DATA_TABLE_HEAD_ROW,
+  DATA_TABLE_ROW,
+  DATA_TABLE_TD,
+  DATA_TABLE_TH,
+  DataTableShell,
+} from "@/components/system/data-table";
 import type { SubAccountDoc } from "@/types";
 
 export default function SubAccountsListPage() {
@@ -21,6 +34,7 @@ export default function SubAccountsListPage() {
   const [subs, setSubs] = useState<SubAccountDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [managingId, setManagingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const isAgencyOwner = agencyRole === "owner";
   const managing = subs.find((s) => s.id === managingId) ?? null;
 
@@ -64,161 +78,175 @@ export default function SubAccountsListPage() {
     return () => unsub();
   }, [agencyId]);
 
+  const q = search.trim().toLowerCase();
+  const visible = q
+    ? subs.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          (s.accountNumber !== undefined && `#${s.accountNumber}`.includes(q)) ||
+          (s.billing?.planName ?? "").toLowerCase().includes(q),
+      )
+    : subs;
+
   if (authLoading || loading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted/50" />
-      </div>
-    );
+    return <PageShellLoading width="data" />;
   }
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Sub-accounts</h1>
-          <p className="text-sm text-muted-foreground">
-            One workspace per client. Each sub-account has its own contacts,
-            pipeline, and team.
-          </p>
-        </div>
-        {agencyRole === "owner" && (
-          <Button render={<Link href="/agency/sub-accounts/new" />}>
-            <Plus className="mr-1 h-4 w-4" />
-            New
-          </Button>
-        )}
-      </div>
+  const empty = (
+    <EmptyState
+      compact
+      icon={Building2}
+      title={subs.length === 0 ? "No sub-accounts yet" : "No matches"}
+      description={
+        subs.length === 0
+          ? "Create a workspace for your first client."
+          : "Try a different name, plan or account number."
+      }
+    />
+  );
 
-      <section className="overflow-hidden rounded-2xl border bg-card">
-        {/* Mobile card list — the whole row is a tap target that OPENS the
-            sub-account (the table's crushed action cell was unreachable on
-            phones); timezone is desktop-only detail. Manage stays a
-            discrete button inside the row for owners. Same explicit
-            mobile-variant pattern as the contacts table. */}
-        <div className="divide-y md:hidden">
-          {subs.length === 0 ? (
-            <div className="px-4 py-12 text-center text-muted-foreground">
-              <Building2 className="mx-auto mb-2 h-6 w-6" />
-              No sub-accounts yet.
-            </div>
+  return (
+    <PageShell width="data">
+      <PageHeader
+        title="Sub-accounts"
+        description="One workspace per client. Each sub-account has its own contacts, pipeline, and team."
+        actions={
+          agencyRole === "owner" ? (
+            <Button render={<Link href="/agency/sub-accounts/new" />}>
+              <Plus />
+              New sub-account
+            </Button>
+          ) : null
+        }
+      />
+
+      <div className="flex flex-col gap-3">
+        {subs.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by name, plan or #"
+              aria-label="Search sub-accounts"
+              className="sm:max-w-xs"
+            />
+            <p className="text-caption text-muted-foreground">
+              {visible.length === subs.length
+                ? `${subs.length} ${subs.length === 1 ? "sub-account" : "sub-accounts"}`
+                : `${visible.length} of ${subs.length}`}
+            </p>
+          </div>
+        )}
+
+        {/* Phones: card rows — the whole row OPENS the sub-account (a table's
+            crushed action cell is unreachable at 390px); Manage stays a
+            discrete button for owners. */}
+        <div className="overflow-hidden rounded-card border border-border bg-card shadow-card md:hidden">
+          {visible.length === 0 ? (
+            empty
           ) : (
-            subs.map((s) => (
-              <Link
-                key={s.id}
-                href={`/sa/${s.id}/dashboard`}
-                className="flex min-h-14 select-none items-center gap-3 px-4 py-3 transition-colors active:bg-muted/40"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{s.name}</p>
-                  <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-mono">
-                      {s.accountNumber !== undefined
-                        ? `#${s.accountNumber}`
-                        : "—"}
-                    </span>
-                    <span
-                      className={
-                        s.status === "active"
-                          ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"
-                          : "rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                      }
-                    >
-                      {s.status}
-                    </span>
-                  </p>
-                </div>
-                {isAgencyOwner && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 shrink-0 rounded-full px-3 text-xs"
-                    onClick={(e) => {
-                      // Inside the row Link — keep the tap from navigating.
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setManagingId(s.id);
-                    }}
+            <ul className="divide-y divide-border-subtle">
+              {visible.map((s) => (
+                <li key={s.id}>
+                  <Link
+                    href={`/sa/${s.id}/dashboard`}
+                    className="flex min-h-14 select-none items-center gap-3 px-4 py-3 transition-colors active:bg-tint-violet"
                   >
-                    Manage
-                  </Button>
-                )}
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </Link>
-            ))
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-body font-medium text-foreground">{s.name}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">
+                        <span className="font-mono">
+                          {s.accountNumber !== undefined ? `#${s.accountNumber}` : "—"}
+                        </span>
+                        {s.billing?.planName ? <span className="truncate">{s.billing.planName}</span> : null}
+                        <BillingStatusBadge billing={s.billing} />
+                      </div>
+                    </div>
+                    {isAgencyOwner && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={(e) => {
+                          // Inside the row Link — keep the tap from navigating.
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setManagingId(s.id);
+                        }}
+                      >
+                        Manage
+                      </Button>
+                    )}
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
-        <table className="hidden w-full text-sm md:table">
-          <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="w-24 px-4 py-2.5 text-left font-medium">#</th>
-              <th className="px-4 py-2.5 text-left font-medium">Name</th>
-              <th className="px-4 py-2.5 text-left font-medium">Status</th>
-              <th className="px-4 py-2.5 text-left font-medium">Timezone</th>
-              <th className="px-4 py-2.5"></th>
+        <DataTableShell className="hidden md:block" minWidth="52rem">
+          <thead>
+            <tr className={DATA_TABLE_HEAD_ROW}>
+              <th className={`${DATA_TABLE_TH} w-20`}>#</th>
+              <th className={DATA_TABLE_TH}>Name</th>
+              <th className={DATA_TABLE_TH}>Workspace</th>
+              <th className={DATA_TABLE_TH}>Plan</th>
+              <th className={DATA_TABLE_TH}>Billing</th>
+              <th className={`${DATA_TABLE_TH} hidden lg:table-cell`}>Timezone</th>
+              <th className={DATA_TABLE_TH}>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {subs.length === 0 ? (
+            {visible.length === 0 ? (
               <tr>
-                <td
-                  colSpan={5}
-                  className="px-4 py-12 text-center text-muted-foreground"
-                >
-                  <Building2 className="mx-auto mb-2 h-6 w-6" />
-                  No sub-accounts yet.
-                </td>
+                <td colSpan={7}>{empty}</td>
               </tr>
             ) : (
-              subs.map((s) => (
-                <tr key={s.id} className="border-t">
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+              visible.map((s) => (
+                <tr key={s.id} className={DATA_TABLE_ROW}>
+                  <td className={`${DATA_TABLE_TD} font-mono text-caption text-muted-foreground`}>
                     {s.accountNumber !== undefined ? `#${s.accountNumber}` : "—"}
                   </td>
-                  <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={
-                        s.status === "active"
-                          ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"
-                          : "rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                      }
-                    >
-                      {s.status}
-                    </span>
+                  <td className={`${DATA_TABLE_TD} max-w-72 font-medium text-foreground`}>
+                    <span className="line-clamp-2">{s.name}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {s.timezone}
+                  <td className={DATA_TABLE_TD}>
+                    <StatusPill status={s.status ?? "active"} className="capitalize">
+                      {s.status ?? "active"}
+                    </StatusPill>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-4">
+                  <td className={`${DATA_TABLE_TD} max-w-56 text-muted-foreground`}>
+                    <span className="line-clamp-2">{s.billing?.planName ?? "—"}</span>
+                  </td>
+                  <td className={DATA_TABLE_TD}>
+                    <BillingStatusBadge billing={s.billing} />
+                  </td>
+                  <td className={`${DATA_TABLE_TD} hidden text-muted-foreground lg:table-cell`}>
+                    {s.timezone ?? "—"}
+                  </td>
+                  <td className={`${DATA_TABLE_TD} text-right`}>
+                    <div className="flex items-center justify-end gap-2">
                       {isAgencyOwner && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-7 rounded-full px-3 text-xs"
-                          onClick={() => setManagingId(s.id)}
-                        >
+                        <Button type="button" size="sm" variant="outline" onClick={() => setManagingId(s.id)}>
                           Manage
                         </Button>
                       )}
-                      <Link
-                        href={`/sa/${s.id}/dashboard`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Open →
-                      </Link>
+                      <Button size="sm" variant="ghost" render={<Link href={`/sa/${s.id}/dashboard`} />}>
+                        Open
+                        <ArrowRight />
+                      </Button>
                     </div>
                   </td>
                 </tr>
               ))
             )}
           </tbody>
-        </table>
-      </section>
+        </DataTableShell>
+      </div>
 
       {isAgencyOwner && (
         <SnapshotsSection
@@ -237,6 +265,6 @@ export default function SubAccountsListPage() {
           if (!open) setManagingId(null);
         }}
       />
-    </div>
+    </PageShell>
   );
 }

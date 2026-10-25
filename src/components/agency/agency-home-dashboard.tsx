@@ -22,10 +22,16 @@ import {
   PieChart,
   Megaphone,
   CalendarClock,
+  Activity,
+  ArrowRight,
   type LucideIcon,
 } from "lucide-react";
-import { StatCard } from "@/components/ui/stat-card";
-import { AreaChart, BarChart, DonutChart, FunnelChart } from "@/components/reports/charts";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AreaChart, DonutChart, FunnelChart } from "@/components/reports/charts";
+import { PageHeader } from "@/components/system/page-header";
+import { MetricCard } from "@/components/system/metric-card";
+import { cn } from "@/lib/utils";
 import {
   effectiveBillingState,
   formatBillingPrice,
@@ -117,17 +123,17 @@ interface ActivityRow {
 }
 
 const ACTIVITY_ICONS: Record<string, { Icon: LucideIcon; tone: string }> = {
-  signup: { Icon: UserPlus, tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  activated: { Icon: CreditCard, tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  plan_assigned: { Icon: ArrowRightLeft, tone: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-  plan_switched: { Icon: ArrowRightLeft, tone: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-  comped: { Icon: Gift, tone: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
-  payment_failed: { Icon: AlertTriangle, tone: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
-  payment_recovered: { Icon: CheckCircle2, tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  canceled: { Icon: XCircle, tone: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
-  reactivated: { Icon: RefreshCcw, tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  status_changed: { Icon: Info, tone: "bg-muted text-muted-foreground" },
-  created: { Icon: Plus, tone: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
+  signup: { Icon: UserPlus, tone: "bg-status-success-bg text-status-success-fg" },
+  activated: { Icon: CreditCard, tone: "bg-status-success-bg text-status-success-fg" },
+  plan_assigned: { Icon: ArrowRightLeft, tone: "bg-tag-violet-bg text-tag-violet-fg" },
+  plan_switched: { Icon: ArrowRightLeft, tone: "bg-tag-violet-bg text-tag-violet-fg" },
+  comped: { Icon: Gift, tone: "bg-tag-blue-bg text-tag-blue-fg" },
+  payment_failed: { Icon: AlertTriangle, tone: "bg-status-danger-bg text-status-danger-fg" },
+  payment_recovered: { Icon: CheckCircle2, tone: "bg-status-success-bg text-status-success-fg" },
+  canceled: { Icon: XCircle, tone: "bg-status-danger-bg text-status-danger-fg" },
+  reactivated: { Icon: RefreshCcw, tone: "bg-status-success-bg text-status-success-fg" },
+  status_changed: { Icon: Info, tone: "bg-status-neutral-bg text-status-neutral-fg" },
+  created: { Icon: Plus, tone: "bg-tag-violet-bg text-tag-violet-fg" },
 };
 
 interface QuickAction {
@@ -249,20 +255,34 @@ export function AgencyHomeDashboard({
 
   // ---- Revenue overview (current MRR by plan) --------------------------
   const revenueByPlan = useMemo(() => {
-    const buckets = new Map<string, number>();
+    const buckets = new Map<string, { cents: number; currency: string }>();
     for (const s of subs) {
       const state = effectiveBillingState(s.billing);
       if (state !== "active" && state !== "grace") continue;
       if (typeof s.billing?.priceCents !== "number") continue;
-      const key = s.billing?.planName || "Unnamed plan";
+      const currency = s.billing.currency || "usd";
+      const key = `${s.billing?.planName || "Unnamed plan"}${currency === "usd" ? "" : ` (${currency.toUpperCase()})`}`;
       const cents = monthlyEquivalentCents(
         s.billing.priceCents,
         s.billing.billingInterval,
       );
-      buckets.set(key, (buckets.get(key) ?? 0) + cents);
+      const prev = buckets.get(key);
+      buckets.set(key, { cents: (prev?.cents ?? 0) + cents, currency });
     }
-    return [...buckets.entries()].map(([x, cents]) => ({ x, y: cents / 100 }));
+    return [...buckets.entries()]
+      .sort((a, b) => b[1].cents - a[1].cents)
+      .map(([label, v]) => ({
+        label,
+        value: v.cents,
+        currency: v.currency,
+        tone: "bg-primary",
+      }));
   }, [subs]);
+
+  const revenueCurrency = useMemo(() => {
+    const set = new Set(revenueByPlan.map((r) => r.currency));
+    return set.size === 1 ? [...set][0] : null;
+  }, [revenueByPlan]);
 
   // ---- Customer growth (real, cumulative by month of createdAt) -------
   const customerGrowth = useMemo(() => {
@@ -342,237 +362,212 @@ export function AgencyHomeDashboard({
         label: row.key || "(direct)",
         value: row.visits,
         secondary: `${row.purchases} signup${row.purchases === 1 ? "" : "s"}`,
+        tone: "bg-tag-violet-fg",
       }));
   }, [acquisition]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Hey, {firstName}.
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Here&apos;s what&apos;s happening with {agencyName} as a SaaS
-            business.
-          </p>
-        </div>
-        <Link
-          href="/agency/sub-accounts/new"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Create sub-account
-        </Link>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Agency home"
+        title={`Hey, ${firstName}.`}
+        description={`Here's what's happening with ${agencyName} as a SaaS business.`}
+        actions={
+          <Button render={<Link href="/agency/sub-accounts/new" />}>
+            <Plus />
+            Create sub-account
+          </Button>
+        }
+      />
 
       {/* Top metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={<Users className="h-4 w-4" />}
-          iconBg="bg-violet-500/10"
-          tone="text-violet-600 dark:text-violet-400"
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          icon={Users}
+          tone="violet"
           label="Total customers"
           value={metrics.totalCustomers}
-          hint="Every sub-account under Magnetix, including your own workspace"
+          hint="Including your own workspace"
+          href="/agency/sub-accounts"
           loading={subsLoading}
         />
-        <StatCard
-          icon={<CreditCard className="h-4 w-4" />}
-          iconBg="bg-emerald-500/10"
-          tone="text-emerald-600 dark:text-emerald-400"
+        <MetricCard
+          icon={CreditCard}
+          tone="aqua"
           label="Monthly recurring revenue"
           value={metrics.mrrLabel}
           hint="Live from Client Billing"
+          href="/agency/billing"
           loading={subsLoading}
         />
-        <StatCard
-          icon={<UserPlus className="h-4 w-4" />}
-          iconBg="bg-sky-500/10"
-          tone="text-sky-600 dark:text-sky-400"
+        <MetricCard
+          icon={UserPlus}
+          tone="blue"
           label="New signups"
           value={metrics.newSignups}
-          hint="Sub-accounts created in the last 30 days"
+          hint="Created in the last 30 days"
           loading={subsLoading}
         />
-        <StatCard
-          icon={<TrendingDown className="h-4 w-4" />}
-          iconBg="bg-rose-500/10"
-          tone="text-rose-600 dark:text-rose-400"
+        <MetricCard
+          icon={TrendingDown}
+          tone="pink"
           label="Canceled subscriptions"
           value={metrics.canceled}
-          hint="Current count, not yet a trailing rate"
+          hint="Current count"
           loading={subsLoading}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <BarChart3 className="h-4 w-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold">Revenue overview</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Current MRR by plan
-                  </p>
-                </div>
-              </div>
-              {revenueByPlan.length === 0 ? (
-                <p className="py-8 text-center text-xs text-muted-foreground">
-                  No active paid plans yet.
-                </p>
-              ) : (
-                <BarChart data={revenueByPlan} tone="emerald" />
-              )}
-            </section>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <DashCard icon={BarChart3} tone="aqua" title="Revenue overview" description="Current MRR by plan">
+          {revenueByPlan.length === 0 ? (
+            <DashEmpty>No active paid plans yet.</DashEmpty>
+          ) : (
+            <FunnelChart
+              data={revenueByPlan.map((row) => ({
+                label: row.label,
+                value: row.value,
+                tone: row.tone,
+                // Mixed currencies: show each amount in its own currency.
+                secondary: revenueCurrency ? undefined : formatBillingPrice(row.value, row.currency),
+              }))}
+              formatValue={revenueCurrency ? (v) => formatBillingPrice(v, revenueCurrency) : () => ""}
+            />
+          )}
+        </DashCard>
 
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                  <LineChart className="h-4 w-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold">Customer growth</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Cumulative sub-accounts by month
-                  </p>
-                </div>
-              </div>
-              {customerGrowth.length === 0 ? (
-                <p className="py-8 text-center text-xs text-muted-foreground">
-                  Not enough history yet.
-                </p>
-              ) : (
-                <AreaChart data={customerGrowth} tone="violet" />
-              )}
-            </section>
-          </div>
+        <DashCard icon={LineChart} tone="violet" title="Customer growth" description="Cumulative sub-accounts by month">
+          {customerGrowth.length === 0 ? (
+            <DashEmpty>Not enough history yet.</DashEmpty>
+          ) : (
+            <AreaChart data={customerGrowth} tone="violet" />
+          )}
+        </DashCard>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400">
-                  <PieChart className="h-4 w-4" />
-                </span>
-                <h2 className="text-sm font-semibold">Plan breakdown</h2>
-              </div>
-              {planBreakdown.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  No sub-accounts yet.
-                </p>
-              ) : (
-                <DonutChart data={planBreakdown} size={140} />
-              )}
-            </section>
+        <DashCard icon={PieChart} tone="pink" title="Plan breakdown" description="Customers by plan" className="md:col-span-2 lg:col-span-1">
+          {planBreakdown.length === 0 ? (
+            <DashEmpty>No sub-accounts yet.</DashEmpty>
+          ) : (
+            <DonutChart data={planBreakdown} size={112} />
+          )}
+        </DashCard>
+      </div>
 
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                  <Radar className="h-4 w-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold">Top sources</h2>
-                  <p className="text-xs text-muted-foreground">
-                    <Link href="/agency/acquisition" className="underline">
-                      Full traffic & signups report
-                    </Link>
-                  </p>
-                </div>
-              </div>
-              {!acquisition ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  Loading…
-                </p>
-              ) : topSources.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  No tracked visits yet.
-                </p>
-              ) : (
-                <FunnelChart data={topSources} />
-              )}
-            </section>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <DashCard
+          icon={Radar}
+          tone="blue"
+          title="Top sources"
+          description={
+            <Link href="/agency/acquisition" className="font-medium text-link hover:underline">
+              Full traffic &amp; signups report
+            </Link>
+          }
+        >
+          {!acquisition ? (
+            <Skeleton className="h-20 w-full" />
+          ) : topSources.length === 0 ? (
+            <DashEmpty>No tracked visits yet.</DashEmpty>
+          ) : (
+            <FunnelChart data={topSources} />
+          )}
+        </DashCard>
 
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <Megaphone className="h-4 w-4" />
-                </span>
-                <h2 className="text-sm font-semibold">Quick actions</h2>
-              </div>
-              <ul className="space-y-1">
-                {QUICK_ACTIONS.map(({ href, label, Icon }) => (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted"
-                    >
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </div>
-        </div>
+        <DashCard icon={Activity} tone="violet" title="Recent activity" description="Sign-ups and billing changes">
+          {activity === null ? (
+            <Skeleton className="h-20 w-full" />
+          ) : activityRows.length === 0 ? (
+            <DashEmpty>Nothing yet.</DashEmpty>
+          ) : (
+            <ul className="space-y-3">
+              {activityRows.map((row) => (
+                <li key={row.id} className="flex items-start gap-2.5">
+                  <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-chip ${row.tone}`}>
+                    <row.Icon className="size-3.5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-body-sm font-medium text-foreground">{row.label}</p>
+                    <p className="truncate text-caption text-muted-foreground">{row.subtitle}</p>
+                  </div>
+                  <span className="shrink-0 text-micro text-muted-foreground">
+                    {formatRelativeTime(new Date(row.occurredAtMs))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DashCard>
 
-        <div className="space-y-4">
-          <section className="rounded-2xl border bg-card p-5">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">Recent activity</h2>
-            </div>
-            {activity === null ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                Loading…
-              </p>
-            ) : activityRows.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                Nothing yet.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {activityRows.map((row) => (
-                  <li key={row.id} className="flex items-start gap-2.5">
-                    <span
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${row.tone}`}
-                    >
-                      <row.Icon className="h-3.5 w-3.5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium">
-                        {row.label}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {row.subtitle}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {formatRelativeTime(new Date(row.occurredAtMs))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+        <div className="flex flex-col gap-4 md:col-span-2 lg:col-span-1">
+          <DashCard icon={Megaphone} tone="gold" title="Quick actions">
+            <ul className="-mx-2 flex flex-col">
+              {QUICK_ACTIONS.map(({ href, label, Icon }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-body-sm font-medium text-foreground transition-colors hover:bg-tint-violet"
+                  >
+                    <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </DashCard>
 
-          <section className="rounded-2xl border bg-card p-5">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <CalendarClock className="h-4 w-4" />
-              </span>
-              <h2 className="text-sm font-semibold">Upcoming events</h2>
-            </div>
-            <p className="py-4 text-center text-xs text-muted-foreground">
-              No upcoming events yet. Office hours, customer trainings, and
-              launch events will show up here once scheduled.
-            </p>
-          </section>
+          <DashCard icon={CalendarClock} tone="gold" title="Upcoming events">
+            <DashEmpty>
+              No upcoming events yet. Office hours, customer trainings, and launch events will show up here once
+              scheduled.
+            </DashEmpty>
+          </DashCard>
         </div>
       </div>
     </div>
   );
+}
+
+const CHIP: Record<"violet" | "aqua" | "pink" | "blue" | "gold", string> = {
+  violet: "bg-tag-violet-bg text-tag-violet-fg",
+  aqua: "bg-tag-aqua-bg text-tag-aqua-fg",
+  pink: "bg-tag-pink-bg text-tag-pink-fg",
+  blue: "bg-tag-blue-bg text-tag-blue-fg",
+  gold: "bg-tag-gold-bg text-tag-gold-fg",
+};
+
+/** One white dashboard card: tinted icon chip, title, helper, content. */
+function DashCard({
+  icon: Icon,
+  tone,
+  title,
+  description,
+  className,
+  children,
+}: {
+  icon: LucideIcon;
+  tone: keyof typeof CHIP;
+  title: string;
+  description?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={cn("flex min-w-0 flex-col gap-4 rounded-card border border-border bg-card p-5 shadow-card", className)}>
+      <div className="flex items-center gap-2.5">
+        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-chip", CHIP[tone])}>
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-section font-semibold text-foreground">{title}</h2>
+          {description ? <p className="text-caption text-muted-foreground">{description}</p> : null}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function DashEmpty({ children }: { children: React.ReactNode }) {
+  return <p className="py-4 text-center text-caption text-muted-foreground">{children}</p>;
 }

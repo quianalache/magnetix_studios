@@ -25,9 +25,9 @@ interface KbChange {
 }
 
 const OP_STYLES: Record<KbChange["op"], string> = {
-  add: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  update: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  delete: "bg-red-500/10 text-red-600 dark:text-red-400",
+  add: "bg-status-success-bg text-status-success-fg",
+  update: "bg-status-warning-bg text-status-warning-fg",
+  delete: "bg-status-danger-bg text-status-danger-fg",
 };
 
 export function AgencyAiKbSection() {
@@ -169,7 +169,7 @@ export function AgencyAiKbSection() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
-                      "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                      "rounded px-1.5 py-0.5 text-overline font-semibold uppercase",
                       OP_STYLES[c.op],
                     )}
                   >

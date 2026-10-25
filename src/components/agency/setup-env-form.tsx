@@ -64,7 +64,7 @@ function Toggle({
       onClick={() => onChange(!checked)}
       className={
         "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-40 " +
-        (checked ? "bg-emerald-500" : "bg-muted-foreground/30")
+        (checked ? "bg-status-success-dot" : "bg-muted-foreground/30")
       }
     >
       <span
@@ -80,27 +80,27 @@ function Toggle({
 function StatePill({ k }: { k: StatusKey }) {
   if (k.state === "active" && k.valid === false) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-status-warning-bg px-2 py-0.5 text-micro font-medium text-status-warning-fg">
         <AlertTriangle className="h-3 w-3" /> Active · check value
       </span>
     );
   }
   if (k.state === "active") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-status-success-bg px-2 py-0.5 text-micro font-medium text-status-success-fg">
         <CheckCircle2 className="h-3 w-3" /> Active
       </span>
     );
   }
   if (k.state === "pending") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-status-info-bg px-2 py-0.5 text-micro font-medium text-status-info-fg">
         <Clock className="h-3 w-3" /> Saved · redeploy
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-micro font-medium text-muted-foreground">
       <Circle className="h-3 w-3" /> Not set
     </span>
   );
@@ -127,12 +127,12 @@ function SummaryPill({
   // Core wants attention when incomplete (the app may not boot); optional is a
   // fine steady state partly-filled, so its incomplete dot stays neutral-blue.
   const dot = complete
-    ? "bg-emerald-500"
+    ? "bg-status-success-dot"
     : active === 0
       ? "bg-muted-foreground/40"
       : kind === "core"
-        ? "bg-amber-500"
-        : "bg-sky-500";
+        ? "bg-status-warning-dot"
+        : "bg-status-info-dot";
   return (
     <div className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1">
       <span className={"h-2 w-2 rounded-full " + dot} />
@@ -141,7 +141,7 @@ function SummaryPill({
         {active}/{total}
       </span>
       {pending > 0 && (
-        <span className="text-[10px] text-sky-600 dark:text-sky-400">
+        <span className="text-overline text-status-info-fg">
           +{pending} pending
         </span>
       )}
@@ -418,7 +418,7 @@ export function SetupEnvForm() {
               type="button"
               onClick={() => openGuide(k.name)}
               title="Where do I get this key? (AI)"
-              className="shrink-0 text-muted-foreground/50 transition-colors hover:text-violet-500"
+              className="shrink-0 text-muted-foreground/50 transition-colors hover:text-primary"
             >
               <Sparkles className="h-3.5 w-3.5" />
               <span className="sr-only">Where do I get {k.name}?</span>
@@ -426,10 +426,10 @@ export function SetupEnvForm() {
           )}
           {revealValue !== undefined && (
             <div className="invisible absolute left-0 top-full z-20 mt-1 w-max max-w-sm rounded-md border bg-background p-2 opacity-0 shadow-md ring-1 ring-foreground/10 transition-opacity group-hover/reveal:visible group-hover/reveal:opacity-100">
-              <p className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+              <p className="mb-1 text-overline font-medium tracking-wide text-muted-foreground uppercase">
                 Current value
               </p>
-              <p className="max-h-40 max-w-[22rem] overflow-auto font-mono text-[11px] leading-relaxed break-all">
+              <p className="max-h-40 max-w-[22rem] overflow-auto font-mono text-micro leading-relaxed break-all">
                 {revealValue}
               </p>
             </div>
@@ -448,7 +448,7 @@ export function SetupEnvForm() {
             "w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs sm:w-64 " +
             (k.state === "active"
               ? ""
-              : "placeholder:text-amber-600 dark:placeholder:text-amber-400")
+              : "placeholder:text-status-warning-fg")
           }
         />
       </div>
@@ -570,7 +570,7 @@ export function SetupEnvForm() {
         </div>
 
         {!config.vercelWired && (
-          <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <div className="rounded-lg bg-status-warning-bg px-3 py-2 text-xs text-status-warning-fg">
             <p className="font-medium">Vercel credentials not detected.</p>
             <p className="mt-0.5">
               Add <code>VERCEL_TOKEN</code>, <code>VERCEL_PROJECT_ID</code>, and{" "}
@@ -656,7 +656,7 @@ export function SetupEnvForm() {
             )}
 
             {!storedKnown && (
-              <p className="rounded-lg bg-muted px-3 py-2 text-[11px] text-muted-foreground">
+              <p className="rounded-lg bg-muted px-3 py-2 text-micro text-muted-foreground">
                 Couldn&rsquo;t read the Vercel env list — &ldquo;Saved · redeploy&rdquo;
                 states below are approximate (based on the running build only).
               </p>
@@ -669,24 +669,24 @@ export function SetupEnvForm() {
             ) : (
               <div className="space-y-5">
                 {openRouterKey && (
-                  <div className="space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4">
+                  <div className="space-y-2 rounded-card border border-primary/20 bg-tint-violet p-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
-                      <p className="text-xs font-semibold tracking-wide text-violet-600 uppercase dark:text-violet-300">
+                      <Sparkles className="h-4 w-4 shrink-0 text-tag-violet-fg" />
+                      <p className="text-xs font-semibold tracking-wide text-tag-violet-fg uppercase">
                         AI setup assistant
                       </p>
                       <span
                         className={
-                          "rounded-full px-2 py-0.5 text-[10px] font-medium " +
+                          "rounded-full px-2 py-0.5 text-overline font-medium " +
                           (aiEnabled
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            ? "bg-status-success-bg text-status-success-fg"
                             : "bg-muted text-muted-foreground")
                         }
                       >
                         {aiEnabled ? "Enabled" : "Locked"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       {aiEnabled
                         ? "Your OpenRouter key is live — AI Agents can reply, and the ✨ next to any key gives a quick “where do I get this?” guide."
                         : "Add your OpenRouter API key to power AI Agents — and unlock ✨ “where do I get this?” guides on every key below."}
@@ -729,7 +729,7 @@ export function SetupEnvForm() {
                                 type="button"
                                 onClick={() => openGuide(k.name)}
                                 title="Where do I get this key? (AI)"
-                                className="shrink-0 text-muted-foreground/50 transition-colors hover:text-violet-500"
+                                className="shrink-0 text-muted-foreground/50 transition-colors hover:text-primary"
                               >
                                 <Sparkles className="h-3.5 w-3.5" />
                                 <span className="sr-only">
@@ -741,7 +741,7 @@ export function SetupEnvForm() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       Set these in Vercel to enable the write path — the form
                       can&rsquo;t set its own credentials, and their values are
                       never shown here.
@@ -772,7 +772,7 @@ export function SetupEnvForm() {
                   className={
                     "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 " +
                     (pendingRedeploy
-                      ? "border-sky-500 text-sky-600 dark:text-sky-400"
+                      ? "border-status-info-fg text-status-info-fg"
                       : "")
                   }
                 >
@@ -800,7 +800,7 @@ export function SetupEnvForm() {
               )}
 
               {pendingRedeploy && (
-                <span className="text-xs text-sky-600 dark:text-sky-400">
+                <span className="text-xs text-status-info-fg">
                   Saved to Vercel — redeploy to activate.
                 </span>
               )}
@@ -828,7 +828,7 @@ export function SetupEnvForm() {
               <Loader2 className="h-4 w-4 animate-spin" /> Reading local env…
             </div>
           ) : exportError ? (
-            <div className="rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-amber-700 dark:text-amber-400">
+            <div className="rounded-lg bg-status-warning-bg px-3 py-3 text-xs text-status-warning-fg">
               {exportError}
             </div>
           ) : (
@@ -846,9 +846,9 @@ export function SetupEnvForm() {
             >
               <span
                 className={
-                  "absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 " +
+                  "absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-overline font-medium ring-1 " +
                   (exportCopied
-                    ? "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400"
+                    ? "bg-status-success-bg text-status-success-fg ring-status-success-fg/20"
                     : "bg-background text-muted-foreground ring-border")
                 }
               >
@@ -868,7 +868,7 @@ export function SetupEnvForm() {
             </div>
           )}
 
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-micro text-muted-foreground">
             These are your real local values, shown unmasked so you can copy them —
             they&rsquo;re read from <code>.env.local</code> on your machine and are
             only ever exposed in local dev, never on a deployed instance. After
@@ -887,7 +887,7 @@ export function SetupEnvForm() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-violet-500" />
+              <Sparkles className="h-4 w-4 text-tag-violet-fg" />
               Where to get {guideKey ?? ""}
             </DialogTitle>
             <DialogDescription>
@@ -901,7 +901,7 @@ export function SetupEnvForm() {
               <Loader2 className="h-4 w-4 animate-spin" /> Writing a quick guide…
             </div>
           ) : guideError ? (
-            <div className="rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-amber-700 dark:text-amber-400">
+            <div className="rounded-lg bg-status-warning-bg px-3 py-3 text-xs text-status-warning-fg">
               {guideError}
             </div>
           ) : (
