@@ -4,9 +4,10 @@ import { Render } from "@puckeditor/core";
 import { Sparkles } from "lucide-react";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
-import { collectPuckEmbedIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
+import { resolveFeaturedOffers } from "@/lib/server/featured-offer-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { getStaffForSubAccount } from "@/lib/auth/current-staff";
 import { passGrants, resultPagePassCookieName, verifyReadingResultPass } from "@/lib/server/reading-result-pass";
@@ -91,6 +92,7 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
   const embedIds = collectPuckEmbedIds(data);
   const resolvedEmbeds = embedIds.length > 0 ? await resolveReadingToolPayloads(subAccountId, embedIds) : {};
   const resolvedActions = await resolvePageActionTargets(subAccountId, data);
+  const resolvedOffers = await resolveFeaturedOffers(subAccountId, collectPuckOfferSummaryIds(data));
 
   return (
     <>
@@ -106,7 +108,7 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
       <Render
         config={serverPuckConfig}
         data={data}
-        metadata={{ subAccountId, resolvedForms, resolvedEmbeds, resolvedActions, pageId: page.id, readingContext }}
+        metadata={{ subAccountId, resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, pageId: page.id, readingContext }}
       />
     </>
   );

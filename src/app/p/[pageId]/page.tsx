@@ -4,12 +4,13 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
 import type { LeadForm } from "@/types/forms";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
-import { collectPuckEmbedIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
 import { publicTitle } from "@/lib/server/public-identity";
 import { ReadingResultPageView } from "@/components/pages-funnels/reading-result-page-view";
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
+import { resolveFeaturedOffers } from "@/lib/server/featured-offer-service";
 
 export const dynamic = "force-dynamic";
 
@@ -89,11 +90,12 @@ export default async function PublicPagePreview({
   // Button/Image "Go to Page" / "Go to Offer" / scroll targets — this page's
   // own sub-account only.
   const resolvedActions = await resolvePageActionTargets(page.subAccountId ?? "", page.puckPublishedData);
+  const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(page.puckPublishedData)) : {};
   return (
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedActions, pageId: page.id }}
+      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, pageId: page.id }}
     />
   );
 }

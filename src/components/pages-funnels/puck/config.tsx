@@ -54,6 +54,10 @@ import {
   DEFAULT_IMAGE_SIZE,
   DEFAULT_VIDEO_SIZE,
 } from "@/lib/pages-funnels/puck/media-size";
+import { IconRender, TabsRender, GalleryRender, SliderRender, ProofRender, LogoStripRender, StatsRender, CountdownRender, OfferSummaryRender } from "@/components/pages-funnels/puck/parity-blocks";
+import type { GalleryImage, ProofItem, LogoItem, StatItem } from "@/components/pages-funnels/puck/parity-blocks";
+import { GalleryImagesField, LogoItemsField } from "@/components/pages-funnels/puck/parity-fields";
+import { FeaturedOfferPickerField } from "@/components/pages-funnels/puck/reading-block-fields";
 
 /**
  * Production Puck component registry (master spec §6/§7) — the CLIENT and
@@ -420,6 +424,7 @@ const FORM_CONTAINER_STYLE: StyleCompatibility = {
   responsive: true,
   visibility: true,
 };
+const GENERAL_ELEMENT_STYLE: StyleCompatibility = { typography: true, spacing: true, border: true, radius: true, boxShadow: true, responsive: true, visibility: true };
 
 /**
  * Builds one `CustomField<StyleConfig>` — defined and CALLED entirely
@@ -457,6 +462,11 @@ const mediaStyleField = makeStyleField(MEDIA_ELEMENT_STYLE);
 const dividerStyleField = makeStyleField(DIVIDER_STYLE);
 const accordionStyleField = makeStyleField(ACCORDION_STYLE);
 const formStyleField = makeStyleField(FORM_CONTAINER_STYLE);
+const generalElementStyleField = makeStyleField(GENERAL_ELEMENT_STYLE);
+
+const offerSummaryField: CustomField<string> = { type: "custom", label: "Offer", render: ({ value, onChange }) => <FeaturedOfferPickerField value={value} onChange={onChange} /> };
+const galleryImagesField: CustomField<GalleryImage[]> = { type: "custom", label: "Images", render: ({ value, onChange }) => <GalleryImagesField value={value} onChange={onChange} /> };
+const logoItemsField: CustomField<LogoItem[]> = { type: "custom", label: "Logos", render: ({ value, onChange }) => <LogoItemsField value={value} onChange={onChange} /> };
 
 /** The fields every Section/Hero shares besides `background` — factored out
  *  once so Section and Hero's field sets can never drift from each other
@@ -534,12 +544,18 @@ export function createPuckConfig(
           "Divider",
           "Spacer",
           "Accordion",
+          "Icon",
+          "Tabs",
+          "ImageGallery",
+          "ImageSlider",
+          "LogoStrip",
+          "Stats",
         ],
       },
       // Category order matches master spec §6's approved customer-facing
       // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
-      business: { title: "Business", components: ["Form", "ReadingTool"] },
+      business: { title: "Business", components: ["Form", "ReadingTool", "Testimonial", "Countdown", "OfferSummary"] },
       // Advanced (2026-10-26): code/embed capabilities, after the general
       // categories. Offered on Reading Result Pages too, after their own
       // Reading / Next Steps categories (blocks-panel.tsx).
@@ -805,6 +821,15 @@ export function createPuckConfig(
               "Form",
               "ReadingTool",
               "CustomHtml",
+              "Icon",
+              "Tabs",
+              "ImageGallery",
+              "ImageSlider",
+              "Testimonial",
+              "LogoStrip",
+              "Stats",
+              "Countdown",
+              "OfferSummary",
               ...ALL_READING_COMPONENT_NAMES,
             ],
           },
@@ -1134,6 +1159,61 @@ export function createPuckConfig(
             style={style}
           />
         ),
+      },
+
+      Icon: {
+        label: "Icon",
+        fields: { name: { type: "select", label: "Icon", options: ["ArrowRight", "Check", "Circle", "Heart", "Shield", "Sparkles", "Star", "Zap"].map((value) => ({ label: value, value })) }, size: { type: "number", label: "Size (px)", min: 12, max: 160 }, alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS }, color: { type: "text", label: "Color (optional)" }, background: { type: "text", label: "Background (optional)" }, style: generalElementStyleField },
+        defaultProps: { name: "Star", size: 32, alignment: "center", color: "", background: "", style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <IconRender id={p.id} name={p.name} size={p.size} alignment={p.alignment} color={p.color} background={p.background} style={p.style} />,
+      },
+      Tabs: {
+        label: "Tabs",
+        fields: { items: { type: "array", label: "Tabs", arrayFields: { label: { type: "text", label: "Label" }, content: { type: "textarea", label: "Content" } }, defaultItemProps: { label: "Tab", content: "Add content here." }, getItemSummary: (item) => item.label || "Tab" }, activeIndex: { type: "number", label: "First active tab", min: 0 }, alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS }, style: generalElementStyleField },
+        defaultProps: { items: [{ label: "Overview", content: "Add content here." }, { label: "Details", content: "Add more details here." }], activeIndex: 0, alignment: "left", style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <TabsRender {...p} id={p.id} items={p.items} activeIndex={p.activeIndex} alignment={p.alignment} style={p.style} />,
+      },
+      ImageGallery: {
+        label: "Image Gallery",
+        fields: { images: galleryImagesField, columns: { type: "select", label: "Columns", options: [{ label: "2", value: 2 }, { label: "3", value: 3 }, { label: "4", value: 4 }] }, gap: { type: "number", label: "Gap (px)", min: 0, max: 64 }, fit: { type: "select", label: "Image fit", options: [{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }] }, aspect: { type: "select", label: "Aspect", options: [{ label: "Square", value: "square" }, { label: "Landscape", value: "landscape" }, { label: "Natural", value: "natural" }] }, alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS }, style: generalElementStyleField },
+        defaultProps: { images: [], columns: 3, gap: 16, fit: "cover", aspect: "landscape", alignment: "left", style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <GalleryRender {...p} id={p.id} images={p.images} columns={p.columns} gap={p.gap} fit={p.fit} aspect={p.aspect} alignment={p.alignment} style={p.style} />,
+      },
+      ImageSlider: {
+        label: "Image Slider",
+        fields: { images: galleryImagesField, autoplay: { type: "radio", label: "Autoplay", options: [{ label: "Off", value: false }, { label: "On", value: true }] }, interval: { type: "number", label: "Interval (ms)", min: 2000, max: 60000 }, showControls: { type: "radio", label: "Previous/next controls", options: [{ label: "Show", value: true }, { label: "Hide", value: false }] }, showDots: { type: "radio", label: "Pagination", options: [{ label: "Show", value: true }, { label: "Hide", value: false }] }, style: generalElementStyleField },
+        defaultProps: { images: [], autoplay: false, interval: 5000, showControls: true, showDots: true, style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <SliderRender {...p} id={p.id} images={p.images} autoplay={p.autoplay} interval={p.interval} showControls={p.showControls} showDots={p.showDots} style={p.style} />,
+      },
+      Testimonial: {
+        label: "Testimonial / Proof",
+        fields: { items: { type: "array", label: "Testimonials", arrayFields: { quote: { type: "textarea", label: "Quote" }, name: { type: "text", label: "Name" }, role: { type: "text", label: "Role / company" }, imageUrl: { type: "text", label: "Avatar URL (optional)" }, sourceLabel: { type: "text", label: "Source label (optional)" } }, defaultItemProps: { quote: "Add a real customer quote.", name: "Customer name", role: "Role or company", imageUrl: "", sourceLabel: "" }, getItemSummary: (item) => item.name || "Testimonial" }, alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS }, style: generalElementStyleField },
+        defaultProps: { items: [], alignment: "left", style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <ProofRender {...p} id={p.id} items={p.items as ProofItem[]} alignment={p.alignment} style={p.style} />,
+      },
+      LogoStrip: {
+        label: "Logo Strip",
+        fields: { logos: logoItemsField, grayscale: { type: "radio", label: "Display", options: [{ label: "Color", value: false }, { label: "Grayscale", value: true }] }, gap: { type: "number", label: "Gap (px)", min: 8, max: 96 }, style: generalElementStyleField },
+        defaultProps: { logos: [], grayscale: true, gap: 32, style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <LogoStripRender {...p} id={p.id} logos={p.logos} grayscale={p.grayscale} gap={p.gap} style={p.style} />,
+      },
+      Stats: {
+        label: "Stats / Numbers",
+        fields: { items: { type: "array", label: "Stats", arrayFields: { value: { type: "text", label: "Value" }, label: { type: "text", label: "Label" }, supportingText: { type: "text", label: "Supporting text (optional)" } }, defaultItemProps: { value: "", label: "Metric", supportingText: "" }, getItemSummary: (item) => item.label || "Stat" }, columns: { type: "select", label: "Columns", options: [{ label: "2", value: 2 }, { label: "3", value: 3 }, { label: "4", value: 4 }] }, alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS }, style: generalElementStyleField },
+        defaultProps: { items: [], columns: 3, alignment: "left", style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <StatsRender {...p} id={p.id} items={p.items as StatItem[]} columns={p.columns} alignment={p.alignment} style={p.style} />,
+      },
+      Countdown: {
+        label: "Countdown Timer",
+        fields: { targetAt: { type: "text", label: "Target date/time (ISO or offset)" }, timezone: { type: "text", label: "IANA timezone" }, showDays: { type: "radio", label: "Days", options: [{ label: "Show", value: true }, { label: "Hide", value: false }] }, showHours: { type: "radio", label: "Hours", options: [{ label: "Show", value: true }, { label: "Hide", value: false }] }, showMinutes: { type: "radio", label: "Minutes", options: [{ label: "Show", value: true }, { label: "Hide", value: false }] }, showSeconds: { type: "radio", label: "Seconds", options: [{ label: "Show", value: true }, { label: "Hide", value: false }] }, expiredBehavior: { type: "select", label: "When expired", options: [{ label: "Show zero", value: "zero" }, { label: "Hide timer", value: "hide" }, { label: "Show message", value: "message" }] }, expiredMessage: { type: "text", label: "Expired message" }, style: generalElementStyleField },
+        defaultProps: { targetAt: "", timezone: "UTC", showDays: true, showHours: true, showMinutes: true, showSeconds: true, expiredBehavior: "message", expiredMessage: "This timer has ended.", style: DEFAULT_STYLE_CONFIG },
+        render: (p) => <CountdownRender {...p} id={p.id} targetAt={p.targetAt} timezone={p.timezone} showDays={p.showDays} showHours={p.showHours} showMinutes={p.showMinutes} showSeconds={p.showSeconds} expiredBehavior={p.expiredBehavior} expiredMessage={p.expiredMessage} style={p.style} />,
+      },
+      OfferSummary: {
+        label: "Pricing / Offer Summary",
+        fields: { offerId: offerSummaryField, ctaLabel: { type: "text", label: "CTA label" }, alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS }, style: generalElementStyleField },
+        defaultProps: { offerId: "", ctaLabel: "GO TO OFFER", alignment: "left", style: DEFAULT_STYLE_CONFIG },
+        render: ({ id, offerId, ctaLabel, alignment, style, puck }) => <OfferSummaryRender id={id} offerId={offerId} ctaLabel={ctaLabel} alignment={alignment} style={style} offer={(puck.metadata as PuckPageMetadata | undefined)?.resolvedOffers?.[offerId] ?? (puck.metadata as PuckPageMetadata | undefined)?.readingContext?.offers?.[offerId] ?? null} />,
       },
 
       Form: {

@@ -1,5 +1,6 @@
 import type { ReadingToolPayload } from "@/types/embed-config";
 import type { ReadingBlockContext } from "@/types/reading-blocks";
+import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
 import type { BlockAlignment } from "@/types/pages-funnels";
 import type { ColumnWidth } from "@/types/pages-funnels-v2";
@@ -127,6 +128,8 @@ export interface PuckPageMetadata {
   /** Public Reading Tool blocks, pre-resolved by the published route
    *  (undefined in the editor/preview, which fetch on demand). */
   resolvedEmbeds?: Record<string, ReadingToolPayload | null>;
+  /** Offer Summary bindings resolved from this page's active sub-account. */
+  resolvedOffers?: Record<string, FeaturedOfferPayload | null>;
   /**
    * Reading Result Page (2026-10-21): the Reading every Reading block shows.
    * Undefined on ordinary pages; null on a Reading Result Page with no

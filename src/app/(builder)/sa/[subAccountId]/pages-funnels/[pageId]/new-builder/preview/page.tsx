@@ -8,7 +8,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/system/empty-state";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
-import { collectPuckFeaturedOfferIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
+import { collectPuckFeaturedOfferIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
 import { collectActionTargets } from "@/lib/pages-funnels/puck/action";
 import type { ResolvedActionTargets } from "@/types/pages-funnels-puck";
@@ -16,6 +16,7 @@ import { getPage } from "@/lib/firestore/pages-funnels";
 import { readReadingPreviewHandoff } from "@/lib/energetic-decoder/reading-preview-handoff";
 import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext } from "@/types/reading-blocks";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
+import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
 
 /**
@@ -164,6 +165,13 @@ export default function NewBuilderPreviewPage({
         }
       }
 
+      const offerSummaryIds = collectPuckOfferSummaryIds(data);
+      const resolvedOffers: NonNullable<PuckPageMetadata["resolvedOffers"]> = {};
+      await Promise.all(offerSummaryIds.map(async (id) => {
+        const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/featured-offers?offerId=${encodeURIComponent(id)}`).catch(() => null);
+        resolvedOffers[id] = res?.ok ? (((await res.json()) as { offer?: FeaturedOfferPayload | null }).offer ?? null) : null;
+      }));
+
       if (cancelled) return;
       setState({
         status: "ready",
@@ -171,6 +179,7 @@ export default function NewBuilderPreviewPage({
         metadata: {
           subAccountId,
           resolvedForms,
+          resolvedOffers,
           resolvedActions,
           pageId,
           ...(readingContext !== undefined

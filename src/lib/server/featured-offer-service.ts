@@ -62,9 +62,12 @@ export async function resolveFeaturedOffer(subAccountId: string, offerId: string
   };
 }
 
-export async function resolveFeaturedOffers(subAccountId: string, offerIds: string[]): Promise<Record<string, FeaturedOfferPayload | null>> {
+export async function resolveFeaturedOffers(subAccountId: string, offerIds: string[], opts: { includeDraftOffer?: boolean } = {}): Promise<Record<string, FeaturedOfferPayload | null>> {
   const unique = [...new Set(offerIds.filter(Boolean))];
-  const entries = await Promise.all(unique.map(async (id) => [id, await resolveFeaturedOffer(subAccountId, id)] as const));
+  const entries = await Promise.all(unique.map(async (id) => {
+    const offer = await resolveFeaturedOffer(subAccountId, id);
+    return [id, offer && (offer.published || opts.includeDraftOffer) ? offer : null] as const;
+  }));
   return Object.fromEntries(entries);
 }
 

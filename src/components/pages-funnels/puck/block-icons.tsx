@@ -34,6 +34,13 @@ import {
   Download,
   BookOpen,
   CodeXml,
+  Smile,
+  PanelsTopLeft,
+  Images,
+  ImagePlay,
+  BadgeCheck,
+  BarChart3,
+  Timer,
 } from "lucide-react";
 
 /**
@@ -84,4 +91,13 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   MyMagnetixButton: LogIn,
   PdfButton: Download,
   ReadingReportButton: BookOpen,
+  Icon: Smile,
+  Tabs: PanelsTopLeft,
+  ImageGallery: Images,
+  ImageSlider: ImagePlay,
+  Testimonial: BadgeCheck,
+  LogoStrip: Images,
+  Stats: BarChart3,
+  Countdown: Timer,
+  OfferSummary: BadgeDollarSign,
 };

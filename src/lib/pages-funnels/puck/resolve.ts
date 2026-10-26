@@ -70,6 +70,20 @@ export function collectPuckFeaturedOfferIds(data: Data | null | undefined): stri
   return [...ids];
 }
 
+/** Offer Summary ids are resolved through the same authoritative Offer service
+ * as Reading Result Featured Offers. The page stores only this reference. */
+export function collectPuckOfferSummaryIds(data: Data | null | undefined): string[] {
+  if (!data) return [];
+  const ids = new Set<string>();
+  const walk = (node: ComponentData) => {
+    const props = node.props as Record<string, unknown>;
+    if (node.type === "OfferSummary" && typeof props.offerId === "string" && props.offerId) ids.add(props.offerId);
+    for (const value of Object.values(props)) if (isComponentDataArray(value)) for (const child of value) walk(child);
+  };
+  for (const node of data.content) walk(node);
+  return [...ids];
+}
+
 /**
  * Every unique Embed id placed by a Public Reading Tool block — the
  * published route resolves these (Admin SDK) into
