@@ -138,7 +138,8 @@ check("Advanced category holds Custom HTML (only)", /advanced: \{ title: "Advanc
 const categories = /categories: \{([\s\S]*?)\n    \},\n    components:/.exec(config)?.[1] ?? "";
 check("Custom HTML is not in Layout / Elements / Business", categories.length > 0 && !/(layout|elements|business): \{[^}]*CustomHtml/.test(categories));
 check("Blocks panel: Advanced comes after the general categories", /BASE_CATEGORY_ORDER = \[\.\.\.GENERAL_CATEGORY_ORDER, "advanced"\]/.test(panel));
-check("Reading Result pages don't offer Advanced", /READING_RESULT_CATEGORY_ORDER = \["reading", "nextSteps", \.\.\.GENERAL_CATEGORY_ORDER\]/.test(panel));
+check("Reading Result pages: Reading + Next Steps first, then the general categories + Advanced", /READING_RESULT_CATEGORY_ORDER = \["reading", "nextSteps", \.\.\.BASE_CATEGORY_ORDER\]/.test(panel));
+check("Column slots accept Custom HTML alongside the Reading blocks", /"CustomHtml",\s*\.\.\.ALL_READING_COMPONENT_NAMES/.test(config));
 check("stored as ONE versioned `content` payload + shared style", /CustomHtml: \{[\s\S]*?fields: \{\s*content: customHtmlContentField,\s*style: mediaStyleField,\s*\}/.test(config));
 const aiPlan = src("src/lib/pages-funnels/ai/page-plan.ts");
 const safeSet = /SAFE_PUCK_COMPONENTS = new Set\(\[([^\]]*)\]\)/.exec(aiPlan)?.[1] ?? "";
@@ -149,6 +150,7 @@ check("published pages use the server variant (sanitized before it reaches visit
   /CustomHtmlElementServerRender/.test(src("src/components/pages-funnels/puck/server-config.tsx")) && !/"use client"/.test(src("src/components/pages-funnels/puck/custom-html-server.tsx")));
 const frame = src("src/components/pages-funnels/puck/custom-html-frame.tsx");
 check("height messages accepted only from this block's own frame", /event\.source !== ref\.current\.contentWindow/.test(frame));
+check("frame answers a 'measure now' request only from its parent (hydration race)", /e\.source===parent&&e\.data&&e\.data\.type==="mx-custom-html-measure"/.test(MEASURE_SCRIPT) && /requestMeasure\(\);/.test(frame));
 check("editor label only while editing", /\{editing && \(/.test(frame) && /Custom HTML/.test(frame));
 check("never injects customer HTML into the page DOM", !/dangerouslySetInnerHTML=\{\{ __html: (?!responsiveCss)/.test(frame));
 

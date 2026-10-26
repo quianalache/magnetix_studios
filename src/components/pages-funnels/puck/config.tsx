@@ -562,7 +562,8 @@ export function createPuckConfig(
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
       business: { title: "Business", components: ["Form", "ReadingTool"] },
       // Advanced (2026-10-26): code/embed capabilities, after the general
-      // categories. Not offered on Reading Result Pages (blocks-panel.tsx).
+      // categories. Offered on Reading Result Pages too, after their own
+      // Reading / Next Steps categories (blocks-panel.tsx).
       advanced: { title: "Advanced", components: ["CustomHtml"] },
       // Reading Result Pages only (2026-10-21) — the Blocks panel shows
       // these two categories just on that page type.

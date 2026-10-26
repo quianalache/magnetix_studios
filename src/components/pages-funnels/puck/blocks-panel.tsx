@@ -41,9 +41,10 @@ const GENERAL_CATEGORY_ORDER = [
 /** Ordinary pages: the general categories, then Advanced (Custom HTML, 2026-10-26). */
 const BASE_CATEGORY_ORDER = [...GENERAL_CATEGORY_ORDER, "advanced"] as const;
 
-/** Reading Result Pages (2026-10-21) lead with the Reading blocks, then the usual blocks to mix in.
- *  Advanced is deliberately not offered there yet — Reading Result boundaries stay as they are. */
-const READING_RESULT_CATEGORY_ORDER = ["reading", "nextSteps", ...GENERAL_CATEGORY_ORDER] as const;
+/** Reading Result Pages (2026-10-21) lead with the Reading blocks, then the usual blocks to mix in —
+ *  including Advanced → Custom HTML (owner decision 2026-10-26: a generic design block, e.g. a
+ *  custom upsell section; it never replaces the Reading / Next Steps blocks). */
+const READING_RESULT_CATEGORY_ORDER = ["reading", "nextSteps", ...BASE_CATEGORY_ORDER] as const;
 
 export function MagnetixBlocksPanel({ config, readingResult = false }: { config: Config; readingResult?: boolean }) {
   const [search, setSearch] = useState("");

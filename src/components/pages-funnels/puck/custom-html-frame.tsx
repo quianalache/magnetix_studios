@@ -8,6 +8,7 @@ import {
   CUSTOM_HTML_INITIAL_AUTO_HEIGHT,
   CUSTOM_HTML_LIMITS,
   HEIGHT_MESSAGE_TYPE,
+  MEASURE_REQUEST_TYPE,
   customHtmlSandbox,
 } from "@/lib/pages-funnels/custom-html/policy";
 
@@ -81,8 +82,14 @@ function CustomHtmlFrame({
     // the builder that's Puck's canvas iframe, not this app's window.
     const host = ref.current?.ownerDocument?.defaultView ?? window;
     host.addEventListener("message", onMessage);
+    // The frame may have loaded (and reported) before this listener existed.
+    requestMeasure();
     return () => host.removeEventListener("message", onMessage);
   }, [auto]);
+
+  function requestMeasure() {
+    ref.current?.contentWindow?.postMessage({ type: MEASURE_REQUEST_TYPE }, "*");
+  }
 
   const height = auto ? (measured ?? CUSTOM_HTML_INITIAL_AUTO_HEIGHT) : display.fixedHeight;
   return (
@@ -93,6 +100,7 @@ function CustomHtmlFrame({
         srcDoc={srcDoc}
         sandbox={customHtmlSandbox(editing ? "editing" : "visitor")}
         referrerPolicy="no-referrer"
+        onLoad={auto ? requestMeasure : undefined}
         // Eager, not lazy: a lazy frame below the fold would load (and grow
         // from its placeholder height) while the visitor scrolls past it.
         loading="eager"

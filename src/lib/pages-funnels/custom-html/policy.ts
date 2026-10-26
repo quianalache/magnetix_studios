@@ -42,6 +42,8 @@ export const CUSTOM_HTML_INITIAL_AUTO_HEIGHT = 160;
 export const CUSTOM_HTML_AUTO_VIEWPORT_PX = 800;
 
 export const HEIGHT_MESSAGE_TYPE = "mx-custom-html-height";
+/** Parent → frame: "report your height now" (the frame may have loaded before the page hydrated). */
+export const MEASURE_REQUEST_TYPE = "mx-custom-html-measure";
 
 export function emptyCustomHtmlArtifact(): CustomHtmlArtifact {
   return {
@@ -123,13 +125,15 @@ export function findCustomHtmlLimitProblem(data: unknown): string | null {
 
 /**
  * The ONLY script allowed in a Custom HTML frame: reports the content's
- * height to the parent so "Auto" height can size the frame. Static text —
+ * height to the parent so "Auto" height can size the frame, and answers the
+ * parent's "measure now" request (a published page's frame can finish
+ * loading before React hydrates and starts listening). Static text —
  * its SHA-256 is pinned in the CSP below (MEASURE_SCRIPT_SHA256, verified by
  * scripts/check-custom-html.ts), so changing it requires updating the hash.
  */
 export const MEASURE_SCRIPT =
-  '(function(){var r=document.getElementById("mx-custom-html-root");if(!r)return;var last=-1;function send(){var h=Math.ceil(r.getBoundingClientRect().height);if(h!==last){last=h;parent.postMessage({type:"mx-custom-html-height",height:h},"*");}}if(window.ResizeObserver){new ResizeObserver(send).observe(r);}window.addEventListener("load",send);if(document.fonts&&document.fonts.ready){document.fonts.ready.then(send);}send();})();';
-export const MEASURE_SCRIPT_SHA256 = "sha256-5E//R0yCy3eMyimVSq1qkY45hHWYfE1IWTDe8pxlQPI=";
+  '(function(){var r=document.getElementById("mx-custom-html-root");if(!r)return;var last=-1;function send(){var h=Math.ceil(r.getBoundingClientRect().height);if(h!==last){last=h;parent.postMessage({type:"mx-custom-html-height",height:h},"*");}}if(window.ResizeObserver){new ResizeObserver(send).observe(r);}window.addEventListener("load",send);window.addEventListener("message",function(e){if(e.source===parent&&e.data&&e.data.type==="mx-custom-html-measure"){last=-1;send();}});if(document.fonts&&document.fonts.ready){document.fonts.ready.then(send);}send();})();';
+export const MEASURE_SCRIPT_SHA256 = "sha256-AHEwzN+HmeTZgXh5tkA+NUVuS0fMLAVDgazx/5HaGbk=";
 
 export const CUSTOM_HTML_CSP = [
   "default-src 'none'",
