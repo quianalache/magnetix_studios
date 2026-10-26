@@ -31,15 +31,19 @@ import { BLOCK_ICONS } from "@/components/pages-funnels/puck/block-icons";
  * config.tsx put it there.
  */
 
-const BASE_CATEGORY_ORDER = [
+const GENERAL_CATEGORY_ORDER = [
   "layout",
   "elements",
   "prebuiltSections",
   "business",
 ] as const;
 
-/** Reading Result Pages (2026-10-21) lead with the Reading blocks, then the usual blocks to mix in. */
-const READING_RESULT_CATEGORY_ORDER = ["reading", "nextSteps", ...BASE_CATEGORY_ORDER] as const;
+/** Ordinary pages: the general categories, then Advanced (Custom HTML, 2026-10-26). */
+const BASE_CATEGORY_ORDER = [...GENERAL_CATEGORY_ORDER, "advanced"] as const;
+
+/** Reading Result Pages (2026-10-21) lead with the Reading blocks, then the usual blocks to mix in.
+ *  Advanced is deliberately not offered there yet — Reading Result boundaries stay as they are. */
+const READING_RESULT_CATEGORY_ORDER = ["reading", "nextSteps", ...GENERAL_CATEGORY_ORDER] as const;
 
 export function MagnetixBlocksPanel({ config, readingResult = false }: { config: Config; readingResult?: boolean }) {
   const [search, setSearch] = useState("");

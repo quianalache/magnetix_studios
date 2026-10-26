@@ -3,6 +3,7 @@ import type {
   PuckPageMetadata,
   PageAction,
   BackgroundConfig,
+  CustomHtmlArtifact,
   StyleConfig,
   StyleCompatibility,
 } from "@/types/pages-funnels-puck";
@@ -27,6 +28,9 @@ import {
   readingPuckComponents,
 } from "@/components/pages-funnels/puck/reading-components";
 import { ImageFieldEditor } from "@/components/pages-funnels/puck/image-field";
+import { CustomHtmlFieldEditor } from "@/components/pages-funnels/puck/custom-html-field";
+import type { CustomHtmlComponentProps } from "@/components/pages-funnels/puck/custom-html-server";
+import { emptyCustomHtmlArtifact } from "@/lib/pages-funnels/custom-html/policy";
 import {
   SectionRender,
   RowRender,
@@ -84,6 +88,18 @@ export interface ReadingToolComponentProps {
  * a dropdown of this sub-account's saved Embeds — no Magnetix embed code is
  * ever pasted into Magnetix. Stores the Embed id.
  */
+/**
+ * Advanced → Custom HTML (2026-10-26): ONE versioned payload (HTML, CSS,
+ * display) edited by `CustomHtmlFieldEditor`; rendering is isolated in a
+ * sandboxed frame (custom-html/policy.ts). Manual-only — the AI page
+ * generator's SAFE_PUCK_COMPONENTS never includes it.
+ */
+const customHtmlContentField: CustomField<CustomHtmlArtifact> = {
+  type: "custom",
+  label: "Custom HTML",
+  render: ({ value, onChange }) => <CustomHtmlFieldEditor value={value} onChange={onChange} />,
+};
+
 const embedIdField: CustomField<string> = {
   type: "custom",
   label: "Reading Tool",
@@ -516,7 +532,8 @@ const SECTION_SHARED_FIELDS = {
 
 export function createPuckConfig(
   FormComponent: React.ComponentType<FormComponentProps>,
-  ReadingToolComponent: React.ComponentType<ReadingToolComponentProps>
+  ReadingToolComponent: React.ComponentType<ReadingToolComponentProps>,
+  CustomHtmlComponent: React.ComponentType<CustomHtmlComponentProps>
 ): Config {
   return {
     // The page root has no editable fields: Puck's default `title` field was
@@ -544,6 +561,9 @@ export function createPuckConfig(
       // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
       business: { title: "Business", components: ["Form", "ReadingTool"] },
+      // Advanced (2026-10-26): code/embed capabilities, after the general
+      // categories. Not offered on Reading Result Pages (blocks-panel.tsx).
+      advanced: { title: "Advanced", components: ["CustomHtml"] },
       // Reading Result Pages only (2026-10-21) — the Blocks panel shows
       // these two categories just on that page type.
       reading: { title: "Reading", components: [...READING_BLOCK_NAMES] },
@@ -804,6 +824,7 @@ export function createPuckConfig(
               "Accordion",
               "Form",
               "ReadingTool",
+              "CustomHtml",
               ...ALL_READING_COMPONENT_NAMES,
             ],
           },
@@ -1062,6 +1083,21 @@ export function createPuckConfig(
         defaultProps: { style: "line", styleConfig: DEFAULT_STYLE_CONFIG },
         render: ({ id, style, styleConfig }) => (
           <DividerRender id={id} style={style} styleConfig={styleConfig} />
+        ),
+      },
+
+      CustomHtml: {
+        label: "Custom HTML",
+        fields: {
+          content: customHtmlContentField,
+          style: mediaStyleField,
+        },
+        defaultProps: {
+          content: emptyCustomHtmlArtifact(),
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, content, style, puck }) => (
+          <CustomHtmlComponent id={id} content={content} style={style} editing={puck.isEditing} />
         ),
       },
 

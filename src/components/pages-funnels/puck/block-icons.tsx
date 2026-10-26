@@ -33,6 +33,7 @@ import {
   LogIn,
   Download,
   BookOpen,
+  CodeXml,
 } from "lucide-react";
 
 /**
@@ -58,6 +59,7 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   Video: VideoIcon,
   Divider: Minus,
   Spacer: MoveVertical,
+  CustomHtml: CodeXml,
   Accordion: ChevronsUpDown,
   Hero: GalleryHorizontal,
   Form: FileText,

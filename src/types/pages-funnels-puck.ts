@@ -521,3 +521,28 @@ export interface VideoPlaybackConfig {
    *  those two providers. */
   posterUrl?: string;
 }
+
+/**
+ * Custom HTML block (Advanced → Custom HTML, 2026-10-26). Static HTML + CSS
+ * pasted from elsewhere (e.g. an AI tool), rendered in an isolated sandboxed
+ * frame — never converted to native blocks and never injected into the
+ * Magnetix DOM. Stored as ONE versioned payload on the node's `content` prop
+ * (not scattered props) so the contract can evolve via `artifactVersion`.
+ * Manual-only: the AI page generator never emits this block.
+ */
+export interface CustomHtmlArtifact {
+  artifactVersion: 1;
+  /** Body markup as the owner entered it (paste-normalized). Sanitized again on every render. */
+  html: string;
+  /** Styles for this block only — they apply inside its frame, never to the page. */
+  css: string;
+  display: {
+    /** "auto" fits the frame to the content; "fixed" uses `fixedHeight`. */
+    height: "auto" | "fixed";
+    fixedHeight: number;
+    /** Fixed height only: what happens to content taller than the frame. */
+    overflow: "scroll" | "clip";
+  };
+  /** How the code arrived — informational. */
+  source?: { kind: "pasted-document" | "pasted-fragment" | "typed" };
+}

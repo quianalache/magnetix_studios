@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
+import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -35,7 +36,13 @@ const PAGES_COLLECTION = "pages";
 
 export type PuckPersistenceResult =
   | { ok: true }
-  | { ok: false; error: string; status: 404 | 403 };
+  | { ok: false; error: string; status: 404 | 403 | 413 };
+
+/** Custom HTML size/count limits (custom-html/policy.ts) — enforced on every draft save and publish. */
+function customHtmlLimitError(data: PuckData): PuckPersistenceResult | null {
+  const problem = findCustomHtmlLimitProblem(data);
+  return problem ? { ok: false, error: problem, status: 413 } : null;
+}
 
 async function loadOwnedPage(
   subAccountId: string,
@@ -72,6 +79,8 @@ export async function savePuckDraft(
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
+  const tooLarge = customHtmlLimitError(data);
+  if (tooLarge) return tooLarge;
 
   const now = FieldValue.serverTimestamp();
   await owned.ref.update({
@@ -113,6 +122,8 @@ export async function publishPuckPage(
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
+  const tooLarge = customHtmlLimitError(data);
+  if (tooLarge) return tooLarge;
 
   const now = FieldValue.serverTimestamp();
   await owned.ref.update({

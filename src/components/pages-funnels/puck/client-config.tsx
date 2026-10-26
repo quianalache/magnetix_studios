@@ -3,6 +3,7 @@
 import { createPuckConfig } from "@/components/pages-funnels/puck/config";
 import { FormElementClientRender } from "@/components/pages-funnels/puck/form-client";
 import { ReadingToolElementClientRender } from "@/components/pages-funnels/puck/reading-tool-client";
+import { CustomHtmlElementClientRender } from "@/components/pages-funnels/puck/custom-html-client";
 
 /**
  * Production CLIENT/EDITOR Puck config (master spec §10) — the one to pass
@@ -12,4 +13,4 @@ import { ReadingToolElementClientRender } from "@/components/pages-funnels/puck/
  * matching the same referential-stability discipline `constants.ts` applies
  * to `iframe`/`metadata`/`viewports` (master spec §3/§12).
  */
-export const clientPuckConfig = createPuckConfig(FormElementClientRender, ReadingToolElementClientRender);
+export const clientPuckConfig = createPuckConfig(FormElementClientRender, ReadingToolElementClientRender, CustomHtmlElementClientRender);
