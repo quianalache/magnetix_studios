@@ -21,7 +21,7 @@ function Shell({ id, style, className, children }: { id: string; style?: StyleCo
 }
 
 export function IconRender({ id, name, size, alignment, color, background, style }: { id: string; name: string; size: number; alignment: PuckAlignment; color: string; background: string; style?: StyleConfig }) {
-  const Icon = ICONS[name] ?? Star;
+  const Icon = ICONS[name as keyof typeof ICONS] ?? Star;
   return <Shell id={id} style={style} className={`flex ${justifyClass[alignment]}`}><span className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2" style={{ color: color || undefined, backgroundColor: background || undefined }}><Icon aria-label={name || "Star"} role="img" size={size} strokeWidth={1.8} /></span></Shell>;
 }
 
