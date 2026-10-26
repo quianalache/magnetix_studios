@@ -136,9 +136,13 @@ export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
       </div>
 
       {!selectedItem ? (
-        <EmptyTabNote>
-          Select a block on the canvas to edit it. The page&rsquo;s name, address and SEO are in Pages &amp; Funnels.
-        </EmptyTabNote>
+        // Page settings (root fields, e.g. Page background) + the hint.
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {children}
+          <EmptyTabNote>
+            Select a block on the canvas to edit it. The page&rsquo;s name, address and SEO are in Pages &amp; Funnels.
+          </EmptyTabNote>
+        </div>
       ) : groups ? (
         <Tabs
           value={activeTab}

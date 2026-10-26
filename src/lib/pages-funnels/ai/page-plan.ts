@@ -161,11 +161,13 @@ export function parsePagePlan(value: unknown): PagePlan {
   };
 }
 
-export type BoundObject = { id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string; eventDetails?: string };
+/** `kind: "offer"` marks a real, tenant-checked Offer — its CTA compiles to the authoritative Go to Offer action. */
+export type BoundObject = { kind?: "offer" | "form" | "webinar"; id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string; eventDetails?: string };
 
 const SAFE_PUCK_COMPONENTS = new Set(["Section", "Row", "Column", "Heading", "Text", "Button", "Accordion", "Form", "Image", "Video", "Divider", "Spacer", "RichText"]);
-const PAGE_ACTION_TYPES = new Set(["none", "url", "next_funnel_step", "selected_funnel_step", "scroll", "open_popup", "close_popup", "show_hide", "submit_form", "download", "call", "sms", "email", "purchase", "accept_upsell", "decline_continue"]);
+const PAGE_ACTION_TYPES = new Set(["none", "url", "page", "next_funnel_step", "selected_funnel_step", "scroll", "open_popup", "close_popup", "show_hide", "submit_form", "download", "call", "sms", "email", "purchase", "accept_upsell", "decline_continue"]);
 const SAFE_URL = /^\/(?!\/)|^https:\/\//;
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 function assertPageAction(action: unknown): void {
   if (!action || typeof action !== "object" || Array.isArray(action)) throw new Error("Generated page contained an invalid action.");
@@ -175,6 +177,8 @@ function assertPageAction(action: unknown): void {
     if (typeof value.url !== "string" || !SAFE_URL.test(value.url)) throw new Error("Generated page contained an unsafe URL.");
     if (value.openInNewTab !== undefined && typeof value.openInNewTab !== "boolean") throw new Error("Generated page contained an invalid URL action.");
   }
+  if (value.type === "purchase" && (typeof value.offerId !== "string" || !SAFE_ID.test(value.offerId))) throw new Error("Generated page contained an invalid Offer action.");
+  if (value.type === "page" && (typeof value.pageId !== "string" || !SAFE_ID.test(value.pageId))) throw new Error("Generated page contained an invalid page action.");
 }
 
 /** Validate actual Puck nodes without mistaking nested prop descriptors for nodes. */
@@ -231,7 +235,12 @@ export function compilePagePlan(plan: PagePlan, bound: BoundObject | null): Puck
     }
     if (index === plan.sections.length - 1 || s.ctaLabel) {
       const label = s.ctaLabel || plan.cta.label;
-      const action = bound?.href ? { type: "url", url: bound.href } : { type: "none" };
+      // Actions are chosen here from the bound object, never by the model. A
+      // real Offer binds by id (resolved to its live, custom-domain-aware URL
+      // at render); other bound objects keep their URL.
+      const action = bound?.kind === "offer" && bound.id
+        ? { type: "purchase", offerId: bound.id }
+        : bound?.href ? { type: "url", url: bound.href } : { type: "none" };
       elements.push(node("Button", { text: label, action, style: "primary", alignment: plan.composition.alignment, background: DEFAULT_BACKGROUND, styleConfig: DEFAULT_STYLE_CONFIG }));
     }
     content.push(section(elements, plan));

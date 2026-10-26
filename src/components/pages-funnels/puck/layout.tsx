@@ -58,7 +58,9 @@ import { cn } from "@/lib/utils";
  * and per-device-visibility CSS, scoped to that same `id`.
  */
 
-export type SectionMaxWidthOption = "contained" | "wide" | "full";
+/** "bleed" (2026-10-26): content runs edge to edge with no side gutter — for
+ *  full-page designs (e.g. Custom HTML artifacts) that carry their own margins. */
+export type SectionMaxWidthOption = "contained" | "wide" | "full" | "bleed";
 export type RowVerticalAlign = "top" | "center" | "bottom";
 export type ColumnContentAlignment = "left" | "center" | "right";
 
@@ -67,6 +69,7 @@ const SECTION_MAX_WIDTH_PX: Record<SectionMaxWidthOption, number | undefined> =
     contained: 1024,
     wide: 1280,
     full: undefined,
+    bleed: undefined,
   };
 
 /**
@@ -128,7 +131,8 @@ export function SectionRender({
     <section
       id={id}
       style={{ paddingTop, paddingBottom, ...resolveBaseStyleProps(style) }}
-      className="relative overflow-hidden px-6"
+      className={`relative overflow-hidden ${maxWidth === "bleed" ? "px-0" : "px-6"}`}
+      data-content-width={maxWidth}
     >
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
@@ -278,6 +282,40 @@ export function ColumnRender({
               : ""
         )}
       />
+    </div>
+  );
+}
+
+/**
+ * Page root (2026-10-26). Paints the PAGE background so the builder canvas
+ * and Preview show exactly what visitors get. Default = white — what
+ * published pages have always shown (the public body is white). Before this
+ * the builder and Preview inherited the CRM's lavender canvas instead,
+ * so pages looked lavender while editing but white when live. A page can
+ * choose its own background in Page settings (`root.props.pageBackground`);
+ * absent → white, so no saved page changes for visitors.
+ */
+export function PageRootRender({
+  background,
+  editing = false,
+  children,
+}: {
+  background?: BackgroundConfig;
+  editing?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      data-page-root=""
+      // Editor only: Puck's root drop zone fills the page, so a block can be
+      // dropped anywhere on an empty canvas (live pages are never stretched).
+      className={cn("relative isolate min-h-screen", editing && "flex flex-col [&>*:not([aria-hidden])]:flex-1")}
+      style={{ backgroundColor: "#ffffff" }}
+    >
+      <div className="absolute inset-0 -z-10" aria-hidden>
+        <BackgroundLayer background={background} />
+      </div>
+      {children}
     </div>
   );
 }

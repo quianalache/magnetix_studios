@@ -58,6 +58,7 @@ type PuckColumnWidth = ColumnWidth;
 export type PageActionType =
   | "none"
   | "url"
+  | "page"
   | "next_funnel_step"
   | "selected_funnel_step"
   | "scroll"
@@ -76,6 +77,10 @@ export type PageActionType =
 export type PageAction =
   | { type: "none" }
   | { type: "url"; url: string; openInNewTab?: boolean }
+  /** Another Pages & Funnels page in the same sub-account (2026-10-26). The
+   *  stored reference is the page id; its public URL is resolved at render
+   *  time through the authoritative page routing (custom domain aware). */
+  | { type: "page"; pageId: string; openInNewTab?: boolean }
   /** Resolves at runtime from Magnetix's own funnel ordering (master spec
    *  §12) — Puck/this type never needs to know what a funnel is beyond this
    *  tag. Not resolved until Build Phase 5. */
@@ -134,6 +139,24 @@ export interface PuckPageMetadata {
    *  pages never set it, so Reading blocks there render nothing without a
    *  Reading instead of a placeholder. */
   readingBuilder?: { status: "loading" | "ready" | "unavailable"; message?: string };
+  /**
+   * Button/Image actions bound to Magnetix objects (2026-10-26), resolved by
+   * the server (published pages) or the resolve-actions route (Preview).
+   * Only targets in THIS page's sub-account that visitors can open resolve;
+   * anything else is null and the button renders without a link.
+   * Undefined in the builder, where links are inert.
+   */
+  resolvedActions?: ResolvedActionTargets;
+}
+
+/** Object-bound action targets resolved for one page. */
+export interface ResolvedActionTargets {
+  /** pageId → its public URL, or null (missing, unpublished, other business). */
+  pages: Record<string, { href: string } | null>;
+  /** offerId → its public Offer/checkout URL, or null (missing, unpublished, other business). */
+  offers: Record<string, { href: string } | null>;
+  /** Section/Hero ids on this page — the only valid scroll targets. */
+  sectionIds: string[];
 }
 
 // ---------- Background (Phase 2D — production-grade color/gradient/blur) ----------

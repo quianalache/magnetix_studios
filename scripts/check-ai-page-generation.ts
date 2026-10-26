@@ -14,8 +14,15 @@ const plan = parsePagePlan({
   composition: { alignment: "left", maxWidth: "contained" },
   mediaIntent: "none",
 });
-const compiled = compilePagePlan(plan, { id: "offer-1", title: "Real Offer", href: "/offer/sa/offer-1" });
+const compiled = compilePagePlan(plan, { kind: "offer", id: "offer-1", title: "Real Offer", href: "/offer/sa/offer-1" });
 assertSafePuck(compiled);
+// A real bound Offer → the authoritative Go to Offer action (no hard-coded URL).
+assert.match(JSON.stringify(compiled), /"action":\{"type":"purchase","offerId":"offer-1"\}/);
+assert.doesNotMatch(JSON.stringify(compiled), /\/offer\/sa\/offer-1/);
+// Other bound objects keep URL actions.
+assert.match(JSON.stringify(compilePagePlan(plan, { id: "x", title: "Link", href: "/somewhere" })), /"type":"url","url":"\/somewhere"/);
+assert.throws(() => assertSafePuck({ ...compiled, content: [{ type: "Button", props: { id: "b", action: { type: "purchase", offerId: "../x" } } }] } as never));
+assert.throws(() => assertSafePuck({ ...compiled, content: [{ type: "Button", props: { id: "b", action: { type: "custom_js" } } }] } as never));
 assert.equal(compiled.content.length, 2);
 assert.equal((compiled.content[0] as { type: string }).type, "Section");
 const waitlistPlan = parsePagePlan({ ...plan, outcome: "waitlist", boundObject: { type: "form", id: "waitlist-form" } });
@@ -42,4 +49,5 @@ assert.throws(() => assertPagePlanProofPolicy(parseGeneratedPagePlan({ sections:
 ], cta: { label: "Continue" } }, "sell_offer"), new Set()));
 const eventCompiled = compilePagePlan(parsePagePlan({ ...plan, outcome: "registration" }), { id: "webinar-1", title: "Event", eventDetails: "Event: Event\nStarts: Monday\nTimezone: America/New_York", href: "/webinar/sa/event" });
 assert.match(JSON.stringify(eventCompiled), /America\/New_York/);
+assert.match(JSON.stringify(eventCompiled), /"type":"url","url":"\/webinar\/sa\/event"/);
 console.log("AI PagePlan/compiler checks passed.");

@@ -10,6 +10,8 @@ import { EmptyState } from "@/components/system/empty-state";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { collectPuckFeaturedOfferIds, collectPuckFormIds } from "@/lib/pages-funnels/puck/resolve";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
+import { collectActionTargets } from "@/lib/pages-funnels/puck/action";
+import type { ResolvedActionTargets } from "@/types/pages-funnels-puck";
 import { getPage } from "@/lib/firestore/pages-funnels";
 import { readReadingPreviewHandoff } from "@/lib/energetic-decoder/reading-preview-handoff";
 import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext } from "@/types/reading-blocks";
@@ -149,6 +151,19 @@ export default function NewBuilderPreviewPage({
         })
       );
 
+      // Button/Image "Go to Page" / "Go to Offer" targets (scroll targets
+      // come from this page's own Section ids).
+      const targets = collectActionTargets(data);
+      let resolvedActions: ResolvedActionTargets = { pages: {}, offers: {}, sectionIds: targets.sectionIds };
+      if (targets.pageIds.length || targets.offerIds.length) {
+        const qs = new URLSearchParams({ subAccountId, pages: targets.pageIds.join(","), offers: targets.offerIds.join(",") });
+        const res = await fetch(`/api/pages-funnels/puck/resolve-actions?${qs}`).catch(() => null);
+        if (res?.ok) {
+          const json = (await res.json()) as Pick<ResolvedActionTargets, "pages" | "offers">;
+          resolvedActions = { ...resolvedActions, pages: json.pages ?? {}, offers: json.offers ?? {} };
+        }
+      }
+
       if (cancelled) return;
       setState({
         status: "ready",
@@ -156,6 +171,7 @@ export default function NewBuilderPreviewPage({
         metadata: {
           subAccountId,
           resolvedForms,
+          resolvedActions,
           pageId,
           ...(readingContext !== undefined
             ? {

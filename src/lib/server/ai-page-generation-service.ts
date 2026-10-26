@@ -21,6 +21,7 @@ import {
   type AiPageOutcome,
   type AiGenerationMetadata,
   type PagePlan,
+  type BoundObject as PagePlanBoundObject,
 } from "@/lib/pages-funnels/ai/page-plan";
 
 const MAX_PROMPT_LENGTH = 4000;
@@ -31,7 +32,7 @@ const GENERATION_TIMEOUT_MS = process.env.MAGNETIX_LOCAL_QA === "1" && process.e
   ? Math.max(1, Number(process.env.AI_PAGE_GENERATION_TIMEOUT_MS)) : 45_000;
 
 type Binding = { type: AiBindingType; id: string } | null;
-type BoundObject = { id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string; eventDetails?: string };
+type BoundObject = PagePlanBoundObject;
 
 export class AiPageGenerationError extends Error {
   constructor(message: string, public readonly status = 400, public readonly code = "validation") { super(message); }
@@ -148,7 +149,7 @@ async function resolveBinding(subAccountId: string, binding: Binding): Promise<B
   if (binding.type === "offer") {
     const offer = (await listCourseOffers(subAccountId)).find((item) => item.id === binding.id);
     if (!offer) throw new AiPageGenerationError("Choose an Offer from this workspace.");
-    return { id: offer.id, title: offer.title, description: cleanText(offer.descriptionHtml, 800), priceLabel: offer.priceTextOverride || (offer.priceCents == null ? "Free" : `${offer.currency ?? "USD"} ${(offer.priceCents / 100).toFixed(2)}`), href: `/offer/${subAccountId}/${offer.id}` };
+    return { kind: "offer", id: offer.id, title: offer.title, description: cleanText(offer.descriptionHtml, 800), priceLabel: offer.priceTextOverride || (offer.priceCents == null ? "Free" : `${offer.currency ?? "USD"} ${(offer.priceCents / 100).toFixed(2)}`), href: `/offer/${subAccountId}/${offer.id}` };
   }
   if (binding.type === "webinar") {
     const webinar = await getWebinarServerSide(subAccountId, binding.id);

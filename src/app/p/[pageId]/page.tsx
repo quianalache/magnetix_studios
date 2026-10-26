@@ -9,6 +9,7 @@ import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
 import { publicTitle } from "@/lib/server/public-identity";
 import { ReadingResultPageView } from "@/components/pages-funnels/reading-result-page-view";
+import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
 
 export const dynamic = "force-dynamic";
 
@@ -85,11 +86,14 @@ export default async function PublicPagePreview({
     page.subAccountId && embedIds.length > 0
       ? await resolveReadingToolPayloads(page.subAccountId, embedIds)
       : {};
+  // Button/Image "Go to Page" / "Go to Offer" / scroll targets — this page's
+  // own sub-account only.
+  const resolvedActions = await resolvePageActionTargets(page.subAccountId ?? "", page.puckPublishedData);
   return (
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, pageId: page.id }}
+      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedActions, pageId: page.id }}
     />
   );
 }

@@ -3,16 +3,14 @@ import type {
   PuckAlignment,
   PuckButtonStyle,
   PageAction,
+  ResolvedActionTargets,
   StyleConfig,
   BackgroundConfig,
   ImageSizeConfig,
   VideoSizeConfig,
   VideoPlaybackConfig,
 } from "@/types/pages-funnels-puck";
-import {
-  resolveActionHref,
-  actionOpensNewTab,
-} from "@/lib/pages-funnels/puck/action";
+import { resolveActionLink } from "@/lib/pages-funnels/puck/action";
 import {
   resolveBaseStyleProps,
   resolveResponsiveCss,
@@ -217,16 +215,22 @@ export function ButtonRender({
   alignment,
   background,
   styleConfig,
+  resolved,
+  editing = false,
 }: {
   id: string;
   text: string;
   action: PageAction;
+  /** Page/Offer/section targets resolved for this page (metadata.resolvedActions). */
+  resolved?: ResolvedActionTargets;
+  /** In the New Builder: render no link, so a click never navigates the editor away. */
+  editing?: boolean;
   style: PuckButtonStyle;
   alignment: PuckAlignment;
   background?: BackgroundConfig;
   styleConfig?: StyleConfig;
 }) {
-  const href = resolveActionHref(action);
+  const link = resolveActionLink(action, { resolved, editing });
   const responsiveCss = resolveResponsiveCss(id, styleConfig);
   return (
     <div className={`flex ${JUSTIFY_CLASS[alignment]}`}>
@@ -235,10 +239,10 @@ export function ButtonRender({
       )}
       <a
         id={id}
-        href={href || "#"}
-        target={actionOpensNewTab(action) ? "_blank" : undefined}
-        rel={actionOpensNewTab(action) ? "noreferrer" : undefined}
-        aria-disabled={!href}
+        href={link.href ?? undefined}
+        target={link.href && link.newTab ? "_blank" : undefined}
+        rel={link.href && link.newTab ? "noreferrer" : undefined}
+        aria-disabled={!link.href || undefined}
         className={`relative overflow-hidden rounded-full px-6 py-2.5 text-sm font-semibold shadow-sm transition-colors ${BUTTON_STYLE_CLASS[buttonStyle]}`}
         style={resolveBaseStyleProps(styleConfig)}
       >
@@ -277,15 +281,19 @@ export function ImageRender({
   action,
   style,
   size,
+  resolved,
+  editing = false,
 }: {
   id: string;
   src: string;
   alt: string;
   action: PageAction;
+  resolved?: ResolvedActionTargets;
+  editing?: boolean;
   style?: StyleConfig;
   size?: ImageSizeConfig;
 }) {
-  const href = resolveActionHref(action);
+  const link = resolveActionLink(action, { resolved, editing });
   const responsiveCss = resolveResponsiveCss(id, style);
   const sizeStyle = resolveImageSizeStyle(size);
   const img = src ? (
@@ -306,11 +314,11 @@ export function ImageRender({
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      {href ? (
+      {link.href ? (
         <a
-          href={href}
-          target={actionOpensNewTab(action) ? "_blank" : undefined}
-          rel={actionOpensNewTab(action) ? "noreferrer" : undefined}
+          href={link.href}
+          target={link.newTab ? "_blank" : undefined}
+          rel={link.newTab ? "noreferrer" : undefined}
         >
           {img}
         </a>

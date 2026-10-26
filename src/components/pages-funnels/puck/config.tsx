@@ -28,6 +28,8 @@ import {
   readingPuckComponents,
 } from "@/components/pages-funnels/puck/reading-components";
 import { ImageFieldEditor } from "@/components/pages-funnels/puck/image-field";
+import { ActionFieldEditor } from "@/components/pages-funnels/puck/action-field";
+import { normalizeStoredAction } from "@/lib/pages-funnels/puck/action";
 import { CustomHtmlFieldEditor } from "@/components/pages-funnels/puck/custom-html-field";
 import type { CustomHtmlComponentProps } from "@/components/pages-funnels/puck/custom-html-server";
 import { emptyCustomHtmlArtifact } from "@/lib/pages-funnels/custom-html/policy";
@@ -35,6 +37,7 @@ import {
   SectionRender,
   RowRender,
   ColumnRender,
+  PageRootRender,
 } from "@/components/pages-funnels/puck/layout";
 import {
   HeadingRender,
@@ -106,56 +109,17 @@ const embedIdField: CustomField<string> = {
   render: ({ value, onChange }) => <ReadingToolFieldEditor value={value} onChange={onChange} />,
 };
 
-const ACTION_TYPE_OPTIONS = [
-  { label: "None", value: "none" },
-  { label: "URL", value: "url" },
-] as const;
-
 /**
- * `object` field composing a `PageAction` (master spec §9's Action System
- * foundation) — only `type: "none" | "url"` are exposed in the Fields
- * panel in Phase 1 (matching "do not implement those behaviors yet"); every
- * other `PageAction` variant already exists on the TYPE so Phase 3 can add
- * its own field UI without changing what Button/Image store. `url`/
- * `openInNewTab` are always shown regardless of the selected type — Puck's
- * `object` field doesn't support conditional sub-fields without a custom
- * field, which is out of scope for this foundation phase; an inert `url`
- * row when `type` is "none" is a small, acceptable Phase 1 UX cost.
+ * Button / Image "Action" (2026-10-26): a custom field — choose the action,
+ * then only its fields (URL, page, Offer, section, phone, email). Stores a
+ * real `PageAction`; legacy flat `{type, url, openInNewTab}` values on
+ * existing pages read through `normalizeStoredAction` unchanged.
  */
-const actionField = {
-  type: "object" as const,
+const actionField: CustomField<PageAction> = {
+  type: "custom",
   label: "Action",
-  objectFields: {
-    type: {
-      type: "select" as const,
-      label: "Type",
-      options: ACTION_TYPE_OPTIONS,
-    },
-    url: { type: "text" as const, label: "URL" },
-    openInNewTab: {
-      type: "radio" as const,
-      label: "Open in new tab",
-      options: [
-        { label: "No", value: false },
-        { label: "Yes", value: true },
-      ],
-    },
-  },
+  render: ({ value, onChange }) => <ActionFieldEditor value={value} onChange={onChange} />,
 };
-
-/** Normalizes the object-field's flat shape (`{type, url, openInNewTab}`)
- *  back into a real discriminated `PageAction` for `resolveActionHref` —
- *  the object field can't itself produce a discriminated union, so this is
- *  the one, explicit, well-documented seam where that translation happens. */
-function toPageAction(raw: {
-  type: string;
-  url?: string;
-  openInNewTab?: boolean;
-}): PageAction {
-  if (raw.type === "url")
-    return { type: "url", url: raw.url ?? "", openInNewTab: raw.openInNewTab };
-  return { type: "none" };
-}
 
 // ---------- Shared Background field (Phase 2D task §3/§4/§5/§6/§7) ----------
 
@@ -188,6 +152,13 @@ const backgroundField: CustomField<BackgroundConfig> = {
  * (not here) since the field needs its own `<Label>` styled consistently
  * with the rest of that component's states (loading/empty/loaded).
  */
+/** Page background (root): same editor as Section backgrounds; empty = white. */
+const pageBackgroundField: CustomField<BackgroundConfig> = {
+  type: "custom",
+  label: "Page background",
+  render: ({ value, onChange }) => <BackgroundFieldEditor value={value} onChange={onChange} />,
+};
+
 const formIdField: CustomField<string> = {
   type: "custom",
   label: "Form",
@@ -495,11 +466,12 @@ const SECTION_SHARED_FIELDS = {
   style: layoutStyleField,
   maxWidth: {
     type: "select" as const,
-    label: "Max Width",
+    label: "Content width",
     options: [
-      { label: "Contained", value: "contained" },
-      { label: "Wide", value: "wide" },
-      { label: "Full", value: "full" },
+      { label: "Contained (1024px)", value: "contained" },
+      { label: "Wide (1280px)", value: "wide" },
+      { label: "Full width (side margins)", value: "full" },
+      { label: "Edge to edge (no margins)", value: "bleed" },
     ],
   },
   // System A closeout task §3 — deliberately a SEPARATE field from
@@ -509,10 +481,10 @@ const SECTION_SHARED_FIELDS = {
   // own doc comment in layout.tsx for the rendering mechanics.
   fullWidthBackground: {
     type: "radio" as const,
-    label: "Full-Width Background",
+    label: "Background width",
     options: [
-      { label: "Yes", value: true },
-      { label: "No (match content width)", value: false },
+      { label: "Edge to edge", value: true },
+      { label: "Match content width", value: false },
     ],
   },
   paddingTop: {
@@ -536,11 +508,18 @@ export function createPuckConfig(
   CustomHtmlComponent: React.ComponentType<CustomHtmlComponentProps>
 ): Config {
   return {
-    // The page root has no editable fields: Puck's default `title` field was
-    // never read by anything (page name, address and SEO live in Pages &
-    // Funnels). An empty field set hides that dead control; root rendering
-    // and the stored data are unchanged.
-    root: { fields: {} },
+    // Puck's default `title` root field was never read by anything (page
+    // name, address and SEO live in Pages & Funnels), so it isn't offered.
+    // Page settings (shown when no block is selected): the page background,
+    // white by default (PageRootRender in layout.tsx).
+    root: {
+      fields: { pageBackground: pageBackgroundField },
+      render: (props: { children?: React.ReactNode; pageBackground?: BackgroundConfig; puck?: { isEditing?: boolean } }) => (
+        <PageRootRender background={props.pageBackground} editing={!!props.puck?.isEditing}>
+          {props.children}
+        </PageRootRender>
+      ),
+    },
     categories: {
       layout: { title: "Layout", components: ["Section", "Row", "Column"] },
       elements: {
@@ -997,11 +976,14 @@ export function createPuckConfig(
           alignment,
           background,
           styleConfig,
+          puck,
         }) => (
           <ButtonRender
             id={id}
             text={text}
-            action={toPageAction(action)}
+            action={normalizeStoredAction(action)}
+            resolved={(puck.metadata as PuckPageMetadata | undefined)?.resolvedActions}
+            editing={puck.isEditing}
             style={style}
             alignment={alignment}
             background={background}
@@ -1026,12 +1008,14 @@ export function createPuckConfig(
           size: DEFAULT_IMAGE_SIZE,
           style: DEFAULT_STYLE_CONFIG,
         },
-        render: ({ id, src, alt, action, size, style }) => (
+        render: ({ id, src, alt, action, size, style, puck }) => (
           <ImageRender
             id={id}
             src={src}
             alt={alt}
-            action={toPageAction(action)}
+            action={normalizeStoredAction(action)}
+            resolved={(puck.metadata as PuckPageMetadata | undefined)?.resolvedActions}
+            editing={puck.isEditing}
             size={size}
             style={style}
           />
