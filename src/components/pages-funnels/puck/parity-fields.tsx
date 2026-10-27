@@ -20,10 +20,12 @@ function ImageList({
   value,
   onChange,
   label,
+  description,
 }: {
   value: (GalleryImage | LogoItem)[] | undefined;
   onChange: (value: (GalleryImage | LogoItem)[]) => void;
   label: string;
+  description?: string;
 }) {
   const items = value ?? [];
   const sub = useOptionalSubAccount();
@@ -55,6 +57,9 @@ function ImageList({
   return (
     <div className="space-y-3">
       <Label className="text-xs font-semibold">{label}</Label>
+      {description && (
+        <p className="text-muted-foreground text-caption">{description}</p>
+      )}
       {items.map((item, index) => (
         <div
           key={index}
@@ -160,6 +165,7 @@ export function LogoItemsField({
       value={value}
       onChange={(next) => onChange(next as LogoItem[])}
       label="Logos"
+      description="Display multiple logos in a horizontal row, such as clients, partners, or sponsors."
     />
   );
 }

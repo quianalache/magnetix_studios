@@ -69,6 +69,7 @@ import type {
   GalleryImage,
   ProofItem,
   LogoItem,
+  LogoSize,
   StatItem,
 } from "@/components/pages-funnels/puck/parity-blocks";
 import {
@@ -77,8 +78,10 @@ import {
 } from "@/components/pages-funnels/puck/parity-fields";
 import {
   CountdownDateTimeFieldEditor,
+  SliderIntervalFieldEditor,
   TimezoneFieldEditor,
 } from "@/components/pages-funnels/puck/countdown-field";
+import { SLIDER_INTERVAL_DEFAULT_SECONDS } from "@/lib/pages-funnels/puck/slider";
 import { FeaturedOfferPickerField } from "@/components/pages-funnels/puck/reading-block-fields";
 
 /**
@@ -1408,10 +1411,14 @@ export function createPuckConfig(
             ],
           },
           interval: {
-            type: "number",
-            label: "Interval (ms)",
-            min: 2000,
-            max: 60000,
+            type: "custom",
+            label: "Time between slides",
+            render: ({ value, onChange }) => (
+              <SliderIntervalFieldEditor
+                value={value ?? SLIDER_INTERVAL_DEFAULT_SECONDS * 1000}
+                onChange={onChange}
+              />
+            ),
           },
           showControls: {
             type: "radio",
@@ -1434,7 +1441,7 @@ export function createPuckConfig(
         defaultProps: {
           images: [],
           autoplay: false,
-          interval: 5000,
+          interval: SLIDER_INTERVAL_DEFAULT_SECONDS * 1000,
           showControls: true,
           showDots: true,
           style: DEFAULT_STYLE_CONFIG,
@@ -1502,6 +1509,15 @@ export function createPuckConfig(
         label: "Logo Strip",
         fields: {
           logos: logoItemsField,
+          logoSize: {
+            type: "select",
+            label: "Logo size",
+            options: [
+              { label: "Small", value: "small" },
+              { label: "Medium", value: "medium" },
+              { label: "Large", value: "large" },
+            ],
+          },
           grayscale: {
             type: "radio",
             label: "Display",
@@ -1515,6 +1531,7 @@ export function createPuckConfig(
         },
         defaultProps: {
           logos: [],
+          logoSize: "medium",
           grayscale: true,
           gap: 32,
           style: DEFAULT_STYLE_CONFIG,
@@ -1526,6 +1543,7 @@ export function createPuckConfig(
             logos={p.logos}
             grayscale={p.grayscale}
             gap={p.gap}
+            logoSize={p.logoSize as LogoSize}
             style={p.style}
             editing={p.puck.isEditing}
           />
@@ -1539,7 +1557,9 @@ export function createPuckConfig(
             label: "Stats",
             arrayFields: {
               value: { type: "text", label: "Value" },
+              prefix: { type: "text", label: "Prefix (optional)" },
               label: { type: "text", label: "Label" },
+              suffix: { type: "text", label: "Suffix (optional)" },
               supportingText: {
                 type: "text",
                 label: "Supporting text (optional)",
@@ -1547,7 +1567,9 @@ export function createPuckConfig(
             },
             defaultItemProps: {
               value: "",
+              prefix: "",
               label: "Metric",
+              suffix: "",
               supportingText: "",
             },
             getItemSummary: (item) => item.label || "Stat",
@@ -1652,7 +1674,7 @@ export function createPuckConfig(
         },
         defaultProps: {
           targetAt: "",
-          timezone: "UTC",
+          timezone: "",
           showDays: true,
           showHours: true,
           showMinutes: true,
