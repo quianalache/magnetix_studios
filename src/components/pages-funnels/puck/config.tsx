@@ -75,6 +75,7 @@ import type {
 import {
   GalleryImagesField,
   LogoItemsField,
+  SliderImagesField,
 } from "@/components/pages-funnels/puck/parity-fields";
 import {
   CountdownDateTimeFieldEditor,
@@ -524,6 +525,13 @@ const logoItemsField: CustomField<LogoItem[]> = {
   label: "Logos",
   render: ({ value, onChange }) => (
     <LogoItemsField value={value} onChange={onChange} />
+  ),
+};
+const sliderImagesField: CustomField<GalleryImage[]> = {
+  type: "custom",
+  label: "Images",
+  render: ({ value, onChange }) => (
+    <SliderImagesField value={value} onChange={onChange} />
   ),
 };
 
@@ -1401,7 +1409,7 @@ export function createPuckConfig(
       ImageSlider: {
         label: "Image Slider",
         fields: {
-          images: galleryImagesField,
+          images: sliderImagesField,
           autoplay: {
             type: "radio",
             label: "Autoplay",

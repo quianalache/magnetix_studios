@@ -21,11 +21,13 @@ function ImageList({
   onChange,
   label,
   description,
+  allowAdvancedAdd = true,
 }: {
   value: (GalleryImage | LogoItem)[] | undefined;
   onChange: (value: (GalleryImage | LogoItem)[]) => void;
   label: string;
   description?: string;
+  allowAdvancedAdd?: boolean;
 }) {
   const items = value ?? [];
   const sub = useOptionalSubAccount();
@@ -126,14 +128,22 @@ function ImageList({
           </div>
         </>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onChange([...items, { src: "", alt: "" }])}
-      >
-        Add image
-      </Button>
+      {allowAdvancedAdd && (
+        <details className="border-border rounded-md border px-3 py-2">
+          <summary className="text-muted-foreground cursor-pointer text-caption font-medium">
+            Advanced: add image URL
+          </summary>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => onChange([...items, { src: "", alt: "" }])}
+          >
+            Add image URL
+          </Button>
+        </details>
+      )}
     </div>
   );
 }
@@ -141,15 +151,34 @@ function ImageList({
 export function GalleryImagesField({
   value,
   onChange,
+  allowAdvancedAdd = true,
 }: {
   value: GalleryImage[] | undefined;
   onChange: (value: GalleryImage[]) => void;
+  allowAdvancedAdd?: boolean;
 }) {
   return (
     <ImageList
       value={value}
       onChange={(next) => onChange(next as GalleryImage[])}
       label="Gallery images"
+      allowAdvancedAdd={allowAdvancedAdd}
+    />
+  );
+}
+
+export function SliderImagesField({
+  value,
+  onChange,
+}: {
+  value: GalleryImage[] | undefined;
+  onChange: (value: GalleryImage[]) => void;
+}) {
+  return (
+    <GalleryImagesField
+      value={value}
+      onChange={onChange}
+      allowAdvancedAdd={false}
     />
   );
 }
