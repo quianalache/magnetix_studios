@@ -14,6 +14,7 @@
     "start": "next start",
     "lint": "node scripts/check-capability-tenancy.mjs && node scripts/gen-api-dispatch.mjs --check && node scripts/check-design-drift.mjs && node scripts/check-no-remote-css.mjs && eslint",
     "check:design-drift": "node scripts/check-design-drift.mjs",
+    "check:puck-registry": "tsx scripts/check-puck-registry.ts",
     "qa:visual": "node scripts/qa/visual-pass.mjs",
     "qa:serve": "node scripts/qa/serve-local-qa.mjs",
     "check:api-dispatch": "node scripts/gen-api-dispatch.mjs --check",
