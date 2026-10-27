@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -38,7 +46,10 @@ import { AutoHierarchyWatcher } from "@/components/pages-funnels/puck/auto-hiera
 import { MagnetixLayersPanel } from "@/components/pages-funnels/puck/layers-panel";
 import { MagnetixSettingsPanel } from "@/components/pages-funnels/puck/settings-panel";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
-import { usePuckPersistence } from "@/components/pages-funnels/puck/use-puck-persistence";
+import {
+  usePuckPersistence,
+  type PuckSaveState,
+} from "@/components/pages-funnels/puck/use-puck-persistence";
 import type { PuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
@@ -47,6 +58,11 @@ import {
   ReadingResultSettingsButton,
   ReadingResultSettingsContext,
 } from "@/components/pages-funnels/puck/reading-result-settings";
+
+const SaveStatusContext = createContext<{
+  state: PuckSaveState;
+  error: string | null;
+}>({ state: "idle", error: null });
 
 /**
  * The REAL, CRM-integrated, Magnetix-styled Puck editor shell (master spec
@@ -348,7 +364,7 @@ export function MagnetixPuckEditorShell({
   const renderHeaderActions = useCallback(
     () => (
       <div className="flex items-center gap-2">
-        <SaveStateIndicator state={saveState} error={saveError} />
+        <SaveStateIndicator />
         {hasReadingSettings && (
           <ReadingResultSettingsButton
             subAccountId={subAccountId}
@@ -412,35 +428,11 @@ export function MagnetixPuckEditorShell({
         <Button variant="outline" size="sm" onClick={openPreview}>
           <Eye className="h-4 w-4" /> Preview
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={saveDraft}
-          disabled={saveState === "saving"}
-        >
-          {saveState === "saving" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : null}
-          Save Draft
-        </Button>
-        <Button
-          size="sm"
-          onClick={handlePublish}
-          disabled={publishState === "saving"}
-          title={
-            publishState === "error" ? (publishError ?? undefined) : undefined
-          }
-        >
-          {publishState === "saving" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : null}
-          Publish
-        </Button>
+        <SaveDraftButton onClick={saveDraft} />
+        <PublishButton onClick={handlePublish} />
       </div>
     ),
     [
-      saveState,
-      saveError,
       hasReadingSettings,
       subAccountId,
       pageId,
@@ -449,8 +441,6 @@ export function MagnetixPuckEditorShell({
       copyLiveLink,
       openPreview,
       saveDraft,
-      publishState,
-      publishError,
       handlePublish,
     ]
   );
@@ -509,17 +499,21 @@ export function MagnetixPuckEditorShell({
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
       <div className="min-h-0 flex-1">
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
-          <Puck
-            config={clientPuckConfig}
-            data={data}
-            onChange={setData}
-            headerTitle={pageName}
-            viewports={VIEWPORTS}
-            iframe={IFRAME_CONFIG}
-            metadata={metadata}
-            overrides={overrides}
-            ui={initialUi}
-          />
+          <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
+            <PublishStatusContext.Provider value={{ state: publishState, error: publishError }}>
+              <Puck
+                config={clientPuckConfig}
+                data={data}
+                onChange={setData}
+                headerTitle={pageName}
+                viewports={VIEWPORTS}
+                iframe={IFRAME_CONFIG}
+                metadata={metadata}
+                overrides={overrides}
+                ui={initialUi}
+              />
+            </PublishStatusContext.Provider>
+          </SaveStatusContext.Provider>
         </ReadingResultSettingsContext.Provider>
       </div>
     </div>
@@ -566,13 +560,43 @@ function PageStatusBadge({
  * user never clicked anything for — still has somewhere to show its own
  * result without silently relabeling a button they didn't press.
  */
-function SaveStateIndicator({
-  state,
-  error,
-}: {
-  state: "idle" | "saving" | "saved" | "error";
+function SaveDraftButton({ onClick }: { onClick: () => void }) {
+  const { state } = useContext(SaveStatusContext);
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      disabled={state === "saving"}
+    >
+      {state === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+      Save Draft
+    </Button>
+  );
+}
+
+function PublishButton({ onClick }: { onClick: () => void }) {
+  const { state, error } = useContext(PublishStatusContext);
+  return (
+    <Button
+      size="sm"
+      onClick={onClick}
+      disabled={state === "saving"}
+      title={state === "error" ? (error ?? undefined) : undefined}
+    >
+      {state === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+      Publish
+    </Button>
+  );
+}
+
+const PublishStatusContext = createContext<{
+  state: PuckSaveState;
   error: string | null;
-}) {
+}>({ state: "idle", error: null });
+
+function SaveStateIndicator() {
+  const { state, error } = useContext(SaveStatusContext);
   if (state === "idle") return null;
   if (state === "saving") {
     return (

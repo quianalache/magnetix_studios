@@ -19,6 +19,7 @@ import {
   resolveResponsiveCss,
 } from "@/lib/pages-funnels/puck/style";
 import { parseCountdownTarget } from "@/lib/pages-funnels/puck/countdown";
+import { clampSliderIntervalMs } from "@/lib/pages-funnels/puck/slider";
 
 export interface GalleryImage {
   src: string;
@@ -35,10 +36,13 @@ export interface LogoItem {
   src: string;
   alt: string;
 }
+export type LogoSize = "small" | "medium" | "large";
 export interface StatItem {
   value: string;
   label: string;
   supportingText: string;
+  prefix?: string;
+  suffix?: string;
 }
 
 const alignClass: Record<PuckAlignment, string> = {
@@ -278,7 +282,7 @@ export function SliderRender({
     if (!autoplay || images.length < 2) return;
     const timer = window.setInterval(
       () => setIndex((current) => (current + 1) % images.length),
-      Math.max(2000, interval)
+      clampSliderIntervalMs(interval)
     );
     return () => window.clearInterval(timer);
   }, [autoplay, interval, images.length]);
@@ -407,6 +411,7 @@ export function LogoStripRender({
   logos,
   grayscale,
   gap,
+  logoSize,
   style,
   editing = false,
 }: {
@@ -414,6 +419,7 @@ export function LogoStripRender({
   logos: LogoItem[];
   grayscale: boolean;
   gap: number;
+  logoSize: LogoSize;
   style?: StyleConfig;
   editing?: boolean;
 }) {
@@ -429,7 +435,7 @@ export function LogoStripRender({
   return (
     <Shell id={id} style={style}>
       <div
-        className="flex min-h-16 flex-wrap items-center justify-center"
+        className="flex min-h-20 flex-wrap items-center justify-center"
         style={{ gap }}
       >
         {logos.map((logo, index) =>
@@ -438,7 +444,13 @@ export function LogoStripRender({
               key={`${logo.src}-${index}`}
               src={logo.src}
               alt={logo.alt}
-              className={`max-h-12 max-w-40 object-contain ${grayscale ? "grayscale" : ""}`}
+              className={`object-contain ${
+                logoSize === "small"
+                  ? "max-h-10 max-w-36"
+                  : logoSize === "large"
+                    ? "max-h-20 max-w-64"
+                    : "max-h-16 max-w-52"
+              } ${grayscale ? "grayscale" : ""}`}
             />
           ) : null
         )}
@@ -486,7 +498,9 @@ export function StatsRender({
           className={`min-w-0 ${alignClass[alignment]}`}
         >
           <div className="text-title-lg font-semibold tracking-tight">
+            {item.prefix}
             {item.value || "—"}
+            {item.suffix}
           </div>
           <div className="text-body font-medium">{item.label}</div>
           {item.supportingText && (
