@@ -356,8 +356,12 @@ export function ProofRender({
   style?: StyleConfig;
   editing?: boolean;
 }) {
-  if (!items.length && !editing) return null;
-  if (!items.length)
+  const hasContent = items.some(
+    (item) =>
+      item.quote || item.name || item.role || item.imageUrl || item.sourceLabel
+  );
+  if (!hasContent && !editing) return null;
+  if (!hasContent)
     return (
       <Shell id={id} style={style}>
         <div className="border-border bg-muted/30 text-muted-foreground text-body-sm flex min-h-32 items-center justify-center rounded-lg border border-dashed px-4 text-center">
@@ -458,8 +462,11 @@ export function StatsRender({
   style?: StyleConfig;
   editing?: boolean;
 }) {
-  if (!items.length && !editing) return null;
-  if (!items.length)
+  const hasContent = items.some(
+    (item) => item.value || item.label || item.supportingText
+  );
+  if (!hasContent && !editing) return null;
+  if (!hasContent)
     return (
       <Shell id={id} style={style}>
         <div className="border-border bg-muted/30 text-muted-foreground text-body-sm flex min-h-24 items-center justify-center rounded-lg border border-dashed px-4 text-center">
