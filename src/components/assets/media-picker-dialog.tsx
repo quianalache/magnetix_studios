@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FileText, Film, ImageIcon, Loader2, Search } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -24,6 +30,8 @@ export function MediaPickerDialog({
   title = "Choose from Media Library",
   description = "Reuse a file you've already uploaded.",
   onSelect,
+  multiple = false,
+  onSelectMany,
 }: {
   subAccountId: string;
   open: boolean;
@@ -34,29 +42,43 @@ export function MediaPickerDialog({
   title?: string;
   description?: string;
   onSelect: (item: MediaLibraryItem) => void;
+  multiple?: boolean;
+  onSelectMany?: (items: MediaLibraryItem[]) => void;
 }) {
   const [items, setItems] = useState<MediaLibraryItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setItems(null);
     setError(null);
-    setSelected(null);
+    setSelected([]);
     setQ("");
-    const params = new URLSearchParams({ ready: "1", ...(kind ? { kind } : {}) });
-    assetsCall<{ items: MediaLibraryItem[] }>(`/api/sub-accounts/${subAccountId}/media-library?${params}`)
+    const params = new URLSearchParams({
+      ready: "1",
+      ...(kind ? { kind } : {}),
+    });
+    assetsCall<{ items: MediaLibraryItem[] }>(
+      `/api/sub-accounts/${subAccountId}/media-library?${params}`
+    )
       .then((r) => setItems(r.items))
       .catch((e) => setError((e as Error).message));
   }, [open, subAccountId, kind]);
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (items ?? []).filter((i) => (!publicOnly || Boolean(i.publicUrl)) && (!s || i.title.toLowerCase().includes(s) || (i.filename ?? "").toLowerCase().includes(s) || i.tags.some((t) => t.toLowerCase().includes(s))));
+    return (items ?? []).filter(
+      (i) =>
+        (!publicOnly || Boolean(i.publicUrl)) &&
+        (!s ||
+          i.title.toLowerCase().includes(s) ||
+          (i.filename ?? "").toLowerCase().includes(s) ||
+          i.tags.some((t) => t.toLowerCase().includes(s)))
+    );
   }, [items, publicOnly, q]);
-  const chosen = shown.find((i) => i.id === selected) ?? null;
+  const chosen = shown.filter((i) => selected.includes(i.id));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -67,7 +89,13 @@ export function MediaPickerDialog({
         </DialogHeader>
         <label className="relative block">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input id="media-picker-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or tag…" className="pl-9" />
+          <Input
+            id="media-picker-search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name or tag…"
+            className="pl-9"
+          />
         </label>
         <div className="min-h-40 flex-1 overflow-y-auto">
           {error ? (
@@ -78,31 +106,53 @@ export function MediaPickerDialog({
             </div>
           ) : shown.length === 0 ? (
             <p className="text-muted-foreground py-10 text-center text-sm">
-              {items.length ? "No files match." : "Nothing here yet — upload it in Assets → Media Library first."}
+              {items.length
+                ? "No files match."
+                : "Nothing here yet — upload it in Assets → Media Library first."}
             </p>
           ) : (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {shown.map((i) => {
-                const Icon = i.kind === "image" ? ImageIcon : i.kind === "video" ? Film : FileText;
+                const Icon =
+                  i.kind === "image"
+                    ? ImageIcon
+                    : i.kind === "video"
+                      ? Film
+                      : FileText;
                 return (
                   <li key={i.id}>
                     <button
                       type="button"
-                      onClick={() => setSelected(i.id)}
+                      onClick={() =>
+                        setSelected((current) =>
+                          multiple
+                            ? current.includes(i.id)
+                              ? current.filter((id) => id !== i.id)
+                              : [...current, i.id]
+                            : [i.id]
+                        )
+                      }
                       onDoubleClick={() => {
+                        if (multiple) return;
                         onSelect(i);
                         onOpenChange(false);
                       }}
-                      aria-pressed={selected === i.id}
+                      aria-pressed={selected.includes(i.id)}
                       className={cn(
                         "w-full overflow-hidden rounded-xl border text-left transition-colors",
-                        selected === i.id ? "border-primary ring-primary/30 ring-2" : "hover:border-primary/40"
+                        selected.includes(i.id)
+                          ? "border-primary ring-primary/30 ring-2"
+                          : "hover:border-primary/40"
                       )}
                     >
                       <span className="bg-muted relative flex aspect-video items-center justify-center overflow-hidden">
                         {i.thumbnailUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
-                          <img src={i.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={i.thumbnailUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <Icon className="text-muted-foreground h-7 w-7" />
                         )}
@@ -113,8 +163,12 @@ export function MediaPickerDialog({
                         ) : null}
                       </span>
                       <span className="block px-2.5 py-2">
-                        <span className="block truncate text-sm font-medium">{i.title}</span>
-                        <span className="text-muted-foreground block truncate text-xs">{formatBytes(i.sizeBytes)}</span>
+                        <span className="block truncate text-sm font-medium">
+                          {i.title}
+                        </span>
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {formatBytes(i.sizeBytes)}
+                        </span>
                       </span>
                     </button>
                   </li>
@@ -128,14 +182,17 @@ export function MediaPickerDialog({
             Cancel
           </Button>
           <Button
-            disabled={!chosen}
+            disabled={!chosen.length}
             onClick={() => {
-              if (!chosen) return;
-              onSelect(chosen);
+              if (!chosen.length) return;
+              if (multiple) onSelectMany?.(chosen);
+              else onSelect(chosen[0]);
               onOpenChange(false);
             }}
           >
-            Use this file
+            {multiple
+              ? `Use ${chosen.length} image${chosen.length === 1 ? "" : "s"}`
+              : "Use this file"}
           </Button>
         </div>
       </DialogContent>

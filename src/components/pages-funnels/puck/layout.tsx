@@ -272,6 +272,17 @@ export function ColumnRender({
           "Spacer",
           "Accordion",
           "Form",
+          "ReadingTool",
+          "CustomHtml",
+          "Icon",
+          "Tabs",
+          "ImageGallery",
+          "ImageSlider",
+          "Testimonial",
+          "LogoStrip",
+          "Stats",
+          "Countdown",
+          "OfferSummary",
         ]}
         className={cn(
           "relative z-10 flex flex-col gap-4",
@@ -309,7 +320,10 @@ export function PageRootRender({
       data-page-root=""
       // Editor only: Puck's root drop zone fills the page, so a block can be
       // dropped anywhere on an empty canvas (live pages are never stretched).
-      className={cn("relative isolate min-h-screen", editing && "flex flex-col [&>*:not([aria-hidden])]:flex-1")}
+      className={cn(
+        "relative isolate min-h-screen",
+        editing && "flex flex-col [&>*:not([aria-hidden])]:flex-1"
+      )}
       style={{ backgroundColor: "#ffffff" }}
     >
       <div className="absolute inset-0 -z-10" aria-hidden>

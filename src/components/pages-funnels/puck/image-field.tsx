@@ -119,15 +119,17 @@ export function ImageFieldEditor({
             )}
             {uploading ? "Uploading…" : src ? "Replace Image" : "Upload Image"}
           </Button>
-          <MediaLibraryImageButton
-            subAccountId={sub!.subAccountId}
-            onPick={(url) => {
-              setError(null);
-              onChange(url);
-            }}
-            disabled={uploading}
-            className="w-full"
-          />
+          {!src && (
+            <MediaLibraryImageButton
+              subAccountId={sub!.subAccountId}
+              onPick={(url) => {
+                setError(null);
+                onChange(url);
+              }}
+              disabled={uploading}
+              className="w-full"
+            />
+          )}
           {error && <p className="text-destructive text-xs">{error}</p>}
         </>
       ) : (

@@ -74,8 +74,8 @@ function makeAutoSection(rows: ReturnType<typeof makeAutoRow>[]) {
       style: DEFAULT_STYLE_CONFIG,
       maxWidth: "contained",
       fullWidthBackground: true,
-      paddingTop: 64,
-      paddingBottom: 64,
+      paddingTop: 32,
+      paddingBottom: 32,
       rows,
     },
   };

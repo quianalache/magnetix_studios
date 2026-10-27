@@ -4,7 +4,14 @@ import { useState } from "react";
 import { FolderOpen, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { assetsCall } from "@/lib/client/assets-api";
 import type { MediaLibraryItem } from "@/types/media-library";
 import { MediaPickerDialog } from "./media-picker-dialog";
@@ -39,11 +46,68 @@ export function MediaLibraryImageButton({
   const [busy, setBusy] = useState(false);
   return (
     <>
-      <Button type="button" variant="outline" size={size} className={className} disabled={disabled || busy} onClick={() => setPickerOpen(true)}>
-        {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FolderOpen className="mr-1 h-3.5 w-3.5" />}
+      <Button
+        type="button"
+        variant="outline"
+        size={size}
+        className={className}
+        disabled={disabled || busy}
+        onClick={() => setPickerOpen(true)}
+      >
+        {busy ? (
+          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <FolderOpen className="mr-1 h-3.5 w-3.5" />
+        )}
         {label}
       </Button>
-      <MediaLibraryPublicImagePicker subAccountId={subAccountId} open={pickerOpen} onOpenChange={setPickerOpen} onPick={(url) => onPick(url)} onBusyChange={setBusy} />
+      <MediaLibraryPublicImagePicker
+        subAccountId={subAccountId}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={(url) => onPick(url)}
+        onBusyChange={setBusy}
+      />
+    </>
+  );
+}
+
+export function MediaLibraryImagesButton({
+  subAccountId,
+  onPick,
+  disabled,
+  className,
+}: {
+  subAccountId: string;
+  onPick: (items: MediaLibraryItem[]) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className={className}
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        <FolderOpen className="mr-1 h-3.5 w-3.5" /> Add from Media Library
+      </Button>
+      <MediaPickerDialog
+        subAccountId={subAccountId}
+        open={open}
+        onOpenChange={setOpen}
+        kind="image"
+        publicOnly
+        title="Add images from Media Library"
+        description="Select one or more publicly available images."
+        multiple
+        onSelect={() => undefined}
+        onSelectMany={onPick}
+      />
     </>
   );
 }
@@ -79,10 +143,13 @@ export function MediaLibraryPublicImagePicker({
   async function publish(item: MediaLibraryItem) {
     setBusy(true);
     try {
-      const r = await assetsCall<{ url: string }>(`/api/sub-accounts/${subAccountId}/media-library/${item.id}/public-image`, {
-        method: "POST",
-        json: {},
-      });
+      const r = await assetsCall<{ url: string }>(
+        `/api/sub-accounts/${subAccountId}/media-library/${item.id}/public-image`,
+        {
+          method: "POST",
+          json: {},
+        }
+      );
       onPick(r.url, item);
       setPending(null);
     } catch (e) {
@@ -106,20 +173,32 @@ export function MediaLibraryPublicImagePicker({
           else setPending(item);
         }}
       />
-      <Dialog open={!!pending} onOpenChange={(o) => !o && !busy && setPending(null)}>
+      <Dialog
+        open={!!pending}
+        onOpenChange={(o) => !o && !busy && setPending(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Make this image public?</DialogTitle>
             <DialogDescription>
-              “{pending?.title}” is private. Using it here creates a public copy that anyone with the link can view — needed for pages, emails, reports and
-              course images. The original in your Media Library stays private, and nothing else in your library changes.
+              “{pending?.title}” is private. Using it here creates a public copy
+              that anyone with the link can view — needed for pages, emails,
+              reports and course images. The original in your Media Library
+              stays private, and nothing else in your library changes.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" disabled={busy} onClick={() => setPending(null)}>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setPending(null)}
+            >
               Cancel
             </Button>
-            <Button disabled={busy} onClick={() => pending && void publish(pending)}>
+            <Button
+              disabled={busy}
+              onClick={() => pending && void publish(pending)}
+            >
               {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Make public &amp; use
             </Button>
