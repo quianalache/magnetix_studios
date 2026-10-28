@@ -34,6 +34,7 @@ import { BLOCK_ICONS } from "@/components/pages-funnels/puck/block-icons";
 const GENERAL_CATEGORY_ORDER = [
   "layout",
   "elements",
+  "dataMetrics",
   "prebuiltSections",
   "business",
 ] as const;

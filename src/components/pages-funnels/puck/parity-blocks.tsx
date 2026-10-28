@@ -20,6 +20,8 @@ import {
 } from "@/lib/pages-funnels/puck/style";
 import { parseCountdownTarget } from "@/lib/pages-funnels/puck/countdown";
 import { clampSliderIntervalMs } from "@/lib/pages-funnels/puck/slider";
+import { MetricGrid } from "@/components/pages-funnels/data-metrics/metric-grid";
+import { MetricValue } from "@/components/pages-funnels/data-metrics/metric-value";
 
 export interface GalleryImage {
   src: string;
@@ -43,6 +45,11 @@ export interface StatItem {
   supportingText: string;
   prefix?: string;
   suffix?: string;
+  sourceNote?: string;
+  format?: "text" | "number" | "compact" | "currency" | "percentage";
+  decimalPlaces?: number;
+  useThousandsSeparator?: boolean;
+  currency?: string;
 }
 
 const alignClass: Record<PuckAlignment, string> = {
@@ -464,6 +471,8 @@ export function StatsRender({
   items,
   columns,
   alignment,
+  gap = 24,
+  dividers = false,
   style,
   editing = false,
 }: {
@@ -471,6 +480,8 @@ export function StatsRender({
   items: StatItem[];
   columns: 2 | 3 | 4;
   alignment: PuckAlignment;
+  gap?: number;
+  dividers?: boolean;
   style?: StyleConfig;
   editing?: boolean;
 }) {
@@ -487,29 +498,29 @@ export function StatsRender({
       </Shell>
     );
   return (
-    <Shell
-      id={id}
-      style={style}
-      className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${columns === 3 ? "lg:grid-cols-3" : columns === 4 ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}
-    >
-      {items.map((item, index) => (
-        <div
-          key={`${item.label}-${index}`}
-          className={`min-w-0 ${alignClass[alignment]}`}
-        >
-          <div className="text-title-lg font-semibold tracking-tight">
-            {item.prefix}
-            {item.value || "—"}
-            {item.suffix}
-          </div>
-          <div className="text-body font-medium">{item.label}</div>
-          {item.supportingText && (
-            <p className="text-muted-foreground text-body-sm mt-1">
-              {item.supportingText}
-            </p>
-          )}
-        </div>
-      ))}
+    <Shell id={id} style={style}>
+      <MetricGrid
+        items={items.map((item) => ({
+          value: (
+            <MetricValue
+              value={item.value}
+              prefix={item.prefix}
+              suffix={item.suffix}
+              format={item.format}
+              decimalPlaces={item.decimalPlaces}
+              useThousandsSeparator={item.useThousandsSeparator}
+              currency={item.currency}
+            />
+          ),
+          label: item.label,
+          supportingText: item.supportingText,
+          sourceNote: item.sourceNote,
+        }))}
+        columns={columns}
+        alignment={alignment}
+        gap={gap}
+        dividers={dividers}
+      />
     </Shell>
   );
 }

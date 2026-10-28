@@ -12,6 +12,7 @@ import { clientPuckConfig } from "../src/components/pages-funnels/puck/client-co
 
 const categories = clientPuckConfig.categories ?? {};
 const elements = categories.elements?.components ?? [];
+const dataMetrics = categories.dataMetrics?.components ?? [];
 const business = categories.business?.components ?? [];
 const components = clientPuckConfig.components ?? {};
 
@@ -21,12 +22,19 @@ const requiredElements = [
   "ImageGallery",
   "ImageSlider",
   "LogoStrip",
-  "Stats",
 ] as const;
+const requiredDataMetrics = ["Stats"] as const;
 const requiredBusiness = ["Testimonial", "Countdown", "OfferSummary"] as const;
 
 for (const name of requiredElements) {
   assert.ok(elements.includes(name), `elements category is missing ${name}`);
+  assert.ok(name in components, `component registry is missing ${name}`);
+}
+for (const name of requiredDataMetrics) {
+  assert.ok(
+    dataMetrics.includes(name),
+    `dataMetrics category is missing ${name}`
+  );
   assert.ok(name in components, `component registry is missing ${name}`);
 }
 for (const name of requiredBusiness) {
@@ -34,4 +42,6 @@ for (const name of requiredBusiness) {
   assert.ok(name in components, `component registry is missing ${name}`);
 }
 
-console.log(`PASS: client New Builder registry exposes ${requiredElements.length + requiredBusiness.length} Wave 1 blocks`);
+console.log(
+  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} Wave 1 blocks`
+);

@@ -84,6 +84,7 @@ import {
 } from "@/components/pages-funnels/puck/countdown-field";
 import { SLIDER_INTERVAL_DEFAULT_SECONDS } from "@/lib/pages-funnels/puck/slider";
 import { FeaturedOfferPickerField } from "@/components/pages-funnels/puck/reading-block-fields";
+import { metricItemSummary } from "@/lib/pages-funnels/data-metrics/formatting";
 
 /**
  * Production Puck component registry (master spec §6/§7) — the CLIENT and
@@ -623,9 +624,9 @@ export function createPuckConfig(
           "ImageGallery",
           "ImageSlider",
           "LogoStrip",
-          "Stats",
         ],
       },
+      dataMetrics: { title: "Data & Metrics", components: ["Stats"] },
       // Category order matches master spec §6's approved customer-facing
       // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
@@ -1572,6 +1573,36 @@ export function createPuckConfig(
                 type: "text",
                 label: "Supporting text (optional)",
               },
+              sourceNote: {
+                type: "text",
+                label: "Source/date note (optional)",
+              },
+              format: {
+                type: "select",
+                label: "Number format",
+                options: [
+                  { label: "Text (default)", value: "text" },
+                  { label: "Number", value: "number" },
+                  { label: "Compact (K/M/B)", value: "compact" },
+                  { label: "Currency", value: "currency" },
+                  { label: "Percentage", value: "percentage" },
+                ],
+              },
+              decimalPlaces: {
+                type: "number",
+                label: "Decimal places",
+                min: 0,
+                max: 6,
+              },
+              useThousandsSeparator: {
+                type: "radio",
+                label: "Thousands separator",
+                options: [
+                  { label: "On", value: true },
+                  { label: "Off", value: false },
+                ],
+              },
+              currency: { type: "text", label: "Currency code (optional)" },
             },
             defaultItemProps: {
               value: "",
@@ -1580,7 +1611,7 @@ export function createPuckConfig(
               suffix: "",
               supportingText: "",
             },
-            getItemSummary: (item) => item.label || "Stat",
+            getItemSummary: (item) => metricItemSummary(item.value, item.label),
           },
           columns: {
             type: "select",
@@ -1596,12 +1627,23 @@ export function createPuckConfig(
             label: "Alignment",
             options: ALIGN_OPTIONS,
           },
+          gap: { type: "number", label: "Gap (px)", min: 0, max: 96 },
+          dividers: {
+            type: "radio",
+            label: "Dividers",
+            options: [
+              { label: "Off", value: false },
+              { label: "On", value: true },
+            ],
+          },
           style: generalElementStyleField,
         },
         defaultProps: {
           items: [],
           columns: 3,
           alignment: "left",
+          gap: 24,
+          dividers: false,
           style: DEFAULT_STYLE_CONFIG,
         },
         render: (p) => (
@@ -1611,6 +1653,8 @@ export function createPuckConfig(
             items={p.items as StatItem[]}
             columns={p.columns}
             alignment={p.alignment}
+            gap={p.gap}
+            dividers={p.dividers}
             style={p.style}
             editing={p.puck.isEditing}
           />
