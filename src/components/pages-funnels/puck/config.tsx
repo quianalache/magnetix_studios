@@ -1541,7 +1541,7 @@ export function createPuckConfig(
         defaultProps: {
           logos: [],
           logoSize: "medium",
-          grayscale: true,
+          grayscale: false,
           gap: 32,
           style: DEFAULT_STYLE_CONFIG,
         },
