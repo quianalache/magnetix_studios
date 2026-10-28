@@ -11,7 +11,9 @@ import {
   sliderIntervalSecondsToMs,
 } from "../src/lib/pages-funnels/puck/slider";
 import {
+  clampLogoHeight,
   hasLogoSource,
+  logoHeightForLegacySize,
   logoSizeLimits,
 } from "../src/lib/pages-funnels/puck/logo";
 import {
@@ -45,6 +47,11 @@ assert.equal(sliderIntervalSecondsToMs(1), 3000);
 assert.equal(sliderIntervalSecondsToMs(90), 60000);
 assert.equal(clampSliderIntervalMs(10499), 10000);
 assert.deepEqual(logoSizeLimits("medium"), { maxHeight: 64, maxWidth: 208 });
+assert.equal(clampLogoHeight(undefined), 96);
+assert.equal(clampLogoHeight(12), 48);
+assert.equal(clampLogoHeight(999), 240);
+assert.equal(logoHeightForLegacySize("small"), 64);
+assert.equal(logoHeightForLegacySize("large"), 128);
 assert.equal(hasLogoSource([{ src: "" }, { src: "  " }]), false);
 assert.equal(hasLogoSource([{ src: "logo.png" }]), true);
 const eastern = timezoneDisplayLabel(

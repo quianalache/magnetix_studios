@@ -85,6 +85,8 @@ import {
 import { SLIDER_INTERVAL_DEFAULT_SECONDS } from "@/lib/pages-funnels/puck/slider";
 import { FeaturedOfferPickerField } from "@/components/pages-funnels/puck/reading-block-fields";
 import { metricItemSummary } from "@/lib/pages-funnels/data-metrics/formatting";
+import { LogoSizeFieldEditor } from "@/components/pages-funnels/puck/logo-size-field";
+import { LOGO_HEIGHT_DEFAULT } from "@/lib/pages-funnels/puck/logo";
 
 /**
  * Production Puck component registry (master spec §6/§7) — the CLIENT and
@@ -1518,14 +1520,12 @@ export function createPuckConfig(
         label: "Logo Strip",
         fields: {
           logos: logoItemsField,
-          logoSize: {
-            type: "select",
-            label: "Logo size",
-            options: [
-              { label: "Small", value: "small" },
-              { label: "Medium", value: "medium" },
-              { label: "Large", value: "large" },
-            ],
+          logoHeight: {
+            type: "custom",
+            label: "Logo height",
+            render: ({ value, onChange }) => (
+              <LogoSizeFieldEditor value={value} onChange={onChange} />
+            ),
           },
           grayscale: {
             type: "radio",
@@ -1541,6 +1541,7 @@ export function createPuckConfig(
         defaultProps: {
           logos: [],
           logoSize: "medium",
+          logoHeight: LOGO_HEIGHT_DEFAULT,
           grayscale: false,
           gap: 32,
           style: DEFAULT_STYLE_CONFIG,
@@ -1553,6 +1554,7 @@ export function createPuckConfig(
             grayscale={p.grayscale}
             gap={p.gap}
             logoSize={p.logoSize as LogoSize}
+            logoHeight={p.logoHeight}
             style={p.style}
             editing={p.puck.isEditing}
           />

@@ -22,6 +22,10 @@ import { parseCountdownTarget } from "@/lib/pages-funnels/puck/countdown";
 import { clampSliderIntervalMs } from "@/lib/pages-funnels/puck/slider";
 import { MetricGrid } from "@/components/pages-funnels/data-metrics/metric-grid";
 import { MetricValue } from "@/components/pages-funnels/data-metrics/metric-value";
+import {
+  clampLogoHeight,
+  logoHeightForLegacySize,
+} from "@/lib/pages-funnels/puck/logo";
 
 export interface GalleryImage {
   src: string;
@@ -419,6 +423,7 @@ export function LogoStripRender({
   grayscale,
   gap,
   logoSize,
+  logoHeight,
   style,
   editing = false,
 }: {
@@ -427,6 +432,7 @@ export function LogoStripRender({
   grayscale: boolean;
   gap: number;
   logoSize: LogoSize;
+  logoHeight?: number;
   style?: StyleConfig;
   editing?: boolean;
 }) {
@@ -451,13 +457,11 @@ export function LogoStripRender({
               key={`${logo.src}-${index}`}
               src={logo.src}
               alt={logo.alt}
-              className={`object-contain ${
-                logoSize === "small"
-                  ? "max-h-10 max-w-36"
-                  : logoSize === "large"
-                    ? "max-h-20 max-w-64"
-                    : "max-h-16 max-w-52"
-              } ${grayscale ? "grayscale" : ""}`}
+              className={`max-w-full object-contain ${grayscale ? "grayscale" : ""}`}
+              style={{
+                height: `${clampLogoHeight(logoHeight ?? logoHeightForLegacySize(logoSize))}px`,
+                width: "auto",
+              }}
             />
           ) : null
         )}
