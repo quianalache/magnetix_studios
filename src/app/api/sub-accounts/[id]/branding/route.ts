@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
+import { BrandKitError, saveBrandColors } from "@/lib/server/brand-kit-service";
 
 /**
  * PATCH /api/sub-accounts/[id]/branding
@@ -14,16 +15,18 @@ import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
  *
  * Auth: sub-account admin OR agency owner (via requireSubAccountAdmin).
  *
- * Body: { logoUrl: string | null }
- *   - null  → wipe the logo
- *   - ""    → wipe the logo
- *   - any other string → must start with http(s)://
+ * Body: { logoUrl?: string | null, brandColors?: BrandColor[] }
+ *   - logoUrl null / "" → wipe the logo; any other string must start with http(s)://
+ *   - brandColors → the workspace's Brand colors (Settings → Branding), up to 6,
+ *     each `{ id, hex, name? }` in order (1st = Primary, 2nd = Secondary).
+ *     Saved to `brandKit` only; see brand-kit-service.ts.
  */
 
 const URL_RE = /^https?:\/\/.+/i;
 
 interface PatchBody {
   logoUrl?: string | null;
+  brandColors?: unknown;
 }
 
 export async function PATCH(
@@ -58,6 +61,20 @@ export async function PATCH(
     }
   }
 
+  let savedColors: unknown = undefined;
+  if ("brandColors" in body) {
+    try {
+      savedColors = await saveBrandColors(subAccountId, body.brandColors);
+    } catch (err) {
+      if (err instanceof BrandKitError) return NextResponse.json({ error: err.message }, { status: err.status });
+      throw err;
+    }
+  }
+
+  if (Object.keys(updates).length === 0 && savedColors !== undefined) {
+    return NextResponse.json({ ok: true, brandColors: savedColors });
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
       { error: "No valid fields to update" },
@@ -75,5 +92,5 @@ export async function PATCH(
       { merge: true },
     );
 
-  return NextResponse.json({ ok: true, ...updates });
+  return NextResponse.json({ ok: true, ...updates, ...(savedColors !== undefined ? { brandColors: savedColors } : {}) });
 }

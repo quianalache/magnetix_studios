@@ -1,7 +1,7 @@
 /**
  * Workspace (sub-account) logo resolution — the ONE place surfaces ask for
  * "this workspace's logo" (2026-10-14). Today the logo is a URL saved in
- * Settings → Business profile → Branding (`subAccount.logoUrl`). When that
+ * Settings → Workspace → Branding (`subAccount.logoUrl`). When that
  * becomes a real upload, change it here and every consumer (booking page,
  * booking editor preview, …) follows. Client-safe, no I/O.
  */

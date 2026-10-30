@@ -253,6 +253,11 @@ How to get it: use `PageHeader variant="moment"`, which owns the serif `<h1>`. D
 - **Never** add a second tab row or a floating sub-nav card. Old `?tab=` links resolve via `requestedSection`.
 - Legacy section cards are normalized inside `[data-settings-panel]` (legacy.css). **New** sections use `<SettingsSection>`.
 
+**Workspace → Branding [IMPLEMENTED: Phase A, 2026-10-30; `sub-account-brand-colors-section.tsx`, `src/lib/brand/brand-colors.ts`; check `scripts/check-brand-kit.ts`]:** the sub-account's branding home, right after Business profile.
+- **Brand colors:** up to 6 colors saved per sub-account in `subAccounts.brandKit.colors` (`{ id, hex, name? }`, hex stored as upper-case `#RRGGBB`). Zero is valid. The role comes from the order and isn't stored: 1st Primary, 2nd Secondary, the rest Accent. Rows reorder by drag (pointer or keyboard). A light color gets a non-blocking "hard to see on white" hint. Customer brand colors are separate from the Magnetix palette and never pre-filled with it.
+- **Logo:** the existing logo editor moved here from Business profile. Storage is unchanged (`subAccounts.logoUrl`, same `/branding` route), so every existing consumer (quotes, invoices, PDFs, booking emails, MyMagnetix) is untouched.
+- **Read path:** `getTenantBrandColors(sub)` (client-safe) and `getTenantBrandColorsServerSide(subAccountId)` return one sub-account's colors with roles. **[FUTURE]** Brand colors aren't applied to anything yet: charts, progress blocks, builder color quick-picks and other surfaces will consume them in later phases. Per-surface colors (portal, booking, forms, community, courses) are unchanged.
+
 ### 4.4 Modals, drawers, popovers
 
 [IMPLEMENTED] `Dialog` (Base UI): `rounded-xl`, `bg-background`, `ring-1 ring-foreground/10`, `p-4`, `max-w-[calc(100%-2rem)]` and `sm:max-w-sm` by default (widen with `className`). `AlertDialog` for confirmations, plus `ConfirmDialog` + **`useConfirm()`** ([confirm-dialog.tsx](../src/components/system/confirm-dialog.tsx)), which **replaces `window.confirm`** (ratcheted, baseline 9). `Sheet` for drawers (left/right `w-3/4 sm:max-w-sm`; bottom sheets on phones). `Popover`, `DropdownMenu` and `Tooltip` are in `components/ui`.

@@ -15,6 +15,7 @@ import { effectiveBillingState } from "@/lib/billing/status";
 import { LANDING_VARIANT } from "@/config/landing";
 import { SubAccountWorkspaceNameSection } from "@/components/settings/sub-account-workspace-name-section";
 import { SubAccountBrandingSection } from "@/components/settings/sub-account-branding-section";
+import { SubAccountBrandColorsSection } from "@/components/settings/sub-account-brand-colors-section";
 import { SubAccountContactSection } from "@/components/settings/sub-account-contact-section";
 import { SubAccountMembersSection } from "@/components/settings/sub-account-members-section";
 import { SubAccountTerritoriesSection } from "@/components/settings/sub-account-territories-section";
@@ -65,6 +66,7 @@ const PLAN_LABEL: Record<SubscriptionStatus, { label: string; tone: StatusTone }
 
 type SectionKey =
   | "business-profile"
+  | "branding"
   | "members"
   | "sending-preferences"
   | "calendar"
@@ -84,7 +86,8 @@ type SectionKey =
   | "webhooks";
 
 const DESCRIPTIONS: Record<SectionKey, string> = {
-  "business-profile": "Your workspace name, the client contact, and the logo used on quotes, invoices and public pages.",
+  "business-profile": "Your workspace name and the client contact.",
+  branding: "Your logo and brand colors, saved once for this workspace.",
   members: "Who can use this workspace, their roles, and optional territory scoping.",
   "sending-preferences": "How email and SMS leave this workspace — for automations, broadcasts and one-off sends.",
   calendar: "Subscribe to this workspace's calendar elsewhere, and bring members' Google Calendar events in.",
@@ -146,7 +149,7 @@ function SettingsPageInner() {
       {
         label: "Workspace",
         items: isAdmin
-          ? [item("business-profile", "Business profile"), item("members", "Members"), item("sending-preferences", "Sending preferences"), item("calendar", "Calendar")]
+          ? [item("business-profile", "Business profile"), item("branding", "Branding"), item("members", "Members"), item("sending-preferences", "Sending preferences"), item("calendar", "Calendar")]
           : [item("calendar", "Calendar")],
       },
       {
@@ -272,8 +275,25 @@ function SettingsPageInner() {
           <SubAccountWorkspaceNameSection />
           {/* Account contact — the human at the client this sub-account belongs to. */}
           <SubAccountContactSection />
-          {/* Branding — the client's logo, used on quote/invoice emails, public
-              link pages, and PDFs. Independent of agency-level branding. */}
+          {isAdmin ? (
+            <p className="text-body-sm text-muted-foreground">
+              Looking for your logo?{" "}
+              <Link href={hrefFor("branding")} className="font-medium text-link underline-offset-2 hover:underline">
+                Manage your logo and brand colors in Branding
+              </Link>
+              .
+            </p>
+          ) : null}
+        </>
+      )}
+
+      {active === "branding" && (
+        <>
+          {/* Brand colors — up to 6, saved once per workspace (1st Primary,
+              2nd Secondary). Not applied to any surface yet. */}
+          <SubAccountBrandColorsSection />
+          {/* Logo — the client's logo on quote/invoice emails, public link
+              pages and PDFs (subAccounts.logoUrl). Moved from Business profile. */}
           <SubAccountBrandingSection />
         </>
       )}

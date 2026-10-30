@@ -27,6 +27,7 @@ import type {
   EnergeticDecoderReportConfig,
 } from "./energetic-decoder";
 import type { PortalBranding } from "./portal-branding";
+import type { BrandKit } from "./brand-kit";
 
 export interface AgencyDoc {
   id: string;
@@ -198,6 +199,12 @@ export interface SubAccountDoc {
    * `resolvePortalBranding()`, never this raw field directly.
    */
   portalBranding?: PortalBranding | null;
+  /**
+   * Workspace Brand colors (Settings → Workspace → Branding) — see
+   * `src/types/brand-kit.ts`. Absent/null = none saved yet. Additive; no
+   * surface reads it automatically yet.
+   */
+  brandKit?: BrandKit | null;
   /**
    * Agency-controlled gate for the public API (slice 1-9 v1). Only the
    * agency owner can flip this (PATCH /api/agency/sub-accounts/[id]/

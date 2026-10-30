@@ -874,7 +874,7 @@ export function BookingPageEditor({ mode, initial }: Props) {
                   <span className="text-xs text-muted-foreground">No workspace logo</span>
                 )}
                 <a
-                  href={saPath("/dashboard/settings?section=business-profile")}
+                  href={saPath("/dashboard/settings?section=branding")}
                   className="ml-auto text-xs font-medium text-primary underline-offset-4 hover:underline"
                 >
                   {workspaceLogo ? "Change in Branding" : "Add one in Branding"}
