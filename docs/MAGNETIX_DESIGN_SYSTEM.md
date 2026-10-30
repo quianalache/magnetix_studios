@@ -508,9 +508,10 @@ Route: `/sa/[id]/pages-funnels/[pageId]/new-builder` (route group `src/app/(buil
 | Category | Blocks | Shown on |
 |---|---|---|
 | **Layout** | Section, Row, Column | All pages |
-| **Elements** | Heading, Text, RichText, Button, Image, Video, Divider, Spacer, Accordion | All pages |
+| **Elements** | Heading, Text, RichText, Button, Image, Video, Divider, Spacer, Accordion, Icon, Tabs, Image Gallery, Image Slider, Logo Strip | All pages |
+| **Data & Metrics** | Stats / Numbers | All pages |
 | **Prebuilt Sections** | Hero | All pages |
-| **Business** | Form, ReadingTool | All pages |
+| **Business** | Form, Reading Tool, Testimonial / Proof, Countdown Timer, Pricing / Offer Summary | All pages |
 | **Advanced** | CustomHtml | All pages, **including** Reading Result pages (since `f1923e8`) |
 | **Reading** | HumanDesignChart, AtAGlance, Centers, Channels, Gates, Variables, Skills, Mandala, MandalaActivations, AstrologyChart, AstrologyKeyFacts, AstrologyHouses, AstrologyPlacements, AstrologyAspects, GeneKeys | **Reading Result pages only** (`pageType: "reading_result"`) |
 | **Next Steps** | FeaturedOffer, MyMagnetixButton, PdfButton, ReadingReportButton | **Reading Result pages only** |
@@ -519,12 +520,24 @@ Route: `/sa/[id]/pages-funnels/[pageId]/new-builder` (route group `src/app/(buil
 
 | Page type | Order |
 |---|---|
-| Ordinary pages | Layout · Elements · Prebuilt Sections · Business · Advanced |
-| Reading Result pages | **Reading · Next Steps** · Layout · Elements · Prebuilt Sections · Business · Advanced |
+| Ordinary pages | Layout · Elements · Data & Metrics · Prebuilt Sections · Business · Advanced |
+| Reading Result pages | **Reading · Next Steps** · Layout · Elements · Data & Metrics · Prebuilt Sections · Business · Advanced |
 
 The specialized **Reading** and **Next Steps** categories stay semantically distinct, even though the general blocks are also available on Reading Result pages. They come first because the Reading is the content of that page type (§13).
 
 **Block-picker icons:** lucide icons mapped per component in [block-icons.tsx](../src/components/pages-funnels/puck/block-icons.tsx). Every new block **must** add an entry there (lucide only).
+
+**Wave 1 block guidance [IMPLEMENTED]:**
+
+- **Stats / Numbers** is a static KPI / proof display. It is appropriate for authored values such as `10K+`, `98%`, `$1.2M`, `4.9/5` or `#1`. It does not count up, render progress, draw charts, query live CRM analytics or fabricate proof. Any displayed number remains customer-authored or otherwise explicitly sourced.
+- **Logo Strip** preserves uploaded colors by default, with optional Grayscale treatment. It provides direct logo-height control from **48–240px**, defaults to **96px**, and keeps the Small / Medium / Large shortcuts at **64px / 96px / 128px**. Logos preserve aspect ratio, use contain-fit, and remain contained responsively.
+- **Image Slider** supports multiple images, Media Library multi-select, replace/remove, and an Advanced image URL as a secondary path. Autoplay is expressed in customer-facing seconds: **5 seconds by default**, bounded from **3 to 60 seconds**.
+- **Countdown Timer** uses native date and time pickers plus a searchable, human-readable timezone selector. The canonical IANA timezone value is an internal representation, not ordinary customer-facing terminology. The component has distinct **Unconfigured**, **Active** and **Expired** states.
+- **Empty content blocks** remain visible, identifiable and selectable in the builder. The structural path is **Section → Row → Column → content block**. Builder-only empty states explain what belongs there; they do not invent visitor-facing content or leave an unexplained blank Section.
+
+**Data & Metrics direction [DEFINED, NOT IMPLEMENTED]:** Animated Counter is a separate block from Stats / Numbers; Progress Bar and Progress Ring are separate progress capabilities; and Chart is one block with a chart-type selector. Initial values and data are manual. Connected CRM or analytics data is a later, explicitly permissioned capability. Data Table is later as well. These are approved architectural directions, not current blocks in the registry.
+
+**Runtime registry is part of “live.”** Source-code presence alone is not proof that a Builder block is available to customers. Release-sensitive additions must be checked in the runtime Puck registry/configuration and in the production block-picker categories, not only by locating a component file.
 
 ### 11.4 Custom HTML treatment [IMPLEMENTED: `61aa1fb`, `f1923e8`; checks `scripts/check-custom-html.ts`]
 
