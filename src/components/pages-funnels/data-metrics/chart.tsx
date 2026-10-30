@@ -21,12 +21,26 @@ import {
   type ChartSort,
   type ChartType,
 } from "@/lib/pages-funnels/data-metrics/chart";
+import {
+  normalizeChartColors,
+  resolveChartColors,
+  type ChartColorsSetting,
+} from "@/lib/pages-funnels/data-metrics/chart-colors";
 import { BlockEmptyState, BlockShell } from "./block-shell";
 
 export interface ChartRowProp {
   label?: string;
   value?: number | string;
+  /** Custom color for this row (used only in Custom mode). */
+  color?: string;
 }
+
+export type ChartTitleSize = "small" | "medium" | "large";
+const TITLE_SIZE_CLASS: Record<ChartTitleSize, string> = {
+  small: "text-body-sm",
+  medium: "text-section",
+  large: "text-title-md",
+};
 
 export interface ChartProps extends MetricFormatConfig {
   id: string;
@@ -41,6 +55,11 @@ export interface ChartProps extends MetricFormatConfig {
   centerText?: string;
   centerLabel?: string;
   height?: ChartHeight;
+  /** Colors setting: Magnetix palette, Brand colors, One color, Shades or Custom. */
+  colors?: ChartColorsSetting;
+  /** The workspace's saved Brand colors (hex, in order) — passed in live, never stored on the chart. */
+  brandColors?: string[];
+  titleSize?: ChartTitleSize;
   style?: StyleConfig;
   editing?: boolean;
 }
@@ -84,6 +103,9 @@ export function ChartRender({
   centerText = "",
   centerLabel = "",
   height = "medium",
+  colors,
+  brandColors,
+  titleSize = "medium",
   format = "number",
   decimalPlaces = 0,
   useThousandsSeparator = true,
@@ -98,10 +120,21 @@ export function ChartRender({
   const { data, missingValues, negativeExcluded } = normalizeChartRows(rows, type, sort);
   const pie = isPartToWhole(type) ? pieSlices(data) : null;
   const empty = data.length === 0 || (isPartToWhole(type) && !pie);
+  const rowList = Array.isArray(rows) ? rows : [];
+  const resolved = resolveChartColors({
+    type,
+    setting: normalizeChartColors(colors),
+    data: data.map((d) => ({ index: d.index, color: rowList[d.index]?.color })),
+    rowCount: rowList.length,
+    brandColors,
+  });
+  const fills = resolved.colors;
 
   const notes: string[] = [];
   if (editing && missingValues > 0)
     notes.push(`${missingValues} ${missingValues === 1 ? "row has" : "rows have"} no number and ${missingValues === 1 ? "isn't" : "aren't"} shown.`);
+  if (editing && resolved.brandMissing)
+    notes.push("No brand colors saved yet, so the Magnetix palette is shown. Add brand colors in Settings → Branding.");
   if (editing && negativeExcluded > 0)
     notes.push(`${negativeExcluded} negative ${negativeExcluded === 1 ? "value is" : "values are"} left out: a ${type === "pie" ? "pie" : "donut"} shows parts of a whole.`);
 
@@ -141,7 +174,11 @@ export function ChartRender({
         {title || description ? (
           <figcaption className="flex flex-col gap-1">
             {title ? (
-              <p id={titleId} className="text-section font-semibold">
+              <p
+                id={titleId}
+                className={TITLE_SIZE_CLASS[titleSize] ?? TITLE_SIZE_CLASS.medium}
+                style={{ fontWeight: style?.typography?.fontWeight ?? 600 }}
+              >
                 {title}
               </p>
             ) : null}
@@ -157,6 +194,8 @@ export function ChartRender({
             <PartToWhole
               type={type}
               pie={pie!}
+              fills={fills}
+              labelColor={style?.typography?.color || undefined}
               width={width}
               fmt={fmt}
               showLegend={showLegend}
@@ -166,11 +205,12 @@ export function ChartRender({
               summaryId={summaryId}
             />
           ) : type === "horizontalBar" ? (
-            <HorizontalBars data={data} width={width} fmt={fmt} showValues={showValues} summaryId={summaryId} />
+            <HorizontalBars data={data} fills={fills} width={width} fmt={fmt} showValues={showValues} summaryId={summaryId} />
           ) : (
             <Cartesian
               type={type}
               data={data}
+              fills={fills}
               width={width}
               height={CHART_HEIGHT_PX[height] ?? CHART_HEIGHT_PX.medium}
               fmt={fmt}
@@ -236,6 +276,7 @@ function tickText(v: number, step: number, fmt: MetricFormatConfig) {
 function Cartesian({
   type,
   data,
+  fills,
   width,
   height,
   fmt,
@@ -244,6 +285,7 @@ function Cartesian({
 }: {
   type: ChartType;
   data: ChartDatum[];
+  fills: string[];
   width: number;
   height: number;
   fmt: MetricFormatConfig;
@@ -270,7 +312,7 @@ function Cartesian({
     isBar ? left + slot * i + slot / 2 : n === 1 ? left + plotW / 2 : left + 12 + ((plotW - 24) / (n - 1)) * i;
   const stride = labelStride(n, plotW, 64);
   const labelWidth = isBar ? slot * stride - 6 : (plotW / Math.max(1, n - 1)) * stride - 6;
-  const lineColor = chartColor(0);
+  const lineColor = fills[0] ?? chartColor(0);
   const points = data.map((d, i) => [xAt(i), y(d.value)] as const);
   const valueEvery = labelStride(n, plotW, 44);
 
@@ -299,7 +341,7 @@ function Cartesian({
             const h = Math.max(1, Math.abs(zeroY - yv));
             return (
               <g key={`${d.index}-${d.label}`}>
-                <rect x={x} y={yTop} width={barW} height={h} rx={Math.min(5, barW / 4)} fill={chartColor(d.index)}>
+                <rect x={x} y={yTop} width={barW} height={h} rx={Math.min(5, barW / 4)} fill={fills[i] ?? chartColor(d.index)}>
                   <title>{`${d.label}: ${formatChartValue(d.value, fmt)}`}</title>
                 </rect>
                 {showValues && i % valueEvery === 0 ? (
@@ -362,12 +404,14 @@ function Cartesian({
 /** Horizontal bar: labels on the left, so long category names stay readable. */
 function HorizontalBars({
   data,
+  fills,
   width,
   fmt,
   showValues,
   summaryId,
 }: {
   data: ChartDatum[];
+  fills: string[];
   width: number;
   fmt: MetricFormatConfig;
   showValues: boolean;
@@ -405,7 +449,7 @@ function HorizontalBars({
             <text x={left - 10} y={cy} dy="0.35em" textAnchor="end" fill="currentColor">
               {fitLabel(d.label, labelW - 14)}
             </text>
-            <rect x={x0} y={cy - barH / 2} width={w} height={barH} rx={Math.min(5, barH / 3)} fill={chartColor(d.index)}>
+            <rect x={x0} y={cy - barH / 2} width={w} height={barH} rx={Math.min(5, barH / 3)} fill={fills[i] ?? chartColor(d.index)}>
               <title>{`${d.label}: ${valueTexts[i]}`}</title>
             </rect>
             {showValues ? (
@@ -431,6 +475,8 @@ function HorizontalBars({
 function PartToWhole({
   type,
   pie,
+  fills,
+  labelColor,
   width,
   fmt,
   showLegend,
@@ -441,6 +487,9 @@ function PartToWhole({
 }: {
   type: "pie" | "donut";
   pie: NonNullable<ReturnType<typeof pieSlices>>;
+  fills: string[];
+  /** Styles → Typography color, applied to legend labels. */
+  labelColor?: string;
   width: number;
   fmt: MetricFormatConfig;
   showLegend: boolean;
@@ -457,6 +506,7 @@ function PartToWhole({
   const stroke = donut ? R * 0.34 : R;
   const r = donut ? R - stroke / 2 : R / 2;
   const C = 2 * Math.PI * r;
+  const visibleSlices = pie.slices.filter((s) => s.fraction > 0).length;
   const center =
     donut && donutCenter !== "none"
       ? donutCenter === "custom"
@@ -472,7 +522,7 @@ function PartToWhole({
           role="img"
           aria-labelledby={summaryId}
         >
-          {pie.slices.map((s) =>
+          {pie.slices.map((s, i) =>
             s.fraction > 0 ? (
               <circle
                 key={`${s.datum.index}-${s.datum.label}`}
@@ -480,7 +530,7 @@ function PartToWhole({
                 cy={V / 2}
                 r={r}
                 fill="none"
-                stroke={chartColor(s.datum.index)}
+                stroke={fills[i] ?? chartColor(s.datum.index)}
                 strokeWidth={stroke}
                 strokeDasharray={`${s.fraction * C} ${C}`}
                 strokeDashoffset={-s.start * C}
@@ -489,6 +539,28 @@ function PartToWhole({
               </circle>
             ) : null,
           )}
+          {/* Thin white dividers between slices, so neighbors stay distinct
+              even when their colors are close. */}
+          {visibleSlices > 1
+            ? pie.slices
+                .filter((s) => s.fraction > 0)
+                .map((s) => {
+                  const a = s.start * 2 * Math.PI;
+                  const rin = donut ? R - stroke : 0;
+                  return (
+                    <line
+                      key={`gap-${s.datum.index}-${s.datum.label}`}
+                      x1={V / 2 + rin * Math.cos(a)}
+                      y1={V / 2 + rin * Math.sin(a)}
+                      x2={V / 2 + (R + 1) * Math.cos(a)}
+                      y2={V / 2 + (R + 1) * Math.sin(a)}
+                      stroke="white"
+                      strokeWidth={2}
+                      data-slice-gap=""
+                    />
+                  );
+                })
+            : null}
         </svg>
         {center || (donut && centerLabel && donutCenter !== "none") ? (
           <div
@@ -504,10 +576,12 @@ function PartToWhole({
       </div>
       {showLegend ? (
         <ul aria-hidden="true" className="text-body-sm m-0 flex w-full min-w-0 list-none flex-col gap-2 p-0" style={{ maxWidth: 360 }}>
-          {pie.slices.map((s) => (
+          {pie.slices.map((s, i) => (
             <li key={`${s.datum.index}-${s.datum.label}`} className="flex min-w-0 items-center gap-2">
-              <span className="size-2.5 shrink-0 rounded-sm" style={{ background: chartColor(s.datum.index) }} />
-              <span className="text-foreground min-w-0 flex-1 truncate">{s.datum.label}</span>
+              <span className="size-2.5 shrink-0 rounded-sm" style={{ background: fills[i] ?? chartColor(s.datum.index) }} />
+              <span className="text-foreground min-w-0 flex-1 truncate" style={labelColor ? { color: labelColor } : undefined}>
+                {s.datum.label}
+              </span>
               <span className="tabular-nums">{formatChartValue(s.datum.value, fmt)}</span>
               <span className="w-10 text-right tabular-nums">{Math.round(s.fraction * 100)}%</span>
             </li>

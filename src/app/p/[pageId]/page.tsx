@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 import { publicTitle } from "@/lib/server/public-identity";
 import { ReadingResultPageView } from "@/components/pages-funnels/reading-result-page-view";
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
+import { getTenantBrandColorsServerSide } from "@/lib/server/brand-kit-service";
 import { resolveFeaturedOffers } from "@/lib/server/featured-offer-service";
 
 export const dynamic = "force-dynamic";
@@ -90,12 +91,14 @@ export default async function PublicPagePreview({
   // Button/Image "Go to Page" / "Go to Offer" / scroll targets — this page's
   // own sub-account only.
   const resolvedActions = await resolvePageActionTargets(page.subAccountId ?? "", page.puckPublishedData);
+  // This page's own workspace Brand colors (live) for Charts in "Brand colors" mode.
+  const brandColors = page.subAccountId ? (await getTenantBrandColorsServerSide(page.subAccountId)).map((c) => c.hex) : [];
   const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(page.puckPublishedData)) : {};
   return (
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, pageId: page.id }}
+      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, pageId: page.id }}
     />
   );
 }

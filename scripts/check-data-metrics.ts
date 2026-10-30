@@ -182,7 +182,7 @@ check("style field lands in the Style tab", ["AnimatedCounter", "ProgressBar", "
 console.log("Numeric field");
 const noop = () => {};
 check("value field: empty means 'not set' (not 0)", /<input[^>]*value=""/.test(h(MetricNumberInput, { label: "End value", value: undefined, onChange: noop })));
-check("value field: shows the saved number, labelled, decimal keyboard", (() => { const o = h(MetricNumberInput, { label: "End value", value: 1250, onChange: noop }); return o.includes('value="1250"') && o.includes('title="End value"') && o.includes('inputMode="decimal"') && o.includes(">End value</label>"); })());
+check("value field: shows the saved number, Puck-labelled like every field, decimal keyboard", (() => { const o = h(MetricNumberInput, { label: "End value", value: 1250, onChange: noop }); return o.includes('value="1250"') && o.includes('title="End value"') && o.includes('inputMode="decimal"') && /^<label><div class="_Input-label[^"]*">.*End value<\/div>/.test(o); })());
 
 console.log("AI safety");
 for (const type of ["AnimatedCounter", "ProgressBar", "ProgressRing", "Chart", "Stats"]) {

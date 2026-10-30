@@ -121,6 +121,12 @@ export const DEFAULT_PAGE_ACTION: PageAction = { type: "none" };
  */
 export interface PuckPageMetadata {
   subAccountId: string;
+  /**
+   * This page's workspace Brand colors (hex, in order; Settings → Branding),
+   * resolved from the page's OWN sub-account at render time — a live
+   * reference, never stored on blocks. Charts in "Brand colors" mode use it.
+   */
+  brandColors?: string[];
   resolvedForms?: Record<string, LeadForm | null>;
   /** The page being rendered — set on the published route so a Public
    *  Reading Tool submission records which page it came from. */

@@ -3,7 +3,6 @@ import type { PuckAlignment, StyleConfig } from "@/types/pages-funnels-puck";
 import { DEFAULT_STYLE_CONFIG } from "@/lib/pages-funnels/puck/style";
 import { METRIC_ACCENT_OPTIONS, type MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
 import {
-  CHART_TYPE_OPTIONS,
   formatChartValue,
   isPartToWhole,
   isSequential,
@@ -20,6 +19,20 @@ import { ChartRender } from "@/components/pages-funnels/data-metrics/chart";
 import type { ProgressValueDisplay } from "@/components/pages-funnels/data-metrics/progress-text";
 import type { EnterAnimationMode } from "@/components/pages-funnels/data-metrics/use-enter-animation";
 import { MetricNumberInput } from "@/components/pages-funnels/puck/metric-number-field";
+import {
+  ChartColorsFieldEditor,
+  ChartRowColorFieldEditor,
+  ChartTypeFieldEditor,
+} from "@/components/pages-funnels/puck/chart-fields";
+import {
+  DEFAULT_CHART_COLORS,
+  defaultRowColor,
+  effectiveColorMode,
+  type ChartColorsSetting,
+} from "@/lib/pages-funnels/data-metrics/chart-colors";
+import { normalizeHex } from "@/lib/brand/brand-colors";
+import type { ChartTitleSize } from "@/components/pages-funnels/data-metrics/chart";
+import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 
 /**
  * Data & Metrics Capability Wave 1 (2026-10-30): Animated Counter, Progress
@@ -85,7 +98,9 @@ export type ChartBlockProps = FormatProps & {
   chartType: ChartType;
   title: string;
   description: string;
-  rows: { label?: string; value?: number }[];
+  rows: { label?: string; value?: number; color?: string }[];
+  colors: ChartColorsSetting;
+  titleSize: ChartTitleSize;
   sort: ChartSort;
   showValues: boolean;
   showLegend: boolean;
@@ -331,8 +346,21 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
   const Chart: ComponentConfig<ChartBlockProps> = {
     label: "Chart",
     fields: {
-      chartType: { type: "select", label: "Chart type", options: CHART_TYPE_OPTIONS },
+      chartType: {
+        type: "custom",
+        label: "Chart type",
+        render: ({ value, onChange }) => <ChartTypeFieldEditor value={value} onChange={onChange} />,
+      },
       title: { type: "text", label: "Title" },
+      titleSize: {
+        type: "radio",
+        label: "Title size",
+        options: [
+          { label: "Small", value: "small" },
+          { label: "Medium", value: "medium" },
+          { label: "Large", value: "large" },
+        ],
+      },
       description: { type: "textarea", label: "Description (optional)" },
       rows: {
         type: "array",
@@ -340,6 +368,11 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
         arrayFields: {
           label: { type: "text", label: "Label" },
           value: metricNumberField("Value"),
+          color: {
+            type: "custom",
+            label: "Color",
+            render: ({ value, onChange, name }) => <ChartRowColorFieldEditor value={value} name={name} onChange={onChange} />,
+          },
         },
         defaultItemProps: { label: "" },
         getItemSummary: (item, index) => {
@@ -347,6 +380,11 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
           const label = item?.label?.trim() || `Row ${(index ?? 0) + 1}`;
           return value == null ? `${label} — add a number` : `${label} — ${formatChartValue(value, {})}`;
         },
+      },
+      colors: {
+        type: "custom",
+        label: "Colors",
+        render: ({ value, onChange }) => <ChartColorsFieldEditor value={value} onChange={onChange} />,
       },
       sort: {
         type: "select",
@@ -385,7 +423,14 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
     resolveFields: (data, { fields }) => {
       const t = data.props.chartType;
       const donut = t === "donut";
-      return omit(fields, [
+      // The per-row Color field appears only in Custom mode.
+      const custom = effectiveColorMode(t, data.props.colors?.mode) === "custom";
+      const rowsField = fields.rows as Extract<Fields<ChartBlockProps>["rows"], { type: "array" }>;
+      const withRows = {
+        ...fields,
+        rows: custom ? rowsField : { ...rowsField, arrayFields: omit(rowsField.arrayFields, ["color"]) },
+      } as typeof fields;
+      return omit(withRows, [
         ...formatOmissions(data.props),
         isSequential(t) && "sort",
         isPartToWhole(t) && "showValues",
@@ -409,9 +454,27 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       centerText: "",
       centerLabel: "",
       height: "medium",
+      colors: DEFAULT_CHART_COLORS,
+      titleSize: "medium",
       style: DEFAULT_STYLE_CONFIG,
     },
-    render: ({ puck, ...p }) => <ChartRender {...p} editing={puck.isEditing} />,
+    // Custom mode: every row carries its own color. Rows without one get the
+    // next Magnetix palette color (never black), saved on the row so reorder
+    // and delete keep each color with its row.
+    resolveData: (data) => {
+      const p = data.props;
+      if (effectiveColorMode(p.chartType, p.colors?.mode) !== "custom" || !Array.isArray(p.rows)) return data;
+      let changed = false;
+      const rows = p.rows.map((row, i) => {
+        if (normalizeHex(row?.color)) return row;
+        changed = true;
+        return { ...row, color: defaultRowColor(i) };
+      });
+      return changed ? { ...data, props: { ...p, rows } } : data;
+    },
+    render: ({ puck, ...p }) => (
+      <ChartRender {...p} brandColors={(puck.metadata as PuckPageMetadata | undefined)?.brandColors} editing={puck.isEditing} />
+    ),
   };
 
   return { AnimatedCounter, ProgressBar, ProgressRing, Chart };

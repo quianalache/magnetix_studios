@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Label } from "@/components/ui/label";
+import { FieldLabel } from "@puckeditor/core";
+import { Hash } from "lucide-react";
 import { parseMetricNumber } from "@/lib/pages-funnels/data-metrics/validation";
 
 /**
@@ -42,10 +43,9 @@ export function MetricNumberInput({
   }, [value]);
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs font-semibold">
-        {label}
-      </Label>
+    // Puck's own FieldLabel (with the "#" number icon), so this field's label
+    // matches every other field in the sidebar.
+    <FieldLabel label={label} icon={<Hash size={16} />}>
       <div className="flex items-center gap-2">
         <input
           id={id}
@@ -85,6 +85,6 @@ export function MetricNumberInput({
           {hint}
         </p>
       ) : null}
-    </div>
+    </FieldLabel>
   );
 }

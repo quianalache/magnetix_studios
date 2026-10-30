@@ -52,6 +52,8 @@ import {
 } from "@/components/pages-funnels/puck/use-puck-persistence";
 import type { PuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
+import { useOptionalSubAccount } from "@/context/sub-account-context";
+import { getTenantBrandColors } from "@/lib/brand/brand-colors";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
 import {
@@ -235,9 +237,14 @@ export function MagnetixPuckEditorShell({
   // omitted: the CLIENT Form element fetches on demand (see
   // form-client.tsx) rather than depending on pre-resolved metadata, which
   // is the server/<Render>-only path (used by the Preview route instead).
+  // Workspace Brand colors (Settings → Branding), live from the sub-account
+  // doc — Charts in "Brand colors" mode read them from metadata.
+  const workspace = useOptionalSubAccount();
+  const brandKey = JSON.stringify(getTenantBrandColors(workspace?.subAccount).map((c) => c.hex));
+  const brandColors = useMemo<string[]>(() => JSON.parse(brandKey), [brandKey]);
   const metadata: PuckPageMetadata = useMemo(
-    () => ({ subAccountId, pageId, readingContext, readingBuilder }),
-    [subAccountId, pageId, readingContext, readingBuilder]
+    () => ({ subAccountId, pageId, readingContext, readingBuilder, brandColors }),
+    [subAccountId, pageId, readingContext, readingBuilder, brandColors]
   );
 
   useEffect(() => {

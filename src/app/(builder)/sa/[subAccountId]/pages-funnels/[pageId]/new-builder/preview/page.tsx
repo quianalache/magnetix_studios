@@ -5,6 +5,7 @@ import { Render } from "@puckeditor/core";
 import type { Data } from "@puckeditor/core";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { getTenantBrandColors } from "@/lib/brand/brand-colors";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/system/empty-state";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
@@ -67,7 +68,10 @@ export default function NewBuilderPreviewPage({
   params: Promise<{ subAccountId: string; pageId: string }>;
 }) {
   const { subAccountId, pageId } = use(params);
-  const { saPath } = useSubAccount();
+  const { saPath, subAccount } = useSubAccount();
+  // Live workspace Brand colors for Charts in "Brand colors" mode — added at
+  // render time so they're current even if the workspace loads after the page.
+  const brandKey = JSON.stringify(getTenantBrandColors(subAccount).map((c) => c.hex));
 
   const [state, setState] = useState<
     | { status: "loading" }
@@ -228,7 +232,7 @@ export default function NewBuilderPreviewPage({
     <Render
       config={serverPuckConfig}
       data={state.data}
-      metadata={state.metadata}
+      metadata={{ ...state.metadata, brandColors: JSON.parse(brandKey) as string[] }}
     />
   );
 }
