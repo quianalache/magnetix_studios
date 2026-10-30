@@ -18,3 +18,12 @@ export function clampDecimalPlaces(value: number | undefined): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(6, Math.trunc(value as number)));
 }
+
+/** A finite number from a stored prop: Puck number fields store numbers, but
+ * older or hand-edited data may hold numeric strings. Anything else is null —
+ * never coerced to 0, so an empty field reads as "not set yet". */
+export function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") return parseMetricNumber(value);
+  return null;
+}

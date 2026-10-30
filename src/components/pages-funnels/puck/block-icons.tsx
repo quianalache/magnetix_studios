@@ -40,6 +40,10 @@ import {
   ImagePlay,
   BadgeCheck,
   BarChart3,
+  ChartBarBig,
+  ChartPie,
+  CircleGauge,
+  TrendingUp,
   Timer,
 } from "lucide-react";
 
@@ -98,6 +102,10 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   Testimonial: BadgeCheck,
   LogoStrip: Images,
   Stats: BarChart3,
+  AnimatedCounter: TrendingUp,
+  ProgressBar: ChartBarBig,
+  ProgressRing: CircleGauge,
+  Chart: ChartPie,
   Countdown: Timer,
   OfferSummary: BadgeDollarSign,
 };

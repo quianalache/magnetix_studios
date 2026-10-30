@@ -12,4 +12,8 @@ for (const name of required) {
 if (!config.includes("OfferSummary")) throw new Error("Offer Summary is not registered");
 if (!resolve.includes("collectPuckOfferSummaryIds")) throw new Error("Offer Summary binding collector is missing");
 if (!panel.includes("readingResult ? READING_RESULT_CATEGORY_ORDER")) throw new Error("Reading Result category routing is missing");
+for (const name of ["AnimatedCounter", "ProgressBar", "ProgressRing", "Chart"]) {
+  if (!icons.includes(`${name}:`)) throw new Error(`Missing block icon: ${name}`);
+}
+if (!config.includes('"AnimatedCounter",\n              "ProgressBar",\n              "ProgressRing",\n              "Chart",')) throw new Error("Data & Metrics blocks are not allowed inside Column");
 console.log(`✓ Native Builder parity contract passed — ${required.length} Wave 1 blocks registered, categorized, icon-mapped, and Offer-bound.`);

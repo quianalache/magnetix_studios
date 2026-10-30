@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import type { ReactNode } from "react";
 import {
   ArrowRight,
   Check,
@@ -14,10 +13,7 @@ import {
 } from "lucide-react";
 import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { PuckAlignment, StyleConfig } from "@/types/pages-funnels-puck";
-import {
-  resolveBaseStyleProps,
-  resolveResponsiveCss,
-} from "@/lib/pages-funnels/puck/style";
+import { BlockShell as Shell } from "@/components/pages-funnels/data-metrics/block-shell";
 import { parseCountdownTarget } from "@/lib/pages-funnels/puck/countdown";
 import { clampSliderIntervalMs } from "@/lib/pages-funnels/puck/slider";
 import { MetricGrid } from "@/components/pages-funnels/data-metrics/metric-grid";
@@ -67,25 +63,6 @@ const justifyClass: Record<PuckAlignment, string> = {
   right: "justify-end",
 };
 
-function Shell({
-  id,
-  style,
-  className,
-  children,
-}: {
-  id: string;
-  style?: StyleConfig;
-  className?: string;
-  children: ReactNode;
-}) {
-  const css = resolveResponsiveCss(id, style);
-  return (
-    <div id={id} className={className} style={resolveBaseStyleProps(style)}>
-      {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
-      {children}
-    </div>
-  );
-}
 
 export function IconRender({
   id,

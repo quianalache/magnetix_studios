@@ -509,7 +509,7 @@ Route: `/sa/[id]/pages-funnels/[pageId]/new-builder` (route group `src/app/(buil
 |---|---|---|
 | **Layout** | Section, Row, Column | All pages |
 | **Elements** | Heading, Text, RichText, Button, Image, Video, Divider, Spacer, Accordion, Icon, Tabs, Image Gallery, Image Slider, Logo Strip | All pages |
-| **Data & Metrics** | Stats / Numbers | All pages |
+| **Data & Metrics** | Stats / Numbers, Animated Counter, Progress Bar, Progress Ring, Chart | All pages |
 | **Prebuilt Sections** | Hero | All pages |
 | **Business** | Form, Reading Tool, Testimonial / Proof, Countdown Timer, Pricing / Offer Summary | All pages |
 | **Advanced** | CustomHtml | All pages, **including** Reading Result pages (since `f1923e8`) |
@@ -535,7 +535,15 @@ The specialized **Reading** and **Next Steps** categories stay semantically dist
 - **Countdown Timer** uses native date and time pickers plus a searchable, human-readable timezone selector. The canonical IANA timezone value is an internal representation, not ordinary customer-facing terminology. The component has distinct **Unconfigured**, **Active** and **Expired** states.
 - **Empty content blocks** remain visible, identifiable and selectable in the builder. The structural path is **Section → Row → Column → content block**. Builder-only empty states explain what belongs there; they do not invent visitor-facing content or leave an unexplained blank Section.
 
-**Data & Metrics direction [DEFINED, NOT IMPLEMENTED]:** Animated Counter is a separate block from Stats / Numbers; Progress Bar and Progress Ring are separate progress capabilities; and Chart is one block with a chart-type selector. Initial values and data are manual. Connected CRM or analytics data is a later, explicitly permissioned capability. Data Table is later as well. These are approved architectural directions, not current blocks in the registry.
+**Data & Metrics Capability Wave 1 [IMPLEMENTED: `data-metrics-config.tsx`, `src/components/pages-funnels/data-metrics/`, `src/lib/pages-funnels/data-metrics/`; check `scripts/check-data-metrics.ts`]:** all values are **manual and customer-authored**. There's no connected CRM or analytics data, no AI generation (`SAFE_PUCK_COMPONENTS` excludes every Data & Metrics block) and no arbitrary chart JSON. New blocks start empty: the builder shows an empty state, and visitors see nothing until real values are entered.
+
+- **Animated Counter** is separate from Stats: a number that counts from a start value to an end value **once**, when it scrolls into view (or on load, or not at all). The builder shows the static final value. Server render and first paint are the final value (hydration-safe, no-JS safe); reduced-motion visitors see the final value immediately; screen readers get only the final value. Width is reserved for the widest value (tabular numerals) so nothing shifts.
+- **Progress Bar** and **Progress Ring** share one progress model: a current value and a target above zero. The fill is clamped to 0–100%, while the real percentage (e.g. 120%) is still shown. A missing or zero target is "not set up", never NaN. The bar or ring carries `role="progressbar"` with `aria-valuemin`/`max`/`now`/`valuetext`, labelled by the visible label; the text stays readable. Optional one-time fill animation follows the same reduced-motion rules. The ring is a neutral primitive with no Decoder styling.
+- **Chart** is **one block** with a chart-type selector: Bar, Horizontal bar, Line, Area, Pie, Donut. Data is a **Label | Value** list (add, remove, reorder) with no JSON. Plain SVG built in-house, with **no chart library**. Every chart has a visible title/description, a plain-language summary and a screen-reader data table. Charts draw at the container's real width so text stays 12px on phones; category labels thin out and shorten when space is tight. Horizontal bar suits long labels, and Pie/Donut legends stack under the chart on narrow screens. Line and Area keep entered order; Pie/Donut leave out negative values and say so in the builder.
+- **Colours:** named choices (Plum, Violet, Pink, Aqua, Gold, Green, or the page's text colour) mapped to palette tokens on `:root`, never a free hex. Chart series use the Magnetix chart palette, plum first.
+- **Number entry:** value fields accept `1,250`, treat an empty box as "not set" (not 0), and show "Enter a number" inline. Formatting (number, compact, currency, percentage, decimals, thousands separator) reuses the shared Data & Metrics formatter. Fields appear only when they apply (e.g. currency code only for Currency; donut centre only for Donut).
+
+**Still later [DEFINED, NOT IMPLEMENTED]:** Data Table, multiple series and stacked charts, and connected (explicitly permissioned) CRM or analytics data.
 
 **Runtime registry is part of “live.”** Source-code presence alone is not proof that a Builder block is available to customers. Release-sensitive additions must be checked in the runtime Puck registry/configuration and in the production block-picker categories, not only by locating a component file.
 

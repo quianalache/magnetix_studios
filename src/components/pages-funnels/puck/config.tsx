@@ -85,6 +85,10 @@ import {
 import { SLIDER_INTERVAL_DEFAULT_SECONDS } from "@/lib/pages-funnels/puck/slider";
 import { FeaturedOfferPickerField } from "@/components/pages-funnels/puck/reading-block-fields";
 import { metricItemSummary } from "@/lib/pages-funnels/data-metrics/formatting";
+import {
+  createDataMetricsComponents,
+  DATA_METRICS_BLOCKS,
+} from "@/components/pages-funnels/puck/data-metrics-config";
 import { LogoSizeFieldEditor } from "@/components/pages-funnels/puck/logo-size-field";
 import { LOGO_HEIGHT_DEFAULT } from "@/lib/pages-funnels/puck/logo";
 
@@ -628,7 +632,7 @@ export function createPuckConfig(
           "LogoStrip",
         ],
       },
-      dataMetrics: { title: "Data & Metrics", components: ["Stats"] },
+      dataMetrics: { title: "Data & Metrics", components: [...DATA_METRICS_BLOCKS] },
       // Category order matches master spec §6's approved customer-facing
       // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
       prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
@@ -656,6 +660,7 @@ export function createPuckConfig(
     },
     components: {
       ...readingPuckComponents,
+      ...createDataMetricsComponents(generalElementStyleField),
       Section: {
         label: "Section",
         fields: SECTION_SHARED_FIELDS,
@@ -920,6 +925,10 @@ export function createPuckConfig(
               "Stats",
               "Countdown",
               "OfferSummary",
+              "AnimatedCounter",
+              "ProgressBar",
+              "ProgressRing",
+              "Chart",
             ],
           },
         },

@@ -23,7 +23,13 @@ const requiredElements = [
   "ImageSlider",
   "LogoStrip",
 ] as const;
-const requiredDataMetrics = ["Stats"] as const;
+const requiredDataMetrics = [
+  "Stats",
+  "AnimatedCounter",
+  "ProgressBar",
+  "ProgressRing",
+  "Chart",
+] as const;
 const requiredBusiness = ["Testimonial", "Countdown", "OfferSummary"] as const;
 
 for (const name of requiredElements) {
@@ -42,6 +48,11 @@ for (const name of requiredBusiness) {
   assert.ok(name in components, `component registry is missing ${name}`);
 }
 
+assert.ok(
+  !dataMetrics.includes("DataTable") && !("DataTable" in components),
+  "Data Table must not be exposed yet"
+);
+
 console.log(
-  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} Wave 1 blocks`
+  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics)`
 );
