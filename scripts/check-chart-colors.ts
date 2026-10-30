@@ -104,7 +104,11 @@ const afterDelete = resolvedRows({ colors: { mode: "custom" }, rows: [filled[0],
 check("delete keeps the remaining rows' colors", afterDelete.map((r) => r.color).join() === [filled[0].color, filled[2].color].join());
 check("palette mode leaves rows untouched", resolvedRows({ colors: { mode: "palette" }, rows: [{ label: "A", value: 1 }] })[0].color === undefined);
 const fieldsFor = (props: Record<string, unknown>) => chartCfg.resolveFields!({ props: { ...chartCfg.defaultProps, ...props } }, { fields: chartCfg.fields });
-check("Data row Color field appears only in Custom mode", "color" in (fieldsFor({ colors: { mode: "custom" } }).rows.arrayFields ?? {}) && !("color" in (fieldsFor({ colors: { mode: "palette" } }).rows.arrayFields ?? {})));
+check("Data rows show only Label + Value (colors are edited in Colors), in every mode", ["palette", "custom"].every((mode) => Object.keys(fieldsFor({ colors: { mode } }).rows.arrayFields ?? {}).join() === "label,value"));
+const fieldsSrc = readFileSync("src/components/pages-funnels/puck/chart-fields.tsx", "utf8");
+check("Colors previews: the FULL Magnetix palette and ALL saved Brand colors (not just colors in use)", fieldsSrc.includes('<Swatches colors={[...MAGNETIX_PALETTE_HEX]} kind="palette" />') && fieldsSrc.includes('<Swatches colors={brand} kind="brand" />') && MAGNETIX_PALETTE_HEX.length === 8);
+check("One color: picker right under Colors; Shades: picker + live ramp", /mode === "single" \? basePicker/.test(fieldsSrc) && /\{basePicker\}\s*<Swatches colors=\{preview\.colors\} kind="shades" \/>/.test(fieldsSrc));
+check("Custom editor is derived from the Data rows and writes each row's own color (no second colors array)", fieldsSrc.includes("rows.map((r, i) => (i === index ? { ...r, color: hex } : r))") && fieldsSrc.includes('type: "replace"') && !/customColors\s*:/.test(fieldsSrc));
 check("field order: Chart type, Title, Title size, Description, Data, Colors, Order", Object.keys(chartCfg.fields!).slice(0, 7).join() === "chartType,title,titleSize,description,rows,colors,sort", Object.keys(chartCfg.fields!).slice(0, 8).join());
 check("Colors defaults to the Magnetix palette", JSON.stringify(chartCfg.defaultProps!.colors) === JSON.stringify({ mode: "palette", base: "" }));
 

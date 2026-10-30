@@ -242,9 +242,11 @@ export function MagnetixPuckEditorShell({
   const workspace = useOptionalSubAccount();
   const brandKey = JSON.stringify(getTenantBrandColors(workspace?.subAccount).map((c) => c.hex));
   const brandColors = useMemo<string[]>(() => JSON.parse(brandKey), [brandKey]);
+  const brandKitKey = JSON.stringify(getTenantBrandColors(workspace?.subAccount).map(({ id, hex, name }) => ({ id, hex, name })));
+  const brandKit = useMemo<NonNullable<PuckPageMetadata["brandKit"]>>(() => JSON.parse(brandKitKey), [brandKitKey]);
   const metadata: PuckPageMetadata = useMemo(
-    () => ({ subAccountId, pageId, readingContext, readingBuilder, brandColors }),
-    [subAccountId, pageId, readingContext, readingBuilder, brandColors]
+    () => ({ subAccountId, pageId, readingContext, readingBuilder, brandColors, brandKit }),
+    [subAccountId, pageId, readingContext, readingBuilder, brandColors, brandKit]
   );
 
   useEffect(() => {

@@ -3,7 +3,9 @@
 import { useId } from "react";
 import type { StyleConfig } from "@/types/pages-funnels-puck";
 import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model";
-import { accentColor, accentTrack, type MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
+import type { MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
+import { PROGRESS_COLOR_NOTICE_TEXT, resolveProgressColor } from "@/lib/pages-funnels/data-metrics/progress-color";
+import type { BrandColor } from "@/types/brand-kit";
 import { formatChartValue } from "@/lib/pages-funnels/data-metrics/chart";
 import {
   RING_SIZE_PX,
@@ -29,6 +31,10 @@ export interface ProgressRingProps extends MetricFormatConfig {
   thickness?: ProgressThickness;
   alignment?: "left" | "center";
   accent?: MetricAccent;
+  /** Color source (Magnetix / Brand color / Custom). Absent = Magnetix (`accent`). */
+  color?: unknown;
+  /** This page's workspace Brand colors, live from page metadata. */
+  brandKit?: readonly Pick<BrandColor, "id" | "hex">[];
   animate?: boolean;
   style?: StyleConfig;
   editing?: boolean;
@@ -50,6 +56,8 @@ export function ProgressRingRender({
   thickness = "medium",
   alignment = "left",
   accent = "plum",
+  color,
+  brandKit,
   animate = true,
   format = "number",
   decimalPlaces = 0,
@@ -77,6 +85,7 @@ export function ProgressRingRender({
     ) : null;
   }
 
+  const paint = resolveProgressColor({ accent, color, brandKit });
   const fmt: MetricFormatConfig = { format, decimalPlaces, useThousandsSeparator, currency };
   const geo = ringGeometry(thickness, state.fillPercent * progress);
   const px = RING_SIZE_PX[size] ?? RING_SIZE_PX.medium;
@@ -110,14 +119,14 @@ export function ProgressRingRender({
           style={{ width: px, maxWidth: "100%", aspectRatio: "1 / 1" }}
         >
           <svg viewBox={`0 0 ${RING_VIEWBOX} ${RING_VIEWBOX}`} className="block h-full w-full -rotate-90" aria-hidden="true">
-            <circle cx={c} cy={c} r={geo.r} fill="none" stroke={accentTrack(accent)} strokeWidth={geo.stroke} />
+            <circle cx={c} cy={c} r={geo.r} fill="none" stroke={paint.track} strokeWidth={geo.stroke} />
             {geo.filled > 0 ? (
               <circle
                 cx={c}
                 cy={c}
                 r={geo.r}
                 fill="none"
-                stroke={accentColor(accent)}
+                stroke={paint.fill}
                 strokeWidth={geo.stroke}
                 strokeLinecap="round"
                 strokeDasharray={geo.dashArray}
@@ -147,6 +156,11 @@ export function ProgressRingRender({
           </div>
         ) : null}
       </div>
+      {editing && paint.notice ? (
+        <p className="text-caption text-muted-foreground mt-2" data-progress-color-notice={paint.notice}>
+          {PROGRESS_COLOR_NOTICE_TEXT[paint.notice]}
+        </p>
+      ) : null}
     </BlockShell>
   );
 }

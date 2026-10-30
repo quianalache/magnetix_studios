@@ -15,13 +15,14 @@ import type { RingSize, ProgressThickness } from "@/lib/pages-funnels/data-metri
 import { AnimatedCounterRender } from "@/components/pages-funnels/data-metrics/animated-counter";
 import { ProgressBarRender } from "@/components/pages-funnels/data-metrics/progress-bar";
 import { ProgressRingRender } from "@/components/pages-funnels/data-metrics/progress-ring";
+import { ProgressColorFieldEditor } from "./progress-color-fields";
+import { DEFAULT_PROGRESS_COLOR, normalizeProgressColor, type ProgressColorSetting } from "@/lib/pages-funnels/data-metrics/progress-color";
 import { ChartRender } from "@/components/pages-funnels/data-metrics/chart";
 import type { ProgressValueDisplay } from "@/components/pages-funnels/data-metrics/progress-text";
 import type { EnterAnimationMode } from "@/components/pages-funnels/data-metrics/use-enter-animation";
 import { MetricNumberInput } from "@/components/pages-funnels/puck/metric-number-field";
 import {
   ChartColorsFieldEditor,
-  ChartRowColorFieldEditor,
   ChartTypeFieldEditor,
 } from "@/components/pages-funnels/puck/chart-fields";
 import {
@@ -75,6 +76,8 @@ export type ProgressBarBlockProps = FormatProps & {
   thickness: ProgressThickness;
   direction: "ltr" | "rtl";
   alignment: PuckAlignment;
+  /** Color source: Magnetix (uses `accent`) · Brand color (live, by id) · Custom. Absent on older blocks = Magnetix. */
+  color?: ProgressColorSetting;
   accent: MetricAccent;
   animate: boolean;
   style: StyleConfig;
@@ -89,6 +92,8 @@ export type ProgressRingBlockProps = FormatProps & {
   size: RingSize;
   thickness: ProgressThickness;
   alignment: "left" | "center";
+  /** Color source: Magnetix (uses `accent`) · Brand color (live, by id) · Custom. Absent on older blocks = Magnetix. */
+  color?: ProgressColorSetting;
   accent: MetricAccent;
   animate: boolean;
   style: StyleConfig;
@@ -171,6 +176,18 @@ function metricNumberField(
 }
 
 /** A copy of `fields` without the named keys (progressive disclosure). */
+/** "Bar color" / "Ring color": Magnetix · Brand color · Custom. The named Magnetix color shows only for Magnetix. */
+function progressColorField(label: string) {
+  return {
+    type: "custom" as const,
+    label,
+    render: ({ value, onChange, field }: { value: ProgressColorSetting | undefined; onChange: (v: ProgressColorSetting) => void; field: { label?: string } }) => (
+      <ProgressColorFieldEditor value={value} onChange={onChange} field={field} />
+    ),
+  };
+}
+const magnetixColorOmission = (props: { color?: unknown }) => normalizeProgressColor(props.color).source !== "magnetix" && "accent";
+
 function omit<F extends Record<string, unknown>>(fields: F, keys: (string | false)[]): F {
   const drop = new Set(keys.filter(Boolean) as string[]);
   return Object.fromEntries(Object.entries(fields).filter(([k]) => !drop.has(k))) as F;
@@ -267,11 +284,12 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
           { label: "Right", value: "right" },
         ],
       },
-      accent: { ...accentField, label: "Bar color" },
+      color: progressColorField("Bar color") as Fields<ProgressBarBlockProps>["color"],
+      accent: { ...accentField, label: "Magnetix color" },
       animate: { type: "radio", label: "Fill in when it scrolls into view", options: ON_OFF },
       style: styleField as Fields<ProgressBarBlockProps>["style"],
     },
-    resolveFields: (data, { fields }) => omit(fields, formatOmissions(data.props)),
+    resolveFields: (data, { fields }) => omit(fields, [...formatOmissions(data.props), magnetixColorOmission(data.props)]),
     defaultProps: {
       label: "",
       supportingText: "",
@@ -282,10 +300,13 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       direction: "ltr",
       alignment: "left",
       accent: "plum",
+      color: DEFAULT_PROGRESS_COLOR,
       animate: true,
       style: DEFAULT_STYLE_CONFIG,
     },
-    render: ({ puck, ...p }) => <ProgressBarRender {...p} editing={puck.isEditing} />,
+    render: ({ puck, ...p }) => (
+      <ProgressBarRender {...p} brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit} editing={puck.isEditing} />
+    ),
   };
 
   const ProgressRing: ComponentConfig<ProgressRingBlockProps> = {
@@ -323,11 +344,12 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
           { label: "Ring above text", value: "center" },
         ],
       },
-      accent: { ...accentField, label: "Ring color" },
+      color: progressColorField("Ring color") as Fields<ProgressRingBlockProps>["color"],
+      accent: { ...accentField, label: "Magnetix color" },
       animate: { type: "radio", label: "Fill in when it scrolls into view", options: ON_OFF },
       style: styleField as Fields<ProgressRingBlockProps>["style"],
     },
-    resolveFields: (data, { fields }) => omit(fields, formatOmissions(data.props)),
+    resolveFields: (data, { fields }) => omit(fields, [...formatOmissions(data.props), magnetixColorOmission(data.props)]),
     defaultProps: {
       centerDisplay: "percentage",
       label: "",
@@ -337,10 +359,13 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       thickness: "medium",
       alignment: "left",
       accent: "plum",
+      color: DEFAULT_PROGRESS_COLOR,
       animate: true,
       style: DEFAULT_STYLE_CONFIG,
     },
-    render: ({ puck, ...p }) => <ProgressRingRender {...p} editing={puck.isEditing} />,
+    render: ({ puck, ...p }) => (
+      <ProgressRingRender {...p} brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit} editing={puck.isEditing} />
+    ),
   };
 
   const Chart: ComponentConfig<ChartBlockProps> = {
@@ -368,11 +393,6 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
         arrayFields: {
           label: { type: "text", label: "Label" },
           value: metricNumberField("Value"),
-          color: {
-            type: "custom",
-            label: "Color",
-            render: ({ value, onChange, name }) => <ChartRowColorFieldEditor value={value} name={name} onChange={onChange} />,
-          },
         },
         defaultItemProps: { label: "" },
         getItemSummary: (item, index) => {
@@ -423,14 +443,7 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
     resolveFields: (data, { fields }) => {
       const t = data.props.chartType;
       const donut = t === "donut";
-      // The per-row Color field appears only in Custom mode.
-      const custom = effectiveColorMode(t, data.props.colors?.mode) === "custom";
-      const rowsField = fields.rows as Extract<Fields<ChartBlockProps>["rows"], { type: "array" }>;
-      const withRows = {
-        ...fields,
-        rows: custom ? rowsField : { ...rowsField, arrayFields: omit(rowsField.arrayFields, ["color"]) },
-      } as typeof fields;
-      return omit(withRows, [
+      return omit(fields, [
         ...formatOmissions(data.props),
         isSequential(t) && "sort",
         isPartToWhole(t) && "showValues",

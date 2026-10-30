@@ -42,7 +42,7 @@ export const CHART_TYPE_SHORT: { value: ChartType; label: string; help: string }
   { value: "donut", label: "Donut", help: "Show parts of a whole with a center value." },
 ];
 
-function Hint({ tone = "muted", children }: { tone?: "muted" | "warning"; children: React.ReactNode }) {
+export function Hint({ tone = "muted", children }: { tone?: "muted" | "warning"; children: React.ReactNode }) {
   return (
     <p className={`text-caption mt-1.5 ${tone === "warning" ? "text-status-warning-fg" : "text-muted-foreground"}`}>
       {children}
@@ -72,16 +72,37 @@ function useBrandHexes(): string[] {
   return useMemo(() => getTenantBrandColors(sub?.subAccount).map((c) => c.hex), [sub?.subAccount]);
 }
 
-function quickPicks(brand: string[]) {
+export function quickPicks(brand: string[]) {
   return [
     ...brand.map((hex, i) => ({ label: `Brand color ${i + 1}`, value: hex })),
     ...MAGNETIX_PALETTE_HEX.map((hex, i) => ({ label: `Magnetix color ${i + 1}`, value: hex })),
   ];
 }
 
-function Swatches({ colors }: { colors: string[] }) {
+/** "No brand colors saved yet" + a link to Settings → Branding (new tab). Shared by Chart and Progress. */
+export function NoBrandColorsNotice({ shownInstead }: { shownInstead: string }) {
+  const sub = useOptionalSubAccount();
+  const brandingHref = sub ? sub.saPath("/dashboard/settings?section=branding") : null;
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-hidden="true" data-chart-color-preview="">
+    <div className="border-border bg-muted/40 text-caption mt-2 rounded-lg border px-3 py-2">
+      <p className="font-medium">No brand colors saved yet.</p>
+      <p className="text-muted-foreground">
+        {shownInstead}{" "}
+        {brandingHref ? (
+          <a href={brandingHref} target="_blank" rel="noreferrer" className="text-link font-medium underline-offset-2 hover:underline">
+            Add brand colors in Settings → Branding
+          </a>
+        ) : (
+          "Add brand colors in Settings → Branding."
+        )}
+      </p>
+    </div>
+  );
+}
+
+function Swatches({ colors, kind }: { colors: string[]; kind: "palette" | "brand" | "shades" }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-hidden="true" data-chart-color-preview={kind}>
       {colors.slice(0, 12).map((c, i) => (
         <span key={`${c}-${i}`} className="size-4 rounded-full border border-border" style={{ background: c }} />
       ))}
@@ -93,7 +114,7 @@ function Swatches({ colors }: { colors: string[] }) {
  * ColorInput with a local draft: the hex box can be typed into one character
  * at a time, and only a complete 6-digit color is saved.
  */
-function ChartColorPicker({ value, onCommit, presets }: { value: string; onCommit: (hex: string) => void; presets: { label: string; value: string }[] }) {
+export function ChartColorPicker({ value, onCommit, presets }: { value: string; onCommit: (hex: string) => void; presets: { label: string; value: string }[] }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   return (
@@ -122,12 +143,10 @@ export function ChartColorsFieldEditor({
   onChange: (v: ChartColorsSetting) => void;
 }) {
   const props = useTypedPuck((s) => s.selectedItem?.props as { chartType?: string; rows?: unknown } | undefined);
-  const sub = useOptionalSubAccount();
   const brand = useBrandHexes();
   const setting = normalizeChartColors(value);
   const type: ChartType = isChartType(props?.chartType) ? props!.chartType : "bar";
   const picks = quickPicks(brand);
-  const brandingHref = sub ? sub.saPath("/dashboard/settings?section=branding") : null;
 
   if (isSequential(type)) {
     const color = setting.base || MAGNETIX_PALETTE_HEX[0];
@@ -154,10 +173,15 @@ export function ChartColorsFieldEditor({
     brandColors: brand,
   });
   const baseColor = setting.base || MAGNETIX_PALETTE_HEX[0];
-  const showBase = mode === "single" || mode === "shades";
   const previewHex = preview.colors.filter((c) => c.startsWith("#"));
   const lookAlike = (mode === "custom" || mode === "brand") && hasLookAlikeNeighbors(previewHex, isPartToWhole(type));
   const light = mode === "single" ? isLightOnWhite(baseColor) : mode === "custom" && previewHex.some((c) => isLightOnWhite(c));
+  const basePicker = (
+    <div className="mt-2 flex items-center gap-3">
+      <ChartColorPicker value={baseColor} onCommit={(hex) => onChange({ ...setting, base: hex })} presets={picks} />
+      <span className="text-caption text-muted-foreground">{mode === "single" ? "Bar color" : "Base color"}</span>
+    </div>
+  );
 
   return (
     <div>
@@ -169,65 +193,71 @@ export function ChartColorsFieldEditor({
           onChange={(m: ChartColorsSetting["mode"]) => onChange({ ...setting, mode: m })}
         />
       </FieldLabel>
-      {mode === "brand" && preview.brandMissing ? (
-        <div className="border-border bg-muted/40 text-caption mt-2 rounded-lg border px-3 py-2">
-          <p className="font-medium">No brand colors saved yet.</p>
-          <p className="text-muted-foreground">
-            The Magnetix palette shows until you add some.{" "}
-            {brandingHref ? (
-              <a href={brandingHref} target="_blank" rel="noreferrer" className="text-link font-medium underline-offset-2 hover:underline">
-                Add brand colors in Settings → Branding
-              </a>
-            ) : (
-              "Add brand colors in Settings → Branding."
-            )}
-          </p>
-        </div>
-      ) : (
-        <Swatches colors={preview.colors} />
-      )}
-      {showBase ? (
-        <div className="mt-3 flex items-center gap-3">
-          <ChartColorPicker value={baseColor} onCommit={(hex) => onChange({ ...setting, base: hex })} presets={picks} />
-          <span className="text-caption text-muted-foreground">{mode === "single" ? "Bar color" : "Base color"}</span>
-        </div>
+      {/* What each mode means, shown in full — not just the colors the current rows happen to use. */}
+      {mode === "palette" ? <Swatches colors={[...MAGNETIX_PALETTE_HEX]} kind="palette" /> : null}
+      {mode === "brand" ? (
+        preview.brandMissing ? (
+          <NoBrandColorsNotice shownInstead="The Magnetix palette shows until you add some." />
+        ) : (
+          <>
+            <Swatches colors={brand} kind="brand" />
+            {data.length > brand.length ? (
+              <Hint>More rows than brand colors: lighter and darker steps of your colors fill the rest.</Hint>
+            ) : null}
+          </>
+        )
       ) : null}
-      {mode === "brand" && !preview.brandMissing && data.length > brand.length ? (
-        <Hint>More rows than brand colors: lighter and darker steps of your colors fill the rest.</Hint>
+      {mode === "single" ? basePicker : null}
+      {mode === "shades" ? (
+        <>
+          {basePicker}
+          <Swatches colors={preview.colors} kind="shades" />
+        </>
       ) : null}
-      {mode === "custom" ? <Hint>Set each color in its Data row.</Hint> : null}
+      {mode === "custom" ? <CustomRowColors brand={brand} /> : null}
       {light ? <Hint tone="warning">Light colors can be hard to see on white.</Hint> : null}
       {lookAlike ? <Hint tone="warning">These colors look very alike.</Hint> : null}
     </div>
   );
 }
 
-/** Row index from a Puck array sub-field name like "rows[2].color". */
-function rowIndexFromName(name: string | undefined): number {
-  const m = /\[(\d+)\]/.exec(name ?? "");
-  return m ? Number(m[1]) : 0;
-}
+/**
+ * Custom mode: one compact color control per Data row, derived from the rows
+ * themselves. Each control edits that row's own `color` — the single source
+ * of truth — so rename / add / delete / reorder in Data show up here, and a
+ * color always stays with its row.
+ */
+function CustomRowColors({ brand }: { brand: string[] }) {
+  const item = useTypedPuck((s) => s.selectedItem);
+  const selector = useTypedPuck((s) => s.appState.ui.itemSelector);
+  const dispatch = useTypedPuck((s) => s.dispatch);
+  const rows = Array.isArray(item?.props?.rows) ? (item!.props.rows as { label?: string; color?: string }[]) : [];
+  if (rows.length === 0) return <Hint>Add rows under Data to choose their colors.</Hint>;
 
-/** Color inside each Data row (Custom mode). Saved on the row, so reorder/delete keep it with its row. */
-export function ChartRowColorFieldEditor({
-  value,
-  name,
-  onChange,
-}: {
-  value: string | undefined;
-  name?: string;
-  onChange: (v: string) => void;
-}) {
-  const brand = useBrandHexes();
-  const color = normalizeHex(value) ?? defaultRowColor(rowIndexFromName(name));
+  const setRowColor = (index: number, hex: string) => {
+    if (!item || !selector?.zone) return;
+    const next = rows.map((r, i) => (i === index ? { ...r, color: hex } : r));
+    dispatch({
+      type: "replace",
+      destinationIndex: selector.index,
+      destinationZone: selector.zone,
+      data: { ...item, props: { ...item.props, rows: next } },
+    });
+  };
+
   return (
-    <FieldLabel label="Color" icon={<Palette size={16} />} el="div">
-      <div className="flex items-center gap-3">
-        <ChartColorPicker value={color} onCommit={onChange} presets={quickPicks(brand)} />
-        <span className="text-caption text-muted-foreground font-mono">{color}</span>
-      </div>
-      {isLightOnWhite(color) ? <Hint tone="warning">Light colors can be hard to see on white.</Hint> : null}
-    </FieldLabel>
+    <ul className="mt-2 flex flex-col gap-1.5" aria-label="Custom colors" data-chart-custom-colors="">
+      {rows.map((r, i) => {
+        const color = normalizeHex(r.color) ?? defaultRowColor(i);
+        const label = r.label?.trim() || `Row ${i + 1}`;
+        return (
+          <li key={i} className="flex items-center gap-2.5" data-chart-custom-row={i}>
+            <ChartColorPicker value={color} onCommit={(hex) => setRowColor(i, hex)} presets={quickPicks(brand)} />
+            <span className="text-body-sm min-w-0 flex-1 truncate">{label}</span>
+            <span className="text-caption text-muted-foreground font-mono">{color}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
-

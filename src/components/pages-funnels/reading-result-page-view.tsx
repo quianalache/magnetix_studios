@@ -93,7 +93,9 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
   const embedIds = collectPuckEmbedIds(data);
   const resolvedEmbeds = embedIds.length > 0 ? await resolveReadingToolPayloads(subAccountId, embedIds) : {};
   const resolvedActions = await resolvePageActionTargets(subAccountId, data);
-  const brandColors = (await getTenantBrandColorsServerSide(subAccountId)).map((c) => c.hex);
+  const tenantBrand = await getTenantBrandColorsServerSide(subAccountId);
+  const brandColors = tenantBrand.map((c) => c.hex);
+  const brandKit = tenantBrand.map(({ id, hex, name }) => ({ id, hex, name }));
   const resolvedOffers = await resolveFeaturedOffers(subAccountId, collectPuckOfferSummaryIds(data));
 
   return (
@@ -110,7 +112,7 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
       <Render
         config={serverPuckConfig}
         data={data}
-        metadata={{ subAccountId, resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, pageId: page.id, readingContext }}
+        metadata={{ subAccountId, resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, readingContext }}
       />
     </>
   );

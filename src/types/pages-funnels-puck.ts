@@ -127,6 +127,12 @@ export interface PuckPageMetadata {
    * reference, never stored on blocks. Charts in "Brand colors" mode use it.
    */
   brandColors?: string[];
+  /**
+   * The same Brand colors with their stable ids + names (live, this page's
+   * own sub-account). Progress Bar / Ring "Brand color" picks resolve by id
+   * against it, so a reorder never swaps the color and an edit follows.
+   */
+  brandKit?: { id: string; hex: string; name?: string }[];
   resolvedForms?: Record<string, LeadForm | null>;
   /** The page being rendered — set on the published route so a Public
    *  Reading Tool submission records which page it came from. */

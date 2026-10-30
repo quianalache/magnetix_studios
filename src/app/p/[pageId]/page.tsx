@@ -92,13 +92,15 @@ export default async function PublicPagePreview({
   // own sub-account only.
   const resolvedActions = await resolvePageActionTargets(page.subAccountId ?? "", page.puckPublishedData);
   // This page's own workspace Brand colors (live) for Charts in "Brand colors" mode.
-  const brandColors = page.subAccountId ? (await getTenantBrandColorsServerSide(page.subAccountId)).map((c) => c.hex) : [];
+  const tenantBrand = page.subAccountId ? await getTenantBrandColorsServerSide(page.subAccountId) : [];
+  const brandColors = tenantBrand.map((c) => c.hex);
+  const brandKit = tenantBrand.map(({ id, hex, name }) => ({ id, hex, name }));
   const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(page.puckPublishedData)) : {};
   return (
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, pageId: page.id }}
+      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id }}
     />
   );
 }

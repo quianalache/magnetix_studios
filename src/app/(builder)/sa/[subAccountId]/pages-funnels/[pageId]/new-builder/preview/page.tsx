@@ -72,6 +72,7 @@ export default function NewBuilderPreviewPage({
   // Live workspace Brand colors for Charts in "Brand colors" mode — added at
   // render time so they're current even if the workspace loads after the page.
   const brandKey = JSON.stringify(getTenantBrandColors(subAccount).map((c) => c.hex));
+  const brandKitKey = JSON.stringify(getTenantBrandColors(subAccount).map(({ id, hex, name }) => ({ id, hex, name })));
 
   const [state, setState] = useState<
     | { status: "loading" }
@@ -232,7 +233,11 @@ export default function NewBuilderPreviewPage({
     <Render
       config={serverPuckConfig}
       data={state.data}
-      metadata={{ ...state.metadata, brandColors: JSON.parse(brandKey) as string[] }}
+      metadata={{
+        ...state.metadata,
+        brandColors: JSON.parse(brandKey) as string[],
+        brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
+      }}
     />
   );
 }

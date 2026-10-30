@@ -3,7 +3,9 @@
 import { useId } from "react";
 import type { PuckAlignment, StyleConfig } from "@/types/pages-funnels-puck";
 import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model";
-import { accentColor, accentTrack, type MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
+import type { MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
+import { PROGRESS_COLOR_NOTICE_TEXT, resolveProgressColor } from "@/lib/pages-funnels/data-metrics/progress-color";
+import type { BrandColor } from "@/types/brand-kit";
 import {
   BAR_THICKNESS_PX,
   computeProgress,
@@ -26,6 +28,10 @@ export interface ProgressBarProps extends MetricFormatConfig {
   direction?: "ltr" | "rtl";
   alignment?: PuckAlignment;
   accent?: MetricAccent;
+  /** Color source (Magnetix / Brand color / Custom). Absent = Magnetix (`accent`). */
+  color?: unknown;
+  /** This page's workspace Brand colors, live from page metadata. */
+  brandKit?: readonly Pick<BrandColor, "id" | "hex">[];
   animate?: boolean;
   style?: StyleConfig;
   editing?: boolean;
@@ -46,6 +52,8 @@ export function ProgressBarRender({
   direction = "ltr",
   alignment = "left",
   accent = "plum",
+  color,
+  brandKit,
   animate = true,
   format = "number",
   decimalPlaces = 0,
@@ -73,6 +81,7 @@ export function ProgressBarRender({
     ) : null;
   }
 
+  const paint = resolveProgressColor({ accent, color, brandKit });
   const fmt: MetricFormatConfig = { format, decimalPlaces, useThousandsSeparator, currency };
   const valueText = progressValueText(state, valueDisplay, fmt);
   const height = BAR_THICKNESS_PX[thickness] ?? BAR_THICKNESS_PX.medium;
@@ -91,13 +100,13 @@ export function ProgressBarRender({
             aria-valuetext={progressAriaText(state, fmt)}
             {...(label ? { "aria-labelledby": labelId } : { "aria-label": "Progress" })}
             className="relative min-w-0 flex-1 overflow-hidden rounded-full"
-            style={{ height, background: accentTrack(accent) }}
+            style={{ height, background: paint.track }}
           >
             <div
               className="absolute inset-y-0 rounded-full"
               style={{
                 width: `${width}%`,
-                background: accentColor(accent),
+                background: paint.fill,
                 [direction === "rtl" ? "right" : "left"]: 0,
               }}
               data-progress-fill={state.fillPercent}
@@ -128,7 +137,7 @@ export function ProgressBarRender({
             {supportingText ? (
               <p
                 className="text-body-sm font-medium"
-                style={{ color: accent === "default" ? undefined : accentColor(accent) }}
+                style={{ color: paint.text }}
               >
                 {supportingText}
               </p>
@@ -136,6 +145,11 @@ export function ProgressBarRender({
           </div>
         ) : null}
       </div>
+      {editing && paint.notice ? (
+        <p className="text-caption text-muted-foreground mt-2" data-progress-color-notice={paint.notice}>
+          {PROGRESS_COLOR_NOTICE_TEXT[paint.notice]}
+        </p>
+      ) : null}
     </BlockShell>
   );
 }
