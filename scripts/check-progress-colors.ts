@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { accentColor, accentTrack, METRIC_ACCENT_OPTIONS } from "../src/lib/pages-funnels/data-metrics/accent";
 import {
+  PROGRESS_COLOR_CHOICES,
   PROGRESS_NEUTRAL_TRACK,
   normalizeProgressColor,
   resolveProgressColor,
@@ -61,6 +62,16 @@ const none = resolveProgressColor({ accent: "aqua", color: pickForest, brandKit:
 check("zero Brand colors: Magnetix color + 'No brand colors saved yet' notice", none.fill === accentColor("aqua") && none.notice === "no-brand-colors");
 check("no Brand Kit passed at all behaves like zero colors", resolveProgressColor({ color: pickForest }).notice === "no-brand-colors");
 
+console.log("New block (Primary brand color, live)");
+check("new block (no specific pick) follows the Primary brand color", resolveProgressColor({ color: { source: "brand" }, brandKit: kit }).fill === "#2F5D50");
+check("…and follows a reorder to the NEW Primary (it never picked a specific color)", resolveProgressColor({ color: { source: "brand" }, brandKit: [CLAY, FOREST] }).fill === "#A9472B");
+const fresh = resolveProgressColor({ accent: "plum", color: { source: "brand" }, brandKit: [] });
+check("new block with no brand colors: renders the internal plum fallback, no warning", fresh.fill === accentColor("plum") && fresh.notice === null);
+check("customer choices are Brand color + Custom only", PROGRESS_COLOR_CHOICES.map((c) => c.label).join() === "Brand color,Custom");
+const fieldSrc = readFileSync("src/components/pages-funnels/puck/progress-color-fields.tsx", "utf8");
+check("sidebar never names Magnetix; an older block shows its current color by name (e.g. Current: Plum)", !/Magnetix/.test(fieldSrc.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")) && fieldSrc.includes("Current: ${systemName}") && fieldSrc.includes('"Choose a color…"'));
+check("no brand colors: Custom only + Add brand colors link (no empty picker)", /if \(brand\.length === 0\)/.test(fieldSrc) && fieldSrc.includes("<AddBrandColorsLink />"));
+
 console.log("Custom");
 check("custom hex is normalized and used", resolveProgressColor({ color: { source: "custom", custom: "#a9472b" } }).fill === "#A9472B");
 check("invalid custom value is never stored", !("custom" in normalizeProgressColor({ source: "custom", custom: "#12" })));
@@ -79,15 +90,16 @@ check("accessibility kept: role=progressbar with min/max/now/valuetext, labelled
 check("percentage text still shown (color is never the only signal)", brandBar.includes("75%") && brandRing.includes("67%"));
 
 console.log("Sidebar config");
-const comps = clientPuckConfig.components as Record<string, { resolveFields?: (d: unknown, p: unknown) => Record<string, unknown>; fields?: Record<string, { label?: string; type?: string }>; defaultProps?: Record<string, unknown> }>;
+const comps = clientPuckConfig.components as Record<string, { resolveData?: (d: unknown, p: unknown) => unknown; resolveFields?: (d: unknown, p: unknown) => Record<string, unknown>; fields?: Record<string, { label?: string; type?: string }>; defaultProps?: Record<string, unknown> }>;
 for (const [name, label] of [["ProgressBar", "Bar color"], ["ProgressRing", "Ring color"]] as const) {
   const cfg = comps[name];
   const keys = Object.keys(cfg.fields!);
-  check(`${name}: "${label}" (Magnetix · Brand color · Custom) sits where the color always was, in General`, cfg.fields!.color?.label === label && cfg.fields!.color?.type === "custom" && keys.indexOf("color") + 1 === keys.indexOf("accent"));
-  check(`${name}: the named Magnetix colors are now "Magnetix color"`, cfg.fields!.accent?.label === "Magnetix color");
+  check(`${name}: "${label}" (Brand color · Custom) sits where the color always was, in General`, cfg.fields!.color?.label === label && cfg.fields!.color?.type === "custom" && keys.indexOf("color") > keys.indexOf("alignment"));
   const f = (color: unknown) => Object.keys(cfg.resolveFields!({ props: { ...cfg.defaultProps, color } }, { fields: cfg.fields }));
-  check(`${name}: Magnetix color shows only for Magnetix (and for old blocks)`, f(undefined).includes("accent") && f({ source: "magnetix" }).includes("accent") && !f({ source: "brand" }).includes("accent") && !f({ source: "custom" }).includes("accent"));
-  check(`${name}: new blocks default to Magnetix plum`, JSON.stringify(cfg.defaultProps!.color) === JSON.stringify({ source: "magnetix" }) && cfg.defaultProps!.accent === "plum");
+  check(`${name}: no customer-facing Magnetix choice — the old named color field is never shown`, [undefined, { source: "magnetix" }, { source: "brand" }, { source: "custom" }].every((c) => !f(c).includes("accent")) && f(undefined).includes("color"));
+  check(`${name}: defaultProps stay LEGACY, so a saved block missing the color setting keeps its named color`, JSON.stringify(cfg.defaultProps!.color) === JSON.stringify({ source: "magnetix" }) && cfg.defaultProps!.accent === "plum");
+  const rd = (trigger: string) => (cfg.resolveData!({ props: { ...cfg.defaultProps } }, { trigger }) as { props: { color: unknown } }).props.color;
+  check(`${name}: a NEWLY INSERTED block follows the Primary brand color; load/move never change a saved block`, JSON.stringify(rd("insert")) === JSON.stringify({ source: "brand" }) && JSON.stringify(rd("load")) === JSON.stringify({ source: "magnetix" }) && JSON.stringify(rd("move")) === JSON.stringify({ source: "magnetix" }));
 }
 
 console.log("Wiring (source)");

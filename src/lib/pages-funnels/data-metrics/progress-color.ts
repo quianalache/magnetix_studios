@@ -4,13 +4,14 @@ import { accentColor, accentTrack, type MetricAccent } from "./accent";
 
 /**
  * Progress Bar / Progress Ring color (Phase C, 2026-10-30) — pure and
- * testable. One fill color, from one of three sources:
- *  - Magnetix: the existing named accent (`accent` prop) — unchanged, and
- *    what every block saved before this phase keeps using.
+ * testable. One fill color. Customers choose (owner decision 2026-11-01):
  *  - Brand color: ONE saved workspace Brand color, referenced by its stable
  *    Brand Kit id and resolved live at render time — never copied in, so
- *    edits follow and reorders don't swap it for another color.
+ *    edits follow and reorders don't swap it for another color. With no id
+ *    (a new block) it follows the Primary brand color.
  *  - Custom: a one-off hex saved on this block.
+ * "magnetix" is LEGACY ONLY — never offered. Blocks saved with it (or with no
+ * color setting at all) keep rendering their named `accent` exactly as before.
  */
 export type ProgressColorSource = "magnetix" | "brand" | "custom";
 
@@ -22,15 +23,27 @@ export interface ProgressColorSetting {
   custom?: string;
 }
 
+/**
+ * The Progress blocks' `defaultProps` value. Puck fills a saved block's
+ * MISSING props from defaultProps, so this must stay legacy — blocks saved
+ * before color sources existed keep their named color.
+ */
 export const DEFAULT_PROGRESS_COLOR: ProgressColorSetting = { source: "magnetix" };
 
-export const PROGRESS_COLOR_SOURCE_LABEL: Record<ProgressColorSource, string> = {
-  magnetix: "Magnetix",
-  brand: "Brand color",
-  custom: "Custom",
-};
+/**
+ * What a Progress block gets when it is INSERTED (owner decision
+ * 2026-11-01): the workspace's Primary brand color, live. With none saved,
+ * the internal plum fallback. Applied by resolveData on "insert".
+ */
+export const NEW_PROGRESS_COLOR: ProgressColorSetting = { source: "brand" };
 
-/** Hex used when Custom is chosen before any color is picked (Magnetix plum). */
+/** The choices customers are offered — "magnetix" is legacy only and never listed. */
+export const PROGRESS_COLOR_CHOICES: { value: Exclude<ProgressColorSource, "magnetix">; label: string }[] = [
+  { value: "brand", label: "Brand color" },
+  { value: "custom", label: "Custom" },
+];
+
+/** Hex used when a Custom block has no color saved (unchanged since Phase C, so no existing block shifts). */
 export const PROGRESS_CUSTOM_FALLBACK = "#5E2574";
 
 /** Neutral track behind a Brand or Custom fill (defined on :root, so it resolves on public pages). */
@@ -82,8 +95,9 @@ export function resolveProgressColor(opts: {
   }
   if (setting.source === "brand") {
     const kit = opts.brandKit ?? [];
-    if (kit.length === 0) return magnetix(opts.accent, "no-brand-colors");
-    const match = kit.find((c) => c.id === setting.brandColorId);
+    // A new block (no specific pick) with no brand colors saved: the internal fallback, quietly.
+    if (kit.length === 0) return magnetix(opts.accent, setting.brandColorId ? "no-brand-colors" : null);
+    const match = setting.brandColorId ? kit.find((c) => c.id === setting.brandColorId) : kit[0];
     const hex = normalizeHex(match?.hex);
     if (!hex) return magnetix(opts.accent, "brand-color-removed");
     return { fill: hex, track: PROGRESS_NEUTRAL_TRACK, text: hex, hex, notice: null };

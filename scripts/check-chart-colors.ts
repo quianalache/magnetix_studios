@@ -10,6 +10,7 @@ import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  CHART_COLOR_MODE_LABEL,
   MAGNETIX_PALETTE_HEX,
   brandColorSequence,
   colorDistance,
@@ -48,8 +49,8 @@ const rows = [
 const data = rows.map((_, index) => ({ index }));
 
 console.log("Modes by chart type");
-check("Bar / Horizontal bar: Magnetix palette, Brand colors, One color, Custom", ["bar", "horizontalBar"].every((t) => colorModesFor(t as "bar").join() === "palette,brand,single,custom"));
-check("Pie / Donut: Magnetix palette, Brand colors, Shades, Custom (no One color)", ["pie", "donut"].every((t) => colorModesFor(t as "pie").join() === "palette,brand,shades,custom"));
+check("Bar / Horizontal bar offer: Brand colors, Custom, One color (no Magnetix palette)", ["bar", "horizontalBar"].every((t) => colorModesFor(t as "bar").join() === "brand,custom,single"));
+check("Pie / Donut offer: Brand colors, Custom, Shades of one color (no One color, no Magnetix palette)", ["pie", "donut"].every((t) => colorModesFor(t as "pie").join() === "brand,custom,shades"));
 check("Line / Area: no Colors menu (single color control)", colorModesFor("line").length === 0 && colorModesFor("area").length === 0);
 check("a setting carried across types maps sensibly", effectiveColorMode("pie", "single") === "shades" && effectiveColorMode("bar", "shades") === "single" && effectiveColorMode("line", "custom") === "single" && effectiveColorMode("bar", "nonsense") === "palette");
 check("stored setting is sanitized", JSON.stringify(normalizeChartColors({ mode: "x", base: "abc" })) === JSON.stringify({ mode: "palette", base: "#AABBCC" }) && normalizeChartColors(null).mode === "palette");
@@ -57,14 +58,17 @@ check("stored setting is sanitized", JSON.stringify(normalizeChartColors({ mode:
 console.log("Resolution");
 const res = (type: string, setting: object, brand: string[] = [], extra: { color?: string }[] = []) =>
   resolveChartColors({ type: type as "bar", setting: setting as never, data: data.map((d, i) => ({ ...d, ...(extra[i] ?? {}) })), rowCount: rows.length, brandColors: brand });
-check("Magnetix palette: the existing palette tokens, one per row", res("bar", { mode: "palette" }).colors[0] === "var(--color-plum-700)" && new Set(res("bar", { mode: "palette" }).colors).size === 6);
+check("LEGACY: an existing chart on the original palette (saved \"palette\", or no Colors setting) renders unchanged", res("bar", { mode: "palette" }).colors[0] === "var(--color-plum-700)" && new Set(res("bar", { mode: "palette" }).colors).size === 6 && effectiveColorMode("bar", "palette") === "palette" && normalizeChartColors(undefined).mode === "palette" && JSON.stringify(res("bar", {}).colors) === JSON.stringify(res("bar", { mode: "palette" }).colors));
 check("One color: every bar the chosen color", res("bar", { mode: "single", base: "#2f5d50" }).colors.every((c) => c === "#2F5D50"));
-check("One color with no choice: Magnetix plum", res("bar", { mode: "single" }).colors.every((c) => c === MAGNETIX_PALETTE_HEX[0]));
+check("One color with no base saved: the internal fallback (unchanged for existing charts)", res("bar", { mode: "single" }).colors.every((c) => c === MAGNETIX_PALETTE_HEX[0]));
 const shades = shadesRamp("#2F5D50", 6);
 check("Shades: 6 distinct steps, dark → light, none near-white", new Set(shades).size === 6 && contrastRatio(shades[0], "#FFFFFF") > contrastRatio(shades[5], "#FFFFFF") && shades.every((c) => contrastRatio(c, "#FFFFFF") > 1.15));
 check("Shades: neighbors never look alike", !hasLookAlikeNeighbors(shadesRamp("#2F5D50", 6)) && !hasLookAlikeNeighbors(shadesRamp("#5E2574", 5)));
 check("Line/Area: one series color (chosen or plum token)", res("line", { mode: "custom", base: "#A9472B" }).colors.every((c) => c === "#A9472B") && res("area", { mode: "palette" }).colors.every((c) => c === "var(--color-plum-700)"));
 const custom = res("bar", { mode: "custom" }, [], [{ color: "#111111" }, {}, { color: "nope" }]);
+check("NEW Line/Area chart (Brand colors default) follows the Primary brand color live; an explicit Line color wins", res("line", { mode: "brand" }, ["#2F5D50", "#A9472B"]).colors.every((c) => c === "#2F5D50") && res("line", { mode: "brand", base: "#123456" }, ["#2F5D50"]).colors.every((c) => c === "#123456") && res("line", { mode: "brand" }, []).colors.every((c) => c === "var(--color-plum-700)"));
+check("existing Line/Area charts (palette) ignore brand colors — unchanged", res("line", { mode: "palette" }, ["#2F5D50"]).colors.every((c) => c === "var(--color-plum-700)"));
+check("Custom rows start from the brand sequence when brand colors exist, else the internal fallback", defaultRowColor(0, ["#2F5D50", "#A9472B"]) === "#2F5D50" && defaultRowColor(1, ["#2F5D50", "#A9472B"]) === "#A9472B" && defaultRowColor(0) === MAGNETIX_PALETTE_HEX[0]);
 check("Custom: a row's color is used; missing/invalid falls back to its palette color", custom.colors[0] === "#111111" && custom.colors[1] === MAGNETIX_PALETTE_HEX[1] && custom.colors[2] === MAGNETIX_PALETTE_HEX[2]);
 
 console.log("Brand colors");
@@ -91,9 +95,9 @@ check("a row keeps its brand color when the chart is re-sorted", (() => {
 })());
 
 console.log("Custom row colors");
-const comps = clientPuckConfig.components as Record<string, { resolveData?: (d: unknown, p: unknown) => { props: Record<string, unknown> }; resolveFields?: (d: unknown, p: unknown) => Record<string, { arrayFields?: Record<string, unknown> }>; fields?: Record<string, unknown>; defaultProps?: Record<string, unknown> }>;
+const comps = clientPuckConfig.components as Record<string, { resolveData?: (d: unknown, p: unknown) => unknown; resolveFields?: (d: unknown, p: unknown) => Record<string, { arrayFields?: Record<string, unknown> }>; fields?: Record<string, unknown>; defaultProps?: Record<string, unknown> }>;
 const chartCfg = comps.Chart;
-const resolvedRows = (props: Record<string, unknown>) => (chartCfg.resolveData!({ props: { ...chartCfg.defaultProps, ...props } }, {}) as { props: { rows: { label: string; color?: string }[] } }).props.rows;
+const resolvedRows = (props: Record<string, unknown>) => (chartCfg.resolveData!({ props: { ...chartCfg.defaultProps, ...props } }, { trigger: "replace", metadata: {} }) as { props: { rows: { label: string; color?: string }[] } }).props.rows;
 const filled = resolvedRows({ colors: { mode: "custom", base: "" }, rows: [{ label: "A", value: 1 }, { label: "B", value: 2, color: "#123456" }, { label: "C", value: 3 }] });
 check("switching to Custom gives every row a palette color (never black), keeps chosen ones", filled[0].color === MAGNETIX_PALETTE_HEX[0] && filled[1].color === "#123456" && filled[2].color === MAGNETIX_PALETTE_HEX[2] && filled.every((r) => r.color !== "#000000"));
 const added = resolvedRows({ colors: { mode: "custom" }, rows: [...filled, { label: "D", value: 4 }] });
@@ -106,11 +110,21 @@ check("palette mode leaves rows untouched", resolvedRows({ colors: { mode: "pale
 const fieldsFor = (props: Record<string, unknown>) => chartCfg.resolveFields!({ props: { ...chartCfg.defaultProps, ...props } }, { fields: chartCfg.fields });
 check("Data rows show only Label + Value (colors are edited in Colors), in every mode", ["palette", "custom"].every((mode) => Object.keys(fieldsFor({ colors: { mode } }).rows.arrayFields ?? {}).join() === "label,value"));
 const fieldsSrc = readFileSync("src/components/pages-funnels/puck/chart-fields.tsx", "utf8");
-check("Colors previews: the FULL Magnetix palette and ALL saved Brand colors (not just colors in use)", fieldsSrc.includes('<Swatches colors={[...MAGNETIX_PALETTE_HEX]} kind="palette" />') && fieldsSrc.includes('<Swatches colors={brand} kind="brand" />') && MAGNETIX_PALETTE_HEX.length === 8);
-check("One color: picker right under Colors; Shades: picker + live ramp", /mode === "single" \? basePicker/.test(fieldsSrc) && /\{basePicker\}\s*<Swatches colors=\{preview\.colors\} kind="shades" \/>/.test(fieldsSrc));
+check("no customer-facing system palette: the editor never offers \"palette\" and never names it", !/Magnetix palette|Magnetix color/.test(fieldsSrc) && fieldsSrc.includes('...(mode === "palette" ? [{ label: "Choose colors…", value: "palette" }] : [])') && CHART_COLOR_MODE_LABEL.palette === "Original colors");
+const ctrlSrc = readFileSync("src/components/pages-funnels/puck/color-controls.tsx", "utf8");
+check("Brand colors are listed by swatch + name + role + hex (not anonymous dots)", fieldsSrc.includes("<BrandColorList brand={brand} />") && /color\.name \|\| color\.hex/.test(ctrlSrc) && /BRAND_COLOR_ROLE_LABEL\[color\.role\]/.test(ctrlSrc) && /\$\{color\.hex\}/.test(ctrlSrc));
+check("quick picks are the workspace's Brand colors only (no system palette)", /export function brandQuickPicks[\s\S]*?return brand\.map/.test(ctrlSrc) && !/MAGNETIX_PALETTE_HEX/.test(ctrlSrc));
+check("no brand colors in Brand mode: guidance + Branding link + 'choose Custom'", fieldsSrc.includes('<NoBrandColorsNotice onUseCustom={() => pickMode("custom")} />') && ctrlSrc.includes("choose Custom"));
+check("One color: swatch + hex picker right under Colors; Shades: base swatch + hex + live ramp", /mode === "single" \? \(\s*<div className="mt-2">\s*<ColorPickRow label="Bar color"/.test(fieldsSrc) && /<ColorPickRow label="Base color"[\s\S]*?testId="shades" \/>\s*<Swatches colors=\{preview\.colors\} kind="shades" \/>/.test(fieldsSrc));
 check("Custom editor is derived from the Data rows and writes each row's own color (no second colors array)", fieldsSrc.includes("rows.map((r, i) => (i === index ? { ...r, color: hex } : r))") && fieldsSrc.includes('type: "replace"') && !/customColors\s*:/.test(fieldsSrc));
 check("field order: Chart type, Title, Title size, Description, Data, Colors, Order", Object.keys(chartCfg.fields!).slice(0, 7).join() === "chartType,title,titleSize,description,rows,colors,sort", Object.keys(chartCfg.fields!).slice(0, 8).join());
-check("Colors defaults to the Magnetix palette", JSON.stringify(chartCfg.defaultProps!.colors) === JSON.stringify({ mode: "palette", base: "" }));
+check("defaultProps stay LEGACY (Puck fills saved blocks' missing props from them) — old charts keep their original colors", JSON.stringify(chartCfg.defaultProps!.colors) === JSON.stringify({ mode: "palette", base: "" }));
+const inserted = (chartCfg.resolveData!({ props: { ...chartCfg.defaultProps } }, { trigger: "insert", metadata: {} }) as { props: { colors: unknown } }).props.colors;
+const loaded = (chartCfg.resolveData!({ props: { ...chartCfg.defaultProps } }, { trigger: "load", metadata: {} }) as { props: { colors: unknown } }).props.colors;
+const moved = (chartCfg.resolveData!({ props: { ...chartCfg.defaultProps } }, { trigger: "move", metadata: {} }) as { props: { colors: unknown } }).props.colors;
+check("a NEWLY INSERTED chart starts on Brand colors; loading or moving a saved chart never changes it", JSON.stringify(inserted) === JSON.stringify({ mode: "brand", base: "" }) && JSON.stringify(loaded) === JSON.stringify({ mode: "palette", base: "" }) && JSON.stringify(moved) === JSON.stringify({ mode: "palette", base: "" }));
+const seededBrand = (chartCfg.resolveData!({ props: { ...chartCfg.defaultProps, colors: { mode: "custom" }, rows: [{ label: "A", value: 1 }, { label: "B", value: 2 }] } }, { trigger: "replace", metadata: { brandColors: ["#2F5D50", "#A9472B"] } }) as { props: { rows: { color?: string }[] } }).props.rows;
+check("switching to Custom seeds rows from the page's brand colors", seededBrand.map((r) => r.color).join() === "#2F5D50,#A9472B");
 
 console.log("Rendering");
 const brandBar = html({ chartType: "bar", rows, colors: { mode: "brand" }, brandColors: ["#2F5D50", "#A9472B"] });

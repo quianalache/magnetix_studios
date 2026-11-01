@@ -20,24 +20,48 @@ export interface ChartColorsSetting {
   base?: string;
 }
 
+/**
+ * The Chart's `defaultProps` value. Puck fills a saved block's MISSING props
+ * from defaultProps, so this must stay the legacy setting — charts saved
+ * before Colors existed keep their original colors.
+ */
 export const DEFAULT_CHART_COLORS: ChartColorsSetting = { mode: "palette", base: "" };
 
-/** Hex equivalents of the Magnetix chart palette (same order as CHART_PALETTE). */
+/**
+ * What a chart gets when it is INSERTED (owner decision 2026-11-01): the
+ * workspace's Brand colors. With none saved, it still draws — on the
+ * fallback colors below — and the builder asks the customer to add brand
+ * colors or choose Custom. Applied by the Chart's resolveData on "insert".
+ */
+export const NEW_CHART_COLORS: ChartColorsSetting = { mode: "brand", base: "" };
+
+/**
+ * INTERNAL FALLBACK ONLY — not a customer-facing palette (owner decision
+ * 2026-11-01). Hex equivalents of the chart's original CHART_PALETTE, in
+ * the same order. Charts saved in "palette" mode (or with no Colors setting)
+ * keep rendering with CHART_PALETTE unchanged; these hexes seed Custom rows
+ * and One color/Shades bases when the workspace has no brand colors.
+ * Name kept for the audit trail (see the 2026-11-01 palette audit).
+ */
 export const MAGNETIX_PALETTE_HEX = ["#5E2574", "#DB4A93", "#C79BD8", "#14A7B4", "#E3A63B", "#5563E0", "#16A34A", "#8E88A8"] as const;
 
 export const CHART_COLOR_MODE_LABEL: Record<ChartColorMode, string> = {
-  palette: "Magnetix palette",
+  palette: "Original colors", // legacy only — never offered as a choice
   brand: "Brand colors",
   single: "One color",
   shades: "Shades of one color",
   custom: "Custom",
 };
 
-/** The Colors choices each chart type offers. Line/Area: none (a single color control instead). */
+/**
+ * The Colors choices a customer is OFFERED per chart type. Line/Area: none (a
+ * single color control instead). "palette" is never offered — it is only
+ * accepted so existing charts keep rendering unchanged.
+ */
 export function colorModesFor(type: ChartType): ChartColorMode[] {
   if (isSequential(type)) return [];
-  if (isPartToWhole(type)) return ["palette", "brand", "shades", "custom"];
-  return ["palette", "brand", "single", "custom"];
+  if (isPartToWhole(type)) return ["brand", "custom", "shades"];
+  return ["brand", "custom", "single"];
 }
 
 /**
@@ -49,7 +73,7 @@ export function effectiveColorMode(type: ChartType, mode: unknown): ChartColorMo
   if (isSequential(type)) return "single";
   const m = (typeof mode === "string" ? mode : "palette") as ChartColorMode;
   const allowed = colorModesFor(type);
-  if (allowed.includes(m)) return m;
+  if (allowed.includes(m) || m === "palette") return m;
   if (m === "single" && allowed.includes("shades")) return "shades";
   if (m === "shades" && allowed.includes("single")) return "single";
   return "palette";
@@ -167,7 +191,9 @@ export function resolveChartColors(opts: {
   const base = normalizeHex(opts.setting.base) ?? "";
   const palette = (i: number) => chartColor(i);
   if (isSequential(opts.type)) {
-    return { mode, brandMissing: false, colors: opts.data.map(() => base || palette(0)) };
+    // A new Line/Area chart (Brand colors default) follows the Primary brand color live.
+    const primary = opts.setting.mode === "brand" ? normalizeHex(opts.brandColors?.[0]) : null;
+    return { mode, brandMissing: false, colors: opts.data.map(() => base || primary || palette(0)) };
   }
   switch (mode) {
     case "brand": {
@@ -192,8 +218,13 @@ export function resolveChartColors(opts: {
   }
 }
 
-/** The default color a new Custom row gets: the next Magnetix palette color, never black. */
-export function defaultRowColor(index: number): string {
+/**
+ * The color a Custom row starts with (never black): the workspace's brand
+ * color sequence when it has brand colors, else the internal fallback.
+ */
+export function defaultRowColor(index: number, brand: string[] = []): string {
+  const seq = brandColorSequence(brand, index + 1);
+  if (seq.length) return seq[index];
   return MAGNETIX_PALETTE_HEX[((index % MAGNETIX_PALETTE_HEX.length) + MAGNETIX_PALETTE_HEX.length) % MAGNETIX_PALETTE_HEX.length];
 }
 

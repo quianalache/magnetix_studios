@@ -24,6 +24,16 @@ const ACCENT_VAR: Record<Exclude<MetricAccent, "default">, string> = {
   green: "var(--ds-chart-6)",
 };
 
+/** Hex of each named accent (the token values) — for showing an older block's current color in the sidebar. */
+export const ACCENT_HEX: Record<Exclude<MetricAccent, "default">, string> = {
+  plum: "#3D1652",
+  violet: "#6D28D9",
+  pink: "#C42A7B",
+  aqua: "#0B8A96",
+  gold: "#B7791F",
+  green: "#16A34A",
+};
+
 /** The colour for an accent; "default" follows the surrounding text colour. */
 export function accentColor(accent: unknown): string {
   return typeof accent === "string" && accent in ACCENT_VAR

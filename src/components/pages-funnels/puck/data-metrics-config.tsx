@@ -16,7 +16,7 @@ import { AnimatedCounterRender } from "@/components/pages-funnels/data-metrics/a
 import { ProgressBarRender } from "@/components/pages-funnels/data-metrics/progress-bar";
 import { ProgressRingRender } from "@/components/pages-funnels/data-metrics/progress-ring";
 import { ProgressColorFieldEditor } from "./progress-color-fields";
-import { DEFAULT_PROGRESS_COLOR, normalizeProgressColor, type ProgressColorSetting } from "@/lib/pages-funnels/data-metrics/progress-color";
+import { DEFAULT_PROGRESS_COLOR, NEW_PROGRESS_COLOR, type ProgressColorSetting } from "@/lib/pages-funnels/data-metrics/progress-color";
 import { ChartRender } from "@/components/pages-funnels/data-metrics/chart";
 import type { ProgressValueDisplay } from "@/components/pages-funnels/data-metrics/progress-text";
 import type { EnterAnimationMode } from "@/components/pages-funnels/data-metrics/use-enter-animation";
@@ -27,6 +27,7 @@ import {
 } from "@/components/pages-funnels/puck/chart-fields";
 import {
   DEFAULT_CHART_COLORS,
+  NEW_CHART_COLORS,
   defaultRowColor,
   effectiveColorMode,
   type ChartColorsSetting,
@@ -176,7 +177,11 @@ function metricNumberField(
 }
 
 /** A copy of `fields` without the named keys (progressive disclosure). */
-/** "Bar color" / "Ring color": Magnetix · Brand color · Custom. The named Magnetix color shows only for Magnetix. */
+/**
+ * "Bar color" / "Ring color": Brand color · Custom. The older named `accent`
+ * has no field any more — it stays on saved blocks (and in defaultProps) so
+ * older blocks keep rendering it, and is shown read-only by name.
+ */
 function progressColorField(label: string) {
   return {
     type: "custom" as const,
@@ -186,7 +191,11 @@ function progressColorField(label: string) {
     ),
   };
 }
-const magnetixColorOmission = (props: { color?: unknown }) => normalizeProgressColor(props.color).source !== "magnetix" && "accent";
+
+/** A freshly inserted Progress Bar / Ring follows the Primary brand color; saved blocks are left alone. */
+function newBlockColor<T extends { props: { color?: ProgressColorSetting } }>(data: T, params?: { trigger?: string }): T {
+  return params?.trigger === "insert" ? { ...data, props: { ...data.props, color: NEW_PROGRESS_COLOR } } : data;
+}
 
 function omit<F extends Record<string, unknown>>(fields: F, keys: (string | false)[]): F {
   const drop = new Set(keys.filter(Boolean) as string[]);
@@ -285,11 +294,12 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
         ],
       },
       color: progressColorField("Bar color") as Fields<ProgressBarBlockProps>["color"],
-      accent: { ...accentField, label: "Magnetix color" },
+      // Legacy named color: kept on saved blocks, never shown (always omitted below).
+      accent: { ...accentField, label: "Color" },
       animate: { type: "radio", label: "Fill in when it scrolls into view", options: ON_OFF },
       style: styleField as Fields<ProgressBarBlockProps>["style"],
     },
-    resolveFields: (data, { fields }) => omit(fields, [...formatOmissions(data.props), magnetixColorOmission(data.props)]),
+    resolveFields: (data, { fields }) => omit(fields, ["accent", ...formatOmissions(data.props)]),
     defaultProps: {
       label: "",
       supportingText: "",
@@ -304,6 +314,7 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       animate: true,
       style: DEFAULT_STYLE_CONFIG,
     },
+    resolveData: newBlockColor,
     render: ({ puck, ...p }) => (
       <ProgressBarRender {...p} brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit} editing={puck.isEditing} />
     ),
@@ -345,11 +356,12 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
         ],
       },
       color: progressColorField("Ring color") as Fields<ProgressRingBlockProps>["color"],
-      accent: { ...accentField, label: "Magnetix color" },
+      // Legacy named color: kept on saved blocks, never shown (always omitted below).
+      accent: { ...accentField, label: "Color" },
       animate: { type: "radio", label: "Fill in when it scrolls into view", options: ON_OFF },
       style: styleField as Fields<ProgressRingBlockProps>["style"],
     },
-    resolveFields: (data, { fields }) => omit(fields, [...formatOmissions(data.props), magnetixColorOmission(data.props)]),
+    resolveFields: (data, { fields }) => omit(fields, ["accent", ...formatOmissions(data.props)]),
     defaultProps: {
       centerDisplay: "percentage",
       label: "",
@@ -363,6 +375,7 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       animate: true,
       style: DEFAULT_STYLE_CONFIG,
     },
+    resolveData: newBlockColor,
     render: ({ puck, ...p }) => (
       <ProgressRingRender {...p} brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit} editing={puck.isEditing} />
     ),
@@ -471,17 +484,21 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       titleSize: "medium",
       style: DEFAULT_STYLE_CONFIG,
     },
-    // Custom mode: every row carries its own color. Rows without one get the
-    // next Magnetix palette color (never black), saved on the row so reorder
-    // and delete keep each color with its row.
-    resolveData: (data) => {
+    // Custom mode: every row carries its own color. Rows without one start
+    // from the workspace's brand colors (or the internal fallback when it has
+    // none) — never black — saved on the row so reorder and delete keep each
+    // color with its row.
+    resolveData: (input, params) => {
+      // A freshly inserted chart starts on Brand colors (defaultProps stay legacy, see DEFAULT_CHART_COLORS).
+      const data = params?.trigger === "insert" ? { ...input, props: { ...input.props, colors: NEW_CHART_COLORS } } : input;
       const p = data.props;
+      const brand = (params?.metadata as PuckPageMetadata | undefined)?.brandColors ?? [];
       if (effectiveColorMode(p.chartType, p.colors?.mode) !== "custom" || !Array.isArray(p.rows)) return data;
       let changed = false;
       const rows = p.rows.map((row, i) => {
         if (normalizeHex(row?.color)) return row;
         changed = true;
-        return { ...row, color: defaultRowColor(i) };
+        return { ...row, color: defaultRowColor(i, brand) };
       });
       return changed ? { ...data, props: { ...p, rows } } : data;
     },
