@@ -100,7 +100,7 @@ export default async function PublicPagePreview({
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id }}
+      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups: page.puckPublishedPopups ?? {} }}
     />
   );
 }

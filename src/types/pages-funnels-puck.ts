@@ -2,6 +2,7 @@ import type { ReadingToolPayload } from "@/types/embed-config";
 import type { ReadingBlockContext } from "@/types/reading-blocks";
 import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
+import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import type { BlockAlignment } from "@/types/pages-funnels";
 import type { ColumnWidth } from "@/types/pages-funnels-v2";
 
@@ -162,6 +163,8 @@ export interface PuckPageMetadata {
    * Undefined in the builder, where links are inert.
    */
   resolvedActions?: ResolvedActionTargets;
+  /** Published page-owned popup snapshot. Runtime is intentionally not wired in Slice 3. */
+  publishedPopups?: PopupDefinitionMap;
 }
 
 /** Object-bound action targets resolved for one page. */

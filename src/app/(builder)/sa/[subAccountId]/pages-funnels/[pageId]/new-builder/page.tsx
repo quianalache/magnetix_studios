@@ -140,6 +140,7 @@ export default function NewBuilderPage({
       hasLivePage={hasLivePage}
       liveUrl={liveUrl}
       initialData={initialData}
+      initialPopups={page.puckDraftPopups}
       readingResult={
         page.pageType === "reading_result"
           ? { ...DEFAULT_READING_RESULT_PAGE_SETTINGS, ...(page.readingResult ?? {}) }

@@ -56,6 +56,8 @@ import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { getTenantBrandColors } from "@/lib/brand/brand-colors";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
+import { PopupManager } from "@/components/pages-funnels/puck/popup-manager";
+import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import {
   ReadingResultSettingsButton,
   ReadingResultSettingsContext,
@@ -161,6 +163,7 @@ export interface MagnetixPuckEditorShellProps {
    *  logic. */
   liveUrl: string;
   initialData: Data;
+  initialPopups?: PopupDefinitionMap | null;
   /** Reading Result Pages only (2026-10-21) — the page's Reading settings.
    *  Null on every other page type. */
   readingResult?: ReadingResultPageSettings | null;
@@ -179,10 +182,12 @@ export function MagnetixPuckEditorShell({
   hasLivePage,
   liveUrl,
   initialData,
+  initialPopups = null,
   readingResult = null,
   pageTypeLabel,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
+  const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
   const [readingSettings, setReadingSettings] =
     useState<ReadingResultPageSettings | null>(readingResult);
   // Stable for the page's lifetime, so the header actions (and Puck's
@@ -228,6 +233,7 @@ export function MagnetixPuckEditorShell({
     subAccountId,
     pageId,
     data,
+    popups,
     enabled: persistenceEnabled,
   });
 
@@ -268,7 +274,7 @@ export function MagnetixPuckEditorShell({
     try {
       sessionStorage.setItem(
         previewStorageKey(pageId),
-        JSON.stringify(latestDataRef.current)
+        JSON.stringify({ data: latestDataRef.current, popups })
       );
     } catch {
       // sessionStorage can throw (private-browsing storage caps, quota,
@@ -277,7 +283,7 @@ export function MagnetixPuckEditorShell({
       // failing with no feedback at all.
     }
     window.open(previewHref, "_blank");
-  }, [pageId, previewHref]);
+  }, [pageId, previewHref, popups]);
 
   const handlePublish = useCallback(async () => {
     const result = await publish();
@@ -506,6 +512,7 @@ export function MagnetixPuckEditorShell({
 
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
+      <PopupManager popups={popups} onChange={setPopups} />
       <div className="min-h-0 flex-1">
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>

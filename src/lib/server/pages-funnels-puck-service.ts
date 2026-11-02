@@ -5,6 +5,7 @@ import type { Data as PuckData } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
+import { normalizePopupMap, findStalePopupReferences, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -33,15 +34,22 @@ import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/poli
  */
 
 const PAGES_COLLECTION = "pages";
+const POPUP_PAYLOAD_LIMIT_BYTES = 700_000;
 
 export type PuckPersistenceResult =
   | { ok: true }
-  | { ok: false; error: string; status: 404 | 403 | 413 };
+  | { ok: false; error: string; status: 400 | 404 | 403 | 413 };
 
 /** Custom HTML size/count limits (custom-html/policy.ts) — enforced on every draft save and publish. */
 function customHtmlLimitError(data: PuckData): PuckPersistenceResult | null {
   const problem = findCustomHtmlLimitProblem(data);
   return problem ? { ok: false, error: problem, status: 413 } : null;
+}
+
+function popupPayloadLimitError(popups: PopupDefinitionMap): PuckPersistenceResult | null {
+  return JSON.stringify(popups).length > POPUP_PAYLOAD_LIMIT_BYTES
+    ? { ok: false, error: "Popup definitions are too large for a page document.", status: 413 }
+    : null;
 }
 
 async function loadOwnedPage(
@@ -75,16 +83,23 @@ async function loadOwnedPage(
 export async function savePuckDraft(
   subAccountId: string,
   pageId: string,
-  data: PuckData
+  data: PuckData,
+  popups: PopupDefinitionMap = {}
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
   const tooLarge = customHtmlLimitError(data);
   if (tooLarge) return tooLarge;
+  const normalizedPopups = normalizePopupMap(popups);
+  const popupTooLarge = popupPayloadLimitError(normalizedPopups);
+  if (popupTooLarge) return popupTooLarge;
+  const stale = findStalePopupReferences(data, normalizedPopups);
+  if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
 
   const now = FieldValue.serverTimestamp();
   await owned.ref.update({
     puckDraftData: data,
+    puckDraftPopups: normalizedPopups,
     puckDraftUpdatedAt: now,
     updatedAt: now,
   });
@@ -118,18 +133,26 @@ export async function savePuckDraft(
 export async function publishPuckPage(
   subAccountId: string,
   pageId: string,
-  data: PuckData
+  data: PuckData,
+  popups: PopupDefinitionMap = {}
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
   const tooLarge = customHtmlLimitError(data);
   if (tooLarge) return tooLarge;
+  const normalizedPopups = normalizePopupMap(popups);
+  const popupTooLarge = popupPayloadLimitError(normalizedPopups);
+  if (popupTooLarge) return popupTooLarge;
+  const stale = findStalePopupReferences(data, normalizedPopups);
+  if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
 
   const now = FieldValue.serverTimestamp();
   await owned.ref.update({
     puckDraftData: data,
+    puckDraftPopups: normalizedPopups,
     puckDraftUpdatedAt: now,
     puckPublishedData: data,
+    puckPublishedPopups: normalizedPopups,
     puckPublishedAt: now,
     status: "published",
     publishedAt: now,

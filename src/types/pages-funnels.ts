@@ -2,6 +2,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import type { AiGenerationMetadata } from "@/lib/pages-funnels/ai/page-plan";
+import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
 /**
  * Native Pages & Funnels builder — the data model for a block-based visual
@@ -319,6 +320,9 @@ export interface PageDoc {
   puckPublishedData?: PuckData | null;
   puckDraftUpdatedAt?: Timestamp | FieldValue | null;
   puckPublishedAt?: Timestamp | FieldValue | null;
+  /** Page-owned popup definitions. Draft and published snapshots are independent. */
+  puckDraftPopups?: PopupDefinitionMap | null;
+  puckPublishedPopups?: PopupDefinitionMap | null;
   /** Reading Result Pages only — page-level Chart Design + builder sample.
    *  Absent = DEFAULT_READING_RESULT_PAGE_SETTINGS. */
   readingResult?: ReadingResultPageSettings;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Data } from "@puckeditor/core";
+import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
 export type PuckSaveState = "idle" | "saving" | "saved" | "error";
 
@@ -38,11 +39,13 @@ export function usePuckPersistence({
   subAccountId,
   pageId,
   data,
+  popups,
   enabled,
 }: {
   subAccountId: string;
   pageId: string;
   data: Data;
+  popups: PopupDefinitionMap;
   /** False until the editor has finished its own initial mount — guards
    *  "no save before initial page load completes" even before the natural
    *  same-value comparison below would already prevent it. */
@@ -52,7 +55,8 @@ export function usePuckPersistence({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const latestDataRef = useRef(data);
-  const lastSavedSerializedRef = useRef<string>(JSON.stringify(data));
+  const latestPopupsRef = useRef(popups);
+  const lastSavedSerializedRef = useRef<string>(JSON.stringify({ data, popups }));
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,6 +64,9 @@ export function usePuckPersistence({
   useEffect(() => {
     latestDataRef.current = data;
   }, [data]);
+  useEffect(() => {
+    latestPopupsRef.current = popups;
+  }, [popups]);
 
   const draftEndpoint = `/api/sub-accounts/${subAccountId}/pages-funnels/${pageId}/puck-draft`;
   const publishEndpoint = `/api/sub-accounts/${subAccountId}/pages-funnels/${pageId}/puck-publish`;
@@ -73,11 +80,12 @@ export function usePuckPersistence({
     setSaveState("saving");
     setSaveError(null);
     const payload = latestDataRef.current;
+    const currentPopups = latestPopupsRef.current;
     try {
       const res = await fetch(draftEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: payload }),
+        body: JSON.stringify({ data: payload, popups: currentPopups }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -86,7 +94,7 @@ export function usePuckPersistence({
       if (!res.ok || !json.ok) {
         throw new Error(json.error ?? "Failed to save draft.");
       }
-      lastSavedSerializedRef.current = JSON.stringify(payload);
+      lastSavedSerializedRef.current = JSON.stringify({ data: payload, popups: currentPopups });
       setSaveState("saved");
     } catch (err) {
       setSaveState("error");
@@ -106,7 +114,7 @@ export function usePuckPersistence({
   // the last successful save (or since mount, if nothing has saved yet).
   useEffect(() => {
     if (!enabled) return;
-    const serialized = JSON.stringify(data);
+    const serialized = JSON.stringify({ data, popups });
     if (serialized === lastSavedSerializedRef.current) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -117,7 +125,7 @@ export function usePuckPersistence({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [data, enabled, runSave]);
+  }, [data, popups, enabled, runSave]);
 
   /** Explicit flush — cancels any pending debounce timer and saves now. */
   const saveDraft = useCallback(() => {
@@ -148,11 +156,12 @@ export function usePuckPersistence({
     setPublishState("saving");
     setPublishError(null);
     const payload = latestDataRef.current;
+    const currentPopups = latestPopupsRef.current;
     try {
       const res = await fetch(publishEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: payload }),
+        body: JSON.stringify({ data: payload, popups: currentPopups }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -164,7 +173,7 @@ export function usePuckPersistence({
       // Publish durably saves the draft too (same payload, one atomic
       // write server-side) — reflect that in the Save Draft state as well
       // so the two controls don't disagree right after a Publish.
-      lastSavedSerializedRef.current = JSON.stringify(payload);
+      lastSavedSerializedRef.current = JSON.stringify({ data: payload, popups: currentPopups });
       setSaveState("saved");
       setPublishState("saved");
       return { ok: true };

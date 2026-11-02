@@ -27,6 +27,7 @@ export async function POST(
   }
 
   const data = (body as { data?: PuckData } | null)?.data;
+  const popups = (body as { popups?: unknown } | null)?.popups;
   if (!data || typeof data !== "object" || !Array.isArray(data.content)) {
     return NextResponse.json(
       { error: "Missing or invalid `data`" },
@@ -34,7 +35,7 @@ export async function POST(
     );
   }
 
-  const result = await publishPuckPage(subAccountId, pageId, data);
+  const result = await publishPuckPage(subAccountId, pageId, data, popups as never);
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error },

@@ -19,6 +19,7 @@ import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext } from "
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
+import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
 /**
  * Pages & Funnels new-builder Preview route (Phase 2D task §10–§14) — a
@@ -77,7 +78,7 @@ export default function NewBuilderPreviewPage({
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "missing" }
-    | { status: "ready"; data: Data; metadata: PuckPageMetadata }
+    | { status: "ready"; data: Data; popups: PopupDefinitionMap; metadata: PuckPageMetadata }
   >({ status: "loading" });
 
   useEffect(() => {
@@ -90,6 +91,7 @@ export default function NewBuilderPreviewPage({
       const fromReadingToolPreview = new URLSearchParams(window.location.search).get("reading") === "preview";
       const page = await getPage(pageId).catch(() => null);
       let data: Data;
+      let previewPopups: PopupDefinitionMap = {};
       if (fromReadingToolPreview) {
         if (!page?.puckDraftData) {
           setState({ status: "missing" });
@@ -103,7 +105,9 @@ export default function NewBuilderPreviewPage({
           return;
         }
         try {
-          data = JSON.parse(raw) as Data;
+          const parsed = JSON.parse(raw) as Data | { data?: Data; popups?: PopupDefinitionMap };
+          data = "data" in parsed && parsed.data ? parsed.data : parsed as Data;
+          previewPopups = "data" in parsed ? (parsed.popups ?? {}) : {};
         } catch {
           setState({ status: "missing" });
           return;
@@ -181,6 +185,7 @@ export default function NewBuilderPreviewPage({
       setState({
         status: "ready",
         data,
+        popups: previewPopups,
         metadata: {
           subAccountId,
           resolvedForms,
