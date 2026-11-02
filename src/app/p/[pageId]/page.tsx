@@ -4,6 +4,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
 import type { LeadForm } from "@/types/forms";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
+import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
@@ -48,6 +49,7 @@ export default async function PublicPagePreview({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { pageId } = await params;
+  const query = (await searchParams) ?? {};
 
   const db = getAdminDb();
   const snap = await db.collection("pages").doc(pageId).get();
@@ -56,8 +58,7 @@ export default async function PublicPagePreview({
 
   // Reading Result Pages (2026-10-21) render a Reading — see the component.
   if (page.pageType === "reading_result") {
-    const sp = (await searchParams) ?? {};
-    return <ReadingResultPageView page={page} wantsDraft={sp.draft === "1"} />;
+    return <ReadingResultPageView page={page} wantsDraft={query.draft === "1"} />;
   }
 
   if (page.status !== "published" || !page.puckPublishedData) notFound();
@@ -96,11 +97,15 @@ export default async function PublicPagePreview({
   const brandColors = tenantBrand.map((c) => c.hex);
   const brandKit = tenantBrand.map(({ id, hex, name }) => ({ id, hex, name }));
   const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(page.puckPublishedData)) : {};
+  const qaPopupId = typeof query.qa_popup === "string" && page.name.startsWith("QA ·") ? query.qa_popup : null;
   return (
+    <>
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
       metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups: page.puckPublishedPopups ?? {} }}
     />
+    <PopupRuntime popups={page.puckPublishedPopups ?? {}} initialPopupId={qaPopupId} metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups: page.puckPublishedPopups ?? {} }} />
+    </>
   );
 }

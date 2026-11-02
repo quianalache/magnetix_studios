@@ -10,9 +10,13 @@ export interface PopupStyle {
   overlayOpacity: number;
   blurPx: number;
   panelMaxWidth: number;
+  panelWidth: string;
   panelBackground: string;
+  panelBorder: string;
+  panelShadow: string;
   panelBorderRadius: number;
   panelPadding: number;
+  panelAlignment: "left" | "center" | "right";
   panelPlacement: "center" | "top" | "bottom";
   closePlacement: "inside" | "outside";
   closeOnOverlayClick: boolean;
@@ -35,9 +39,13 @@ export const DEFAULT_POPUP_STYLE: PopupStyle = {
   overlayOpacity: 0.58,
   blurPx: 0,
   panelMaxWidth: 640,
+  panelWidth: "min(640px, calc(100vw - 32px))",
   panelBackground: "#ffffff",
+  panelBorder: "1px solid rgba(22, 11, 47, 0.12)",
+  panelShadow: "0 24px 80px rgba(22, 11, 47, 0.22)",
   panelBorderRadius: 20,
   panelPadding: 32,
+  panelAlignment: "center",
   panelPlacement: "center",
   closePlacement: "inside",
   closeOnOverlayClick: true,
@@ -66,7 +74,10 @@ export function normalizePopupMap(raw: unknown): PopupDefinitionMap {
     if (!value || typeof value !== "object") continue;
     const popup = value as Partial<PopupDefinition>;
     if (popup.id !== key || typeof popup.name !== "string" || !popup.content || !popup.trigger || !popup.style) continue;
-    result[key] = popup as PopupDefinition;
+    result[key] = {
+      ...(popup as PopupDefinition),
+      style: { ...DEFAULT_POPUP_STYLE, ...(popup.style as Partial<PopupStyle>) },
+    };
   }
   return result;
 }

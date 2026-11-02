@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { PopupDefinition, PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import { createDefaultPopup } from "@/types/pages-funnels-popup";
 
-export function PopupManager({ popups, onChange }: { popups: PopupDefinitionMap; onChange: (next: PopupDefinitionMap) => void }) {
+export function PopupManager({ popups, onChange, onPreview }: { popups: PopupDefinitionMap; onChange: (next: PopupDefinitionMap) => void; onPreview?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const entries = Object.values(popups);
   const create = () => {
@@ -35,6 +35,7 @@ export function PopupManager({ popups, onChange }: { popups: PopupDefinitionMap;
               </label>
               <div className="mt-2 flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">ID: {popup.id}</span>
+                {onPreview && <Button variant="ghost" size="sm" onClick={() => onPreview(popup.id)}>Preview</Button>}
                 <Button variant="ghost" size="sm" onClick={() => remove(popup.id)}>Delete</Button>
               </div>
             </div>

@@ -57,6 +57,7 @@ import { getTenantBrandColors } from "@/lib/brand/brand-colors";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
 import { PopupManager } from "@/components/pages-funnels/puck/popup-manager";
+import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import {
   ReadingResultSettingsButton,
@@ -188,6 +189,7 @@ export function MagnetixPuckEditorShell({
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
+  const [activePopupId, setActivePopupId] = useState<string | null>(null);
   const [readingSettings, setReadingSettings] =
     useState<ReadingResultPageSettings | null>(readingResult);
   // Stable for the page's lifetime, so the header actions (and Puck's
@@ -512,7 +514,8 @@ export function MagnetixPuckEditorShell({
 
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
-      <PopupManager popups={popups} onChange={setPopups} />
+      <PopupManager popups={popups} onChange={setPopups} onPreview={setActivePopupId} />
+      <PopupRuntime popups={popups} initialPopupId={activePopupId} onActiveChange={setActivePopupId} metadata={metadata} />
       <div className="min-h-0 flex-1">
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
