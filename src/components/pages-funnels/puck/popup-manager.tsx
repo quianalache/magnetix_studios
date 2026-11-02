@@ -24,7 +24,7 @@ export function PopupManager({ popups, onChange, onPreview }: { popups: PopupDef
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>Popups ({entries.length})</Button>
         <Button variant="outline" size="sm" onClick={create}>Add popup</Button>
-        <span className="text-muted-foreground">Draft-only definitions; runtime triggers are not enabled in Slice 3.</span>
+        <span className="text-muted-foreground">Draft-only definitions; runtime triggers are not enabled yet.</span>
       </div>
       {open && entries.length > 0 && (
         <div className="mt-2 grid gap-2 md:grid-cols-2">
