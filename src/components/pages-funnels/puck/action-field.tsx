@@ -12,8 +12,8 @@ import { subscribeToPages } from "@/lib/firestore/pages-funnels";
 import {
   isSafeActionUrl,
   isValidEmailAddress,
+  inspectStoredAction,
   normalizePhoneNumber,
-  normalizeStoredAction,
 } from "@/lib/pages-funnels/puck/action";
 import type { PageAction } from "@/types/pages-funnels-puck";
 
@@ -53,7 +53,8 @@ function blank(type: LiveType): PageAction {
  * or a new custom domain never leaves a stale URL behind.
  */
 export function ActionFieldEditor({ value, onChange }: { value: unknown; onChange: (value: PageAction) => void }) {
-  const action = normalizeStoredAction(value);
+  const inspection = inspectStoredAction(value);
+  const action = inspection.action;
   const type = (ACTION_OPTIONS.some((o) => o.value === action.type) ? action.type : "none") as LiveType;
 
   return (
@@ -68,6 +69,11 @@ export function ActionFieldEditor({ value, onChange }: { value: unknown; onChang
           className="w-full"
         />
       </div>
+      {inspection.status !== "supported" && inspection.rawType && (
+        <Hint tone="warning">
+          This saved action ({inspection.rawType}) is not available yet. It remains inactive until you choose a supported action.
+        </Hint>
+      )}
       {action.type === "url" && <UrlFields action={action} onChange={onChange} />}
       {action.type === "page" && <PageFields action={action} onChange={onChange} />}
       {action.type === "purchase" && <OfferFields action={action} onChange={onChange} />}

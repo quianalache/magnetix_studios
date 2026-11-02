@@ -19,6 +19,7 @@ import {
   normalizeStoredAction,
   resolveActionLink,
 } from "../src/lib/pages-funnels/puck/action";
+import { canonicalizeStoredAction } from "../src/lib/pages-funnels/action/normalize";
 import { ButtonRender, ImageRender } from "../src/components/pages-funnels/puck/elements";
 import { PageRootRender, SectionRender } from "../src/components/pages-funnels/puck/layout";
 import type { PageAction, ResolvedActionTargets } from "../src/types/pages-funnels-puck";
@@ -83,6 +84,13 @@ check("legacy none reads as none", normalizeStoredAction({ type: "none", url: ""
 check("missing/garbage → none", normalizeStoredAction(undefined).type === "none" && normalizeStoredAction("x").type === "none" && normalizeStoredAction({ type: "custom_js", code: "x" }).type === "none");
 check("reserved stored types → none", normalizeStoredAction({ type: "open_popup", popupId: "p" }).type === "none");
 check("non-string fields coerced safely", JSON.stringify(normalizeStoredAction({ type: "purchase", offerId: { evil: 1 } })) === JSON.stringify({ type: "purchase", offerId: "" }));
+check("canonical URL action is supported", canonicalizeStoredAction({ type: "url", url: "https://a.com" }).status === "supported" && canonicalizeStoredAction({ type: "url", url: "https://a.com" }).action.type === "navigate");
+const canonicalPurchase = canonicalizeStoredAction({ type: "purchase", offerId: "offer_a" });
+check("canonical purchase maps to offer checkout", canonicalPurchase.action.type === "navigate" && canonicalPurchase.action.destination.type === "offer_checkout");
+const canonicalFunnel = canonicalizeStoredAction({ type: "next_funnel_step" });
+check("reserved funnel action is preserved but unsupported", canonicalFunnel.status === "unsupported" && canonicalFunnel.action.type === "navigate" && canonicalFunnel.action.destination.type === "funnel_next_step");
+check("reserved popup action retains raw type", canonicalizeStoredAction({ type: "open_popup", popupId: "popup_a" }).status === "unsupported" && canonicalizeStoredAction({ type: "open_popup", popupId: "popup_a" }).rawType === "open_popup");
+check("malformed bound action is invalid", canonicalizeStoredAction({ type: "page", pageId: "../other" }).status === "invalid");
 
 console.log("Target collection");
 const pageData = {
@@ -133,7 +141,7 @@ check("Edge to edge: no max width and no gutter", !sec("bleed").includes("max-wi
 // ── Tenant resolution (emulator) ───────────────────────────────────────
 async function tenancy() {
   const { getAdminDb } = await import("../src/lib/firebase/admin");
-  const { resolveActionTargets } = await import("../src/lib/server/page-action-targets");
+  const { resolveActionTargets, resolveDestination } = await import("../src/lib/server/page-action-targets");
   const db = getAdminDb();
   const A = "sa_act_a";
   const B = "sa_act_b";
@@ -146,6 +154,9 @@ async function tenancy() {
     db.doc(`subAccounts/${A}/courseOffers/act_offer_a`).set({ subAccountId: A, visibility: "published", title: "A offer", slug: "a-offer" }),
     db.doc(`subAccounts/${A}/courseOffers/act_offer_draft`).set({ subAccountId: A, visibility: "draft", title: "A draft offer" }),
     db.doc(`subAccounts/${B}/courseOffers/act_offer_b`).set({ subAccountId: B, visibility: "published", title: "B offer" }),
+    db.doc(`subAccounts/${A}/bookingPages/book-a`).set({ slug: "book-a", status: "published", name: "A booking" }),
+    db.doc(`subAccounts/${A}/bookingPages/book-draft`).set({ slug: "book-draft", status: "draft", name: "A draft booking" }),
+    db.doc(`subAccounts/${B}/bookingPages/book-b`).set({ slug: "book-b", status: "published", name: "B booking" }),
   ]);
   const r = await resolveActionTargets(A, {
     pageIds: ["act_pub_a", "act_draft_a", "act_pub_b", "act_nope", "../evil"],
@@ -160,6 +171,20 @@ async function tenancy() {
   check("own published Offer resolves to /offer/{sa}/{id}", !!r.offers.act_offer_a?.href.endsWith(`/offer/${A}/act_offer_a`));
   check("own draft Offer → null", r.offers.act_offer_draft === null);
   check("other tenant's Offer → null", r.offers.act_offer_b === null);
+  const pageCrossTenant = await resolveDestination({ subAccountId: A, mode: "preview", destination: { type: "page", pageId: "act_pub_b" } });
+  const pageDraft = await resolveDestination({ subAccountId: A, mode: "preview", destination: { type: "page", pageId: "act_draft_a" } });
+  const reversePageCrossTenant = await resolveDestination({ subAccountId: B, mode: "preview", destination: { type: "page", pageId: "act_pub_a" } });
+  check("typed page cross-tenant failure", pageCrossTenant.status === "cross_tenant");
+  check("reverse page cross-tenant failure", reversePageCrossTenant.status === "cross_tenant");
+  check("Preview does not leak draft page", pageDraft.status === "unpublished");
+  const booking = await resolveDestination({ subAccountId: A, mode: "published", destination: { type: "booking", bookingPageSlug: "book-a" } });
+  const bookingDraft = await resolveDestination({ subAccountId: A, mode: "preview", destination: { type: "booking", bookingPageSlug: "book-draft" } });
+  const bookingOther = await resolveDestination({ subAccountId: A, mode: "published", destination: { type: "booking", bookingPageSlug: "book-b" } });
+  check("own published booking resolves", booking.status === "resolved" && booking.destination.href.endsWith(`/b/${A}/book-a`));
+  check("Preview does not leak draft booking", bookingDraft.status === "unpublished");
+  check("booking from another tenant is unavailable", bookingOther.status === "missing");
+  const funnel = await resolveDestination({ subAccountId: A, mode: "preview", destination: { type: "funnel_next_step" } });
+  check("funnel destination remains explicitly unsupported", funnel.status === "unsupported");
   const empty = await resolveActionTargets("", { pageIds: ["act_pub_a"], offerIds: [] });
   check("no sub-account → nothing resolves", Object.keys(empty.pages).length === 0);
 }

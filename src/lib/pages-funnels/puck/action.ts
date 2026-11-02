@@ -1,4 +1,6 @@
 import type { PageAction, ResolvedActionTargets } from "@/types/pages-funnels-puck";
+import type { StoredActionInspection } from "@/types/pages-funnels-action";
+import { canonicalizeStoredAction } from "@/lib/pages-funnels/action/normalize";
 
 /**
  * Button / Image actions (master spec §8's Shared Action system; native
@@ -66,56 +68,43 @@ export function resolveActionLink(
 ): ResolvedActionLink {
   const none: ResolvedActionLink = { href: null, newTab: false };
   if (!action || opts.editing) return none;
-  switch (action.type) {
-    case "url": {
-      const url = (action.url ?? "").trim();
-      return url && isSafeActionUrl(url) ? { href: url, newTab: !!action.openInNewTab } : none;
+  const inspected = canonicalizeStoredAction(action);
+  if (inspected.status !== "supported" || inspected.action.type !== "navigate") return none;
+  const destination = inspected.action.destination;
+  switch (destination.type) {
+    case "external_url": {
+      const url = destination.url.trim();
+      return url && isSafeActionUrl(url) ? { href: url, newTab: !!inspected.action.openInNewTab } : none;
     }
     case "page": {
-      const href = opts.resolved?.pages[action.pageId]?.href;
-      return href ? { href, newTab: !!action.openInNewTab } : none;
+      const href = opts.resolved?.pages[destination.pageId]?.href;
+      return href ? { href, newTab: !!inspected.action.openInNewTab } : none;
     }
-    case "purchase": {
-      const href = opts.resolved?.offers[action.offerId]?.href;
+    case "offer_checkout": {
+      const href = opts.resolved?.offers[destination.offerId]?.href;
       return href ? { href, newTab: false } : none;
     }
-    case "scroll": {
-      const id = action.targetElementId ?? "";
-      if (!isSafeSectionId(id)) return none;
-      // When the page's section list is known, only real sections link.
-      if (opts.resolved && !opts.resolved.sectionIds.includes(id)) return none;
-      return { href: `#${id}`, newTab: false };
+    case "section": {
+      if (!isSafeSectionId(destination.elementId)) return none;
+      if (opts.resolved && !opts.resolved.sectionIds.includes(destination.elementId)) return none;
+      return { href: `#${destination.elementId}`, newTab: false };
     }
     case "call": {
-      const phone = normalizePhoneNumber(action.phoneNumber ?? "");
+      const phone = normalizePhoneNumber(destination.phoneNumber);
       return phone ? { href: `tel:${phone}`, newTab: false } : none;
     }
     case "sms": {
-      const phone = normalizePhoneNumber(action.phoneNumber ?? "");
+      const phone = normalizePhoneNumber(destination.phoneNumber);
       return phone ? { href: `sms:${phone}`, newTab: false } : none;
     }
     case "email": {
-      const email = (action.emailAddress ?? "").trim();
+      const email = destination.emailAddress.trim();
       if (!isValidEmailAddress(email)) return none;
-      const subject = action.subject?.trim();
+      const subject = destination.subject?.trim();
       return { href: `mailto:${email}${subject ? `?subject=${encodeURIComponent(subject)}` : ""}`, newTab: false };
     }
-    // Reserved — not exposed in the builder, never rendered as a link.
-    case "none":
-    case "next_funnel_step":
-    case "selected_funnel_step":
-    case "open_popup":
-    case "close_popup":
-    case "show_hide":
-    case "submit_form":
-    case "download":
-    case "accept_upsell":
-    case "decline_continue":
+    default:
       return none;
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
   }
 }
 
@@ -184,4 +173,19 @@ export function normalizeStoredAction(raw: unknown): PageAction {
     default:
       return { type: "none" };
   }
+}
+
+/**
+ * Inspect without rewriting. The current field editor can continue to use
+ * the legacy normalized action, while unsupported stored values remain
+ * diagnosable and inert until an owner intentionally chooses a new action.
+ */
+export function inspectStoredAction(raw: unknown): StoredActionInspection {
+  const value = canonicalizeStoredAction(raw);
+  return {
+    action: normalizeStoredAction(raw),
+    status: value.status,
+    rawType: value.rawType,
+    raw,
+  };
 }

@@ -18,6 +18,8 @@ export async function GET(request: Request) {
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
   const list = (key: string) => (url.searchParams.get(key) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  const resolved = await resolveActionTargets(subAccountId, { pageIds: list("pages"), offerIds: list("offers") });
+  // Preview has an explicit policy even though this slice only resolves
+  // published targets: same tenant, no transactions, no draft leakage.
+  const resolved = await resolveActionTargets(subAccountId, { pageIds: list("pages"), offerIds: list("offers") }, "preview");
   return NextResponse.json({ pages: resolved.pages, offers: resolved.offers });
 }

@@ -165,7 +165,10 @@ export function parsePagePlan(value: unknown): PagePlan {
 export type BoundObject = { kind?: "offer" | "form" | "webinar"; id: string; title: string; href?: string; description?: string; priceLabel?: string; dateLabel?: string; formName?: string; eventDetails?: string };
 
 const SAFE_PUCK_COMPONENTS = new Set(["Section", "Row", "Column", "Heading", "Text", "Button", "Accordion", "Form", "Image", "Video", "Divider", "Spacer", "RichText"]);
-const PAGE_ACTION_TYPES = new Set(["none", "url", "page", "next_funnel_step", "selected_funnel_step", "scroll", "open_popup", "close_popup", "show_hide", "submit_form", "download", "call", "sms", "email", "purchase", "accept_upsell", "decline_continue"]);
+// AI may emit only actions with a live, safe renderer. Reserved vocabulary is
+// represented by the canonical action contract, but must not be generated
+// into customer-facing drafts until its runtime exists.
+const PAGE_ACTION_TYPES = new Set(["none", "url", "page", "scroll", "call", "sms", "email", "purchase"]);
 const SAFE_URL = /^\/(?!\/)|^https:\/\//;
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
