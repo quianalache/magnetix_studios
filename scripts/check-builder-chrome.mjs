@@ -24,6 +24,7 @@ const theme = src("src/components/pages-funnels/puck/magnetix-theme.css");
 const blocks = src("src/components/pages-funnels/puck/blocks-panel.tsx");
 const settings = src("src/components/pages-funnels/puck/settings-panel.tsx");
 const style = code("src/components/pages-funnels/puck/style-field.tsx");
+const puckConfig = code("src/components/pages-funnels/puck/config.tsx");
 
 check("header: no migration-era 'New Builder' badge", !/New Builder/.test(code("src/components/pages-funnels/puck/editor-shell.tsx")));
 check("header: page type label + shared status pill (Published/Draft/Unpublished changes)", shell.includes("pageTypeLabel") && shell.includes("<StatusPill tone=\"success\"") && shell.includes("tone=\"warning\""));
@@ -35,7 +36,13 @@ check("fields: Puck labels/inputs on the Magnetix type scale", theme.includes("-
 check("library: compact tiles, fluid grid, token type", blocks.includes("min-h-10") && blocks.includes("minmax(6.75rem,1fr)") && !/text-\[\d+px\]/.test(blocks));
 check("settings: component label (not internal key) in the panel header", settings.includes("config.components[type]?.label"));
 check("settings: no spec references in staff copy", !/master spec/.test(code("src/components/pages-funnels/puck/settings-panel.tsx")));
-check("settings: page root explains where page settings live (dead title field hidden)", settings.includes("Select a block on the canvas to edit it") && src("src/components/pages-funnels/puck/config.tsx").includes("root: { fields: {} }"));
+check(
+  "settings: page root exposes the shared page background field (identity/SEO stay outside Puck)",
+  settings.includes("Select a block on the canvas to edit it") &&
+    /const pageBackgroundField\b[\s\S]*?label:\s*"Page background"[\s\S]*?BackgroundFieldEditor/.test(puckConfig) &&
+    /root:\s*\{\s*fields:\s*\{\s*pageBackground:\s*pageBackgroundField\s*\}/.test(puckConfig) &&
+    /pageBackground\?:\s*BackgroundConfig[\s\S]*?props\.pageBackground/.test(puckConfig)
+);
 check("style + form fields use the system Select (no native <select>)", !/<select\b/.test(style) && !/<select\b/.test(code("src/components/pages-funnels/puck/form-field.tsx")) && style.includes("<OptionSelect"));
 check("style rows wrap instead of clipping", style.includes("flex flex-wrap items-center justify-between"));
 check("load states use the shared EmptyState", src("src/components/pages-funnels/page-load-state.tsx").includes("<EmptyState") && src("src/app/(builder)/sa/[subAccountId]/pages-funnels/[pageId]/new-builder/preview/page.tsx").includes("<EmptyState"));
