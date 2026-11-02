@@ -52,14 +52,39 @@ export const DEFAULT_POPUP_STYLE: PopupStyle = {
 };
 
 export function createDefaultPopup(id: string, name = "Untitled popup"): PopupDefinition {
+  const sectionId = `${id}-section`;
+  const rowId = `${id}-row`;
+  const columnId = `${id}-column`;
   return {
     id,
     name,
     content: {
       root: { props: {} },
       content: [
-        { type: "Heading", props: { id: `${id}-heading`, text: name, level: "h2", align: "center" } },
-        { type: "Text", props: { id: `${id}-text`, text: "Add your popup content here.", align: "center" } },
+        {
+          type: "Section",
+          props: {
+            id: sectionId,
+            rows: [{
+              type: "Row",
+              props: {
+                id: rowId,
+                columns: [{
+                  type: "Column",
+                  props: {
+                    id: columnId,
+                    width: "auto",
+                    alignment: "left",
+                    elements: [
+                      { type: "Heading", props: { id: `${id}-heading`, text: name, level: "h2", alignment: "left" } },
+                      { type: "Text", props: { id: `${id}-text`, text: "Add your popup content here.", alignment: "left" } },
+                    ],
+                  },
+                }],
+              },
+            }],
+          },
+        },
       ],
     } as PuckData,
     trigger: { type: "manual" },

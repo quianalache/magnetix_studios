@@ -58,6 +58,7 @@ import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
 import { PopupManager } from "@/components/pages-funnels/puck/popup-manager";
 import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
+import { createPopupPuckConfig } from "@/components/pages-funnels/puck/popup-config";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import {
   ReadingResultSettingsButton,
@@ -190,6 +191,11 @@ export function MagnetixPuckEditorShell({
   const [data, setData] = useState<Data>(initialData);
   const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
   const [activePopupId, setActivePopupId] = useState<string | null>(null);
+  const [editingPopupId, setEditingPopupId] = useState<string | null>(null);
+  const editingPopup = editingPopupId ? popups[editingPopupId] : null;
+  const popupConfig = useMemo(() => createPopupPuckConfig(clientPuckConfig), []);
+  const editorConfig = editingPopup ? popupConfig : clientPuckConfig;
+  const editorData = editingPopup?.content ?? data;
   const [readingSettings, setReadingSettings] =
     useState<ReadingResultPageSettings | null>(readingResult);
   // Stable for the page's lifetime, so the header actions (and Puck's
@@ -256,6 +262,24 @@ export function MagnetixPuckEditorShell({
     () => ({ subAccountId, pageId, readingContext, readingBuilder, brandColors, brandKit }),
     [subAccountId, pageId, readingContext, readingBuilder, brandColors, brandKit]
   );
+
+  const handleEditorChange = useCallback((next: Data) => {
+    if (editingPopupId) {
+      setPopups((current) => current[editingPopupId]
+        ? { ...current, [editingPopupId]: { ...current[editingPopupId], content: next } }
+        : current);
+      return;
+    }
+    setData(next);
+  }, [editingPopupId]);
+
+  const enterPopupEditor = useCallback((id: string) => {
+    if (!popups[id]) return;
+    setActivePopupId(null);
+    setEditingPopupId(id);
+  }, [popups]);
+
+  const exitPopupEditor = useCallback(() => setEditingPopupId(null), []);
 
   useEffect(() => {
     setPersistenceEnabled(true);
@@ -352,15 +376,21 @@ export function MagnetixPuckEditorShell({
         {/* Responsive header (2026-10-22): below 2xl the back link is the
             arrow alone (accessible name + tooltip kept) so Publish never
             runs off the edge on laptop widths. */}
-        <a
-          href={backHref}
-          aria-label="Back to Pages & Funnels"
-          title="Back to Pages & Funnels"
-          className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden 2xl:inline">Back to Pages &amp; Funnels</span>
-        </a>
+        {editingPopup ? (
+          <Button variant="ghost" size="sm" onClick={exitPopupEditor} aria-label="Back to Page" title="Back to Page">
+            <ArrowLeft className="h-4 w-4" /> <span className="hidden 2xl:inline">Back to Page</span>
+          </Button>
+        ) : (
+          <a
+            href={backHref}
+            aria-label="Back to Pages & Funnels"
+            title="Back to Pages & Funnels"
+            className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden 2xl:inline">Back to Pages &amp; Funnels</span>
+          </a>
+        )}
         <PageStatusBadge
           pageStatus={pageStatus}
           puckPublishStatus={puckPublishStatus}
@@ -375,7 +405,7 @@ export function MagnetixPuckEditorShell({
         <div className="min-w-0 flex-1">{children}</div>
       </div>
     ),
-    [backHref, pageStatus, puckPublishStatus, pageTypeLabel]
+    [backHref, editingPopup, exitPopupEditor, pageStatus, puckPublishStatus, pageTypeLabel]
   );
 
   const renderHeaderActions = useCallback(
@@ -394,7 +424,7 @@ export function MagnetixPuckEditorShell({
             REAL public route in a new tab; "Copy Link" copies the exact
             same canonical URL, never a hardcoded localhost/relative
             path. */}
-        {hasLivePage && (
+        {!editingPopup && hasLivePage && (
           <>
             {/* Secondary live-page actions: inline at 2xl, otherwise in a
                 "More actions" menu so Preview / Save Draft / Publish always
@@ -453,6 +483,7 @@ export function MagnetixPuckEditorShell({
       hasReadingSettings,
       subAccountId,
       pageId,
+      editingPopup,
       hasLivePage,
       liveUrl,
       copyLiveLink,
@@ -466,11 +497,11 @@ export function MagnetixPuckEditorShell({
   const renderDrawer = useCallback(
     () => (
       <MagnetixBlocksPanel
-        config={clientPuckConfig}
-        readingResult={isReadingResult}
+        config={editorConfig}
+        readingResult={isReadingResult && !editingPopup}
       />
     ),
-    [isReadingResult]
+    [editorConfig, editingPopup, isReadingResult]
   );
   const renderOutline = useCallback(
     ({ children }: { children: React.ReactNode }) => (
@@ -514,17 +545,25 @@ export function MagnetixPuckEditorShell({
 
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
-      <PopupManager popups={popups} onChange={setPopups} onPreview={setActivePopupId} />
-      <PopupRuntime popups={popups} initialPopupId={activePopupId} onActiveChange={setActivePopupId} metadata={metadata} />
+      <PopupManager
+        popups={popups}
+        onChange={setPopups}
+        onPreview={setActivePopupId}
+        onEdit={enterPopupEditor}
+        editingPopupId={editingPopupId}
+        onBackToPage={exitPopupEditor}
+      />
+      {!editingPopup && <PopupRuntime popups={popups} initialPopupId={activePopupId} onActiveChange={setActivePopupId} metadata={metadata} />}
       <div className="min-h-0 flex-1">
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
             <PublishStatusContext.Provider value={{ state: publishState, error: publishError }}>
               <Puck
-                config={clientPuckConfig}
-                data={data}
-                onChange={setData}
-                headerTitle={pageName}
+                key={editingPopupId ?? "page"}
+                config={editorConfig}
+                data={editorData}
+                onChange={handleEditorChange}
+                headerTitle={editingPopup ? `${editingPopup.name} · Popup` : pageName}
                 viewports={VIEWPORTS}
                 iframe={IFRAME_CONFIG}
                 metadata={metadata}
