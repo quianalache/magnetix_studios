@@ -19,8 +19,9 @@ import {
   Eye,
   Loader2,
   MoreHorizontal,
+  PanelTop,
 } from "lucide-react";
-import { Puck } from "@puckeditor/core";
+import { Puck, outlinePlugin, useGetPuck } from "@puckeditor/core";
 // Puck's `no-external.css` is its own build of puck.css without the
 // `@import "https://rsms.me/inter/inter.css"` line. That remote import made
 // the editor's CSS chunk fail whenever rsms.me was unreachable (blocked
@@ -30,7 +31,7 @@ import { Puck } from "@puckeditor/core";
 // `pnpm lint` (scripts/check-no-remote-css.mjs) keeps it this way.
 import "@puckeditor/core/no-external.css";
 import "./magnetix-theme.css";
-import type { Data } from "@puckeditor/core";
+import type { Data, Plugin, UiState } from "@puckeditor/core";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/system/status-pill";
 import {
@@ -56,10 +57,15 @@ import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { getTenantBrandColors } from "@/lib/brand/brand-colors";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import { useReadingResultBuilder } from "@/components/pages-funnels/puck/use-reading-result-builder";
-import { PopupManager } from "@/components/pages-funnels/puck/popup-manager";
-import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
-import { createPopupPuckConfig } from "@/components/pages-funnels/puck/popup-config";
-import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import {
+  PopupManagerContext,
+  PopupManagerPanel,
+  type PopupManagerApi,
+} from "@/components/pages-funnels/puck/popup-manager";
+import { createPopupEditorConfig } from "@/components/pages-funnels/puck/popup-editor-config";
+import { PopupEditorContext } from "@/components/pages-funnels/puck/popup-edit-canvas";
+import { applyPopupEditorChange, popupToEditorData } from "@/lib/pages-funnels/popup-editor";
+import { createDefaultPopup, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import {
   ReadingResultSettingsButton,
   ReadingResultSettingsContext,
@@ -166,6 +172,8 @@ export interface MagnetixPuckEditorShellProps {
   liveUrl: string;
   initialData: Data;
   initialPopups?: PopupDefinitionMap | null;
+  /** The page's PUBLISHED Popups — only used for each Popup's publish state in the Popups panel. */
+  publishedPopups?: PopupDefinitionMap | null;
   /** Reading Result Pages only (2026-10-21) — the page's Reading settings.
    *  Null on every other page type. */
   readingResult?: ReadingResultPageSettings | null;
@@ -185,17 +193,24 @@ export function MagnetixPuckEditorShell({
   liveUrl,
   initialData,
   initialPopups = null,
+  publishedPopups: initialPublishedPopups = null,
   readingResult = null,
   pageTypeLabel,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
-  const [activePopupId, setActivePopupId] = useState<string | null>(null);
-  const [editingPopupId, setEditingPopupId] = useState<string | null>(null);
+  const [publishedPopups, setPublishedPopups] = useState<PopupDefinitionMap | null>(initialPublishedPopups);
+  // Popup authoring (Wave 2A Slice 4.5): ONE Puck editor whose active
+  // SURFACE is either the Page or one Popup. Puck reads `data`/`ui` only at
+  // mount, so switching surface remounts <Puck> (keyed by the surface) with
+  // that surface's data. The Page's selection, panel and scroll are restored
+  // on the way back.
+  const [surface, setSurface] = useState<{ popupId: string | null; data: Data; ui?: Partial<UiState> }>(() => ({ popupId: null, data: initialData }));
+  const editingPopupId = surface.popupId;
   const editingPopup = editingPopupId ? popups[editingPopupId] : null;
-  const popupConfig = useMemo(() => createPopupPuckConfig(clientPuckConfig), []);
-  const editorConfig = editingPopup ? popupConfig : clientPuckConfig;
-  const editorData = editingPopup?.content ?? data;
+  const popupEditorConfig = useMemo(() => createPopupEditorConfig(clientPuckConfig), []);
+  const editorConfig = editingPopupId ? popupEditorConfig : clientPuckConfig;
+  const isPopupSurface = editingPopupId !== null;
   const [readingSettings, setReadingSettings] =
     useState<ReadingResultPageSettings | null>(readingResult);
   // Stable for the page's lifetime, so the header actions (and Puck's
@@ -223,6 +238,10 @@ export function MagnetixPuckEditorShell({
   useEffect(() => {
     latestDataRef.current = data;
   }, [data]);
+  const latestPopupsRef = useRef(popups);
+  useEffect(() => {
+    latestPopupsRef.current = popups;
+  }, [popups]);
   // Guards autosave against firing before the editor has actually mounted —
   // set true in a layout-safe effect below (master spec §24.12 "no save
   // before initial page load completes"). The hook's own comparison against
@@ -263,23 +282,107 @@ export function MagnetixPuckEditorShell({
     [subAccountId, pageId, readingContext, readingBuilder, brandColors, brandKit]
   );
 
+  // Every change is routed by the surface this <Puck> instance was mounted
+  // for (captured per instance), so Page edits can only write the Page and
+  // a Popup's edits can only write that Popup — never another one.
   const handleEditorChange = useCallback((next: Data) => {
     if (editingPopupId) {
-      setPopups((current) => current[editingPopupId]
-        ? { ...current, [editingPopupId]: { ...current[editingPopupId], content: next } }
-        : current);
+      setPopups((current) => applyPopupEditorChange(current, editingPopupId, next));
       return;
     }
     setData(next);
   }, [editingPopupId]);
 
-  const enterPopupEditor = useCallback((id: string) => {
-    if (!popups[id]) return;
-    setActivePopupId(null);
-    setEditingPopupId(id);
-  }, [popups]);
+  // The live <Puck> instance's API (set by PuckBridge inside its tree): used
+  // to snapshot the Page's UI before switching and to rename the Popup
+  // being edited through Puck's own store.
+  const getPuckRef = useRef<ReturnType<typeof useGetPuck> | null>(null);
+  const pageReturnRef = useRef<{ ui: Partial<UiState>; scrollTop: number } | null>(null);
 
-  const exitPopupEditor = useCallback(() => setEditingPopupId(null), []);
+  const enterPopupEditor = useCallback((id: string, popupOverride?: PopupDefinitionMap[string]) => {
+    const popup = popupOverride ?? latestPopupsRef.current[id];
+    if (!popup) return;
+    const current = getPuckRef.current?.()?.appState.ui;
+    if (!editingPopupId) {
+      pageReturnRef.current = {
+        ui: current
+          ? {
+              itemSelector: current.itemSelector,
+              plugin: current.plugin,
+              leftSideBarVisible: current.leftSideBarVisible,
+              rightSideBarVisible: current.rightSideBarVisible,
+              itemExpanded: current.itemExpanded,
+            }
+          : {},
+        scrollTop: canvasScroller()?.scrollTop ?? 0,
+      };
+    }
+    setSurface({
+      popupId: id,
+      data: popupToEditorData(popup),
+      ui: current
+        ? {
+            viewports: current.viewports,
+            // Below laptop width the side panel closes so the Popup itself is
+            // what the owner sees (Blocks / Layers stay one tap away).
+            leftSideBarVisible: window.innerWidth >= 1000 ? current.leftSideBarVisible : false,
+            rightSideBarVisible: current.rightSideBarVisible,
+            plugin: { current: "blocks" },
+            itemSelector: null,
+          }
+        : { plugin: { current: "blocks" } },
+    });
+  }, [editingPopupId]);
+
+  const exitPopupEditor = useCallback(() => {
+    const current = getPuckRef.current?.()?.appState.ui;
+    const back = pageReturnRef.current;
+    setSurface({
+      popupId: null,
+      data: latestDataRef.current,
+      ui: { ...(back?.ui ?? {}), ...(current ? { viewports: current.viewports } : {}) },
+    });
+    if (back?.scrollTop) restoreCanvasScroll(back.scrollTop);
+  }, []);
+
+  const popupApi = useMemo<PopupManagerApi>(() => ({
+    popups,
+    publishedPopups,
+    editingPopupId,
+    create: (name) => {
+      const id = `popup_${crypto.randomUUID().replaceAll("-", "")}`;
+      const now = new Date().toISOString();
+      const popup = { ...createDefaultPopup(id, name), createdAt: now, updatedAt: now };
+      setPopups((current) => ({ ...current, [id]: popup }));
+      enterPopupEditor(id, popup);
+    },
+    edit: (id) => enterPopupEditor(id),
+    rename: (id, name) => {
+      if (id === editingPopupId) {
+        // The Popup being edited lives in Puck's store (root `frame`):
+        // rename it there so Puck's next change can't restore the old name.
+        const puck = getPuckRef.current?.();
+        const root = puck?.appState.data.root as { props?: { frame?: { name: string } } } | undefined;
+        if (puck && root?.props?.frame) {
+          puck.dispatch({ type: "setData", data: { root: { props: { ...root.props, frame: { ...root.props.frame, name } } } } as Partial<Data> });
+          return;
+        }
+      }
+      setPopups((current) => (current[id] ? { ...current, [id]: { ...current[id], name } } : current));
+    },
+    remove: (id) => {
+      if (id === editingPopupId) exitPopupEditor();
+      setPopups((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    },
+    backToPage: exitPopupEditor,
+  }), [popups, publishedPopups, editingPopupId, enterPopupEditor, exitPopupEditor]);
+
+  const popupEditorValue = useMemo(() => ({ pageData: data, onBackToPage: exitPopupEditor }), [data, exitPopupEditor]);
+  const popupHeaderValue = useMemo(() => ({ name: editingPopup?.name ?? null, onBackToPage: exitPopupEditor }), [editingPopup?.name, exitPopupEditor]);
 
   useEffect(() => {
     setPersistenceEnabled(true);
@@ -300,7 +403,7 @@ export function MagnetixPuckEditorShell({
     try {
       sessionStorage.setItem(
         previewStorageKey(pageId),
-        JSON.stringify({ data: latestDataRef.current, popups })
+        JSON.stringify({ data: latestDataRef.current, popups: latestPopupsRef.current })
       );
     } catch {
       // sessionStorage can throw (private-browsing storage caps, quota,
@@ -308,12 +411,18 @@ export function MagnetixPuckEditorShell({
       // found" empty state explains what to do next rather than this
       // failing with no feedback at all.
     }
-    window.open(previewHref, "_blank");
-  }, [pageId, previewHref, popups]);
+    // While editing a Popup, Preview opens the page with that Popup open.
+    window.open(
+      editingPopupId ? `${previewHref}${previewHref.includes("?") ? "&" : "?"}popup=${encodeURIComponent(editingPopupId)}` : previewHref,
+      "_blank"
+    );
+  }, [pageId, previewHref, editingPopupId]);
 
   const handlePublish = useCallback(async () => {
+    const published = latestPopupsRef.current;
     const result = await publish();
     if (result.ok) {
+      setPublishedPopups(published);
       toast.success("Page published");
     } else {
       toast.error(result.error);
@@ -373,39 +482,42 @@ export function MagnetixPuckEditorShell({
             `createUsePuck()` requires. See that component's own doc
             comment for the full mechanism. */}
         <AutoHierarchyWatcher />
-        {/* Responsive header (2026-10-22): below 2xl the back link is the
-            arrow alone (accessible name + tooltip kept) so Publish never
-            runs off the edge on laptop widths. */}
-        {editingPopup ? (
-          <Button variant="ghost" size="sm" onClick={exitPopupEditor} aria-label="Back to Page" title="Back to Page">
-            <ArrowLeft className="h-4 w-4" /> <span className="hidden 2xl:inline">Back to Page</span>
-          </Button>
+        <PuckBridge getPuckRef={getPuckRef} />
+        {isPopupSurface ? (
+          // Popup Edit Mode: one obvious way back, and an always-visible
+          // "Editing Popup: <name>" so it's never unclear which surface is open.
+          <PopupHeaderContext />
         ) : (
-          <a
-            href={backHref}
-            aria-label="Back to Pages & Funnels"
-            title="Back to Pages & Funnels"
-            className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden 2xl:inline">Back to Pages &amp; Funnels</span>
-          </a>
-        )}
-        <PageStatusBadge
-          pageStatus={pageStatus}
-          puckPublishStatus={puckPublishStatus}
-        />
-        {/* Page type (2026-10-24) — replaces the migration-era "New
-            Builder" badge now that this is the only editor. */}
-        {pageTypeLabel && (
-          <span className="text-muted-foreground hidden shrink-0 text-caption font-medium xl:inline">
-            {pageTypeLabel}
-          </span>
+          <>
+            {/* Responsive header (2026-10-22): below 2xl the back link is the
+                arrow alone (accessible name + tooltip kept) so Publish never
+                runs off the edge on laptop widths. */}
+            <a
+              href={backHref}
+              aria-label="Back to Pages & Funnels"
+              title="Back to Pages & Funnels"
+              className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden 2xl:inline">Back to Pages &amp; Funnels</span>
+            </a>
+            <PageStatusBadge
+              pageStatus={pageStatus}
+              puckPublishStatus={puckPublishStatus}
+            />
+            {/* Page type (2026-10-24) — replaces the migration-era "New
+                Builder" badge now that this is the only editor. */}
+            {pageTypeLabel && (
+              <span className="text-muted-foreground hidden shrink-0 text-caption font-medium xl:inline">
+                {pageTypeLabel}
+              </span>
+            )}
+          </>
         )}
         <div className="min-w-0 flex-1">{children}</div>
       </div>
     ),
-    [backHref, editingPopup, exitPopupEditor, pageStatus, puckPublishStatus, pageTypeLabel]
+    [backHref, isPopupSurface, pageStatus, puckPublishStatus, pageTypeLabel]
   );
 
   const renderHeaderActions = useCallback(
@@ -424,7 +536,7 @@ export function MagnetixPuckEditorShell({
             REAL public route in a new tab; "Copy Link" copies the exact
             same canonical URL, never a hardcoded localhost/relative
             path. */}
-        {!editingPopup && hasLivePage && (
+        {!isPopupSurface && hasLivePage && (
           <>
             {/* Secondary live-page actions: inline at 2xl, otherwise in a
                 "More actions" menu so Preview / Save Draft / Publish always
@@ -483,7 +595,7 @@ export function MagnetixPuckEditorShell({
       hasReadingSettings,
       subAccountId,
       pageId,
-      editingPopup,
+      isPopupSurface,
       hasLivePage,
       liveUrl,
       copyLiveLink,
@@ -498,22 +610,25 @@ export function MagnetixPuckEditorShell({
     () => (
       <MagnetixBlocksPanel
         config={editorConfig}
-        readingResult={isReadingResult && !editingPopup}
+        readingResult={isReadingResult && !isPopupSurface}
       />
     ),
-    [editorConfig, editingPopup, isReadingResult]
+    [editorConfig, isPopupSurface, isReadingResult]
   );
   const renderOutline = useCallback(
-    ({ children }: { children: React.ReactNode }) => (
-      <MagnetixLayersPanel>{children}</MagnetixLayersPanel>
-    ),
-    []
+    ({ children }: { children: React.ReactNode }) =>
+      isPopupSurface ? (
+        <PopupLayersPanel>{children}</PopupLayersPanel>
+      ) : (
+        <MagnetixLayersPanel>{children}</MagnetixLayersPanel>
+      ),
+    [isPopupSurface]
   );
   const renderFields = useCallback(
     ({ children }: { children: React.ReactNode }) => (
-      <MagnetixSettingsPanel>{children}</MagnetixSettingsPanel>
+      <MagnetixSettingsPanel popupMode={isPopupSurface}>{children}</MagnetixSettingsPanel>
     ),
-    []
+    [isPopupSurface]
   );
 
   const overrides = useMemo(
@@ -544,38 +659,104 @@ export function MagnetixPuckEditorShell({
   );
 
   return (
-    <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
-      <PopupManager
-        popups={popups}
-        onChange={setPopups}
-        onPreview={setActivePopupId}
-        onEdit={enterPopupEditor}
-        editingPopupId={editingPopupId}
-        onBackToPage={exitPopupEditor}
-      />
-      {!editingPopup && <PopupRuntime popups={popups} initialPopupId={activePopupId} onActiveChange={setActivePopupId} metadata={metadata} />}
+    <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col" data-editing-surface={isPopupSurface ? "popup" : "page"}>
       <div className="min-h-0 flex-1">
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
             <PublishStatusContext.Provider value={{ state: publishState, error: publishError }}>
-              <Puck
-                key={editingPopupId ?? "page"}
-                config={editorConfig}
-                data={editorData}
-                onChange={handleEditorChange}
-                headerTitle={editingPopup ? `${editingPopup.name} · Popup` : pageName}
-                viewports={VIEWPORTS}
-                iframe={IFRAME_CONFIG}
-                metadata={metadata}
-                overrides={overrides}
-                ui={initialUi}
-              />
+              <PopupManagerContext.Provider value={popupApi}>
+                <PopupEditorContext.Provider value={popupEditorValue}>
+                  <EditingPopupContext.Provider value={popupHeaderValue}>
+                    <Puck
+                      key={editingPopupId ?? "page"}
+                      config={editorConfig}
+                      data={surface.data}
+                      onChange={handleEditorChange}
+                      headerTitle={pageName}
+                      viewports={VIEWPORTS}
+                      iframe={IFRAME_CONFIG}
+                      metadata={metadata}
+                      overrides={overrides}
+                      plugins={POPUP_PLUGINS}
+                      ui={surface.ui ?? initialUi}
+                    />
+                  </EditingPopupContext.Provider>
+                </PopupEditorContext.Provider>
+              </PopupManagerContext.Provider>
             </PublishStatusContext.Provider>
           </SaveStatusContext.Provider>
         </ReadingResultSettingsContext.Provider>
       </div>
     </div>
   );
+}
+
+/**
+ * Builder left rail (approved mockup): Blocks · Layers · Popups. Puck's own
+ * Outline plugin, relabelled "Layers" to match its panel; "Popups" is the
+ * Popup manager. Stable: Puck plugins are props.
+ */
+const POPUP_PLUGINS: Plugin[] = [
+  outlinePlugin({ label: "Layers" }),
+  { name: "popups", label: "Popups", icon: <PanelTop />, render: PopupManagerPanel },
+];
+
+/** Name of the Popup being edited, read by the header and Layers through context so `overrides` stay stable while it changes. */
+const EditingPopupContext = createContext<{ name: string | null; onBackToPage: () => void }>({ name: null, onBackToPage: () => {} });
+
+function PopupHeaderContext() {
+  const { name, onBackToPage } = useContext(EditingPopupContext);
+  return (
+    <>
+      {/* Below laptop width: the arrow alone (labelled + tooltip, like the
+          page's own back link), so Puck's title and Preview / Save Draft /
+          Publish keep their room. The canvas has a labelled "Back to Page" too. */}
+      <Button variant="outline" size="sm" className="shrink-0" onClick={onBackToPage} aria-label="Back to Page" title="Back to Page" data-popup-back-to-page="header">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> <span className="hidden lg:inline">Back to Page</span>
+      </Button>
+      <span
+        className="bg-tag-violet-bg text-tag-violet-fg flex max-w-[11rem] min-w-0 shrink items-center gap-1.5 rounded-md px-2 py-1 text-caption font-semibold xl:max-w-xs"
+        data-editing-popup-label=""
+      >
+        <PanelTop className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">Editing Popup: {name}</span>
+      </span>
+    </>
+  );
+}
+
+function PopupLayersPanel({ children }: { children: React.ReactNode }) {
+  const { name } = useContext(EditingPopupContext);
+  return <MagnetixLayersPanel popupName={name ?? "Popup"}>{children}</MagnetixLayersPanel>;
+}
+
+/** Hands the live <Puck> instance's API to the shell (mounted inside Puck's tree). */
+function PuckBridge({ getPuckRef }: { getPuckRef: React.MutableRefObject<ReturnType<typeof useGetPuck> | null> }) {
+  const getPuck = useGetPuck();
+  useEffect(() => {
+    getPuckRef.current = getPuck;
+  }, [getPuck, getPuckRef]);
+  return null;
+}
+
+/** The element that scrolls the editor canvas: Puck's canvas iframe scrolls its own document. */
+function canvasScroller(): HTMLElement | null {
+  const frame = document.getElementById("preview-frame") as HTMLIFrameElement | null;
+  return (frame?.contentDocument?.scrollingElement as HTMLElement | null | undefined) ?? null;
+}
+
+/** Back to Page: once the remounted Page canvas is tall enough, return to where the owner was. */
+function restoreCanvasScroll(top: number) {
+  const started = Date.now();
+  const attempt = () => {
+    const el = canvasScroller();
+    if (el && el.scrollHeight - el.clientHeight >= top) {
+      el.scrollTop = top;
+      return;
+    }
+    if (Date.now() - started < 4000) window.setTimeout(attempt, 100);
+  };
+  window.setTimeout(attempt, 100);
 }
 
 /**

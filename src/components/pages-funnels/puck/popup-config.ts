@@ -7,7 +7,11 @@ const categories = {
   business: { title: "Business", components: ["Form"] },
 };
 
-/** A filtered view of the production registry; renderers are never duplicated. */
+/**
+ * A filtered view of a production registry; renderers are never duplicated.
+ * Runtime (Preview + public page) uses the server config's blocks so a Form
+ * inside a Popup reads its pre-resolved form like any page Form.
+ */
 export function createPopupPuckConfig(base: Config): Config {
   const components = Object.fromEntries(Object.entries(base.components ?? {})
     .filter(([name]) => POPUP_ALLOWED_BLOCKS.has(name))
@@ -24,9 +28,10 @@ function restrictPopupSlots(component: unknown) {
     if (!field || typeof field !== "object") return [key, field];
     const candidate = field as { type?: unknown; allow?: unknown };
     if (candidate.type !== "slot") return [key, field];
+    // A slot with no allow list accepts any block — inside a Popup that means any POPUP block.
     const allow = Array.isArray(candidate.allow)
       ? candidate.allow.filter((name): name is string => typeof name === "string" && POPUP_ALLOWED_BLOCKS.has(name))
-      : [];
+      : [...POPUP_ALLOWED_BLOCKS];
     return [key, { ...candidate, allow }];
   }));
   return { ...component as object, fields };

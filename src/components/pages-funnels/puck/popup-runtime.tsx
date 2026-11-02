@@ -5,14 +5,17 @@ import { createPortal } from "react-dom";
 import { Render } from "@puckeditor/core";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
+import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { createPopupPuckConfig } from "@/components/pages-funnels/puck/popup-config";
 import { sanitizePopupContent, validatePopupContent } from "@/lib/pages-funnels/popup-content";
+import { overlayColor } from "@/lib/pages-funnels/popup-editor";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 
 const POPUP_Z_INDEX = 1000;
-const popupConfig = createPopupPuckConfig(clientPuckConfig);
+// The public/Preview registry (server config): a Form inside a Popup reads
+// its pre-resolved form from metadata like every page Form — no client fetch.
+const popupConfig = createPopupPuckConfig(serverPuckConfig);
 
 export function PopupRuntime({ popups, metadata, initialPopupId, onActiveChange }: { popups: PopupDefinitionMap; metadata?: PuckPageMetadata; initialPopupId?: string | null; onActiveChange?: (id: string | null) => void }) {
   const [activePopupId, setActivePopupId] = useState<string | null>(initialPopupId ?? null);
@@ -50,7 +53,7 @@ export function PopupRuntime({ popups, metadata, initialPopupId, onActiveChange 
   const sanitized = sanitizePopupContent(active.content);
   const labelId = `popup-title-${active.id}`;
   return createPortal(
-    <div data-popup-portal="" className="fixed inset-0 flex p-4" style={{ zIndex: POPUP_Z_INDEX, backgroundColor: withOpacity(style.overlayColor, style.overlayOpacity), backdropFilter: style.blurPx ? `blur(${style.blurPx}px)` : undefined, alignItems: style.panelPlacement === "top" ? "flex-start" : style.panelPlacement === "bottom" ? "flex-end" : "center", justifyContent: style.panelAlignment === "left" ? "flex-start" : style.panelAlignment === "right" ? "flex-end" : "center" }} onMouseDown={(event) => { if (event.target === event.currentTarget && style.closeOnOverlayClick) closePopup(); }}>
+    <div data-popup-portal="" className="fixed inset-0 flex p-4" style={{ zIndex: POPUP_Z_INDEX, backgroundColor: overlayColor(style.overlayColor, style.overlayOpacity), backdropFilter: style.blurPx ? `blur(${style.blurPx}px)` : undefined, alignItems: style.panelPlacement === "top" ? "flex-start" : style.panelPlacement === "bottom" ? "flex-end" : "center", justifyContent: style.panelAlignment === "left" ? "flex-start" : style.panelAlignment === "right" ? "flex-end" : "center" }} onMouseDown={(event) => { if (event.target === event.currentTarget && style.closeOnOverlayClick) closePopup(); }}>
       <div data-popup-dialog="" role="dialog" aria-modal="true" aria-labelledby={labelId} aria-describedby={issues.length ? `${labelId}-warning` : undefined} className="relative max-h-[calc(100dvh-2rem)] overflow-y-auto outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-reduce:animate-none" style={{ width: style.panelWidth, maxWidth: `min(${style.panelMaxWidth}px, calc(100vw - 32px))`, background: style.panelBackground, border: style.panelBorder, boxShadow: style.panelShadow, borderRadius: style.panelBorderRadius, padding: style.panelPadding }}>
         <h2 id={labelId} className="sr-only">{active.name}</h2>
         <Button ref={closeRef} type="button" variant="ghost" size="icon-sm" aria-label={`Close ${active.name}`} className="absolute right-3 top-3 z-10" onClick={closePopup}><X /></Button>
@@ -60,11 +63,4 @@ export function PopupRuntime({ popups, metadata, initialPopupId, onActiveChange 
     </div>,
     document.body,
   );
-}
-
-function withOpacity(hex: string, opacity: number) {
-  const value = hex.replace("#", "");
-  if (!/^[0-9a-f]{6}$/i.test(value)) return `rgba(22, 11, 47, ${opacity})`;
-  const [r, g, b] = [0, 2, 4].map((index) => parseInt(value.slice(index, index + 2), 16));
-  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, opacity))})`;
 }

@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 import { normalizePopupMap, findStalePopupReferences, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import { FIRESTORE_MAX_FIELD_DEPTH, fieldDepth } from "@/lib/pages-funnels/popup-content";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -52,6 +53,17 @@ function popupPayloadLimitError(popups: PopupDefinitionMap): PuckPersistenceResu
     : null;
 }
 
+/** Firestore's 20-level nesting limit (see popup-content.ts) — a clear error instead of a bare 500. */
+function nestingDepthError(data: PuckData, popups: PopupDefinitionMap): PuckPersistenceResult | null {
+  if (fieldDepth(popups) > FIRESTORE_MAX_FIELD_DEPTH) {
+    return { ok: false, error: "A popup has blocks nested too deeply to save. Move a block out of its nested container and try again.", status: 413 };
+  }
+  if (fieldDepth(data) > FIRESTORE_MAX_FIELD_DEPTH) {
+    return { ok: false, error: "This page has blocks nested too deeply to save. Move a block out of its nested container and try again.", status: 413 };
+  }
+  return null;
+}
+
 async function loadOwnedPage(
   subAccountId: string,
   pageId: string
@@ -91,7 +103,7 @@ export async function savePuckDraft(
   const tooLarge = customHtmlLimitError(data);
   if (tooLarge) return tooLarge;
   const normalizedPopups = normalizePopupMap(popups);
-  const popupTooLarge = popupPayloadLimitError(normalizedPopups);
+  const popupTooLarge = popupPayloadLimitError(normalizedPopups) ?? nestingDepthError(data, normalizedPopups);
   if (popupTooLarge) return popupTooLarge;
   const stale = findStalePopupReferences(data, normalizedPopups);
   if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
@@ -141,7 +153,7 @@ export async function publishPuckPage(
   const tooLarge = customHtmlLimitError(data);
   if (tooLarge) return tooLarge;
   const normalizedPopups = normalizePopupMap(popups);
-  const popupTooLarge = popupPayloadLimitError(normalizedPopups);
+  const popupTooLarge = popupPayloadLimitError(normalizedPopups) ?? nestingDepthError(data, normalizedPopups);
   if (popupTooLarge) return popupTooLarge;
   const stale = findStalePopupReferences(data, normalizedPopups);
   if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };

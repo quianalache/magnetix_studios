@@ -5,6 +5,7 @@ import type { PageDoc } from "@/types/pages-funnels";
 import type { LeadForm } from "@/types/forms";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
+import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
@@ -63,7 +64,9 @@ export default async function PublicPagePreview({
 
   if (page.status !== "published" || !page.puckPublishedData) notFound();
 
-  const formIds = collectPuckFormIds(page.puckPublishedData);
+  // Forms, actions, embeds and offers inside Popups resolve like the page's own.
+  const collectable = withPopupContent(page.puckPublishedData, page.puckPublishedPopups);
+  const formIds = collectPuckFormIds(collectable);
   const resolvedForms: Record<string, LeadForm | null> = {};
   await Promise.all(
     formIds.map(async (formId) => {
@@ -84,19 +87,19 @@ export default async function PublicPagePreview({
   // Public Reading Tool blocks (2026-10-19): resolved here so visitors get
   // the live tool without a client fetch; only this page's own
   // sub-account's Embeds can resolve.
-  const embedIds = collectPuckEmbedIds(page.puckPublishedData);
+  const embedIds = collectPuckEmbedIds(collectable);
   const resolvedEmbeds =
     page.subAccountId && embedIds.length > 0
       ? await resolveReadingToolPayloads(page.subAccountId, embedIds)
       : {};
   // Button/Image "Go to Page" / "Go to Offer" / scroll targets — this page's
   // own sub-account only.
-  const resolvedActions = await resolvePageActionTargets(page.subAccountId ?? "", page.puckPublishedData);
+  const resolvedActions = await resolvePageActionTargets(page.subAccountId ?? "", collectable);
   // This page's own workspace Brand colors (live) for Charts in "Brand colors" mode.
   const tenantBrand = page.subAccountId ? await getTenantBrandColorsServerSide(page.subAccountId) : [];
   const brandColors = tenantBrand.map((c) => c.hex);
   const brandKit = tenantBrand.map(({ id, hex, name }) => ({ id, hex, name }));
-  const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(page.puckPublishedData)) : {};
+  const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(collectable)) : {};
   const qaPopupId = typeof query.qa_popup === "string" && page.name.startsWith("QA ·") ? query.qa_popup : null;
   return (
     <>

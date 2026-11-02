@@ -51,6 +51,11 @@ export const DEFAULT_POPUP_STYLE: PopupStyle = {
   closeOnOverlayClick: true,
 };
 
+/**
+ * A new Popup's starting content (Slice 4.5): Section → Row → Column →
+ * Heading, Text, Button with generic placeholder copy only. Puck fills every
+ * other prop from each block's own defaultProps when the editor loads it.
+ */
 export function createDefaultPopup(id: string, name = "Untitled popup"): PopupDefinition {
   const sectionId = `${id}-section`;
   const rowId = `${id}-row`;
@@ -73,11 +78,12 @@ export function createDefaultPopup(id: string, name = "Untitled popup"): PopupDe
                   type: "Column",
                   props: {
                     id: columnId,
-                    width: "auto",
+                    width: "full",
                     alignment: "left",
                     elements: [
-                      { type: "Heading", props: { id: `${id}-heading`, text: name, level: "h2", alignment: "left" } },
-                      { type: "Text", props: { id: `${id}-text`, text: "Add your popup content here.", alignment: "left" } },
+                      { type: "Heading", props: { id: `${id}-heading`, text: "Add your headline", level: "h2", alignment: "left" } },
+                      { type: "Text", props: { id: `${id}-text`, text: "Add a short message for your visitors.", alignment: "left" } },
+                      { type: "Button", props: { id: `${id}-button`, text: "Button", action: { type: "none" }, style: "primary", alignment: "left" } },
                     ],
                   },
                 }],

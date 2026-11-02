@@ -141,6 +141,7 @@ export default function NewBuilderPage({
       liveUrl={liveUrl}
       initialData={initialData}
       initialPopups={page.puckDraftPopups}
+      publishedPopups={page.puckPublishedPopups ?? null}
       readingResult={
         page.pageType === "reading_result"
           ? { ...DEFAULT_READING_RESULT_PAGE_SETTINGS, ...(page.readingResult ?? {}) }

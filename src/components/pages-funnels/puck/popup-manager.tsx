@@ -1,99 +1,187 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, Edit3, Eye } from "lucide-react";
+import { createContext, useContext, useState, type FormEvent } from "react";
+import { ArrowLeft, MoreHorizontal, PanelTop, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { PopupDefinition, PopupDefinitionMap, PopupStyle } from "@/types/pages-funnels-popup";
-import { createDefaultPopup } from "@/types/pages-funnels-popup";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { StatusPill } from "@/components/system/status-pill";
+import { useConfirm } from "@/components/system/confirm-dialog";
+import { nextPopupName, popupPublishState } from "@/lib/pages-funnels/popup-editor";
+import { cn } from "@/lib/utils";
+import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
-interface PopupManagerProps {
+/** What the Popups panel needs from the editor shell (Slice 4.5). */
+export interface PopupManagerApi {
   popups: PopupDefinitionMap;
-  onChange: (next: PopupDefinitionMap) => void;
-  onPreview?: (id: string) => void;
-  onEdit?: (id: string) => void;
-  editingPopupId?: string | null;
-  onBackToPage?: () => void;
+  publishedPopups: PopupDefinitionMap | null;
+  editingPopupId: string | null;
+  create: (name: string) => void;
+  edit: (id: string) => void;
+  rename: (id: string, name: string) => void;
+  remove: (id: string) => void;
+  backToPage: () => void;
 }
 
-export function PopupManager({ popups, onChange, onPreview, onEdit, editingPopupId, onBackToPage }: PopupManagerProps) {
-  const [open, setOpen] = useState(false);
-  const entries = Object.values(popups);
-  const editingPopup = editingPopupId ? popups[editingPopupId] : null;
-  const create = () => {
-    const id = `popup_${crypto.randomUUID().replaceAll("-", "")}`;
-    onChange({ ...popups, [id]: createDefaultPopup(id, `Popup ${entries.length + 1}`) });
-    setOpen(true);
+export const PopupManagerContext = createContext<PopupManagerApi | null>(null);
+
+const STATE_PILL = {
+  published: { tone: "success", label: "Published" },
+  changed: { tone: "warning", label: "Unpublished changes" },
+  draft: { tone: "neutral", label: "Draft" },
+} as const;
+
+/**
+ * Popups panel (Slice 4.5, approved mockup panel A) — the "Popups" entry in
+ * the builder's left rail. Popups belong to THIS page: create (name it →
+ * default content → straight into Popup Edit Mode), edit, rename, delete.
+ * Trigger settings are not shown until their runtime ships (Slice 6), so a
+ * row shows only the Popup's publish state.
+ */
+export function PopupManagerPanel() {
+  const api = useContext(PopupManagerContext);
+  const [dialog, setDialog] = useState<{ mode: "create" } | { mode: "rename"; id: string } | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  if (!api) return <></>;
+  const entries = Object.values(api.popups).sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.name.localeCompare(b.name));
+  const editing = api.editingPopupId ? api.popups[api.editingPopupId] : null;
+
+  const askDelete = async (id: string) => {
+    const popup = api.popups[id];
+    if (!popup) return;
+    const ok = await confirm({
+      title: `Delete “${popup.name}”?`,
+      description: "The popup and its content are removed from this page. The live page keeps the last published version until you publish again.",
+      confirmLabel: "Delete popup",
+      tone: "danger",
+    });
+    if (ok) api.remove(id);
   };
-  const update = (popup: PopupDefinition) => onChange({ ...popups, [popup.id]: popup });
-  const updateStyle = <K extends keyof PopupStyle>(key: K, value: PopupStyle[K]) => {
-    if (!editingPopup) return;
-    update({ ...editingPopup, style: { ...editingPopup.style, [key]: value } });
-  };
-  const remove = (id: string) => {
-    const next = { ...popups };
-    delete next[id];
-    onChange(next);
-  };
+
   return (
-    <div className="border-border bg-card border-b px-4 py-2 text-sm" data-popup-editor-manager>
-      <div className="flex flex-wrap items-center gap-2">
-        {editingPopup && onBackToPage ? <Button variant="outline" size="sm" onClick={onBackToPage} aria-label="Back to Page"><ArrowLeft className="size-4" /> Back to Page</Button> : null}
-        <Button variant="outline" size="sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>Popups ({entries.length})</Button>
-        <Button variant="outline" size="sm" onClick={create}>Add popup</Button>
-        {editingPopup ? <span className="text-foreground font-medium">Editing Popup: {editingPopup.name}</span> : <span className="text-muted-foreground">Draft-only definitions; runtime triggers are not enabled yet.</span>}
+    <div className="flex h-full flex-col" data-popup-manager="">
+      <div className="border-border border-b px-4 pt-4 pb-3">
+        <h2 className="text-foreground text-base font-semibold">Popups</h2>
+        <p className="text-caption text-muted-foreground mt-0.5">Manage popups for this page.</p>
+        {editing ? (
+          <Button variant="outline" size="sm" className="mt-3 w-full" onClick={api.backToPage}>
+            <ArrowLeft className="size-4" aria-hidden="true" /> Back to Page
+          </Button>
+        ) : null}
+        <Button size="sm" className="mt-3 w-full" onClick={() => setDialog({ mode: "create" })}>
+          <Plus className="size-4" aria-hidden="true" /> Create Popup
+        </Button>
       </div>
-      {editingPopup && <PopupFrameSettings popup={editingPopup} onChange={updateStyle} />}
-      {open && entries.length > 0 && (
-        <div className="mt-2 grid gap-2 md:grid-cols-2">
-          {entries.map((popup) => (
-            <div key={popup.id} className={`border-border rounded-md border p-2 ${editingPopupId === popup.id ? "ring-tag-violet-fg ring-2" : ""}`}>
-              <label className="block text-xs font-medium">Name
-                <input aria-label="Name" className="border-input bg-background mt-1 w-full rounded border px-2 py-1" value={popup.name} onChange={(event) => update({ ...popup, name: event.target.value })} />
-              </label>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs">
-                <span className="text-muted-foreground">ID: {popup.id}</span>
-                {onEdit && <Button variant="ghost" size="sm" onClick={() => onEdit(popup.id)}><Edit3 className="size-3.5" /> Edit Popup</Button>}
-                {onPreview && <Button variant="ghost" size="sm" onClick={() => onPreview(popup.id)}><Eye className="size-3.5" /> Preview</Button>}
-                <Button variant="ghost" size="sm" onClick={() => remove(popup.id)}>Delete</Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {entries.length === 0 ? (
+          <p className="text-muted-foreground px-2 py-6 text-center text-body-sm">No popups yet. A popup belongs to this page and opens over it.</p>
+        ) : (
+          <ul className="flex flex-col gap-2" aria-label="Popups on this page">
+            {entries.map((popup) => {
+              const state = STATE_PILL[popupPublishState(popup, api.publishedPopups)];
+              const isEditing = popup.id === api.editingPopupId;
+              return (
+                <li
+                  key={popup.id}
+                  className={cn("border-border bg-card flex items-center gap-2.5 rounded-lg border p-2.5", isEditing && "border-tag-violet-fg ring-tag-violet-fg/30 ring-2")}
+                  data-popup-row={popup.id}
+                >
+                  <span className="bg-tag-violet-bg text-tag-violet-fg flex size-9 shrink-0 items-center justify-center rounded-md" aria-hidden="true">
+                    <PanelTop className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground truncate text-sm font-medium">{popup.name}</p>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      {isEditing ? <span className="text-caption text-tag-violet-fg font-medium">Editing ·</span> : null}
+                      <StatusPill tone={state.tone} className="text-micro">{state.label}</StatusPill>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => api.edit(popup.id)} disabled={isEditing} aria-label={`Edit ${popup.name}`}>
+                    Edit
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`More actions for ${popup.name}`} />}>
+                      <MoreHorizontal className="size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-36">
+                      <DropdownMenuItem onClick={() => setDialog({ mode: "rename", id: popup.id })}>
+                        <Pencil className="size-4" /> Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onClick={() => askDelete(popup.id)}>
+                        <Trash2 className="size-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <PopupNameDialog
+        key={dialog ? (dialog.mode === "rename" ? dialog.id : "create") : "closed"}
+        open={!!dialog}
+        mode={dialog?.mode ?? "create"}
+        initialName={dialog?.mode === "rename" ? (api.popups[dialog.id]?.name ?? "") : nextPopupName(api.popups)}
+        onOpenChange={(open) => !open && setDialog(null)}
+        onSubmit={(name) => {
+          if (dialog?.mode === "rename") api.rename(dialog.id, name);
+          else api.create(name);
+          setDialog(null);
+        }}
+      />
+      {confirmDialog}
     </div>
   );
 }
 
-function PopupFrameSettings({ popup, onChange }: { popup: PopupDefinition; onChange: <K extends keyof PopupStyle>(key: K, value: PopupStyle[K]) => void }) {
-  const style = popup.style;
+function PopupNameDialog({
+  open,
+  mode,
+  initialName,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  mode: "create" | "rename";
+  initialName: string;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState(initialName);
+  const trimmed = name.trim();
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (trimmed) onSubmit(trimmed);
+  };
   return (
-    <div className="border-border bg-background mt-2 grid gap-2 rounded-md border p-3 text-xs md:grid-cols-4" aria-label="Popup frame settings">
-      <label>Overlay color<input aria-label="Overlay color" type="color" className="mt-1 block h-8 w-full" value={style.overlayColor} onChange={(e) => onChange("overlayColor", e.target.value)} /></label>
-      <label>Overlay opacity<input aria-label="Overlay opacity" type="number" min="0" max="1" step="0.05" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.overlayOpacity} onChange={(e) => onChange("overlayOpacity", Number(e.target.value))} /></label>
-      <label>Blur (px)<input aria-label="Overlay blur" type="number" min="0" max="24" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.blurPx} onChange={(e) => onChange("blurPx", Number(e.target.value))} /></label>
-      <label>Panel width<input aria-label="Panel width" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.panelWidth} onChange={(e) => onChange("panelWidth", e.target.value)} /></label>
-      <label>Max width (px)<input aria-label="Panel max width" type="number" min="240" max="1400" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.panelMaxWidth} onChange={(e) => onChange("panelMaxWidth", Number(e.target.value))} /></label>
-      <label>Panel background<input aria-label="Panel background" type="color" className="mt-1 block h-8 w-full" value={style.panelBackground} onChange={(e) => onChange("panelBackground", e.target.value)} /></label>
-      <label>Radius (px)<input aria-label="Panel radius" type="number" min="0" max="64" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.panelBorderRadius} onChange={(e) => onChange("panelBorderRadius", Number(e.target.value))} /></label>
-      <label>Padding (px)<input aria-label="Panel padding" type="number" min="0" max="96" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.panelPadding} onChange={(e) => onChange("panelPadding", Number(e.target.value))} /></label>
-      <PopupSelect label="Horizontal alignment" ariaLabel="Panel alignment" value={style.panelAlignment} options={["left", "center", "right"]} onChange={(value) => onChange("panelAlignment", value as PopupStyle["panelAlignment"])} />
-      <PopupSelect label="Vertical placement" ariaLabel="Panel placement" value={style.panelPlacement} options={["top", "center", "bottom"]} onChange={(value) => onChange("panelPlacement", value as PopupStyle["panelPlacement"])} />
-      <PopupSelect label="Close placement" ariaLabel="Close placement" value={style.closePlacement} options={["inside", "outside"]} onChange={(value) => onChange("closePlacement", value as PopupStyle["closePlacement"])} />
-      <label>Border<input aria-label="Panel border" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.panelBorder} onChange={(e) => onChange("panelBorder", e.target.value)} /></label>
-      <label>Shadow<input aria-label="Panel shadow" className="border-input mt-1 block w-full rounded border px-2 py-1" value={style.panelShadow} onChange={(e) => onChange("panelShadow", e.target.value)} /></label>
-      <label className="flex items-center gap-2 self-end"><input aria-label="Close on overlay click" type="checkbox" checked={style.closeOnOverlayClick} onChange={(e) => onChange("closeOnOverlayClick", e.target.checked)} /> Close on overlay click</label>
-    </div>
-  );
-}
-
-function PopupSelect({ label, ariaLabel, value, options, onChange }: { label: string; ariaLabel: string; value: string; options: string[]; onChange: (value: string) => void }) {
-  return (
-    <label>{label}
-      <Select value={value} onValueChange={(next) => next && onChange(next)} items={Object.fromEntries(options.map((option) => [option, option]))}>
-        <SelectTrigger aria-label={ariaLabel} className="mt-1"><SelectValue /></SelectTrigger>
-        <SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-      </Select>
-    </label>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>{mode === "create" ? "Create popup" : "Rename popup"}</DialogTitle>
+            <DialogDescription>
+              {mode === "create" ? "Name it — you'll go straight to editing its content." : "Shown in the builder, and announced to screen-reader visitors when the popup opens."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="popup-name-input">Popup name</Label>
+            <Input id="popup-name-input" value={name} maxLength={80} autoFocus onChange={(e) => setName(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!trimmed}>
+              {mode === "create" ? "Create & edit" : "Save name"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

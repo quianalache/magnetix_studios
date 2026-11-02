@@ -29,7 +29,7 @@ const puckConfig = code("src/components/pages-funnels/puck/config.tsx");
 check("header: no migration-era 'New Builder' badge", !/New Builder/.test(code("src/components/pages-funnels/puck/editor-shell.tsx")));
 check("header: page type label + shared status pill (Published/Draft/Unpublished changes)", shell.includes("pageTypeLabel") && shell.includes("<StatusPill tone=\"success\"") && shell.includes("tone=\"warning\""));
 check("header: Puck's inner header border/divider removed inside the Magnetix row", /\[class\*="_PuckHeader_"\] \{\s*border-bottom: 0;/.test(theme) && theme.includes("border-left: 0;"));
-check("tablets open with the Blocks sidebar collapsed; laptops keep both panels", shell.includes("leftSideBarVisible: false") && shell.includes("window.innerWidth < 1000") && shell.includes("ui={initialUi}"));
+check("tablets open with the Blocks sidebar collapsed; laptops keep both panels", shell.includes("leftSideBarVisible: false") && shell.includes("window.innerWidth < 1000") && /ui=\{(surface\.ui \?\? )?initialUi\}/.test(shell)); // Popup authoring: the Page surface still opens with initialUi
 check("canvas: quiet selection + slot tints (≤ 5% plum)", /--puck-color-selection-bg: color-mix\(\s*in srgb,\s*var\(--primary\) 5%/.test(theme) && /--puck-slot-color-bg: color-mix\(in srgb, var\(--primary\) 3%/.test(theme));
 check("canvas: empty page shows a start hint", theme.includes('content: "Drag a block from the left to start building"'));
 check("fields: Puck labels/inputs on the Magnetix type scale", theme.includes("--puck-field-label-font-size: 0.8125rem") && theme.includes("--puck-field-font-size: 0.875rem"));

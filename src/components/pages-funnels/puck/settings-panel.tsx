@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createUsePuck } from "@puckeditor/core";
+import { PanelTop } from "lucide-react";
 import { BLOCK_ICONS } from "@/components/pages-funnels/puck/block-icons";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -107,7 +108,7 @@ function splitFieldsByGroup(
  * function's own doc history for why `createUsePuck()` over the bare
  * `usePuck()`.
  */
-export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
+export function MagnetixSettingsPanel({ children, popupMode = false }: { children: ReactNode; popupMode?: boolean }) {
   const selectedItem = useTypedPuck((s) => s.selectedItem);
   const config = useTypedPuck((s) => s.config);
   const type = selectedItem?.type;
@@ -130,8 +131,13 @@ export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
             <Icon className="h-3.5 w-3.5" />
           </span>
         )}
-        <p className="text-foreground text-sm font-semibold">
-          {label ?? "Page"} Settings
+        {!selectedItem && popupMode && (
+          <span className="bg-tag-violet-bg text-tag-violet-fg flex h-6 w-6 items-center justify-center rounded-md" aria-hidden="true">
+            <PanelTop className="h-3.5 w-3.5" />
+          </span>
+        )}
+        <p className="text-foreground text-sm font-semibold" data-settings-title="">
+          {label ?? (popupMode ? "Popup" : "Page")} Settings{!selectedItem && popupMode ? " (Frame)" : ""}
         </p>
       </div>
 
@@ -140,7 +146,9 @@ export function MagnetixSettingsPanel({ children }: { children: ReactNode }) {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {children}
           <EmptyTabNote>
-            Select a block on the canvas to edit it. The page&rsquo;s name, address and SEO are in Pages &amp; Funnels.
+            {popupMode
+              ? "Select a block inside the popup to edit it. Click the popup frame (or its layer) to come back here."
+              : <>Select a block on the canvas to edit it. The page&rsquo;s name, address and SEO are in Pages &amp; Funnels.</>}
           </EmptyTabNote>
         </div>
       ) : groups ? (

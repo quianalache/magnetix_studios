@@ -21,6 +21,7 @@ import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
+import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 
 /**
  * Pages & Funnels new-builder Preview route (Phase 2D task §10–§14) — a
@@ -145,7 +146,9 @@ export default function NewBuilderPreviewPage({
         }
       }
 
-      const formIds = collectPuckFormIds(data);
+      // Forms and action targets inside Popups resolve like the page's own.
+      const collectable = withPopupContent(data, previewPopups);
+      const formIds = collectPuckFormIds(collectable);
       const resolvedForms: Record<string, LeadForm | null> = {};
       await Promise.all(
         formIds.map(async (formId) => {
@@ -164,7 +167,7 @@ export default function NewBuilderPreviewPage({
 
       // Button/Image "Go to Page" / "Go to Offer" targets (scroll targets
       // come from this page's own Section ids).
-      const targets = collectActionTargets(data);
+      const targets = collectActionTargets(collectable);
       let resolvedActions: ResolvedActionTargets = { pages: {}, offers: {}, sectionIds: targets.sectionIds };
       if (targets.pageIds.length || targets.offerIds.length) {
         const qs = new URLSearchParams({ subAccountId, pages: targets.pageIds.join(","), offers: targets.offerIds.join(",") });
@@ -175,7 +178,7 @@ export default function NewBuilderPreviewPage({
         }
       }
 
-      const offerSummaryIds = collectPuckOfferSummaryIds(data);
+      const offerSummaryIds = collectPuckOfferSummaryIds(collectable);
       const resolvedOffers: NonNullable<PuckPageMetadata["resolvedOffers"]> = {};
       await Promise.all(offerSummaryIds.map(async (id) => {
         const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/featured-offers?offerId=${encodeURIComponent(id)}`).catch(() => null);
@@ -247,7 +250,15 @@ export default function NewBuilderPreviewPage({
         brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
       }}
     />
-    <PopupRuntime popups={state.popups} initialPopupId={qaPopupId} metadata={state.metadata} />
+    <PopupRuntime
+      popups={state.popups}
+      initialPopupId={qaPopupId}
+      metadata={{
+        ...state.metadata,
+        brandColors: JSON.parse(brandKey) as string[],
+        brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
+      }}
+    />
     </>
   );
 }
