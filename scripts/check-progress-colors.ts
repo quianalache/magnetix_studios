@@ -18,6 +18,7 @@ import {
 } from "../src/lib/pages-funnels/data-metrics/progress-color";
 import { ProgressBarRender } from "../src/components/pages-funnels/data-metrics/progress-bar";
 import { ProgressRingRender } from "../src/components/pages-funnels/data-metrics/progress-ring";
+import { AnimatedCounterRender } from "../src/components/pages-funnels/data-metrics/animated-counter";
 import { clientPuckConfig } from "../src/components/pages-funnels/puck/client-config";
 
 (globalThis as { React?: typeof React }).React = React;
@@ -102,12 +103,32 @@ for (const [name, label] of [["ProgressBar", "Bar color"], ["ProgressRing", "Rin
   check(`${name}: a NEWLY INSERTED block follows the Primary brand color; load/move never change a saved block`, JSON.stringify(rd("insert")) === JSON.stringify({ source: "brand" }) && JSON.stringify(rd("load")) === JSON.stringify({ source: "magnetix" }) && JSON.stringify(rd("move")) === JSON.stringify({ source: "magnetix" }));
 }
 
+console.log("Animated Counter number color (2026-11-02)");
+const counter = (props: AnyProps) => renderToStaticMarkup(React.createElement(AnimatedCounterRender as unknown as React.ComponentType<AnyProps>, { id: "n", startValue: 0, endValue: 50000, suffix: "+", label: "Subscribers", animation: "none", ...props }));
+const numStyle = (html: string) => html.match(/<p aria-hidden="true" class="text-display-md[^"]*"( style="([^"]*)")?/)?.[2] ?? "";
+check("LEGACY counter, page text color (the old default): no color style — unchanged", numStyle(counter({ accent: "default" })) === "" && counter({ accent: "default" }) === counter({ accent: "default", color: { source: "magnetix" } }));
+check("LEGACY counter, named color (Aqua): still that token — unchanged", numStyle(counter({ accent: "aqua" })) === `color:${accentColor("aqua")}` && counter({ accent: "aqua" }) === counter({ accent: "aqua", color: { source: "magnetix" } }));
+check("NEW counter follows the Primary brand color (live)", numStyle(counter({ accent: "default", color: { source: "brand" }, brandKit: kit })) === "color:#2F5D50" && numStyle(counter({ accent: "default", color: { source: "brand" }, brandKit: [CLAY, FOREST] })) === "color:#A9472B");
+check("NEW counter with no brand colors: safe fallback = page text color, no warning", numStyle(counter({ accent: "default", color: { source: "brand" }, brandKit: [], editing: true })) === "" && !counter({ accent: "default", color: { source: "brand" }, brandKit: [], editing: true }).includes("data-progress-color-notice"));
+check("explicit Brand pick: by id, survives reorder, follows a hex edit", numStyle(counter({ color: pickForest, brandKit: [CLAY, FOREST] })) === "color:#2F5D50" && numStyle(counter({ color: pickForest, brandKit: [CLAY, { ...FOREST, hex: "#1E4038" }] })) === "color:#1E4038");
+check("deleted Brand pick: falls back to the legacy color (not another brand color) + builder-only warning", numStyle(counter({ accent: "default", color: pickForest, brandKit: [CLAY], editing: true })) === "" && counter({ accent: "default", color: pickForest, brandKit: [CLAY], editing: true }).includes("no longer available") && !counter({ accent: "default", color: pickForest, brandKit: [CLAY] }).includes("no longer available"));
+check("Custom number color", numStyle(counter({ color: { source: "custom", custom: "#264653" } })) === "color:#264653");
+check("number + screen-reader text unchanged", counter({ color: { source: "custom", custom: "#264653" } }).includes('data-counter-final="50,000+"') && /<p class="sr-only">50,000\+ Subscribers<\/p>/.test(counter({ color: { source: "custom", custom: "#264653" } })));
+{
+  const cfg = comps.AnimatedCounter;
+  const keys = (color: unknown) => Object.keys(cfg.resolveFields!({ props: { ...cfg.defaultProps, color } }, { fields: cfg.fields }));
+  check("Counter: 'Number color' is the shared Brand color · Custom field; the named colors are never shown", cfg.fields!.color?.label === "Number color" && cfg.fields!.color?.type === "custom" && [undefined, { source: "magnetix" }, { source: "brand" }].every((c) => !keys(c).includes("accent")));
+  const rd = (trigger: string) => (cfg.resolveData!({ props: { ...cfg.defaultProps } }, { trigger }) as { props: { color: unknown } }).props.color;
+  check("Counter: defaultProps stay legacy (page text color); a NEWLY INSERTED counter follows the Primary brand color; load/move never change it", JSON.stringify(cfg.defaultProps!.color) === JSON.stringify({ source: "magnetix" }) && cfg.defaultProps!.accent === "default" && JSON.stringify(rd("insert")) === JSON.stringify({ source: "brand" }) && JSON.stringify(rd("load")) === JSON.stringify({ source: "magnetix" }) && JSON.stringify(rd("move")) === JSON.stringify({ source: "magnetix" }));
+  check("Counter reads the page's Brand Kit from metadata", (readFileSync("src/components/pages-funnels/puck/data-metrics-config.tsx", "utf8").match(/brandKit=\{\(puck\.metadata/g) ?? []).length === 3);
+}
+
 console.log("Wiring (source)");
 const src = (p: string) => readFileSync(p, "utf8");
 check("published page passes its OWN workspace's Brand Kit (with ids)", /brandKit = tenantBrand\.map/.test(src("src/app/p/[pageId]/page.tsx")) && src("src/app/p/[pageId]/page.tsx").includes("getTenantBrandColorsServerSide(page.subAccountId)"));
 check("Reading Result pages pass the Brand Kit too", src("src/components/pages-funnels/reading-result-page-view.tsx").includes("brandKit, pageId"));
 check("builder + Preview pass the open workspace's Brand Kit", src("src/components/pages-funnels/puck/editor-shell.tsx").includes("getTenantBrandColors(workspace?.subAccount).map(({ id, hex, name })") && src("src/app/(builder)/sa/[subAccountId]/pages-funnels/[pageId]/new-builder/preview/page.tsx").includes("brandKit: JSON.parse(brandKitKey)"));
-check("blocks read the Brand Kit from page metadata", (src("src/components/pages-funnels/puck/data-metrics-config.tsx").match(/brandKit=\{\(puck\.metadata/g) ?? []).length === 2);
+check("blocks read the Brand Kit from page metadata", (src("src/components/pages-funnels/puck/data-metrics-config.tsx").match(/brandKit=\{\(puck\.metadata/g) ?? []).length === 3);
 check("no agency / portal / decoder colors are read", !/portalBranding|energeticDecoderTheme|appTheme/.test(src("src/lib/pages-funnels/data-metrics/progress-color.ts") + src("src/components/pages-funnels/puck/progress-color-fields.tsx")));
 
 async function emulator() {

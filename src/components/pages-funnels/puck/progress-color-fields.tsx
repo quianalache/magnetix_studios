@@ -16,7 +16,8 @@ import { AddBrandColorsLink, BrandColorPicker, ColorPickRow, Hint, NoBrandColors
 const useTypedPuck = createUsePuck();
 
 /**
- * Progress Bar / Ring color (owner color UX correction 2026-11-01).
+ * Progress Bar / Ring color and Animated Counter number color (owner color
+ * UX correction 2026-11-01; Counter 2026-11-02).
  * With brand colors saved: Brand color · Custom. With none: Custom, plus a
  * small "Add brand colors" link. A Brand color is saved by its stable Brand
  * Kit id (a new block follows the Primary brand color), so it stays live.
@@ -50,6 +51,7 @@ export function ProgressColorFieldEditor({
     <ColorPickRow
       label={legacy ? `Current: ${systemName}` : fieldLabel}
       hex={systemHex ?? PROGRESS_CUSTOM_FALLBACK}
+      hexText={systemHex ? undefined : "Text color"}
       onCommit={toCustom}
       brand={brand}
       testId="current"

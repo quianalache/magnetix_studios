@@ -26,6 +26,12 @@
  *   qa-fx-chart-shades         4 distinct shades of #A9472B
  *   qa-fx-chart-line           #A9472B
  *   qa-fx-chart-line-brand     Primary brand color; with none saved var(--color-plum-700)
+ *   Animated Counter number color (the number's inline style color; 2026-11-02):
+ *   qa-fx-counter-legacy       NO color style (legacy "Page text color", the old default)
+ *   qa-fx-counter-legacy-gold  var(--color-gold-600)   (legacy named color)
+ *   qa-fx-counter-new          Primary brand color; with none saved: NO color style (page text
+ *                              color fallback), no warning
+ *   qa-fx-counter-custom       #A9472B
  * Sidebar: no option anywhere is named "Magnetix"; legacy blocks show "Choose colors…" /
  * "Choose a color…" and their current color by name (e.g. "Current: Plum").
  */
@@ -39,6 +45,7 @@ const heading = (id: string, text: string) => ({ type: "Heading", props: { id, t
 const fmt = { format: "number", decimalPlaces: 0, useThousandsSeparator: true, currency: "USD" };
 const bar = (id: string, label: string, extra: Record<string, unknown> = {}) => ({ type: "ProgressBar", props: { id, currentValue: 75, targetValue: 100, label, supportingText: "", valueDisplay: "of", showPercentage: true, ...fmt, thickness: "medium", direction: "ltr", alignment: "left", accent: "plum", animate: false, style: S, ...extra } });
 const ring = (id: string, label: string, extra: Record<string, unknown> = {}) => ({ type: "ProgressRing", props: { id, currentValue: 8, targetValue: 12, centerDisplay: "percentage", label, supportingText: "", ...fmt, size: "small", thickness: "medium", alignment: "left", accent: "plum", animate: false, style: S, ...extra } });
+const counter = (id: string, label: string, extra: Record<string, unknown> = {}) => ({ type: "AnimatedCounter", props: { id, startValue: 0, endValue: 50000, prefix: "", suffix: "+", label, supportingText: "", ...fmt, animation: "none", durationSeconds: 2, alignment: "center", accent: "default", style: S, ...extra } });
 const rows4 = [{ label: "Alpha", value: 40 }, { label: "Beta", value: 30 }, { label: "Gamma", value: 20 }, { label: "Delta", value: 10 }];
 const chart = (id: string, title: string, chartType: string, extra: Record<string, unknown> = {}) => ({ type: "Chart", props: { id, chartType, title, titleSize: "small", description: "", rows: rows4, sort: "original", ...fmt, showValues: true, showLegend: true, donutCenter: "total", centerText: "", centerLabel: "", height: "small", style: S, ...extra } });
 const content = [
@@ -62,6 +69,12 @@ const content = [
     chart("qa-fx-chart-shades", "QA-CHART Shades · base #A9472B", "donut", { colors: { mode: "shades", base: "#A9472B" } }),
     chart("qa-fx-chart-line", "QA-CHART Line color · #A9472B", "line", { colors: { mode: "single", base: "#A9472B" } }),
     chart("qa-fx-chart-line-brand", "QA-CHART Line · default · follows Primary brand color", "line", { colors: { mode: "brand", base: "" } }),
+  ]),
+  section("qa-fx-s4", [
+    counter("qa-fx-counter-legacy", "QA-LEGACY counter · page text color"),
+    counter("qa-fx-counter-legacy-gold", "QA-LEGACY counter · gold", { accent: "gold" }),
+    counter("qa-fx-counter-new", "QA-NEW counter · follows Primary brand color", { color: { source: "brand" } }),
+    counter("qa-fx-counter-custom", "QA-CUSTOM counter · #A9472B", { color: { source: "custom", custom: "#A9472B" } }),
   ]),
 ];
 if (process.argv[2]) {

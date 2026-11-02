@@ -63,6 +63,8 @@ export type AnimatedCounterBlockProps = FormatProps & {
   animation: EnterAnimationMode;
   durationSeconds?: number;
   alignment: PuckAlignment;
+  /** Number color: Brand color (live, by id) · Custom. Absent / "magnetix" on older blocks = the legacy named `accent`. */
+  color?: ProgressColorSetting;
   accent: MetricAccent;
   style: StyleConfig;
 };
@@ -236,11 +238,13 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
           { label: "Right", value: "right" },
         ],
       },
-      accent: { ...accentField, label: "Number color" },
+      color: progressColorField("Number color") as Fields<AnimatedCounterBlockProps>["color"],
+      // Legacy named color: kept on saved blocks, never shown (always omitted below).
+      accent: { ...accentField, label: "Color" },
       style: styleField as Fields<AnimatedCounterBlockProps>["style"],
     },
     resolveFields: (data, { fields }) =>
-      omit(fields, [...formatOmissions(data.props), data.props.animation === "none" && "durationSeconds"]),
+      omit(fields, ["accent", ...formatOmissions(data.props), data.props.animation === "none" && "durationSeconds"]),
     defaultProps: {
       startValue: 0,
       prefix: "",
@@ -252,9 +256,13 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       durationSeconds: 2,
       alignment: "center",
       accent: "default",
+      color: DEFAULT_PROGRESS_COLOR,
       style: DEFAULT_STYLE_CONFIG,
     },
-    render: ({ puck, ...p }) => <AnimatedCounterRender {...p} editing={puck.isEditing} />,
+    resolveData: newBlockColor,
+    render: ({ puck, ...p }) => (
+      <AnimatedCounterRender {...p} brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit} editing={puck.isEditing} />
+    ),
   };
 
   const ProgressBar: ComponentConfig<ProgressBarBlockProps> = {

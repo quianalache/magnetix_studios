@@ -61,9 +61,12 @@ export function ColorPickRow({
   onCommit,
   brand,
   testId,
+  hexText,
 }: {
   label: string;
   hex: string;
+  /** Shown instead of the hex when the color isn't a single hex (e.g. "Text color"). */
+  hexText?: string;
   onCommit: (hex: string) => void;
   brand: readonly ResolvedBrandColor[];
   testId?: string;
@@ -76,7 +79,7 @@ export function ColorPickRow({
         {label}
         {named ? <span className="text-muted-foreground"> · {named}</span> : null}
       </span>
-      <span className="text-caption text-muted-foreground font-mono">{hex}</span>
+      <span className={cn("text-caption text-muted-foreground", !hexText && "font-mono")}>{hexText ?? hex}</span>
     </div>
   );
 }

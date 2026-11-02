@@ -2,7 +2,9 @@
 
 import type { PuckAlignment, StyleConfig } from "@/types/pages-funnels-puck";
 import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model";
-import { accentColor, type MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
+import type { MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
+import { PROGRESS_COLOR_NOTICE_TEXT, resolveProgressColor } from "@/lib/pages-funnels/data-metrics/progress-color";
+import type { BrandColor } from "@/types/brand-kit";
 import {
   counterDurationMs,
   counterValueAt,
@@ -35,6 +37,10 @@ export interface AnimatedCounterProps extends MetricFormatConfig {
   animation?: EnterAnimationMode;
   alignment?: PuckAlignment;
   accent?: MetricAccent;
+  /** Number color source (Brand color / Custom). Absent / "magnetix" = the legacy named `accent`. */
+  color?: unknown;
+  /** This page's workspace Brand colors, live from page metadata. */
+  brandKit?: readonly Pick<BrandColor, "id" | "hex">[];
   style?: StyleConfig;
   editing?: boolean;
 }
@@ -61,6 +67,8 @@ export function AnimatedCounterRender({
   animation = "onScroll",
   alignment = "center",
   accent = "default",
+  color,
+  brandKit,
   style,
   editing = false,
 }: AnimatedCounterProps) {
@@ -87,6 +95,9 @@ export function AnimatedCounterRender({
       ? finalText
       : `${prefix}${formatCounterValue(counterValueAt(counter.start, counter.end, progress, decimalPlaces), fmt)}${suffix}`;
 
+  // Same color model as Progress: legacy named accent (page text color by default), Brand color or Custom.
+  const paint = resolveProgressColor({ accent, color, brandKit });
+
   return (
     <BlockShell id={id} style={style}>
       <div ref={ref} className={`flex flex-col gap-1 ${ALIGN[alignment] ?? ALIGN.center}`}>
@@ -95,7 +106,7 @@ export function AnimatedCounterRender({
         <p
           aria-hidden="true"
           className={`text-display-md sm:text-display-lg inline-grid font-semibold tracking-tight tabular-nums ${JUSTIFY_ITEMS[alignment] ?? JUSTIFY_ITEMS.center}`}
-          style={{ color: accent === "default" ? undefined : accentColor(accent) }}
+          style={{ color: paint.text }}
           data-counter-final={finalText}
         >
           <span className="invisible col-start-1 row-start-1">{finalText}</span>
@@ -115,6 +126,11 @@ export function AnimatedCounterRender({
         ) : null}
         {supportingText ? <p className="text-muted-foreground text-body-sm">{supportingText}</p> : null}
       </div>
+      {editing && paint.notice ? (
+        <p className="text-caption text-muted-foreground mt-2" data-progress-color-notice={paint.notice}>
+          {PROGRESS_COLOR_NOTICE_TEXT[paint.notice]}
+        </p>
+      ) : null}
     </BlockShell>
   );
 }
