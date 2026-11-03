@@ -18,7 +18,10 @@ const POPUP_Z_INDEX = 1000;
 const popupConfig = createPopupPuckConfig(serverPuckConfig);
 
 export function PopupRuntime({ popups, metadata, initialPopupId, onActiveChange }: { popups: PopupDefinitionMap; metadata?: PuckPageMetadata; initialPopupId?: string | null; onActiveChange?: (id: string | null) => void }) {
-  const [activePopupId, setActivePopupId] = useState<string | null>(initialPopupId ?? null);
+  // Starts closed on BOTH server and client: the server renders nothing, so
+  // the first client render must too (a portal there broke hydration on the
+  // public page). `initialPopupId` opens it right after mount, below.
+  const [activePopupId, setActivePopupId] = useState<string | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const active = activePopupId ? popups[activePopupId] : null;
