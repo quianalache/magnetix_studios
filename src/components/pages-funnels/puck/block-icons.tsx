@@ -1,5 +1,6 @@
 import {
   LayoutPanelTop,
+  PanelTop,
   Rows3,
   Columns3,
   Heading as HeadingIcon,
@@ -101,6 +102,7 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   ImageSlider: ImagePlay,
   Testimonial: BadgeCheck,
   LogoStrip: Images,
+  Navigation: PanelTop,
   Stats: BarChart3,
   AnimatedCounter: TrendingUp,
   ProgressBar: ChartBarBig,

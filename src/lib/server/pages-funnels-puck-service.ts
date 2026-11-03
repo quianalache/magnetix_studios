@@ -21,6 +21,7 @@ import {
   fieldDepth,
   firestoreStorageSize,
 } from "@/lib/pages-funnels/popup-content";
+import { findNavigationProblem } from "@/lib/pages-funnels/navigation";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -76,6 +77,10 @@ function preparePageWrite(
   }
   const htmlProblem = findCustomHtmlLimitProblem(data);
   if (htmlProblem) return tooLarge(htmlProblem);
+  // Navigation blocks are checked strictly here (renders read leniently), so a
+  // malformed menu is a clear error instead of a silently changed one.
+  const navigationProblem = findNavigationProblem(data);
+  if (navigationProblem) return { ok: false, error: navigationProblem, status: 400 };
 
   // Malformed Popups are refused, never silently dropped (dropping would delete them on save).
   const incoming = popups && typeof popups === "object" && !Array.isArray(popups) ? Object.keys(popups) : [];

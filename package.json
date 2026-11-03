@@ -19,6 +19,7 @@
     "check:popup-rendering": "tsx scripts/check-popup-rendering.ts",
     "check:popup-actions": "tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-popup-actions.ts",
     "check:popup-triggers": "tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-popup-triggers.ts",
+    "check:navigation": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-navigation.ts",
     "check:popup-persistence": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-popup-persistence.ts",
     "check:page-persistence": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-popup-persistence.ts",
     "check:form-tenancy": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-form-resolver-tenancy.ts",

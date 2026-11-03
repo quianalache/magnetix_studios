@@ -91,6 +91,27 @@ import {
 } from "@/components/pages-funnels/puck/data-metrics-config";
 import { LogoSizeFieldEditor } from "@/components/pages-funnels/puck/logo-size-field";
 import { LOGO_HEIGHT_DEFAULT } from "@/lib/pages-funnels/puck/logo";
+import { NavigationRender } from "@/components/pages-funnels/puck/navigation-block";
+import {
+  NavigationAriaLabelFieldEditor,
+  NavigationCtaFieldEditor,
+  NavigationFieldGroup,
+  NavigationItemsFieldEditor,
+  NavigationLogoFieldEditor,
+  NavigationMobileFieldEditor,
+  NavigationStyleFieldEditor,
+} from "@/components/pages-funnels/puck/navigation-fields";
+import {
+  DEFAULT_NAVIGATION_CTA,
+  DEFAULT_NAVIGATION_STYLE,
+  NAV_LOGO_HEIGHT_DEFAULT,
+  defaultNavigationItems,
+  type NavigationCta,
+  type NavigationItem,
+  type NavigationLogo,
+  type NavigationMobile,
+  type NavigationStyle,
+} from "@/lib/pages-funnels/navigation";
 
 /**
  * Production Puck component registry (master spec §6/§7) — the CLIENT and
@@ -512,6 +533,61 @@ const dividerStyleField = makeStyleField(DIVIDER_STYLE);
 const accordionStyleField = makeStyleField(ACCORDION_STYLE);
 const formStyleField = makeStyleField(FORM_CONTAINER_STYLE);
 const generalElementStyleField = makeStyleField(GENERAL_ELEMENT_STYLE);
+// Navigation (Wave 2B-1): its own Layout & style group carries colors and
+// widths, so the shared Styles field only adds spacing + device visibility.
+const navigationStyleField = makeStyleField({ spacing: true, responsive: true, visibility: true });
+
+/**
+ * Navigation (Wave 2B-1) settings — one custom field per group, each a
+ * purpose-built editor (navigation-fields.tsx). Links use the shared Action
+ * field narrowed to page / URL / section (+ Offer for the button).
+ */
+const navigationLogoField: CustomField<NavigationLogo> = {
+  type: "custom",
+  label: "Brand",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Brand">
+      <NavigationLogoFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const navigationItemsField: CustomField<NavigationItem[]> = {
+  type: "custom",
+  label: "Menu items",
+  render: ({ value, onChange }) => <NavigationItemsFieldEditor value={value} onChange={onChange} />,
+};
+const navigationCtaField: CustomField<NavigationCta> = {
+  type: "custom",
+  label: "Button",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Button (optional)">
+      <NavigationCtaFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const navigationMobileField: CustomField<NavigationMobile> = {
+  type: "custom",
+  label: "Mobile menu",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Mobile menu">
+      <NavigationMobileFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const navigationAriaLabelField: CustomField<string> = {
+  type: "custom",
+  label: "Menu name",
+  render: ({ value, onChange }) => <NavigationAriaLabelFieldEditor value={value} onChange={onChange} />,
+};
+const navigationLayoutField: CustomField<NavigationStyle> = {
+  type: "custom",
+  label: "Layout & style",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Layout & style">
+      <NavigationStyleFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
 
 const offerSummaryField: CustomField<string> = {
   type: "custom",
@@ -630,6 +706,7 @@ export function createPuckConfig(
           "ImageGallery",
           "ImageSlider",
           "LogoStrip",
+          "Navigation",
         ],
       },
       dataMetrics: { title: "Data & Metrics", components: [...DATA_METRICS_BLOCKS] },
@@ -1565,6 +1642,44 @@ export function createPuckConfig(
             logoSize={p.logoSize as LogoSize}
             logoHeight={p.logoHeight}
             style={p.style}
+            editing={p.puck.isEditing}
+          />
+        ),
+      },
+      // Wave 2B-1: a page-level block (like Section/Hero), so it is placed
+      // directly on the page — never inside a Column — and never auto-wrapped.
+      Navigation: {
+        label: "Navigation",
+        fields: {
+          logo: navigationLogoField,
+          items: navigationItemsField,
+          cta: navigationCtaField,
+          mobile: navigationMobileField,
+          ariaLabel: navigationAriaLabelField,
+          navStyle: navigationLayoutField,
+          style: navigationStyleField,
+        },
+        defaultProps: {
+          ariaLabel: "Main",
+          logo: { src: "", alt: "", height: NAV_LOGO_HEIGHT_DEFAULT },
+          items: defaultNavigationItems(),
+          cta: DEFAULT_NAVIGATION_CTA,
+          mobile: { collapseAt: "mobile" },
+          navStyle: DEFAULT_NAVIGATION_STYLE,
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: (p) => (
+          <NavigationRender
+            id={p.id}
+            ariaLabel={p.ariaLabel}
+            logo={p.logo}
+            items={p.items}
+            cta={p.cta}
+            mobile={p.mobile}
+            navStyle={p.navStyle}
+            style={p.style}
+            resolved={(p.puck.metadata as PuckPageMetadata | undefined)?.resolvedActions}
+            brandKit={(p.puck.metadata as PuckPageMetadata | undefined)?.brandKit}
             editing={p.puck.isEditing}
           />
         ),

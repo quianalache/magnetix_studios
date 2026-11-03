@@ -35,7 +35,8 @@ type PuckNode = Data["content"][number];
  *  master spec §15: "Do NOT auto-wrap prebuilt sections like Hero inside
  *  another Section... Prebuilt section factories should remain
  *  root-level insertable structures"). */
-const ROOT_LEVEL_CONTAINER_TYPES = new Set(["Section", "Hero"]);
+// Navigation (Wave 2B-1) is a page-level header block, so it stays at the root too.
+const ROOT_LEVEL_CONTAINER_TYPES = new Set(["Section", "Hero", "Navigation"]);
 
 function makeAutoColumn(elements: PuckNode[]) {
   return {

@@ -22,6 +22,7 @@ const requiredElements = [
   "ImageGallery",
   "ImageSlider",
   "LogoStrip",
+  "Navigation",
 ] as const;
 const requiredDataMetrics = [
   "Stats",
@@ -54,5 +55,5 @@ assert.ok(
 );
 
 console.log(
-  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics)`
+  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics + Navigation)`
 );

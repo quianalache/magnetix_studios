@@ -289,6 +289,34 @@ async function main() {
     await savePuckDraft(subAccountId, pageId, data, trig(undefined));
     assert.deepEqual((await triggerOf()).raw, { type: "manual" }, "a Popup sent without a trigger saves as Manual"); passed++;
 
+    // ---- Wave 2B-1: Navigation lives inside normal Page content (puck-json-v1) ----
+    const navPage = (labels: string[], extra: Record<string, unknown> = {}) => ({
+      root: { props: {} },
+      content: [{ type: "Navigation", props: { id: "Navigation-qa", ariaLabel: "Main", logo: { src: "https://example.com/logo.png", alt: "QA", height: 40 },
+        items: [
+          ...labels.map((label, i) => ({ id: `nav-${i}`, kind: "link", label, action: { type: "page", pageId: "page_target" } })),
+          { id: "nav-dd", kind: "dropdown", label: "Services", children: [{ id: "nav-c1", label: "Coaching", action: { type: "url", url: "https://example.com" } }] },
+        ],
+        cta: { enabled: true, label: "Book", action: { type: "scroll", targetElementId: "Section-x" }, variant: "solid" }, ...extra } }],
+    }) as unknown as PuckData;
+    const navItems = (d: unknown) => ((d as PuckData).content[0].props as { items: { label: string; children?: { label: string }[] }[] }).items;
+    const navLabels = (d: unknown) => navItems(d).map((i) => i.label);
+    await publishPuckPage(subAccountId, pageId, navPage(["Home", "About"]), {});
+    assert.equal((await savePuckDraft(subAccountId, pageId, navPage(["Home", "About Us", "Contact"]), {})).ok, true, "Navigation draft saves"); passed++;
+    let navRead = await readPage();
+    assert.equal(navRead.rawPage.draft.encoding, "puck-json-v1", "Navigation stored in the normal puck-json-v1 page envelope"); passed++;
+    assert.deepEqual(navLabels(navRead.puckDraftData), ["Home", "About Us", "Contact", "Services"], "reload: draft menu round-trips in order"); passed++;
+    assert.deepEqual(navLabels(navRead.puckPublishedData), ["Home", "About", "Services"], "published menu unchanged by Save Draft"); passed++;
+    assert.equal(navItems(navRead.puckDraftData)[3].children?.[0].label, "Coaching", "dropdown sub-item survives"); passed++;
+    await publishPuckPage(subAccountId, pageId, navPage(["Home", "About Us", "Contact"]), {});
+    navRead = await readPage();
+    assert.deepEqual(navLabels(navRead.puckPublishedData), ["Home", "About Us", "Contact", "Services"], "Publish: published menu updated"); passed++;
+    const nested = navPage(["Home"], { items: [{ id: "d", kind: "dropdown", label: "D", children: [{ id: "c", label: "C", kind: "dropdown", children: [{ id: "g", label: "G" }] }] }] });
+    const refused = await savePuckDraft(subAccountId, pageId, nested, {});
+    assert.equal(refused.ok, false, "a nested (two-level) dropdown is refused at save"); passed++;
+    assert.match((refused as { error: string }).error, /one level deep/, "…with a plain-language reason"); passed++;
+    assert.deepEqual(navLabels((await readPage()).puckDraftData), ["Home", "About Us", "Contact", "Services"], "…and the refused save changed nothing"); passed++;
+
     console.log(`Popup persistence QA: ${passed}/${passed} PASS`);
   } finally {
     await db.collection("pages").doc(pageId).delete();

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { createUsePuck } from "@puckeditor/core";
@@ -76,9 +76,24 @@ function blank(type: LiveType): PageAction {
  * their public links are resolved when the page renders, so a renamed Offer
  * or a new custom domain never leaves a stale URL behind.
  */
-export function ActionFieldEditor({ value, onChange }: { value: unknown; onChange: (value: PageAction) => void }) {
+export function ActionFieldEditor({
+  value,
+  onChange,
+  allowedTypes,
+  includeCurrentPage = false,
+  label = "Action",
+}: {
+  value: unknown;
+  onChange: (value: PageAction) => void;
+  /** Narrows the offered actions (Navigation offers only page / URL / section). The stored shape is unchanged. */
+  allowedTypes?: readonly string[];
+  /** Lets "Go to page" pick the page being edited (a menu's Home link). */
+  includeCurrentPage?: boolean;
+  label?: string;
+}) {
   const ctx = useContext(ActionFieldContext);
-  const options = actionOptions(ctx);
+  const all = actionOptions(ctx);
+  const options = allowedTypes ? all.filter((o) => allowedTypes.includes(o.value)) : all;
   const inspection = inspectStoredAction(value);
   const action = inspection.action;
   const offered = options.some((o) => o.value === action.type);
@@ -87,9 +102,9 @@ export function ActionFieldEditor({ value, onChange }: { value: unknown; onChang
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label className="text-xs font-semibold">Action</Label>
+        <Label className="text-xs font-semibold">{label}</Label>
         <OptionSelect
-          aria-label="Action"
+          aria-label={label}
           value={type}
           onChange={(next) => onChange(blank((next ?? "none") as LiveType))}
           options={options}
@@ -108,7 +123,7 @@ export function ActionFieldEditor({ value, onChange }: { value: unknown; onChang
         </Hint>
       )}
       {action.type === "url" && <UrlFields action={action} onChange={onChange} />}
-      {action.type === "page" && <PageFields action={action} onChange={onChange} />}
+      {action.type === "page" && <PageFields action={action} onChange={onChange} includeCurrentPage={includeCurrentPage} />}
       {action.type === "purchase" && <OfferFields action={action} onChange={onChange} />}
       {action.type === "scroll" && <SectionFields action={action} onChange={onChange} />}
       {(action.type === "call" || action.type === "sms") && <PhoneFields action={action} onChange={onChange} />}
@@ -178,12 +193,13 @@ function NewTab({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 function UrlFields({ action, onChange }: { action: Extract<PageAction, { type: "url" }>; onChange: (a: PageAction) => void }) {
+  const id = `action-url-${useId().replace(/:/g, "")}`;
   const unsafe = action.url.trim() !== "" && !isSafeActionUrl(action.url.trim());
   return (
     <>
       <div className="space-y-1.5">
-        <Label htmlFor="action-url" className="text-xs font-semibold">URL</Label>
-        <Input id="action-url" value={action.url} placeholder="https://…" onChange={(e) => onChange({ ...action, url: e.target.value })} className="h-8 text-caption" />
+        <Label htmlFor={id} className="text-xs font-semibold">URL</Label>
+        <Input id={id} value={action.url} placeholder="https://…" onChange={(e) => onChange({ ...action, url: e.target.value })} className="h-8 text-caption" />
         {unsafe && <Hint tone="warning">This link type isn&apos;t allowed. Use a web address starting with https://.</Hint>}
       </div>
       <NewTab checked={!!action.openInNewTab} onChange={(v) => onChange({ ...action, openInNewTab: v })} />
@@ -191,16 +207,16 @@ function UrlFields({ action, onChange }: { action: Extract<PageAction, { type: "
   );
 }
 
-function PageFields({ action, onChange }: { action: Extract<PageAction, { type: "page" }>; onChange: (a: PageAction) => void }) {
+function PageFields({ action, onChange, includeCurrentPage }: { action: Extract<PageAction, { type: "page" }>; onChange: (a: PageAction) => void; includeCurrentPage?: boolean }) {
   const sub = useOptionalSubAccount();
   const params = useParams<{ pageId?: string }>();
   const [pages, setPages] = useState<{ id: string; name: string; published: boolean }[] | null>(null);
   useEffect(() => {
     if (!sub?.subAccountId || !sub.agencyId) return;
     return subscribeToPages({ subAccountId: sub.subAccountId, agencyId: sub.agencyId }, (list) =>
-      setPages(list.filter((p) => p.id !== params?.pageId).map((p) => ({ id: p.id, name: p.name || "Untitled page", published: p.status === "published" }))),
+      setPages(list.filter((p) => includeCurrentPage || p.id !== params?.pageId).map((p) => ({ id: p.id, name: p.id === params?.pageId ? `${p.name || "Untitled page"} (this page)` : p.name || "Untitled page", published: p.status === "published" }))),
     () => setPages([]));
-  }, [sub?.subAccountId, sub?.agencyId, params?.pageId]);
+  }, [sub?.subAccountId, sub?.agencyId, params?.pageId, includeCurrentPage]);
   const selected = pages?.find((p) => p.id === action.pageId);
   return (
     <>
@@ -328,7 +344,7 @@ function Loading({ what }: { what: string }) {
 }
 
 /** Top-level Sections/Heros with a readable label: "Section 2 · <first heading>". The stored value is the stable Puck id. */
-function listSections(content: unknown[]): { id: string; label: string }[] {
+export function listSections(content: unknown[]): { id: string; label: string }[] {
   const firstHeading = (node: unknown): string | null => {
     if (!node || typeof node !== "object") return null;
     if (Array.isArray(node)) {

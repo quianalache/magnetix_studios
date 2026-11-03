@@ -513,7 +513,7 @@ Route: `/sa/[id]/pages-funnels/[pageId]/new-builder` (route group `src/app/(buil
 | Category | Blocks | Shown on |
 |---|---|---|
 | **Layout** | Section, Row, Column | All pages |
-| **Elements** | Heading, Text, RichText, Button, Image, Video, Divider, Spacer, Accordion, Icon, Tabs, Image Gallery, Image Slider, Logo Strip | All pages |
+| **Elements** | Heading, Text, RichText, Button, Image, Video, Divider, Spacer, Accordion, Icon, Tabs, Image Gallery, Image Slider, Logo Strip, Navigation (page-level; Wave 2B-1) | All pages |
 | **Data & Metrics** | Stats / Numbers, Animated Counter, Progress Bar, Progress Ring, Chart | All pages |
 | **Prebuilt Sections** | Hero | All pages |
 | **Business** | Form, Reading Tool, Testimonial / Proof, Countdown Timer, Pricing / Offer Summary | All pages |

@@ -124,6 +124,12 @@ export function collectActionTargets(data: unknown): { pageIds: string[]; offerI
   const pageIds = new Set<string>();
   const offerIds = new Set<string>();
   const sectionIds = new Set<string>();
+  const addTarget = (raw: unknown) => {
+    const action = raw as PageAction | undefined;
+    if (!action || typeof action !== "object") return;
+    if (action.type === "page" && typeof action.pageId === "string" && action.pageId) pageIds.add(action.pageId);
+    if (action.type === "purchase" && typeof action.offerId === "string" && action.offerId) offerIds.add(action.offerId);
+  };
   const visit = (node: unknown) => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
@@ -133,10 +139,16 @@ export function collectActionTargets(data: unknown): { pageIds: string[]; offerI
     const n = node as { type?: unknown; props?: Record<string, unknown> };
     const props = n.props ?? {};
     if ((n.type === "Section" || n.type === "Hero") && typeof props.id === "string") sectionIds.add(props.id);
-    const action = props.action as PageAction | undefined;
-    if (action && typeof action === "object") {
-      if (action.type === "page" && typeof action.pageId === "string" && action.pageId) pageIds.add(action.pageId);
-      if (action.type === "purchase" && typeof action.offerId === "string" && action.offerId) offerIds.add(action.offerId);
+    addTarget(props.action);
+    // Navigation (Wave 2B-1) keeps its links inside its own props: menu items, sub-items and the CTA.
+    if (n.type === "Navigation") {
+      for (const item of Array.isArray(props.items) ? props.items : []) {
+        const it = item as { action?: unknown; children?: unknown } | null;
+        addTarget(it?.action);
+        for (const child of Array.isArray(it?.children) ? it.children : []) addTarget((child as { action?: unknown } | null)?.action);
+      }
+      addTarget((props.cta as { action?: unknown } | null | undefined)?.action);
+      return;
     }
     for (const value of Object.values(props)) if (Array.isArray(value)) value.forEach(visit);
   };
