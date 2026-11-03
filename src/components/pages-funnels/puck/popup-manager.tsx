@@ -11,7 +11,7 @@ import { StatusPill } from "@/components/system/status-pill";
 import { useConfirm } from "@/components/system/confirm-dialog";
 import { nextPopupName, popupPublishState } from "@/lib/pages-funnels/popup-editor";
 import { cn } from "@/lib/utils";
-import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import { comparePopupCreationOrder, popupTriggerSummary, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
 /** What the Popups panel needs from the editor shell (Slice 4.5). */
 export interface PopupManagerApi {
@@ -37,15 +37,16 @@ const STATE_PILL = {
  * Popups panel (Slice 4.5, approved mockup panel A) — the "Popups" entry in
  * the builder's left rail. Popups belong to THIS page: create (name it →
  * default content → straight into Popup Edit Mode), edit, rename, delete.
- * Trigger settings are not shown until their runtime ships (Slice 6), so a
- * row shows only the Popup's publish state.
+ * Each row shows the Popup's trigger ("Manual", "Delay · 10s", "Exit intent")
+ * and its publish state; rows are in creation order — the same order that
+ * breaks automatic-trigger ties.
  */
 export function PopupManagerPanel() {
   const api = useContext(PopupManagerContext);
   const [dialog, setDialog] = useState<{ mode: "create" } | { mode: "rename"; id: string } | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
   if (!api) return <></>;
-  const entries = Object.values(api.popups).sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.name.localeCompare(b.name));
+  const entries = Object.values(api.popups).sort(comparePopupCreationOrder);
   const editing = api.editingPopupId ? api.popups[api.editingPopupId] : null;
 
   const askDelete = async (id: string) => {
@@ -96,6 +97,7 @@ export function PopupManagerPanel() {
                     <p className="text-foreground truncate text-sm font-medium">{popup.name}</p>
                     <div className="mt-0.5 flex items-center gap-1.5">
                       {isEditing ? <span className="text-caption text-tag-violet-fg font-medium">Editing ·</span> : null}
+                      <span className="text-caption text-muted-foreground whitespace-nowrap" data-popup-trigger-summary="">{popupTriggerSummary(popup.trigger)} ·</span>
                       <StatusPill tone={state.tone} className="text-micro">{state.label}</StatusPill>
                     </div>
                   </div>

@@ -19,7 +19,7 @@ import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext } from "
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
-import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import { normalizePopupMap, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import { PopupHost } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { readStoredPuckData } from "@/lib/pages-funnels/puck-storage";
@@ -111,7 +111,7 @@ export default function NewBuilderPreviewPage({
         try {
           const parsed = JSON.parse(raw) as Data | { data?: Data; popups?: PopupDefinitionMap };
           data = "data" in parsed && parsed.data ? parsed.data : parsed as Data;
-          previewPopups = "data" in parsed ? (parsed.popups ?? {}) : {};
+          previewPopups = "data" in parsed ? normalizePopupMap(parsed.popups) : {};
         } catch {
           setState({ status: "missing" });
           return;
@@ -248,7 +248,7 @@ export default function NewBuilderPreviewPage({
   };
   // Preview runs Open / Close Popup against this page's DRAFT Popups.
   return (
-    <PopupHost popups={state.popups} initialPopupId={qaPopupId} metadata={metadata}>
+    <PopupHost popups={state.popups} initialPopupId={qaPopupId} metadata={metadata} automaticTriggers>
       <Render config={serverPuckConfig} data={state.data} metadata={metadata} />
     </PopupHost>
   );

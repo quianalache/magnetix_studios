@@ -66,7 +66,7 @@ import { createPopupEditorConfig } from "@/components/pages-funnels/puck/popup-e
 import { ActionFieldContext, type ActionFieldContextValue } from "@/components/pages-funnels/puck/action-field";
 import { PopupEditorContext } from "@/components/pages-funnels/puck/popup-edit-canvas";
 import { applyPopupEditorChange, popupToEditorData } from "@/lib/pages-funnels/popup-editor";
-import { createDefaultPopup, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import { comparePopupCreationOrder, createDefaultPopup, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import {
   ReadingResultSettingsButton,
   ReadingResultSettingsContext,
@@ -387,7 +387,7 @@ export function MagnetixPuckEditorShell({
   const actionFieldValue = useMemo<ActionFieldContextValue>(() => ({
     surface: isPopupSurface ? "popup" : "page",
     popups: Object.values(popups)
-      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.name.localeCompare(b.name))
+      .sort(comparePopupCreationOrder)
       .map((p) => ({ id: p.id, name: p.name })),
     openPopupsPanel: () => getPuckRef.current?.()?.dispatch({ type: "setUi", ui: { plugin: { current: "popups" }, leftSideBarVisible: true } }),
   }), [isPopupSurface, popups]);

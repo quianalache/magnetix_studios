@@ -9,6 +9,7 @@ import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/poli
 import {
   encodePopupMapForStorage,
   normalizePopupMap,
+  parsePopupTrigger,
   type PopupDefinitionMap,
   type StoredPopupMap,
 } from "@/types/pages-funnels-popup";
@@ -81,6 +82,13 @@ function preparePageWrite(
   const normalized = normalizePopupMap(popups);
   if (incoming.length !== Object.keys(normalized).length) {
     return { ok: false, error: "A popup couldn't be read. Reload the page and try again.", status: 400 };
+  }
+  // Triggers are checked strictly here (reads normalize leniently to Manual),
+  // so a bad delay is a clear error instead of a silent change of behavior.
+  for (const id of incoming) {
+    const raw = (popups as Record<string, { trigger?: unknown }>)[id];
+    const trigger = parsePopupTrigger(raw?.trigger);
+    if (!trigger.ok) return { ok: false, error: `The popup “${normalized[id].name}”: ${trigger.error}`, status: 400 };
   }
   for (const popup of Object.values(normalized)) {
     if (fieldDepth(popup.content) > POPUP_CONTENT_MAX_DEPTH) {

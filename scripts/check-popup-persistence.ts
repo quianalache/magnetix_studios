@@ -257,6 +257,38 @@ async function main() {
     } finally {
       await db.collection("pages").doc(legacyPageDoc).delete();
     }
+    // ---- Slice 6: triggers at the save boundary + draft/published isolation ----
+    const trig = (trigger: unknown) => ({ popup_t: { ...createDefaultPopup("popup_t", "Trigger QA"), createdAt: "2026-11-03T10:00:00.000Z", trigger } as unknown as PopupDefinition });
+    const triggerOf = async () => { const r = await readPage(); return { draft: r.puckDraftPopups.popup_t?.trigger, published: r.puckPublishedPopups.popup_t?.trigger, raw: r.raw.draft.popup_t?.trigger }; };
+    assert.equal((await publishPuckPage(subAccountId, pageId, data, trig({ type: "manual" }))).ok, true, "publish a Manual Popup"); passed++;
+    await savePuckDraft(subAccountId, pageId, data, trig({ type: "delay", delaySeconds: 2 }));
+    let t = await triggerOf();
+    assert.deepEqual(t.draft, { type: "delay", delaySeconds: 2 }, "Save Draft: draft trigger = Delay 2s"); passed++;
+    assert.deepEqual(t.published, { type: "manual" }, "…published trigger stays Manual until Publish"); passed++;
+    assert.deepEqual(t.raw, { type: "delay", delaySeconds: 2 }, "trigger stored as plain Popup metadata"); passed++;
+    await publishPuckPage(subAccountId, pageId, data, trig({ type: "delay", delaySeconds: 2 }));
+    t = await triggerOf();
+    assert.deepEqual(t.published, { type: "delay", delaySeconds: 2 }, "Publish: published trigger = Delay 2s"); passed++;
+    await savePuckDraft(subAccountId, pageId, data, trig({ type: "exit_intent" }));
+    t = await triggerOf();
+    assert.deepEqual([t.draft, t.published], [{ type: "exit_intent" }, { type: "delay", delaySeconds: 2 }], "draft Exit intent while published stays Delay 2s"); passed++;
+    for (const [label, bad] of [
+      ["delay 0", { type: "delay", delaySeconds: 0 }],
+      ["delay -3", { type: "delay", delaySeconds: -3 }],
+      ["delay as a string", { type: "delay", delaySeconds: "5" }],
+      ["delay without seconds", { type: "delay" }],
+      ["delay 99999", { type: "delay", delaySeconds: 99999 }],
+      ["unknown trigger type", { type: "scroll", percent: 40 }],
+    ] as const) {
+      const r = await savePuckDraft(subAccountId, pageId, data, trig(bad));
+      assert.ok(!r.ok && r.status === 400 && /Trigger QA/.test(r.error), `save refuses ${label} with a clear 400 naming the Popup`); passed++;
+    }
+    assert.deepEqual((await triggerOf()).draft, { type: "exit_intent" }, "…refused trigger saves changed nothing"); passed++;
+    await savePuckDraft(subAccountId, pageId, data, trig({ type: "delay", delaySeconds: 4, oncePerPageView: true }));
+    assert.deepEqual((await triggerOf()).raw, { type: "delay", delaySeconds: 4 }, "legacy oncePerPageView is accepted and not written back"); passed++;
+    await savePuckDraft(subAccountId, pageId, data, trig(undefined));
+    assert.deepEqual((await triggerOf()).raw, { type: "manual" }, "a Popup sent without a trigger saves as Manual"); passed++;
+
     console.log(`Popup persistence QA: ${passed}/${passed} PASS`);
   } finally {
     await db.collection("pages").doc(pageId).delete();

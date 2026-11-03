@@ -99,7 +99,7 @@ export default async function PublicPagePreview({
   // The host holds ONLY this page's PUBLISHED Popups: an Open Popup action can
   // never reach a draft-only Popup or another page's Popup (Slice 5).
   return (
-    <PopupHost popups={publishedPopups} initialPopupId={qaPopupId} metadata={metadata}>
+    <PopupHost popups={publishedPopups} initialPopupId={qaPopupId} metadata={metadata} automaticTriggers>
       <Render config={serverPuckConfig} data={publishedData} metadata={metadata} />
     </PopupHost>
   );

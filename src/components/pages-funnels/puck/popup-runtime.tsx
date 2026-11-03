@@ -10,6 +10,7 @@ import { createPopupPuckConfig } from "@/components/pages-funnels/puck/popup-con
 import { sanitizePopupContent, validatePopupContent } from "@/lib/pages-funnels/popup-content";
 import { overlayColor } from "@/lib/pages-funnels/popup-editor";
 import type { PopupActionRuntime } from "@/lib/pages-funnels/action/execute";
+import { automaticPopupPlan, browserExitIntent, startAutomaticPopupTriggers, type AutomaticPopupState } from "@/lib/pages-funnels/popup-triggers";
 import { ActionSurfaceContext, PopupControllerContext } from "@/components/pages-funnels/puck/popup-action-context";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
@@ -22,7 +23,7 @@ const popupConfig = createPopupPuckConfig(serverPuckConfig);
 export { ActionSurfaceContext, PopupControllerContext };
 
 /**
- * Popup host (Slices 4–5): wraps a rendered page (Preview: DRAFT Popups;
+ * Popup host (Slices 4–6): wraps a rendered page (Preview: DRAFT Popups;
  * public page: PUBLISHED Popups only) and owns the ONE dialog shell. Page
  * blocks reach it through `PopupControllerContext` (manual Open Popup);
  * blocks inside the Popup run in the "popup" surface (Close Popup).
@@ -30,17 +31,24 @@ export { ActionSurfaceContext, PopupControllerContext };
  * One active Popup at a time — opening while one is open does nothing.
  * Every way of closing (×, Esc, overlay, a Close Popup button) goes through
  * `closePopup`, which returns focus to the element that opened it.
+ *
+ * Slice 6: with `automaticTriggers`, Delay / Exit-intent Popups open through
+ * this same `openPopup` path via the one coordinator (`popup-triggers.ts`).
+ * Off by default, so nothing but Preview and the public page can auto-open.
  */
 export function PopupHost({
   popups,
   metadata,
   initialPopupId,
+  automaticTriggers = false,
   children,
 }: {
   popups: PopupDefinitionMap;
   metadata?: PuckPageMetadata;
-  /** QA opener (`?popup=` in Preview, `?qa_popup=` on QA pages). */
+  /** QA opener (`?popup=` in Preview, `?qa_popup=` on QA pages) — counts as a manual open. */
   initialPopupId?: string | null;
+  /** Run Delay / Exit-intent triggers (Preview + public page only; never the editor). */
+  automaticTriggers?: boolean;
   children?: ReactNode;
 }) {
   // Starts closed on BOTH server and client: the server renders nothing, so
@@ -53,13 +61,33 @@ export function PopupHost({
   const active = activePopupId ? popups[activePopupId] : null;
   const issues = useMemo(() => (active ? validatePopupContent(active.content) : []), [active]);
 
-  const openPopup = useCallback((id: string, opener?: HTMLElement | null) => {
+  // Page-view state for automatic triggers: in memory only, never reset by
+  // an effect re-run (React may run effects twice) — only by a new page view.
+  const autoStateRef = useRef<AutomaticPopupState>({ consumed: false });
+  const autoStartRef = useRef<number | null>(null);
+  const stopAutoRef = useRef<(() => void) | null>(null);
+  const [openKind, setOpenKind] = useState<"manual" | "automatic">("manual");
+
+  const showPopup = useCallback((id: string, opener: HTMLElement | null, kind: "manual" | "automatic") => {
     if (activeRef.current || !popups[id]) return false;
-    openerRef.current = opener ?? (document.activeElement as HTMLElement | null);
+    // An automatic Popup has no opener: focus goes back to whatever had it
+    // before (if anything real did), never to an arbitrary element.
+    const previous = document.activeElement as HTMLElement | null;
+    openerRef.current = opener ?? (previous && previous !== document.body ? previous : null);
     activeRef.current = id;
+    setOpenKind(kind);
     setActivePopupId(id);
     return true;
   }, [popups]);
+  const openPopup = useCallback((id: string, opener?: HTMLElement | null) => {
+    const opened = showPopup(id, opener ?? null, "manual");
+    if (opened) {
+      // Rule 5: any manual open ends automatic Popups for this page view.
+      autoStateRef.current.consumed = true;
+      stopAutoRef.current?.();
+    }
+    return opened;
+  }, [showPopup]);
   const closePopup = useCallback(() => {
     if (!activeRef.current) return false;
     activeRef.current = null;
@@ -72,6 +100,30 @@ export function PopupHost({
   }, []);
   const controller = useMemo<PopupActionRuntime>(() => ({ openPopup, closePopup, hasPopup: (id) => !!popups[id] }), [openPopup, closePopup, popups]);
   useEffect(() => { if (initialPopupId) openPopup(initialPopupId); }, [initialPopupId, openPopup]);
+
+  const plan = useMemo(() => (automaticTriggers ? automaticPopupPlan(popups) : null), [automaticTriggers, popups]);
+  useEffect(() => {
+    if (!plan || (!plan.delay && !plan.exitIntent)) return;
+    // The clock starts at the first client mount and survives effect re-runs.
+    if (autoStartRef.current === null) autoStartRef.current = performance.now();
+    const stop = startAutomaticPopupTriggers({
+      plan,
+      state: autoStateRef.current,
+      elapsedMs: performance.now() - autoStartRef.current,
+      env: {
+        setTimer: (callback, ms) => window.setTimeout(callback, ms),
+        clearTimer: (handle) => window.clearTimeout(handle as number),
+        onExitIntent: browserExitIntent(document, window),
+      },
+      isPopupActive: () => activeRef.current !== null,
+      open: (id) => showPopup(id, null, "automatic"),
+    });
+    stopAutoRef.current = stop;
+    return () => {
+      stop();
+      if (stopAutoRef.current === stop) stopAutoRef.current = null;
+    };
+  }, [plan, showPopup]);
 
   useEffect(() => {
     if (!active) return;
@@ -101,7 +153,7 @@ export function PopupHost({
       {children}
       {active && style && typeof document !== "undefined"
         ? createPortal(
-            <div data-popup-portal="" data-active-popup={active.id} className="fixed inset-0 flex p-4" style={{ zIndex: POPUP_Z_INDEX, backgroundColor: overlayColor(style.overlayColor, style.overlayOpacity), backdropFilter: style.blurPx ? `blur(${style.blurPx}px)` : undefined, alignItems: style.panelPlacement === "top" ? "flex-start" : style.panelPlacement === "bottom" ? "flex-end" : "center", justifyContent: style.panelAlignment === "left" ? "flex-start" : style.panelAlignment === "right" ? "flex-end" : "center" }} onMouseDown={(event) => { if (event.target === event.currentTarget && style.closeOnOverlayClick) closePopup(); }}>
+            <div data-popup-portal="" data-active-popup={active.id} data-popup-open-kind={openKind} className="fixed inset-0 flex p-4" style={{ zIndex: POPUP_Z_INDEX, backgroundColor: overlayColor(style.overlayColor, style.overlayOpacity), backdropFilter: style.blurPx ? `blur(${style.blurPx}px)` : undefined, alignItems: style.panelPlacement === "top" ? "flex-start" : style.panelPlacement === "bottom" ? "flex-end" : "center", justifyContent: style.panelAlignment === "left" ? "flex-start" : style.panelAlignment === "right" ? "flex-end" : "center" }} onMouseDown={(event) => { if (event.target === event.currentTarget && style.closeOnOverlayClick) closePopup(); }}>
               <div data-popup-dialog="" role="dialog" aria-modal="true" aria-labelledby={labelId} aria-describedby={issues.length ? `${labelId}-warning` : undefined} className="relative max-h-[calc(100dvh-2rem)] overflow-y-auto outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-reduce:animate-none" style={{ width: style.panelWidth, maxWidth: `min(${style.panelMaxWidth}px, calc(100vw - 32px))`, background: style.panelBackground, border: style.panelBorder, boxShadow: style.panelShadow, borderRadius: style.panelBorderRadius, padding: style.panelPadding }}>
                 <h2 id={labelId} className="sr-only">{active.name}</h2>
                 <Button ref={closeRef} type="button" variant="ghost" size="icon-sm" aria-label={`Close ${active.name}`} className="absolute right-3 top-3 z-10" onClick={closePopup}><X /></Button>

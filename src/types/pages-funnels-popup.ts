@@ -1,10 +1,66 @@
 import type { Data as PuckData } from "@puckeditor/core";
 import { PUCK_JSON_ENCODING, isPuckData, parsePuckJson } from "@/lib/pages-funnels/puck-storage";
 
+/**
+ * How a Popup opens on its own (Slice 6). Manual = only an explicit Open
+ * Popup action; Delay = after `delaySeconds` of the page being open;
+ * Exit intent = desktop pointer leaving through the top of the window.
+ * At most one automatic Popup per page view (see `popup-triggers.ts`), so
+ * there is no per-Popup frequency setting.
+ */
 export type PopupTrigger =
   | { type: "manual" }
-  | { type: "delay"; delaySeconds: number; oncePerPageView: boolean }
-  | { type: "exit_intent"; oncePerPageView: boolean };
+  | { type: "delay"; delaySeconds: number }
+  | { type: "exit_intent" };
+
+export const POPUP_DELAY_MIN_SECONDS = 1;
+export const POPUP_DELAY_MAX_SECONDS = 3600;
+export const POPUP_DELAY_DEFAULT_SECONDS = 10;
+
+const isDelaySeconds = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= POPUP_DELAY_MIN_SECONDS && value <= POPUP_DELAY_MAX_SECONDS;
+
+/**
+ * Strict read for the SAVE boundary. A missing trigger is a legacy Manual
+ * Popup; anything else that isn't a valid trigger is an error the owner
+ * sees. (Slice 3–5 docs may carry an `oncePerPageView` flag — ignored.)
+ */
+export function parsePopupTrigger(raw: unknown): { ok: true; trigger: PopupTrigger } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, trigger: { type: "manual" } };
+  const type = raw && typeof raw === "object" ? (raw as { type?: unknown }).type : undefined;
+  if (type === "manual") return { ok: true, trigger: { type: "manual" } };
+  if (type === "exit_intent") return { ok: true, trigger: { type: "exit_intent" } };
+  if (type === "delay") {
+    const seconds = (raw as { delaySeconds?: unknown }).delaySeconds;
+    return isDelaySeconds(seconds)
+      ? { ok: true, trigger: { type: "delay", delaySeconds: seconds } }
+      : { ok: false, error: `Delay must be a whole number of seconds from ${POPUP_DELAY_MIN_SECONDS} to ${POPUP_DELAY_MAX_SECONDS}.` };
+  }
+  return { ok: false, error: "This trigger type isn't supported." };
+}
+
+/** Lenient read for RENDERING: anything unreadable becomes Manual, so a bad doc never auto-opens or crashes. */
+export function normalizePopupTrigger(raw: unknown): PopupTrigger {
+  const parsed = parsePopupTrigger(raw);
+  return parsed.ok ? parsed.trigger : { type: "manual" };
+}
+
+/** Owner-facing summary: "Manual", "Delay · 10s", "Exit intent". */
+export function popupTriggerSummary(trigger: PopupTrigger): string {
+  if (trigger.type === "delay") return `Delay · ${trigger.delaySeconds}s`;
+  if (trigger.type === "exit_intent") return "Exit intent";
+  return "Manual";
+}
+
+/**
+ * Creation order — the ONE ordering for the manager, the Open popup picker
+ * and automatic-trigger tie-breaks. `createdAt` (ISO, stamped on create)
+ * ascending; a legacy Popup without one sorts first (it predates
+ * timestamps); the stable Popup id breaks any remaining tie.
+ */
+export function comparePopupCreationOrder(a: { id: string; createdAt?: string }, b: { id: string; createdAt?: string }): number {
+  return (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
 
 export interface PopupStyle {
   overlayColor: string;
@@ -167,14 +223,15 @@ export function normalizePopupMap(raw: unknown): PopupDefinitionMap {
   for (const [key, value] of Object.entries(raw)) {
     if (!value || typeof value !== "object") continue;
     const popup = value as Partial<PopupDefinition> & { contentJson?: unknown; contentEncoding?: unknown };
-    if (popup.id !== key || typeof popup.name !== "string" || !popup.trigger || !popup.style) continue;
+    if (popup.id !== key || typeof popup.name !== "string" || !popup.style) continue;
     const content = readPopupContent(popup);
     if (!content) continue;
     result[key] = {
       id: key,
       name: popup.name,
       content,
-      trigger: popup.trigger,
+      // Missing (legacy) or malformed → Manual: never auto-opens, never crashes.
+      trigger: normalizePopupTrigger(popup.trigger),
       style: { ...DEFAULT_POPUP_STYLE, ...(popup.style as Partial<PopupStyle>) },
       ...(typeof popup.createdAt === "string" ? { createdAt: popup.createdAt } : {}),
       ...(typeof popup.updatedAt === "string" ? { updatedAt: popup.updatedAt } : {}),

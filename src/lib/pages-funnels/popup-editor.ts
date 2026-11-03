@@ -1,6 +1,6 @@
 import type { Data as PuckData } from "@puckeditor/core";
-import type { PopupDefinition, PopupDefinitionMap, PopupStyle } from "@/types/pages-funnels-popup";
-import { DEFAULT_POPUP_STYLE } from "@/types/pages-funnels-popup";
+import type { PopupDefinition, PopupDefinitionMap, PopupStyle, PopupTrigger } from "@/types/pages-funnels-popup";
+import { DEFAULT_POPUP_STYLE, normalizePopupTrigger } from "@/types/pages-funnels-popup";
 
 /**
  * Popup authoring (Wave 2A Slice 4.5) — pure, testable helpers.
@@ -10,12 +10,14 @@ import { DEFAULT_POPUP_STYLE } from "@/types/pages-funnels-popup";
  * tree's root: selecting nothing selects the frame, and the frame's settings
  * are the root's single `frame` field. The frame lives in root props only
  * while editing — `popupFromEditorData` moves it back onto the Popup's
- * `name`/`style`, so a saved Popup's `content.root` stays empty exactly as
+ * `name`/`trigger`/`style`, so a saved Popup's `content.root` stays empty exactly as
  * before.
  */
 
 export interface PopupFrameValue {
   name: string;
+  /** Slice 6: how the Popup opens (Manual / Delay / Exit intent). */
+  trigger: PopupTrigger;
   style: PopupStyle;
 }
 
@@ -23,7 +25,7 @@ export interface PopupFrameValue {
 export function popupToEditorData(popup: PopupDefinition): PuckData {
   const content = popup.content ?? { root: { props: {} }, content: [] };
   return {
-    root: { props: { frame: { name: popup.name, style: { ...DEFAULT_POPUP_STYLE, ...popup.style } } satisfies PopupFrameValue } },
+    root: { props: { frame: { name: popup.name, trigger: normalizePopupTrigger(popup.trigger), style: { ...DEFAULT_POPUP_STYLE, ...popup.style } } satisfies PopupFrameValue } },
     content: Array.isArray(content.content) ? content.content : [],
     ...(content.zones ? { zones: content.zones } : {}),
   } as PuckData;
@@ -34,9 +36,11 @@ export function popupFromEditorData(popup: PopupDefinition, data: PuckData): Pop
   const frame = (data.root?.props as { frame?: Partial<PopupFrameValue> } | undefined)?.frame;
   const name = typeof frame?.name === "string" ? frame.name : popup.name;
   const style = frame?.style ? { ...popup.style, ...frame.style } : popup.style;
+  const trigger = frame?.trigger ? normalizePopupTrigger(frame.trigger) : popup.trigger;
   return {
     ...popup,
     name,
+    trigger,
     style,
     content: {
       root: { props: {} },
@@ -59,7 +63,7 @@ export type PopupPublishState = "published" | "changed" | "draft";
 export function popupPublishState(draft: PopupDefinition, published: PopupDefinitionMap | null | undefined): PopupPublishState {
   const live = published?.[draft.id];
   if (!live) return "draft";
-  const strip = (p: PopupDefinition) => JSON.stringify({ name: p.name, content: p.content, style: p.style });
+  const strip = (p: PopupDefinition) => JSON.stringify({ name: p.name, trigger: normalizePopupTrigger(p.trigger), content: p.content, style: p.style });
   return strip(live) === strip(draft) ? "published" : "changed";
 }
 

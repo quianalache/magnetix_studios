@@ -15,20 +15,26 @@ import {
   type FramePreset,
   type PopupFrameValue,
 } from "@/lib/pages-funnels/popup-editor";
-import type { PopupStyle } from "@/types/pages-funnels-popup";
+import {
+  POPUP_DELAY_DEFAULT_SECONDS,
+  POPUP_DELAY_MAX_SECONDS,
+  POPUP_DELAY_MIN_SECONDS,
+  type PopupStyle,
+  type PopupTrigger,
+} from "@/types/pages-funnels-popup";
 import { ColorPickRow, useBrandColors } from "./color-controls";
 
 /**
  * Popup Frame settings (Slice 4.5, approved mockup panel C) — the editor for
  * the Popup root's `frame` field, shown when the frame (not a content block)
  * is selected. Only settings the public Popup runtime actually draws are
- * offered: overlay color/opacity/blur, panel width + placement, panel
+ * offered: trigger (Slice 6: Manual / Delay / Exit intent), overlay
+ * color/opacity/blur, panel width + placement, panel
  * background/padding/border/radius/shadow, and close-on-overlay-click.
- * Trigger settings are deliberately absent until their runtime ships.
  */
 
 /** Which groups are open — module scope so a Puck-driven remount of the fields panel keeps them. */
-const openGroups: Record<string, boolean> = { general: true };
+const openGroups: Record<string, boolean> = { general: true, trigger: true };
 
 export function PopupFrameFieldEditor({ value, onChange }: { value: PopupFrameValue | undefined; onChange: (next: PopupFrameValue) => void }) {
   const brand = useBrandColors();
@@ -38,6 +44,8 @@ export function PopupFrameFieldEditor({ value, onChange }: { value: PopupFrameVa
   if (!value) return null;
   const style = value.style;
   const set = <K extends keyof PopupStyle>(key: K, v: PopupStyle[K]) => onChange({ ...value, style: { ...style, [key]: v } });
+  const trigger: PopupTrigger = value.trigger ?? { type: "manual" };
+  const setTrigger = (next: PopupTrigger) => onChange({ ...value, trigger: next });
 
   return (
     <div className="-mx-1 flex flex-col" data-popup-frame-settings="">
@@ -45,6 +53,41 @@ export function PopupFrameFieldEditor({ value, onChange }: { value: PopupFrameVa
         <Field label="Popup name" htmlFor={id("name")}>
           <DraftText id={id("name")} value={value.name} onCommit={(name) => onChange({ ...value, name })} />
         </Field>
+      </Group>
+      <Group id="trigger" title="Trigger">
+        <Field label="Trigger">
+          <ChoiceSelect
+            label="Trigger"
+            value={trigger.type}
+            options={[{ value: "manual", label: "Manual" }, { value: "delay", label: "Delay" }, { value: "exit_intent", label: "Exit intent" }]}
+            onChange={(v) => {
+              if (v === trigger.type) return;
+              setTrigger(v === "delay" ? { type: "delay", delaySeconds: POPUP_DELAY_DEFAULT_SECONDS } : v === "exit_intent" ? { type: "exit_intent" } : { type: "manual" });
+            }}
+          />
+        </Field>
+        {trigger.type === "manual" ? (
+          <p className="text-caption text-muted-foreground">Opens only from a button or image set to Open popup.</p>
+        ) : null}
+        {trigger.type === "delay" ? (
+          <Field label="Delay" htmlFor={id("delay")} suffix="seconds" hint="Opens automatically after the page has been open this long.">
+            <DraftNumber
+              id={id("delay")}
+              value={trigger.delaySeconds}
+              min={POPUP_DELAY_MIN_SECONDS}
+              max={POPUP_DELAY_MAX_SECONDS}
+              integer
+              onCommit={(n) => setTrigger({ type: "delay", delaySeconds: n })}
+            />
+          </Field>
+        ) : null}
+        {trigger.type === "exit_intent" ? (
+          <div className="border-border bg-muted/40 rounded-md border px-2.5 py-2" data-popup-exit-note="">
+            <p className="text-foreground text-caption font-semibold">Desktop only</p>
+            <p className="text-caption text-muted-foreground mt-0.5">Exit intent is available on desktop browsers only. It opens when a visitor moves their pointer toward the top of the browser to leave.</p>
+          </div>
+        ) : null}
+        <p className="text-caption text-muted-foreground">At most one popup opens on its own per visit to the page.</p>
       </Group>
       <Group id="overlay" title="Overlay">
         <ColorPickRow label="Overlay color" hex={style.overlayColor} onCommit={(hex) => set("overlayColor", hex)} brand={brand} testId="popup-overlay" />
@@ -173,12 +216,12 @@ function DraftText({ id, value, onCommit }: { id: string; value: string; onCommi
 }
 
 /** Number input: typing is free, only a valid number inside [min, max] is saved. */
-function DraftNumber({ id, value, min, max, onCommit }: { id: string; value: number; min: number; max: number; onCommit: (n: number) => void }) {
+function DraftNumber({ id, value, min, max, integer = false, onCommit }: { id: string; value: number; min: number; max: number; integer?: boolean; onCommit: (n: number) => void }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const commit = (raw: string) => {
     const n = Number(raw);
-    if (raw.trim() !== "" && Number.isFinite(n) && n >= min && n <= max && n !== value) onCommit(n);
+    if (raw.trim() !== "" && Number.isFinite(n) && (!integer || Number.isInteger(n)) && n >= min && n <= max && n !== value) onCommit(n);
   };
   return (
     <Input
@@ -194,7 +237,7 @@ function DraftNumber({ id, value, min, max, onCommit }: { id: string; value: num
       }}
       onBlur={() => {
         const n = Number(draft);
-        const clamped = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : value;
+        const clamped = Number.isFinite(n) ? Math.min(max, Math.max(min, integer ? Math.round(n) : n)) : value;
         if (clamped !== value) onCommit(clamped);
         setDraft(String(clamped));
       }}
