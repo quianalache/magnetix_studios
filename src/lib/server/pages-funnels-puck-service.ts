@@ -8,7 +8,6 @@ import { PUCK_CONTENT_MAX_DEPTH, encodePuckData, isPuckData, type EncodedPuckDat
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 import {
   encodePopupMapForStorage,
-  findStalePopupReferences,
   normalizePopupMap,
   type PopupDefinitionMap,
   type StoredPopupMap,
@@ -88,8 +87,9 @@ function preparePageWrite(
       return tooLarge(`The popup “${popup.name}” has blocks nested too deeply to save.`);
     }
   }
-  const stale = findStalePopupReferences(data, normalized);
-  if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
+  // An Open Popup action whose Popup was deleted keeps its target id (Slice 5):
+  // the editor shows it as missing and the runtime treats it as inert, so a
+  // stale reference is never a save error and is never rewritten silently.
 
   const stored = encodePopupMapForStorage(normalized);
   if (firestoreStorageSize(stored) > POPUP_PAYLOAD_LIMIT_BYTES) {

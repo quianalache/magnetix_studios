@@ -17,7 +17,8 @@ export function validatePopupContent(data: unknown): PopupContentIssue[] {
       if (node.type === "Popup") issues.push({ path, message: "Nested Popups are not allowed.", type: node.type });
       else if (!POPUP_ALLOWED_BLOCKS.has(node.type)) issues.push({ path, message: `Block ${node.type} is not allowed in a Popup.`, type: node.type });
       const action = node.props?.action as { type?: unknown } | undefined;
-      if (action?.type === "open_popup" || action?.type === "close_popup") issues.push({ path, message: "Popup actions are reserved for Slice 5.", type: node.type });
+      // Slice 5: Close Popup belongs in a Popup; Open Popup never does (no nested Popups).
+      if (action?.type === "open_popup") issues.push({ path, message: "A Popup can't open another Popup.", type: node.type });
     }
     Object.entries(node.props ?? {}).forEach(([key, child]) => visit(child, `${path}.${key}`, key === "content" || key === "children"));
   };
@@ -33,7 +34,8 @@ export function sanitizePopupContent(data: unknown): PuckData {
       const node = item as { type?: unknown; props?: Record<string, unknown> };
       if (typeof node.type === "string" && !POPUP_ALLOWED_BLOCKS.has(node.type)) return [];
       const props = Object.fromEntries(Object.entries(node.props ?? {})
-        .filter(([key, child]) => !(key === "action" && child && typeof child === "object" && ["open_popup", "close_popup"].includes(String((child as { type?: unknown }).type))))
+        // Open Popup is removed inside a Popup (no nesting); Close Popup is kept.
+        .filter(([key, child]) => !(key === "action" && child && typeof child === "object" && (child as { type?: unknown }).type === "open_popup"))
         .map(([key, child]) => [key, clean(child)]));
       return [{ ...node, props }];
     });

@@ -21,7 +21,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.GCLOUD_PROJECT?.startsW
 }
 if (!getApps().length) initializeApp({ projectId: process.env.GCLOUD_PROJECT });
 
-let passed = 9; // the nine original assertions below (Slices 1–4), all counted on success
+let passed = 10; // the ten assertions in the first block below (Slices 1–5), all counted on success
 
 async function main() {
   const db = getAdminDb();
@@ -69,8 +69,11 @@ async function main() {
 
     const withMissingRef = { ...data, content: [{ type: "Button", props: { id: "button-1", action: { type: "open_popup", popupId: "missing" } } }] } as PuckData;
     assert.deepEqual(findStalePopupReferences(withMissingRef, { [popupId]: edited }), ["missing"], "stale popup refs are detected");
-    const rejected = await savePuckDraft(subAccountId, pageId, withMissingRef, { [popupId]: edited });
-    assert.equal(rejected.ok, false, "stale popup reference is rejected");
+    // Slice 5: a stale target is KEPT (shown as missing in the editor, inert at runtime), never a save error.
+    const staleSaved = await savePuckDraft(subAccountId, pageId, withMissingRef, { [popupId]: edited });
+    assert.equal(staleSaved.ok, true, "a stale Open Popup target saves (no hidden rewrite, no save error)");
+    assert.equal((await readPage()).puckDraftData.content[0].props.action.popupId, "missing", "…and the stale target id is preserved exactly");
+    await savePuckDraft(subAccountId, pageId, data, { [popupId]: edited });
     // ---- Slice 4.5: real child content, several Popups, frame settings ----
     const headingOf = (p: PopupDefinition) => {
       const find = (v: unknown): string | null => {

@@ -56,12 +56,14 @@ export function canonicalizeStoredAction(raw: unknown): {
       const emailAddress = text("emailAddress");
       return emailAddress ? { action: { type: "navigate", destination: { type: "email", emailAddress, ...(text("subject") ? { subject: text("subject") } : {}) } }, status: "supported", rawType, raw } : invalid();
     }
+    // Manual Popup actions (Wave 2A Slice 5). Executed by `executePageAction`
+    // (action/execute.ts), never rendered as links.
     case "open_popup": {
       const popupId = text("popupId");
-      return popupId ? unsupported({ type: "open_popup", popupId }) : invalid();
+      return popupId && ID.test(popupId) ? { action: { type: "open_popup", popupId }, status: "supported", rawType, raw } : invalid();
     }
     case "close_popup":
-      return unsupported({ type: "close_popup" });
+      return { action: { type: "close_popup" }, status: "supported", rawType, raw };
     case "submit_form": {
       const formId = text("formId");
       return formId ? unsupported({ type: "submit_form", formId }) : invalid();

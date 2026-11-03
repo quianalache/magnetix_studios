@@ -3,7 +3,7 @@ import { Render } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
-import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
+import { PopupHost } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
 import { normalizePopupMap } from "@/types/pages-funnels-popup";
@@ -95,14 +95,12 @@ export default async function PublicPagePreview({
   const brandKit = tenantBrand.map(({ id, hex, name }) => ({ id, hex, name }));
   const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(collectable)) : {};
   const qaPopupId = typeof query.qa_popup === "string" && page.name.startsWith("QA ·") ? query.qa_popup : null;
+  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups };
+  // The host holds ONLY this page's PUBLISHED Popups: an Open Popup action can
+  // never reach a draft-only Popup or another page's Popup (Slice 5).
   return (
-    <>
-    <Render
-      config={serverPuckConfig}
-      data={publishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups }}
-    />
-    <PopupRuntime popups={publishedPopups} initialPopupId={qaPopupId} metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups }} />
-    </>
+    <PopupHost popups={publishedPopups} initialPopupId={qaPopupId} metadata={metadata}>
+      <Render config={serverPuckConfig} data={publishedData} metadata={metadata} />
+    </PopupHost>
   );
 }

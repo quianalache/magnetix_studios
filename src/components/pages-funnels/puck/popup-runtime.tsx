@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Render } from "@puckeditor/core";
 import { X } from "lucide-react";
@@ -9,6 +9,8 @@ import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config"
 import { createPopupPuckConfig } from "@/components/pages-funnels/puck/popup-config";
 import { sanitizePopupContent, validatePopupContent } from "@/lib/pages-funnels/popup-content";
 import { overlayColor } from "@/lib/pages-funnels/popup-editor";
+import type { PopupActionRuntime } from "@/lib/pages-funnels/action/execute";
+import { ActionSurfaceContext, PopupControllerContext } from "@/components/pages-funnels/puck/popup-action-context";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 
@@ -17,17 +19,58 @@ const POPUP_Z_INDEX = 1000;
 // its pre-resolved form from metadata like every page Form — no client fetch.
 const popupConfig = createPopupPuckConfig(serverPuckConfig);
 
-export function PopupRuntime({ popups, metadata, initialPopupId, onActiveChange }: { popups: PopupDefinitionMap; metadata?: PuckPageMetadata; initialPopupId?: string | null; onActiveChange?: (id: string | null) => void }) {
+export { ActionSurfaceContext, PopupControllerContext };
+
+/**
+ * Popup host (Slices 4–5): wraps a rendered page (Preview: DRAFT Popups;
+ * public page: PUBLISHED Popups only) and owns the ONE dialog shell. Page
+ * blocks reach it through `PopupControllerContext` (manual Open Popup);
+ * blocks inside the Popup run in the "popup" surface (Close Popup).
+ *
+ * One active Popup at a time — opening while one is open does nothing.
+ * Every way of closing (×, Esc, overlay, a Close Popup button) goes through
+ * `closePopup`, which returns focus to the element that opened it.
+ */
+export function PopupHost({
+  popups,
+  metadata,
+  initialPopupId,
+  children,
+}: {
+  popups: PopupDefinitionMap;
+  metadata?: PuckPageMetadata;
+  /** QA opener (`?popup=` in Preview, `?qa_popup=` on QA pages). */
+  initialPopupId?: string | null;
+  children?: ReactNode;
+}) {
   // Starts closed on BOTH server and client: the server renders nothing, so
   // the first client render must too (a portal there broke hydration on the
   // public page). `initialPopupId` opens it right after mount, below.
   const [activePopupId, setActivePopupId] = useState<string | null>(null);
+  const activeRef = useRef<string | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const active = activePopupId ? popups[activePopupId] : null;
-  const issues = useMemo(() => active ? validatePopupContent(active.content) : [], [active]);
-  const openPopup = useCallback((id: string, opener?: HTMLElement) => { if (!popups[id]) return; openerRef.current = opener ?? document.activeElement as HTMLElement; setActivePopupId(id); onActiveChange?.(id); }, [onActiveChange, popups]);
-  const closePopup = useCallback(() => { setActivePopupId(null); onActiveChange?.(null); requestAnimationFrame(() => openerRef.current?.focus?.()); }, [onActiveChange]);
+  const issues = useMemo(() => (active ? validatePopupContent(active.content) : []), [active]);
+
+  const openPopup = useCallback((id: string, opener?: HTMLElement | null) => {
+    if (activeRef.current || !popups[id]) return false;
+    openerRef.current = opener ?? (document.activeElement as HTMLElement | null);
+    activeRef.current = id;
+    setActivePopupId(id);
+    return true;
+  }, [popups]);
+  const closePopup = useCallback(() => {
+    if (!activeRef.current) return false;
+    activeRef.current = null;
+    setActivePopupId(null);
+    const opener = openerRef.current;
+    openerRef.current = null;
+    // After the page is interactive again (the effect below removes `inert`).
+    requestAnimationFrame(() => { if (opener?.isConnected) opener.focus(); });
+    return true;
+  }, []);
+  const controller = useMemo<PopupActionRuntime>(() => ({ openPopup, closePopup, hasPopup: (id) => !!popups[id] }), [openPopup, closePopup, popups]);
   useEffect(() => { if (initialPopupId) openPopup(initialPopupId); }, [initialPopupId, openPopup]);
 
   useEffect(() => {
@@ -51,19 +94,26 @@ export function PopupRuntime({ popups, metadata, initialPopupId, onActiveChange 
     return () => { document.body.style.overflow = previousOverflow; siblings.forEach((element) => { element.removeAttribute("aria-hidden"); (element as HTMLElement).inert = false; }); document.removeEventListener("keydown", onKeyDown); };
   }, [active, closePopup]);
 
-  if (!active || typeof document === "undefined") return null;
-  const style = active.style;
-  const sanitized = sanitizePopupContent(active.content);
-  const labelId = `popup-title-${active.id}`;
-  return createPortal(
-    <div data-popup-portal="" className="fixed inset-0 flex p-4" style={{ zIndex: POPUP_Z_INDEX, backgroundColor: overlayColor(style.overlayColor, style.overlayOpacity), backdropFilter: style.blurPx ? `blur(${style.blurPx}px)` : undefined, alignItems: style.panelPlacement === "top" ? "flex-start" : style.panelPlacement === "bottom" ? "flex-end" : "center", justifyContent: style.panelAlignment === "left" ? "flex-start" : style.panelAlignment === "right" ? "flex-end" : "center" }} onMouseDown={(event) => { if (event.target === event.currentTarget && style.closeOnOverlayClick) closePopup(); }}>
-      <div data-popup-dialog="" role="dialog" aria-modal="true" aria-labelledby={labelId} aria-describedby={issues.length ? `${labelId}-warning` : undefined} className="relative max-h-[calc(100dvh-2rem)] overflow-y-auto outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-reduce:animate-none" style={{ width: style.panelWidth, maxWidth: `min(${style.panelMaxWidth}px, calc(100vw - 32px))`, background: style.panelBackground, border: style.panelBorder, boxShadow: style.panelShadow, borderRadius: style.panelBorderRadius, padding: style.panelPadding }}>
-        <h2 id={labelId} className="sr-only">{active.name}</h2>
-        <Button ref={closeRef} type="button" variant="ghost" size="icon-sm" aria-label={`Close ${active.name}`} className="absolute right-3 top-3 z-10" onClick={closePopup}><X /></Button>
-        {issues.length > 0 && <p id={`${labelId}-warning`} role="status" className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">Some Popup blocks are unavailable and were safely omitted.</p>}
-        <Render config={popupConfig} data={sanitized} metadata={metadata} />
-      </div>
-    </div>,
-    document.body,
+  const style = active?.style;
+  const labelId = active ? `popup-title-${active.id}` : "";
+  return (
+    <PopupControllerContext.Provider value={controller}>
+      {children}
+      {active && style && typeof document !== "undefined"
+        ? createPortal(
+            <div data-popup-portal="" data-active-popup={active.id} className="fixed inset-0 flex p-4" style={{ zIndex: POPUP_Z_INDEX, backgroundColor: overlayColor(style.overlayColor, style.overlayOpacity), backdropFilter: style.blurPx ? `blur(${style.blurPx}px)` : undefined, alignItems: style.panelPlacement === "top" ? "flex-start" : style.panelPlacement === "bottom" ? "flex-end" : "center", justifyContent: style.panelAlignment === "left" ? "flex-start" : style.panelAlignment === "right" ? "flex-end" : "center" }} onMouseDown={(event) => { if (event.target === event.currentTarget && style.closeOnOverlayClick) closePopup(); }}>
+              <div data-popup-dialog="" role="dialog" aria-modal="true" aria-labelledby={labelId} aria-describedby={issues.length ? `${labelId}-warning` : undefined} className="relative max-h-[calc(100dvh-2rem)] overflow-y-auto outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-reduce:animate-none" style={{ width: style.panelWidth, maxWidth: `min(${style.panelMaxWidth}px, calc(100vw - 32px))`, background: style.panelBackground, border: style.panelBorder, boxShadow: style.panelShadow, borderRadius: style.panelBorderRadius, padding: style.panelPadding }}>
+                <h2 id={labelId} className="sr-only">{active.name}</h2>
+                <Button ref={closeRef} type="button" variant="ghost" size="icon-sm" aria-label={`Close ${active.name}`} className="absolute right-3 top-3 z-10" onClick={closePopup}><X /></Button>
+                {issues.length > 0 && <p id={`${labelId}-warning`} role="status" className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">Some Popup blocks are unavailable and were safely omitted.</p>}
+                <ActionSurfaceContext.Provider value="popup">
+                  <Render config={popupConfig} data={sanitizePopupContent(active.content)} metadata={metadata} />
+                </ActionSurfaceContext.Provider>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </PopupControllerContext.Provider>
   );
 }

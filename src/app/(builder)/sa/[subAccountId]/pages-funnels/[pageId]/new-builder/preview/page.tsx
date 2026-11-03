@@ -20,7 +20,7 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { LeadForm } from "@/types/forms";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
-import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
+import { PopupHost } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { readStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 
@@ -241,26 +241,15 @@ export default function NewBuilderPreviewPage({
   }
 
   const qaPopupId = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("popup");
+  const metadata = {
+    ...state.metadata,
+    brandColors: JSON.parse(brandKey) as string[],
+    brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
+  };
+  // Preview runs Open / Close Popup against this page's DRAFT Popups.
   return (
-    <>
-    <Render
-      config={serverPuckConfig}
-      data={state.data}
-      metadata={{
-        ...state.metadata,
-        brandColors: JSON.parse(brandKey) as string[],
-        brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
-      }}
-    />
-    <PopupRuntime
-      popups={state.popups}
-      initialPopupId={qaPopupId}
-      metadata={{
-        ...state.metadata,
-        brandColors: JSON.parse(brandKey) as string[],
-        brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
-      }}
-    />
-    </>
+    <PopupHost popups={state.popups} initialPopupId={qaPopupId} metadata={metadata}>
+      <Render config={serverPuckConfig} data={state.data} metadata={metadata} />
+    </PopupHost>
   );
 }

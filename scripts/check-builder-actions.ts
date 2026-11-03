@@ -82,14 +82,16 @@ console.log("Stored-action normalization (existing pages need no migration)");
 check("legacy flat URL action reads unchanged", JSON.stringify(normalizeStoredAction({ type: "url", url: "https://a.com", openInNewTab: true })) === JSON.stringify({ type: "url", url: "https://a.com", openInNewTab: true }));
 check("legacy none reads as none", normalizeStoredAction({ type: "none", url: "" }).type === "none");
 check("missing/garbage → none", normalizeStoredAction(undefined).type === "none" && normalizeStoredAction("x").type === "none" && normalizeStoredAction({ type: "custom_js", code: "x" }).type === "none");
-check("reserved stored types → none", normalizeStoredAction({ type: "open_popup", popupId: "p" }).type === "none");
+check("reserved stored types → none", normalizeStoredAction({ type: "show_hide", targetElementId: "s", mode: "toggle" }).type === "none");
+check("Slice 5: Open Popup keeps its (possibly stale) target id", JSON.stringify(normalizeStoredAction({ type: "open_popup", popupId: "p" })) === JSON.stringify({ type: "open_popup", popupId: "p" }));
 check("non-string fields coerced safely", JSON.stringify(normalizeStoredAction({ type: "purchase", offerId: { evil: 1 } })) === JSON.stringify({ type: "purchase", offerId: "" }));
 check("canonical URL action is supported", canonicalizeStoredAction({ type: "url", url: "https://a.com" }).status === "supported" && canonicalizeStoredAction({ type: "url", url: "https://a.com" }).action.type === "navigate");
 const canonicalPurchase = canonicalizeStoredAction({ type: "purchase", offerId: "offer_a" });
 check("canonical purchase maps to offer checkout", canonicalPurchase.action.type === "navigate" && canonicalPurchase.action.destination.type === "offer_checkout");
 const canonicalFunnel = canonicalizeStoredAction({ type: "next_funnel_step" });
 check("reserved funnel action is preserved but unsupported", canonicalFunnel.status === "unsupported" && canonicalFunnel.action.type === "navigate" && canonicalFunnel.action.destination.type === "funnel_next_step");
-check("reserved popup action retains raw type", canonicalizeStoredAction({ type: "open_popup", popupId: "popup_a" }).status === "unsupported" && canonicalizeStoredAction({ type: "open_popup", popupId: "popup_a" }).rawType === "open_popup");
+check("reserved show/hide action retains raw type", canonicalizeStoredAction({ type: "show_hide", targetElementId: "s", mode: "toggle" }).status === "unsupported" && canonicalizeStoredAction({ type: "show_hide", targetElementId: "s", mode: "toggle" }).rawType === "show_hide");
+check("Slice 5: Open / Close Popup are supported canonical actions", canonicalizeStoredAction({ type: "open_popup", popupId: "popup_a" }).status === "supported" && canonicalizeStoredAction({ type: "close_popup" }).status === "supported");
 check("malformed bound action is invalid", canonicalizeStoredAction({ type: "page", pageId: "../other" }).status === "invalid");
 
 console.log("Target collection");

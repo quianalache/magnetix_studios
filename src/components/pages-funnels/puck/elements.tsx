@@ -11,6 +11,8 @@ import type {
   VideoPlaybackConfig,
 } from "@/types/pages-funnels-puck";
 import { resolveActionLink } from "@/lib/pages-funnels/puck/action";
+import { popupActionKind } from "@/lib/pages-funnels/action/execute";
+import { PopupActionTrigger } from "@/components/pages-funnels/puck/popup-action-trigger";
 import {
   resolveBaseStyleProps,
   resolveResponsiveCss,
@@ -232,6 +234,20 @@ export function ButtonRender({
 }) {
   const link = resolveActionLink(action, { resolved, editing });
   const responsiveCss = resolveResponsiveCss(id, styleConfig);
+  const buttonClass = `relative overflow-hidden rounded-full px-6 py-2.5 text-sm font-semibold shadow-sm transition-colors ${BUTTON_STYLE_CLASS[buttonStyle]}`;
+  // Slice 5: Open / Close Popup run through the shared action executor (a
+  // real <button>); navigation actions stay links. Never in the builder.
+  if (!editing && popupActionKind(action)) {
+    return (
+      <div className={`flex ${JUSTIFY_CLASS[alignment]}`}>
+        {responsiveCss && <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />}
+        <PopupActionTrigger id={id} action={action} className={`${buttonClass} cursor-pointer aria-disabled:cursor-default`} style={resolveBaseStyleProps(styleConfig)}>
+          <BackgroundLayer background={background} />
+          <span className="relative z-10">{text}</span>
+        </PopupActionTrigger>
+      </div>
+    );
+  }
   return (
     <div className={`flex ${JUSTIFY_CLASS[alignment]}`}>
       {responsiveCss && (
@@ -314,7 +330,12 @@ export function ImageRender({
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      {link.href ? (
+      {!editing && src && popupActionKind(action) ? (
+        // Slice 5: an Image that opens a Popup is a real button (keyboard + screen reader).
+        <PopupActionTrigger action={action} className="block cursor-pointer rounded-xl border-0 bg-transparent p-0 text-left aria-disabled:cursor-default" label={alt ? undefined : "Open popup"}>
+          {img}
+        </PopupActionTrigger>
+      ) : link.href ? (
         <a
           href={link.href}
           target={link.newTab ? "_blank" : undefined}

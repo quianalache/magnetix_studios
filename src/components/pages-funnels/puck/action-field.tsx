@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { createUsePuck } from "@puckeditor/core";
@@ -19,9 +19,25 @@ import type { PageAction } from "@/types/pages-funnels-puck";
 
 const useTypedPuck = createUsePuck();
 
-type LiveType = "none" | "url" | "page" | "purchase" | "scroll" | "call" | "email" | "sms";
+type LiveType = "none" | "url" | "page" | "purchase" | "scroll" | "call" | "email" | "sms" | "open_popup" | "close_popup";
 
-const ACTION_OPTIONS: { value: LiveType; label: string }[] = [
+/**
+ * Where the ActionField is being used (Wave 2A Slice 5), provided by the
+ * editor shell. PAGE content may Open a Popup (one of THIS page's draft
+ * Popups, by stable id); POPUP content may Close the Popup and never Open
+ * one (no nested Popups). Without a provider (outside the page editor) the
+ * Popup actions are simply not offered.
+ */
+export interface ActionFieldContextValue {
+  surface: "page" | "popup";
+  /** This page's current draft Popups — stable id + current name. */
+  popups: { id: string; name: string }[];
+  /** Opens the builder's Popups panel (the "Create a Popup" shortcut). */
+  openPopupsPanel?: () => void;
+}
+export const ActionFieldContext = createContext<ActionFieldContextValue | null>(null);
+
+const BASE_ACTION_OPTIONS: { value: LiveType; label: string }[] = [
   { value: "none", label: "No action" },
   { value: "url", label: "Go to URL" },
   { value: "page", label: "Go to page" },
@@ -32,6 +48,12 @@ const ACTION_OPTIONS: { value: LiveType; label: string }[] = [
   { value: "sms", label: "Text message (SMS)" },
 ];
 
+export function actionOptions(ctx: ActionFieldContextValue | null): { value: LiveType; label: string }[] {
+  if (ctx?.surface === "page") return [...BASE_ACTION_OPTIONS, { value: "open_popup", label: "Open popup" }];
+  if (ctx?.surface === "popup") return [...BASE_ACTION_OPTIONS, { value: "close_popup", label: "Close popup" }];
+  return BASE_ACTION_OPTIONS;
+}
+
 function blank(type: LiveType): PageAction {
   switch (type) {
     case "url": return { type: "url", url: "", openInNewTab: false };
@@ -41,6 +63,8 @@ function blank(type: LiveType): PageAction {
     case "call": return { type: "call", phoneNumber: "" };
     case "sms": return { type: "sms", phoneNumber: "" };
     case "email": return { type: "email", emailAddress: "" };
+    case "open_popup": return { type: "open_popup", popupId: "" };
+    case "close_popup": return { type: "close_popup" };
     default: return { type: "none" };
   }
 }
@@ -53,9 +77,12 @@ function blank(type: LiveType): PageAction {
  * or a new custom domain never leaves a stale URL behind.
  */
 export function ActionFieldEditor({ value, onChange }: { value: unknown; onChange: (value: PageAction) => void }) {
+  const ctx = useContext(ActionFieldContext);
+  const options = actionOptions(ctx);
   const inspection = inspectStoredAction(value);
   const action = inspection.action;
-  const type = (ACTION_OPTIONS.some((o) => o.value === action.type) ? action.type : "none") as LiveType;
+  const offered = options.some((o) => o.value === action.type);
+  const type = (offered ? action.type : "none") as LiveType;
 
   return (
     <div className="space-y-3">
@@ -65,10 +92,16 @@ export function ActionFieldEditor({ value, onChange }: { value: unknown; onChang
           aria-label="Action"
           value={type}
           onChange={(next) => onChange(blank((next ?? "none") as LiveType))}
-          options={ACTION_OPTIONS}
+          options={options}
           className="w-full"
         />
       </div>
+      {/* A Popup action saved somewhere it can't run (e.g. Open popup inside a Popup): kept, inert, explained. */}
+      {inspection.status === "supported" && !offered && (action.type === "open_popup" || action.type === "close_popup") && (
+        <Hint tone="warning">
+          {action.type === "open_popup" ? "A popup can't open another popup." : "Close popup only works inside a popup."} This action does nothing here — choose another action.
+        </Hint>
+      )}
       {inspection.status !== "supported" && inspection.rawType && (
         <Hint tone="warning">
           This saved action ({inspection.rawType}) is not available yet. It remains inactive until you choose a supported action.
@@ -80,6 +113,46 @@ export function ActionFieldEditor({ value, onChange }: { value: unknown; onChang
       {action.type === "scroll" && <SectionFields action={action} onChange={onChange} />}
       {(action.type === "call" || action.type === "sms") && <PhoneFields action={action} onChange={onChange} />}
       {action.type === "email" && <EmailFields action={action} onChange={onChange} />}
+      {action.type === "open_popup" && offered && <PopupFields action={action} onChange={onChange} ctx={ctx} />}
+      {action.type === "close_popup" && offered && <Hint>Closes this popup and returns the visitor to the page.</Hint>}
+    </div>
+  );
+}
+
+/** Open popup → one of THIS page's Popups, stored by its stable id (renaming a Popup never breaks the link). */
+function PopupFields({ action, onChange, ctx }: { action: Extract<PageAction, { type: "open_popup" }>; onChange: (a: PageAction) => void; ctx: ActionFieldContextValue | null }) {
+  const popups = ctx?.popups ?? [];
+  const missing = !!action.popupId && !popups.some((p) => p.id === action.popupId);
+  const options = [
+    ...popups.map((p) => ({ value: p.id, label: p.name || "Untitled popup" })),
+    // A deleted target stays visible (and stays stored) until the owner picks another.
+    ...(missing ? [{ value: action.popupId, label: "Missing popup (deleted)" }] : []),
+  ];
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold">Popup</Label>
+      {popups.length === 0 && !missing ? (
+        <Hint>
+          This page has no popups yet.{" "}
+          {ctx?.openPopupsPanel ? (
+            <button type="button" onClick={ctx.openPopupsPanel} className="text-link font-medium underline-offset-2 hover:underline">
+              Create a popup
+            </button>
+          ) : (
+            "Create one in the Popups panel."
+          )}
+        </Hint>
+      ) : (
+        <OptionSelect
+          aria-label="Popup"
+          value={action.popupId || null}
+          onChange={(popupId) => onChange({ type: "open_popup", popupId: popupId ?? "" })}
+          options={options}
+          placeholder="Choose a popup…"
+          className="w-full"
+        />
+      )}
+      {missing && <Hint tone="warning">That popup was deleted from this page. Choose another popup, or choose No action.</Hint>}
     </div>
   );
 }

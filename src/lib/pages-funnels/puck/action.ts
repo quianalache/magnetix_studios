@@ -19,7 +19,8 @@ import { canonicalizeStoredAction } from "@/lib/pages-funnels/action/normalize";
  * sub-account — a missing, unpublished or other-business target renders as a
  * button with no link instead of a broken one.
  *
- * Reserved (in the type, not exposed or rendered): funnel steps, popups,
+ * Popup actions (Slice 5) never render as links — see action/execute.ts.
+ * Reserved (in the type, not exposed or rendered): funnel steps,
  * show/hide, submit form, download, upsell accept/decline. Each is still an
  * explicit case below so adding a variant forces a decision here.
  */
@@ -170,6 +171,11 @@ export function normalizeStoredAction(raw: unknown): PageAction {
       return { type: "sms", phoneNumber: str(a.phoneNumber) };
     case "email":
       return { type: "email", emailAddress: str(a.emailAddress), ...(str(a.subject) ? { subject: str(a.subject) } : {}) };
+    // Slice 5: Popup actions keep their target id even when it's stale, so the editor can show it.
+    case "open_popup":
+      return { type: "open_popup", popupId: str(a.popupId) };
+    case "close_popup":
+      return { type: "close_popup" };
     default:
       return { type: "none" };
   }

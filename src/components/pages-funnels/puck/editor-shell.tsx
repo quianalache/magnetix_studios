@@ -63,6 +63,7 @@ import {
   type PopupManagerApi,
 } from "@/components/pages-funnels/puck/popup-manager";
 import { createPopupEditorConfig } from "@/components/pages-funnels/puck/popup-editor-config";
+import { ActionFieldContext, type ActionFieldContextValue } from "@/components/pages-funnels/puck/action-field";
 import { PopupEditorContext } from "@/components/pages-funnels/puck/popup-edit-canvas";
 import { applyPopupEditorChange, popupToEditorData } from "@/lib/pages-funnels/popup-editor";
 import { createDefaultPopup, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
@@ -381,6 +382,16 @@ export function MagnetixPuckEditorShell({
     backToPage: exitPopupEditor,
   }), [popups, publishedPopups, editingPopupId, enterPopupEditor, exitPopupEditor]);
 
+  // ActionField context (Slice 5): which surface is being edited, and THIS
+  // page's draft Popups (stable id + current name) for the Open popup picker.
+  const actionFieldValue = useMemo<ActionFieldContextValue>(() => ({
+    surface: isPopupSurface ? "popup" : "page",
+    popups: Object.values(popups)
+      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.name.localeCompare(b.name))
+      .map((p) => ({ id: p.id, name: p.name })),
+    openPopupsPanel: () => getPuckRef.current?.()?.dispatch({ type: "setUi", ui: { plugin: { current: "popups" }, leftSideBarVisible: true } }),
+  }), [isPopupSurface, popups]);
+
   const popupEditorValue = useMemo(() => ({ pageData: data, onBackToPage: exitPopupEditor }), [data, exitPopupEditor]);
   const popupHeaderValue = useMemo(() => ({ name: editingPopup?.name ?? null, onBackToPage: exitPopupEditor }), [editingPopup?.name, exitPopupEditor]);
 
@@ -665,6 +676,7 @@ export function MagnetixPuckEditorShell({
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
             <PublishStatusContext.Provider value={{ state: publishState, error: publishError }}>
               <PopupManagerContext.Provider value={popupApi}>
+                <ActionFieldContext.Provider value={actionFieldValue}>
                 <PopupEditorContext.Provider value={popupEditorValue}>
                   <EditingPopupContext.Provider value={popupHeaderValue}>
                     <Puck
@@ -682,6 +694,7 @@ export function MagnetixPuckEditorShell({
                     />
                   </EditingPopupContext.Provider>
                 </PopupEditorContext.Provider>
+                </ActionFieldContext.Provider>
               </PopupManagerContext.Provider>
             </PublishStatusContext.Provider>
           </SaveStatusContext.Provider>
