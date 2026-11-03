@@ -5,8 +5,20 @@ import type { Data as PuckData } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
-import { normalizePopupMap, findStalePopupReferences, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
-import { FIRESTORE_MAX_FIELD_DEPTH, fieldDepth } from "@/lib/pages-funnels/popup-content";
+import {
+  encodePopupMapForStorage,
+  findStalePopupReferences,
+  normalizePopupMap,
+  type PopupDefinitionMap,
+  type StoredPopupMap,
+} from "@/types/pages-funnels-popup";
+import {
+  FIRESTORE_MAX_FIELD_DEPTH,
+  PAGE_DOC_SIZE_LIMIT_BYTES,
+  POPUP_CONTENT_MAX_DEPTH,
+  POPUP_PAYLOAD_LIMIT_BYTES,
+  fieldDepth,
+} from "@/lib/pages-funnels/popup-content";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -35,40 +47,65 @@ import { FIRESTORE_MAX_FIELD_DEPTH, fieldDepth } from "@/lib/pages-funnels/popup
  */
 
 const PAGES_COLLECTION = "pages";
-const POPUP_PAYLOAD_LIMIT_BYTES = 700_000;
 
 export type PuckPersistenceResult =
   | { ok: true }
   | { ok: false; error: string; status: 400 | 404 | 403 | 413 };
 
-/** Custom HTML size/count limits (custom-html/policy.ts) — enforced on every draft save and publish. */
-function customHtmlLimitError(data: PuckData): PuckPersistenceResult | null {
-  const problem = findCustomHtmlLimitProblem(data);
-  return problem ? { ok: false, error: problem, status: 413 } : null;
-}
+const tooLarge = (error: string): PuckPersistenceResult => ({ ok: false, error, status: 413 });
 
-function popupPayloadLimitError(popups: PopupDefinitionMap): PuckPersistenceResult | null {
-  return JSON.stringify(popups).length > POPUP_PAYLOAD_LIMIT_BYTES
-    ? { ok: false, error: "Popup definitions are too large for a page document.", status: 413 }
-    : null;
-}
+/**
+ * Every check a draft save or publish runs before writing (storage contract
+ * of 2026-11-03 — Popup content is stored as a JSON string, see
+ * `StoredPopupDefinition`). Returns the exact Popup map to write, or the
+ * clear error to return instead of letting Firestore fail generically.
+ */
+function preparePageWrite(
+  data: PuckData,
+  popups: unknown,
+  currentDoc: Record<string, unknown>,
+  replacedFields: readonly string[]
+): { stored: StoredPopupMap } | PuckPersistenceResult {
+  const htmlProblem = findCustomHtmlLimitProblem(data);
+  if (htmlProblem) return tooLarge(htmlProblem);
 
-/** Firestore's 20-level nesting limit (see popup-content.ts) — a clear error instead of a bare 500. */
-function nestingDepthError(data: PuckData, popups: PopupDefinitionMap): PuckPersistenceResult | null {
-  if (fieldDepth(popups) > FIRESTORE_MAX_FIELD_DEPTH) {
-    return { ok: false, error: "A popup has blocks nested too deeply to save. Move a block out of its nested container and try again.", status: 413 };
+  // Malformed Popups are refused, never silently dropped (dropping would delete them on save).
+  const incoming = popups && typeof popups === "object" && !Array.isArray(popups) ? Object.keys(popups) : [];
+  const normalized = normalizePopupMap(popups);
+  if (incoming.length !== Object.keys(normalized).length) {
+    return { ok: false, error: "A popup couldn't be read. Reload the page and try again.", status: 400 };
   }
-  if (fieldDepth(data) > FIRESTORE_MAX_FIELD_DEPTH) {
-    return { ok: false, error: "This page has blocks nested too deeply to save. Move a block out of its nested container and try again.", status: 413 };
+  for (const popup of Object.values(normalized)) {
+    if (fieldDepth(popup.content) > POPUP_CONTENT_MAX_DEPTH) {
+      return tooLarge(`The popup “${popup.name}” has blocks nested too deeply to save.`);
+    }
   }
-  return null;
+  const stale = findStalePopupReferences(data, normalized);
+  if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
+
+  const stored = encodePopupMapForStorage(normalized);
+  if (Buffer.byteLength(JSON.stringify(stored)) > POPUP_PAYLOAD_LIMIT_BYTES) {
+    return tooLarge("This page's popups are too large to save. Remove a popup or some of its content.");
+  }
+  // Firestore's 20-level map/array limit: page content is still stored as maps.
+  // (The stored Popup map is a few levels deep by construction; checked anyway.)
+  if (fieldDepth(data) > FIRESTORE_MAX_FIELD_DEPTH || fieldDepth(stored) > FIRESTORE_MAX_FIELD_DEPTH) {
+    return tooLarge("This page has blocks nested too deeply to save. Move a block out of its nested container and try again.");
+  }
+  // The whole document (page draft + published + both Popup maps) must stay under Firestore's 1 MiB.
+  const next: Record<string, unknown> = { ...currentDoc };
+  for (const field of replacedFields) next[field] = field.endsWith("Popups") ? stored : data;
+  if (Buffer.byteLength(JSON.stringify(next)) > PAGE_DOC_SIZE_LIMIT_BYTES) {
+    return tooLarge("This page and its popups are too large to save. Remove some content and try again.");
+  }
+  return { stored };
 }
 
 async function loadOwnedPage(
   subAccountId: string,
   pageId: string
 ): Promise<
-  { ref: FirebaseFirestore.DocumentReference } | PuckPersistenceResult
+  { ref: FirebaseFirestore.DocumentReference; doc: Record<string, unknown> } | PuckPersistenceResult
 > {
   const db = getAdminDb();
   const ref = db.collection(PAGES_COLLECTION).doc(pageId);
@@ -84,7 +121,7 @@ async function loadOwnedPage(
     // (small) information leak.
     return { ok: false, error: "Page not found", status: 404 };
   }
-  return { ref };
+  return { ref, doc: page as Record<string, unknown> };
 }
 
 /**
@@ -100,18 +137,13 @@ export async function savePuckDraft(
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
-  const tooLarge = customHtmlLimitError(data);
-  if (tooLarge) return tooLarge;
-  const normalizedPopups = normalizePopupMap(popups);
-  const popupTooLarge = popupPayloadLimitError(normalizedPopups) ?? nestingDepthError(data, normalizedPopups);
-  if (popupTooLarge) return popupTooLarge;
-  const stale = findStalePopupReferences(data, normalizedPopups);
-  if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
+  const prepared = preparePageWrite(data, popups, owned.doc, ["puckDraftData", "puckDraftPopups"]);
+  if ("ok" in prepared) return prepared;
 
   const now = FieldValue.serverTimestamp();
   await owned.ref.update({
     puckDraftData: data,
-    puckDraftPopups: normalizedPopups,
+    puckDraftPopups: prepared.stored,
     puckDraftUpdatedAt: now,
     updatedAt: now,
   });
@@ -150,21 +182,18 @@ export async function publishPuckPage(
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
-  const tooLarge = customHtmlLimitError(data);
-  if (tooLarge) return tooLarge;
-  const normalizedPopups = normalizePopupMap(popups);
-  const popupTooLarge = popupPayloadLimitError(normalizedPopups) ?? nestingDepthError(data, normalizedPopups);
-  if (popupTooLarge) return popupTooLarge;
-  const stale = findStalePopupReferences(data, normalizedPopups);
-  if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
+  const prepared = preparePageWrite(data, popups, owned.doc, ["puckDraftData", "puckDraftPopups", "puckPublishedData", "puckPublishedPopups"]);
+  if ("ok" in prepared) return prepared;
 
   const now = FieldValue.serverTimestamp();
+  // ONE document update: page draft + page published + both Popup maps land
+  // together, so no reader can ever see page version B with Popups version A.
   await owned.ref.update({
     puckDraftData: data,
-    puckDraftPopups: normalizedPopups,
+    puckDraftPopups: prepared.stored,
     puckDraftUpdatedAt: now,
     puckPublishedData: data,
-    puckPublishedPopups: normalizedPopups,
+    puckPublishedPopups: prepared.stored,
     puckPublishedAt: now,
     status: "published",
     publishedAt: now,

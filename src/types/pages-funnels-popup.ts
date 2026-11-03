@@ -98,16 +98,89 @@ export function createDefaultPopup(id: string, name = "Untitled popup"): PopupDe
   };
 }
 
+/**
+ * How a Popup is STORED on the page doc (`puckDraftPopups` / `puckPublishedPopups`)
+ * since the storage-headroom hardening (2026-11-03). Metadata stays as plain
+ * fields; the Popup's Puck tree is ONE JSON string. Firestore limits map/array
+ * nesting to 20 levels, and a Popup tree stored as maps sat two levels deeper
+ * than page content — its deepest real block (a Button's gradient stops in
+ * Section → Row → Column) was exactly 20. As a string it adds no nesting, so
+ * the stored Popup map is 3 levels deep whatever the blocks contain.
+ *
+ * Older docs hold `content` as a map (Slices 3–4.5); `normalizePopupMap` reads
+ * both, and the next intentional save writes this shape. Nothing is bulk-migrated.
+ */
+export interface StoredPopupDefinition {
+  id: string;
+  name: string;
+  trigger: PopupTrigger;
+  style: PopupStyle;
+  /** `JSON.stringify` of the Popup's Puck data. */
+  contentJson: string;
+  contentEncoding: typeof POPUP_CONTENT_ENCODING;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type StoredPopupMap = Record<string, StoredPopupDefinition>;
+
+export const POPUP_CONTENT_ENCODING = "puck-json-v1" as const;
+
+/** Popup map → the shape written to Firestore. Input must already be normalized. */
+export function encodePopupMapForStorage(popups: PopupDefinitionMap): StoredPopupMap {
+  const stored: StoredPopupMap = {};
+  for (const [id, popup] of Object.entries(popups)) {
+    stored[id] = {
+      id,
+      name: popup.name,
+      trigger: popup.trigger,
+      style: popup.style,
+      contentJson: JSON.stringify(popup.content),
+      contentEncoding: POPUP_CONTENT_ENCODING,
+      // Firestore rejects `undefined`: only real timestamps are written.
+      ...(typeof popup.createdAt === "string" ? { createdAt: popup.createdAt } : {}),
+      ...(typeof popup.updatedAt === "string" ? { updatedAt: popup.updatedAt } : {}),
+    };
+  }
+  return stored;
+}
+
+/** A Popup's Puck data from either storage shape; null when missing or malformed. */
+function readPopupContent(popup: { content?: unknown; contentJson?: unknown }): PuckData | null {
+  let content: unknown = popup.content;
+  if (typeof popup.contentJson === "string") {
+    try {
+      content = JSON.parse(popup.contentJson);
+    } catch {
+      return null;
+    }
+  }
+  if (!content || typeof content !== "object" || !Array.isArray((content as { content?: unknown }).content)) return null;
+  return content as PuckData;
+}
+
+/**
+ * Reads a Popup map from the client (editor payload) OR from Firestore in
+ * either storage shape, and returns editor-shaped Popups. Entries that are
+ * malformed (wrong id, missing fields, unreadable content) are dropped.
+ */
 export function normalizePopupMap(raw: unknown): PopupDefinitionMap {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const result: PopupDefinitionMap = {};
   for (const [key, value] of Object.entries(raw)) {
     if (!value || typeof value !== "object") continue;
-    const popup = value as Partial<PopupDefinition>;
-    if (popup.id !== key || typeof popup.name !== "string" || !popup.content || !popup.trigger || !popup.style) continue;
+    const popup = value as Partial<PopupDefinition> & { contentJson?: unknown; contentEncoding?: unknown };
+    if (popup.id !== key || typeof popup.name !== "string" || !popup.trigger || !popup.style) continue;
+    const content = readPopupContent(popup);
+    if (!content) continue;
     result[key] = {
-      ...(popup as PopupDefinition),
+      id: key,
+      name: popup.name,
+      content,
+      trigger: popup.trigger,
       style: { ...DEFAULT_POPUP_STYLE, ...(popup.style as Partial<PopupStyle>) },
+      ...(typeof popup.createdAt === "string" ? { createdAt: popup.createdAt } : {}),
+      ...(typeof popup.updatedAt === "string" ? { updatedAt: popup.updatedAt } : {}),
     };
   }
   return result;

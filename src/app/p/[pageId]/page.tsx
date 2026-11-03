@@ -2,10 +2,11 @@ import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
-import type { LeadForm } from "@/types/forms";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
+import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
+import { normalizePopupMap } from "@/types/pages-funnels-popup";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
@@ -65,25 +66,10 @@ export default async function PublicPagePreview({
   if (page.status !== "published" || !page.puckPublishedData) notFound();
 
   // Forms, actions, embeds and offers inside Popups resolve like the page's own.
-  const collectable = withPopupContent(page.puckPublishedData, page.puckPublishedPopups);
-  const formIds = collectPuckFormIds(collectable);
-  const resolvedForms: Record<string, LeadForm | null> = {};
-  await Promise.all(
-    formIds.map(async (formId) => {
-      const formSnap = await db.collection("forms").doc(formId).get();
-      if (!formSnap.exists) {
-        resolvedForms[formId] = null;
-        return;
-      }
-      const data = formSnap.data() as Omit<LeadForm, "id">;
-      resolvedForms[formId] = {
-        id: formSnap.id,
-        ...data,
-        createdAt: null,
-        updatedAt: null,
-      };
-    })
-  );
+  const publishedPopups = normalizePopupMap(page.puckPublishedPopups);
+  const collectable = withPopupContent(page.puckPublishedData, publishedPopups);
+  // Only this page's own workspace's Forms render (a foreign id renders nothing).
+  const resolvedForms = await resolveFormsForSubAccount(page.subAccountId, collectPuckFormIds(collectable));
   // Public Reading Tool blocks (2026-10-19): resolved here so visitors get
   // the live tool without a client fetch; only this page's own
   // sub-account's Embeds can resolve.
@@ -106,9 +92,9 @@ export default async function PublicPagePreview({
     <Render
       config={serverPuckConfig}
       data={page.puckPublishedData}
-      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups: page.puckPublishedPopups ?? {} }}
+      metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups }}
     />
-    <PopupRuntime popups={page.puckPublishedPopups ?? {}} initialPopupId={qaPopupId} metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups: page.puckPublishedPopups ?? {} }} />
+    <PopupRuntime popups={publishedPopups} initialPopupId={qaPopupId} metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups }} />
     </>
   );
 }

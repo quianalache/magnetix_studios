@@ -58,14 +58,24 @@ export function withPopupContent(data: PuckData, popups: Record<string, { conten
 }
 
 /**
- * Firestore rejects a document whose maps/arrays nest deeper than 20 levels
- * (confirmed in production 2026-11-02: a Popup at 20 levels saved, 21 failed
- * with a bare 500). Popups live two levels deeper than page content
- * (`puckDraftPopups.{id}.content` vs `puckDraftData`), and a Button's
- * gradient background inside Section → Row → Column already reaches 20 — so
- * the save path checks depth and returns a clear error instead.
+ * Page-doc storage limits (storage contract of 2026-11-03).
+ *
+ * Firestore rejects maps/arrays nested deeper than 20 levels (production
+ * probe 2026-11-02: 20 saved, 21 → bare 500; the emulator does NOT enforce
+ * it). Popup Puck content is stored as a JSON string (`StoredPopupDefinition`),
+ * so it no longer counts toward that limit; page content (`puckDraftData`)
+ * is still stored as maps and is checked against it.
  */
 export const FIRESTORE_MAX_FIELD_DEPTH = 20;
+
+/** Sanity cap on a Popup's decoded Puck tree — far above any real layout (~17). */
+export const POPUP_CONTENT_MAX_DEPTH = 48;
+
+/** All Popups on one page, encoded. */
+export const POPUP_PAYLOAD_LIMIT_BYTES = 700_000;
+
+/** The whole page doc (draft + published page + both Popup maps). Firestore's hard cap is 1 MiB. */
+export const PAGE_DOC_SIZE_LIMIT_BYTES = 900_000;
 
 /** Map/array nesting depth of a stored field value (a scalar is 0, `{a: 1}` is 1). */
 export function fieldDepth(value: unknown): number {

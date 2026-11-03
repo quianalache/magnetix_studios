@@ -154,7 +154,7 @@ export default function NewBuilderPreviewPage({
         formIds.map(async (formId) => {
           try {
             const res = await fetch(
-              `/api/pages-funnels/puck/resolve-form?formId=${encodeURIComponent(formId)}`
+              `/api/pages-funnels/puck/resolve-form?formId=${encodeURIComponent(formId)}&pageId=${encodeURIComponent(pageId)}`
             );
             resolvedForms[formId] = res.ok
               ? ((await res.json()) as LeadForm | null)

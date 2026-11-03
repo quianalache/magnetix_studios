@@ -8,7 +8,7 @@ import { clientPuckConfig } from "../src/components/pages-funnels/puck/client-co
 import { serverPuckConfig } from "../src/components/pages-funnels/puck/server-config";
 import { createPopupPuckConfig } from "../src/components/pages-funnels/puck/popup-config";
 import { createPopupEditorConfig } from "../src/components/pages-funnels/puck/popup-editor-config";
-import { FIRESTORE_MAX_FIELD_DEPTH, POPUP_ALLOWED_BLOCKS, fieldDepth, validatePopupContent, withPopupContent } from "../src/lib/pages-funnels/popup-content";
+import { FIRESTORE_MAX_FIELD_DEPTH, POPUP_ALLOWED_BLOCKS, POPUP_CONTENT_MAX_DEPTH, fieldDepth, validatePopupContent, withPopupContent } from "../src/lib/pages-funnels/popup-content";
 import {
   POPUP_BORDER_PRESETS,
   POPUP_SHADOW_PRESETS,
@@ -21,7 +21,7 @@ import {
   presetFor,
   withPanelMaxWidth,
 } from "../src/lib/pages-funnels/popup-editor";
-import { DEFAULT_POPUP_STYLE, createDefaultPopup, type PopupDefinition } from "../src/types/pages-funnels-popup";
+import { DEFAULT_POPUP_STYLE, createDefaultPopup, encodePopupMapForStorage, normalizePopupMap, type PopupDefinition } from "../src/types/pages-funnels-popup";
 
 let passed = 0;
 const ok = (cond: unknown, label: string) => {
@@ -141,12 +141,33 @@ eq(fieldDepth(probePopup(true)), FIRESTORE_MAX_FIELD_DEPTH + 1, "calibration: th
 // The deepest Popup a customer can build today: Section → Row → Column → every allowed element, all with real defaultProps.
 const withDefaults = (type: string, id: string, extra: Record<string, unknown> = {}) => ({ type, props: { ...(clientPuckConfig.components[type].defaultProps ?? {}), id, ...extra } });
 const elements = [...POPUP_ALLOWED_BLOCKS].filter((n) => !["Section", "Row", "Column"].includes(n)).map((n, i) => withDefaults(n, `e${i}`));
-const deepest = { p: { id: "p", name: "p", trigger: { type: "manual" }, style: DEFAULT_POPUP_STYLE, content: { root: { props: {} }, content: [
-  withDefaults("Section", "s", { rows: [withDefaults("Row", "r", { columns: [withDefaults("Column", "c", { elements })] })] }),
-] } } };
-const deepestDepth = fieldDepth(deepest);
-ok(deepestDepth <= FIRESTORE_MAX_FIELD_DEPTH, `deepest real Popup (all allowed blocks, default props) fits Firestore: ${deepestDepth}/${FIRESTORE_MAX_FIELD_DEPTH}`);
-console.log(`  (headroom: ${FIRESTORE_MAX_FIELD_DEPTH - deepestDepth} level(s))`);
+const deepestPopup = (extraElements: unknown[] = []) => ({ id: "p", name: "p", trigger: { type: "manual" as const }, style: DEFAULT_POPUP_STYLE, content: { root: { props: {} }, content: [
+  withDefaults("Section", "s", { rows: [withDefaults("Row", "r", { columns: [withDefaults("Column", "c", { elements: [...elements, ...extraElements] })] })] }),
+] } as Data });
+const asMaps = fieldDepth({ p: deepestPopup() });
+eq(asMaps, FIRESTORE_MAX_FIELD_DEPTH, `OLD storage (content as maps): deepest real Popup = ${asMaps} — zero headroom (why storage changed)`);
+const stored = encodePopupMapForStorage({ p: deepestPopup() });
+const storedDepth = fieldDepth(stored);
+ok(storedDepth <= 3, `NEW storage (content as JSON string): stored Popup map depth = ${storedDepth}, whatever the blocks contain`);
+eq(normalizePopupMap(stored).p.content, deepestPopup().content, "NEW storage round-trips the Puck tree exactly");
+// Future Slice 5 Button: an Open Popup action with destination metadata, plus several extra nested props.
+const futureButton = withDefaults("Button", "future", {
+  action: { type: "open_popup", popupId: "popup_x", destination: { kind: "popup", target: { id: "popup_x", meta: { analytics: { label: "cta", tags: ["a"] } } } } },
+  styleConfig: { responsive: { mobile: { spacing: { padding: { top: { value: 8, unit: "px" } } } } } },
+});
+const futureStored = encodePopupMapForStorage({ p: deepestPopup([futureButton]) });
+const futureContentDepth = fieldDepth(deepestPopup([futureButton]).content);
+ok(fieldDepth(futureStored) <= 3, `Slice-5-style nested action + extra nested props: stored depth still ${fieldDepth(futureStored)} (content depth ${futureContentDepth}, no longer limited by Firestore)`);
+ok(futureContentDepth > FIRESTORE_MAX_FIELD_DEPTH - 2, "…and that content is deeper than the OLD storage could ever have saved");
+ok(POPUP_CONTENT_MAX_DEPTH - fieldDepth(deepestPopup().content) >= 25, `sanity cap leaves ${POPUP_CONTENT_MAX_DEPTH - fieldDepth(deepestPopup().content)} levels above today's deepest Popup content (${fieldDepth(deepestPopup().content)})`);
+console.log(`  (stored Popup map depth ${storedDepth}/${FIRESTORE_MAX_FIELD_DEPTH}; deepest real content ${fieldDepth(deepestPopup().content)} levels, capped at ${POPUP_CONTENT_MAX_DEPTH})`);
+
+// ---- 10. Storage codec: legacy map content, malformed entries ----
+const legacy = { p: deepestPopup() };
+eq(normalizePopupMap(legacy).p.content, deepestPopup().content, "legacy map-content Popups (Slices 3–4.5) still read");
+eq(Object.keys(normalizePopupMap({ p: { ...stored.p, contentJson: "{not json" } })), [], "unreadable contentJson → dropped, never thrown");
+eq(Object.keys(normalizePopupMap({ p: { ...stored.p, contentJson: JSON.stringify({ root: {} }) } })), [], "contentJson without a content array → dropped");
+ok(!("createdAt" in encodePopupMapForStorage({ p: deepestPopup() }).p), "no undefined fields reach Firestore");
 
 // Type-level guard: the editor config is a real Puck Config.
 const _typed: Config = editorConfig;

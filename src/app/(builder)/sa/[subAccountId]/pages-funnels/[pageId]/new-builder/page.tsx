@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizePopupMap } from "@/types/pages-funnels-popup";
 import { use, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -140,8 +141,8 @@ export default function NewBuilderPage({
       hasLivePage={hasLivePage}
       liveUrl={liveUrl}
       initialData={initialData}
-      initialPopups={page.puckDraftPopups}
-      publishedPopups={page.puckPublishedPopups ?? null}
+      initialPopups={normalizePopupMap(page.puckDraftPopups)}
+      publishedPopups={normalizePopupMap(page.puckPublishedPopups)}
       readingResult={
         page.pageType === "reading_result"
           ? { ...DEFAULT_READING_RESULT_PAGE_SETTINGS, ...(page.readingResult ?? {}) }

@@ -5,6 +5,7 @@ import { Sparkles } from "lucide-react";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
+import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
 import { getTenantBrandColorsServerSide } from "@/lib/server/brand-kit-service";
@@ -17,7 +18,6 @@ import { buildSampleReading } from "@/lib/server/reading-samples";
 import { platformOrigin } from "@/lib/domains/public-url";
 import { PublicAction, PublicStateShell } from "@/components/public/public-shell";
 import type { PageDoc } from "@/types/pages-funnels";
-import type { LeadForm } from "@/types/forms";
 import type { ReadingBlockContext } from "@/types/reading-blocks";
 
 /**
@@ -81,15 +81,8 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
     return <ResultPassExpired businessName={businessName} />;
   }
 
-  const db = getAdminDb();
-  const formIds = collectPuckFormIds(data);
-  const resolvedForms: Record<string, LeadForm | null> = {};
-  await Promise.all(
-    formIds.map(async (formId) => {
-      const formSnap = await db.collection("forms").doc(formId).get();
-      resolvedForms[formId] = formSnap.exists ? { id: formSnap.id, ...(formSnap.data() as Omit<LeadForm, "id">), createdAt: null, updatedAt: null } : null;
-    }),
-  );
+  // Only this page's own workspace's Forms render (a foreign id renders nothing).
+  const resolvedForms = await resolveFormsForSubAccount(subAccountId, collectPuckFormIds(data));
   const embedIds = collectPuckEmbedIds(data);
   const resolvedEmbeds = embedIds.length > 0 ? await resolveReadingToolPayloads(subAccountId, embedIds) : {};
   const resolvedActions = await resolvePageActionTargets(subAccountId, data);

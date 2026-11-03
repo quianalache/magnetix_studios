@@ -34,17 +34,17 @@ export function FormElementClientRender({
   formId,
   formName,
   style,
+  metadata,
 }: {
   id: string;
   formId: string;
   formName: string;
   style?: StyleConfig;
-  // Accepted (not read) purely so this component's prop shape matches
-  // `form-server.tsx`'s `FormElementServerRender` — `config.tsx`'s shared
-  // factory passes `metadata` to whichever Form variant it's given without
-  // caring which one actually uses it. This variant fetches instead.
+  /** Only `pageId` is read: the resolver derives the workspace from that
+   *  page server-side and refuses Forms from any other workspace. */
   metadata?: PuckPageMetadata;
 }) {
+  const pageId = metadata?.pageId ?? "";
   const [form, setForm] = useState<LeadForm | null>(null);
   const [status, setStatus] = useState<
     "idle" | "loading" | "found" | "not-found" | "error"
@@ -59,9 +59,10 @@ export function FormElementClientRender({
     let cancelled = false;
     setStatus("loading");
     fetch(
-      `/api/pages-funnels/puck/resolve-form?formId=${encodeURIComponent(formId)}`
+      `/api/pages-funnels/puck/resolve-form?formId=${encodeURIComponent(formId)}&pageId=${encodeURIComponent(pageId)}`
     )
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      // 404 = no such Form in THIS page's workspace (missing, deleted or foreign).
+      .then((res) => (res.ok ? res.json() : res.status === 404 ? null : Promise.reject(res.status)))
       .then((data: LeadForm | null) => {
         if (cancelled) return;
         setForm(data);
@@ -73,7 +74,7 @@ export function FormElementClientRender({
     return () => {
       cancelled = true;
     };
-  }, [formId]);
+  }, [formId, pageId]);
 
   const responsiveCss = resolveResponsiveCss(id, style);
   const baseStyle = resolveBaseStyleProps(style);
