@@ -1,4 +1,5 @@
 import "server-only";
+import { encodePuckData } from "@/lib/pages-funnels/puck-storage";
 
 import { createHash, randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
@@ -251,7 +252,8 @@ export async function generateAiPage(input: { subAccountId: string; agencyId: st
     pageType: mapped.pageType, goal: mapped.goal, status: "draft", origin: "ai", funnelId: null, blocks: [],
     seo: { title: name, description: "", ogImage: "" }, templateId: null, agencyId: input.agencyId, subAccountId: input.subAccountId,
     createdByUid: input.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), publishedAt: null,
-    puckDraftData: compiled, puckDraftUpdatedAt: FieldValue.serverTimestamp(), aiGeneration: metadata,
+    // The generated tree is a normal Puck object; it is encoded only here, at the write (puck-storage.ts).
+    puckDraftData: encodePuckData(compiled), puckDraftUpdatedAt: FieldValue.serverTimestamp(), aiGeneration: metadata,
   });
   await recordAiGenerationTelemetry({ requestId, subAccountId: input.subAccountId, uid: input.uid, model: generated.result.model, status: "success", durationMs: metadata.durationMs });
   return { pageId: ref.id, requestId, model: generated.result.model };

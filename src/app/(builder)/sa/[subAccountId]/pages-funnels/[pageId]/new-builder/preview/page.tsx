@@ -22,6 +22,7 @@ import type { LeadForm } from "@/types/forms";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
+import { readStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 
 /**
  * Pages & Funnels new-builder Preview route (Phase 2D task §10–§14) — a
@@ -95,11 +96,12 @@ export default function NewBuilderPreviewPage({
       let data: Data;
       let previewPopups: PopupDefinitionMap = {};
       if (fromReadingToolPreview) {
-        if (!page?.puckDraftData) {
+        const draft = readStoredPuckData(page?.puckDraftData);
+        if (!draft) {
           setState({ status: "missing" });
           return;
         }
-        data = page.puckDraftData;
+        data = draft;
       } else {
         const raw = sessionStorage.getItem(previewStorageKey(pageId));
         if (!raw) {

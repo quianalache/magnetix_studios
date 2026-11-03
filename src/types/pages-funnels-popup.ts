@@ -1,4 +1,5 @@
 import type { Data as PuckData } from "@puckeditor/core";
+import { PUCK_JSON_ENCODING, isPuckData, parsePuckJson } from "@/lib/pages-funnels/puck-storage";
 
 export type PopupTrigger =
   | { type: "manual" }
@@ -124,7 +125,8 @@ export interface StoredPopupDefinition {
 
 export type StoredPopupMap = Record<string, StoredPopupDefinition>;
 
-export const POPUP_CONTENT_ENCODING = "puck-json-v1" as const;
+/** Same encoding as page content — one Puck storage codec (`puck-storage.ts`). */
+export const POPUP_CONTENT_ENCODING = PUCK_JSON_ENCODING;
 
 /** Popup map → the shape written to Firestore. Input must already be normalized. */
 export function encodePopupMapForStorage(popups: PopupDefinitionMap): StoredPopupMap {
@@ -145,18 +147,13 @@ export function encodePopupMapForStorage(popups: PopupDefinitionMap): StoredPopu
   return stored;
 }
 
-/** A Popup's Puck data from either storage shape; null when missing or malformed. */
-function readPopupContent(popup: { content?: unknown; contentJson?: unknown }): PuckData | null {
-  let content: unknown = popup.content;
+/** A Popup's Puck data from either storage shape; null when missing, malformed or in an unknown encoding. */
+function readPopupContent(popup: { content?: unknown; contentJson?: unknown; contentEncoding?: unknown }): PuckData | null {
   if (typeof popup.contentJson === "string") {
-    try {
-      content = JSON.parse(popup.contentJson);
-    } catch {
-      return null;
-    }
+    if (popup.contentEncoding !== undefined && popup.contentEncoding !== PUCK_JSON_ENCODING) return null;
+    return parsePuckJson(popup.contentJson);
   }
-  if (!content || typeof content !== "object" || !Array.isArray((content as { content?: unknown }).content)) return null;
-  return content as PuckData;
+  return isPuckData(popup.content) ? popup.content : null;
 }
 
 /**

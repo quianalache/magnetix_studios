@@ -17,6 +17,7 @@ import { GET as pocResolveFormRoute } from "../src/app/api/docs/design-prototype
 import { resolveFormsForSubAccount } from "../src/lib/server/page-form-resolver";
 import { collectPuckFormIds } from "../src/lib/pages-funnels/puck/resolve";
 import { withPopupContent } from "../src/lib/pages-funnels/popup-content";
+import { encodePuckData, readStoredPuckData } from "../src/lib/pages-funnels/puck-storage";
 import { createDefaultPopup, encodePopupMapForStorage, normalizePopupMap } from "../src/types/pages-funnels-popup";
 
 if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST || !process.env.GCLOUD_PROJECT?.startsWith("demo-")) {
@@ -53,7 +54,8 @@ async function seed() {
   // Page A: page Form A + foreign Form B; Popup A: Form A + foreign Form B. Published.
   const popups = encodePopupMapForStorage({ popup_a: popupWith("popup_a", [A.form, B.form]) });
   const dataA = pageData([A.form, B.form]);
-  await db.doc(`pages/${A.page}`).set({ subAccountId: A.sa, agencyId: A.agency, name: "QA · A", status: "published", puckDraftData: dataA, puckPublishedData: dataA, puckDraftPopups: popups, puckPublishedPopups: popups });
+  // Page A stored in the NEW encoded shape, Page B in the legacy map shape — both must stay tenant-safe.
+  await db.doc(`pages/${A.page}`).set({ subAccountId: A.sa, agencyId: A.agency, name: "QA · A", status: "published", puckDraftData: encodePuckData(dataA), puckPublishedData: encodePuckData(dataA), puckDraftPopups: popups, puckPublishedPopups: popups });
   await db.doc(`pages/${B.page}`).set({ subAccountId: B.sa, agencyId: B.agency, name: "QA · B", status: "published", puckDraftData: pageData([A.form]), puckPublishedData: pageData([A.form]) });
 }
 
@@ -99,13 +101,13 @@ async function main() {
     console.log("Published page + published Popup (the public page's own resolution path)");
     const pageA = (await db.doc(`pages/${A.page}`).get()).data()!;
     const published = normalizePopupMap(pageA.puckPublishedPopups);
-    const ids = collectPuckFormIds(withPopupContent(pageA.puckPublishedData, published));
+    const ids = collectPuckFormIds(withPopupContent(readStoredPuckData(pageA.puckPublishedData)!, published));
     ok(ids.includes(A.form) && ids.includes(B.form), "Page A + Popup A reference Form A and foreign Form B");
     const resolvedA = await resolveFormsForSubAccount(pageA.subAccountId, ids);
     ok(resolvedA[A.form]?.id === A.form, "published Page A / Popup A → Form A renders");
     ok(resolvedA[B.form] === null, "published Page A / Popup A → Form B never resolves (renders nothing)");
     const pageB = (await db.doc(`pages/${B.page}`).get()).data()!;
-    const resolvedB = await resolveFormsForSubAccount(pageB.subAccountId, collectPuckFormIds(pageB.puckPublishedData));
+    const resolvedB = await resolveFormsForSubAccount(pageB.subAccountId, collectPuckFormIds(readStoredPuckData(pageB.puckPublishedData)!));
     ok(resolvedB[A.form] === null, "published Page B → Form A never resolves");
     ok((await resolveFormsForSubAccount(null, [A.form]))[A.form] === null, "page without a workspace resolves no Forms");
     ok((await resolveFormsForSubAccount(A.sa, ["../x", DELETED]))["../x"] === null, "malformed / deleted ids resolve to nothing on public pages");

@@ -7,6 +7,7 @@ import { PopupRuntime } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
 import { normalizePopupMap } from "@/types/pages-funnels-popup";
+import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import type { Metadata } from "next";
@@ -64,10 +65,17 @@ export default async function PublicPagePreview({
   }
 
   if (page.status !== "published" || !page.puckPublishedData) notFound();
+  // Stored content is decoded here (puck-storage.ts) — visitors only ever get the PUBLISHED tree.
+  const decoded = decodeStoredPuckData(page.puckPublishedData);
+  if (!decoded.ok) {
+    console.error(`[p/${pageId}] published content is unreadable (${decoded.reason})`);
+    notFound();
+  }
+  const publishedData = decoded.data;
 
   // Forms, actions, embeds and offers inside Popups resolve like the page's own.
   const publishedPopups = normalizePopupMap(page.puckPublishedPopups);
-  const collectable = withPopupContent(page.puckPublishedData, publishedPopups);
+  const collectable = withPopupContent(publishedData, publishedPopups);
   // Only this page's own workspace's Forms render (a foreign id renders nothing).
   const resolvedForms = await resolveFormsForSubAccount(page.subAccountId, collectPuckFormIds(collectable));
   // Public Reading Tool blocks (2026-10-19): resolved here so visitors get
@@ -91,7 +99,7 @@ export default async function PublicPagePreview({
     <>
     <Render
       config={serverPuckConfig}
-      data={page.puckPublishedData}
+      data={publishedData}
       metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups }}
     />
     <PopupRuntime popups={publishedPopups} initialPopupId={qaPopupId} metadata={{ subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, publishedPopups }} />

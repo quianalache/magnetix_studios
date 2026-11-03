@@ -1,3 +1,4 @@
+import { encodePuckData } from "@/lib/pages-funnels/puck-storage";
 import {
   addDoc,
   collection,
@@ -144,7 +145,7 @@ export async function createPage(
     // with a New Builder draft — which also routes it to the New Builder.
     ...(input.pageType === "reading_result"
       ? {
-          puckDraftData: buildReadingResultStarterData(),
+          puckDraftData: encodePuckData(buildReadingResultStarterData()),
           puckDraftUpdatedAt: serverTimestamp(),
           readingResult: DEFAULT_READING_RESULT_PAGE_SETTINGS,
         }

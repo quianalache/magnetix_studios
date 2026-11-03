@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
+import { PUCK_CONTENT_MAX_DEPTH, encodePuckData, isPuckData, type EncodedPuckData } from "@/lib/pages-funnels/puck-storage";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 import {
   encodePopupMapForStorage,
@@ -18,6 +19,7 @@ import {
   POPUP_CONTENT_MAX_DEPTH,
   POPUP_PAYLOAD_LIMIT_BYTES,
   fieldDepth,
+  firestoreStorageSize,
 } from "@/lib/pages-funnels/popup-content";
 
 /**
@@ -56,16 +58,22 @@ const tooLarge = (error: string): PuckPersistenceResult => ({ ok: false, error, 
 
 /**
  * Every check a draft save or publish runs before writing (storage contract
- * of 2026-11-03 — Popup content is stored as a JSON string, see
- * `StoredPopupDefinition`). Returns the exact Popup map to write, or the
- * clear error to return instead of letting Firestore fail generically.
+ * of 2026-11-03 — page AND Popup Puck trees are stored as `puck-json-v1`
+ * JSON strings, see lib/pages-funnels/puck-storage.ts). Returns exactly what
+ * to write, or the clear error to return instead of letting Firestore fail
+ * generically.
  */
 function preparePageWrite(
   data: PuckData,
   popups: unknown,
   currentDoc: Record<string, unknown>,
   replacedFields: readonly string[]
-): { stored: StoredPopupMap } | PuckPersistenceResult {
+): { page: EncodedPuckData; stored: StoredPopupMap } | PuckPersistenceResult {
+  if (!isPuckData(data)) return { ok: false, error: "The page content couldn't be read. Reload the page and try again.", status: 400 };
+  // Application sanity cap (NOT a Firestore limit — the tree is stored as a string).
+  if (fieldDepth(data) > PUCK_CONTENT_MAX_DEPTH) {
+    return tooLarge("This page has blocks nested too deeply to save. Move a block out of its nested container and try again.");
+  }
   const htmlProblem = findCustomHtmlLimitProblem(data);
   if (htmlProblem) return tooLarge(htmlProblem);
 
@@ -84,21 +92,23 @@ function preparePageWrite(
   if (stale.length) return { ok: false, error: `Unknown popup reference: ${stale[0]}`, status: 400 };
 
   const stored = encodePopupMapForStorage(normalized);
-  if (Buffer.byteLength(JSON.stringify(stored)) > POPUP_PAYLOAD_LIMIT_BYTES) {
+  if (firestoreStorageSize(stored) > POPUP_PAYLOAD_LIMIT_BYTES) {
     return tooLarge("This page's popups are too large to save. Remove a popup or some of its content.");
   }
-  // Firestore's 20-level map/array limit: page content is still stored as maps.
-  // (The stored Popup map is a few levels deep by construction; checked anyway.)
-  if (fieldDepth(data) > FIRESTORE_MAX_FIELD_DEPTH || fieldDepth(stored) > FIRESTORE_MAX_FIELD_DEPTH) {
-    return tooLarge("This page has blocks nested too deeply to save. Move a block out of its nested container and try again.");
+  const page = encodePuckData(data);
+  // Firestore's 20-level map/array limit applies to what is WRITTEN: the page
+  // envelope (1 level) and the stored Popup map (3). Checked, never assumed.
+  if (fieldDepth(page) > FIRESTORE_MAX_FIELD_DEPTH || fieldDepth(stored) > FIRESTORE_MAX_FIELD_DEPTH) {
+    return tooLarge("This page can't be saved in its current shape. Reload the page and try again.");
   }
   // The whole document (page draft + published + both Popup maps) must stay under Firestore's 1 MiB.
   const next: Record<string, unknown> = { ...currentDoc };
-  for (const field of replacedFields) next[field] = field.endsWith("Popups") ? stored : data;
-  if (Buffer.byteLength(JSON.stringify(next)) > PAGE_DOC_SIZE_LIMIT_BYTES) {
+  for (const field of replacedFields) next[field] = field.endsWith("Popups") ? stored : page;
+  // Measured the way Firestore counts it (field names + values), not as JSON text.
+  if (firestoreStorageSize(next) > PAGE_DOC_SIZE_LIMIT_BYTES) {
     return tooLarge("This page and its popups are too large to save. Remove some content and try again.");
   }
-  return { stored };
+  return { page, stored };
 }
 
 async function loadOwnedPage(
@@ -142,7 +152,7 @@ export async function savePuckDraft(
 
   const now = FieldValue.serverTimestamp();
   await owned.ref.update({
-    puckDraftData: data,
+    puckDraftData: prepared.page,
     puckDraftPopups: prepared.stored,
     puckDraftUpdatedAt: now,
     updatedAt: now,
@@ -189,10 +199,10 @@ export async function publishPuckPage(
   // ONE document update: page draft + page published + both Popup maps land
   // together, so no reader can ever see page version B with Popups version A.
   await owned.ref.update({
-    puckDraftData: data,
+    puckDraftData: prepared.page,
     puckDraftPopups: prepared.stored,
     puckDraftUpdatedAt: now,
-    puckPublishedData: data,
+    puckPublishedData: prepared.page,
     puckPublishedPopups: prepared.stored,
     puckPublishedAt: now,
     status: "published",

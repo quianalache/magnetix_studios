@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
+import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
 import { getTenantBrandColorsServerSide } from "@/lib/server/brand-kit-service";
@@ -38,7 +39,10 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
   if (!subAccountId) notFound();
   const staff = await getStaffForSubAccount(subAccountId);
   const useDraft = wantsDraft && !!staff && !!page.puckDraftData;
-  const data = useDraft ? page.puckDraftData : page.puckPublishedData;
+  // Stored content is decoded here (puck-storage.ts); unreadable content is never rendered as empty.
+  const decoded = decodeStoredPuckData(useDraft ? page.puckDraftData : page.puckPublishedData);
+  if (!decoded.ok && decoded.reason !== "missing") console.error(`[reading-result/${page.id}] stored content is unreadable (${decoded.reason})`);
+  const data = decoded.ok ? decoded.data : null;
   // A visitor only ever reaches a published page.
   if (!data || (!useDraft && page.status !== "published")) notFound();
 

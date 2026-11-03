@@ -1,4 +1,5 @@
 import type { Data as PuckData } from "@puckeditor/core";
+import { PUCK_CONTENT_MAX_DEPTH } from "@/lib/pages-funnels/puck-storage";
 
 export const POPUP_ALLOWED_BLOCKS = new Set([
   "Section", "Row", "Column", "Heading", "Text", "RichText", "Button", "Image", "Video", "Divider", "Spacer", "Accordion", "Icon", "Form",
@@ -58,24 +59,45 @@ export function withPopupContent(data: PuckData, popups: Record<string, { conten
 }
 
 /**
- * Page-doc storage limits (storage contract of 2026-11-03).
- *
- * Firestore rejects maps/arrays nested deeper than 20 levels (production
- * probe 2026-11-02: 20 saved, 21 → bare 500; the emulator does NOT enforce
- * it). Popup Puck content is stored as a JSON string (`StoredPopupDefinition`),
- * so it no longer counts toward that limit; page content (`puckDraftData`)
- * is still stored as maps and is checked against it.
+ * Page-doc storage limits (storage contract of 2026-11-03). Page AND Popup
+ * Puck trees are stored as JSON strings (`puck-storage.ts`), so their
+ * structure no longer counts toward Firestore's 20-level map/array limit;
+ * the stored doc's own fields are a few levels deep. FIRESTORE_MAX_FIELD_DEPTH
+ * stays as a check on what is actually written.
  */
 export const FIRESTORE_MAX_FIELD_DEPTH = 20;
 
-/** Sanity cap on a Popup's decoded Puck tree — far above any real layout (~17). */
-export const POPUP_CONTENT_MAX_DEPTH = 48;
+/** Application sanity cap on a decoded Popup tree (same cap as page content). */
+export const POPUP_CONTENT_MAX_DEPTH = PUCK_CONTENT_MAX_DEPTH;
 
 /** All Popups on one page, encoded. */
 export const POPUP_PAYLOAD_LIMIT_BYTES = 700_000;
 
 /** The whole page doc (draft + published page + both Popup maps). Firestore's hard cap is 1 MiB. */
 export const PAGE_DOC_SIZE_LIMIT_BYTES = 900_000;
+
+/**
+ * Firestore storage size of a value, per Firestore's documented rules
+ * (string = UTF-8 bytes + 1, number 8, boolean/null 1, map = Σ field-name
+ * bytes + 1 + value). What the 1 MiB document cap actually counts — unlike
+ * `JSON.stringify(...).length`, which double-counts the escaped quotes
+ * inside an encoded Puck string.
+ */
+const utf8 = new TextEncoder();
+const utf8Bytes = (text: string) => utf8.encode(text).length;
+
+export function firestoreStorageSize(value: unknown): number {
+  if (value == null) return 1;
+  if (typeof value === "string") return utf8Bytes(value) + 1;
+  if (typeof value === "number") return 8;
+  if (typeof value === "boolean") return 1;
+  if (Array.isArray(value)) return value.reduce((n: number, item) => n + firestoreStorageSize(item), 0);
+  if (typeof value === "object") {
+    if (typeof (value as { toDate?: unknown }).toDate === "function") return 8;
+    return Object.entries(value).reduce((n, [key, item]) => n + utf8Bytes(key) + 1 + firestoreStorageSize(item), 0);
+  }
+  return 8;
+}
 
 /** Map/array nesting depth of a stored field value (a scalar is 0, `{a: 1}` is 1). */
 export function fieldDepth(value: unknown): number {

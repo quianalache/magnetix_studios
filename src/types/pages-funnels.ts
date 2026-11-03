@@ -1,8 +1,8 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
-import type { Data as PuckData } from "@puckeditor/core";
 import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 import type { AiGenerationMetadata } from "@/lib/pages-funnels/ai/page-plan";
 import type { PopupDefinitionMap, StoredPopupMap } from "@/types/pages-funnels-popup";
+import type { StoredPuckData } from "@/lib/pages-funnels/puck-storage";
 
 /**
  * Native Pages & Funnels builder — the data model for a block-based visual
@@ -316,8 +316,11 @@ export interface PageDoc {
    * how the new builder derives "Draft" / "Published" / "Published, with
    * unpublished changes" without inventing a second status enum.
    */
-  puckDraftData?: PuckData | null;
-  puckPublishedData?: PuckData | null;
+  /** RAW stored Puck content — the `puck-json-v1` envelope (2026-11-03) or
+   *  the older map-stored tree. Always read through `decodeStoredPuckData`
+   *  (lib/pages-funnels/puck-storage.ts); write through `encodePuckData`. */
+  puckDraftData?: StoredPuckData | null;
+  puckPublishedData?: StoredPuckData | null;
   puckDraftUpdatedAt?: Timestamp | FieldValue | null;
   puckPublishedAt?: Timestamp | FieldValue | null;
   /** Page-owned popup definitions. Draft and published snapshots are independent.

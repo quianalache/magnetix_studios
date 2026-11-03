@@ -1,4 +1,5 @@
 import "server-only";
+import { readStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 
 import { FieldValue } from "firebase-admin/firestore";
 import type { Data, ComponentData } from "@puckeditor/core";
@@ -196,8 +197,9 @@ export async function listEmbedPlacements(subAccountId: string): Promise<Map<str
     .get();
   const map = new Map<string, EmbedPlacementUsage[]>();
   for (const d of snap.docs) {
-    const published = puckEmbedIds(d.get("puckPublishedData") as Data | null);
-    const draft = puckEmbedIds(d.get("puckDraftData") as Data | null);
+    // Stored content decoded (puck-storage.ts); an unreadable tree simply places no Embeds.
+    const published = puckEmbedIds(readStoredPuckData(d.get("puckPublishedData")));
+    const draft = puckEmbedIds(readStoredPuckData(d.get("puckDraftData")));
     for (const id of new Set([...published, ...draft])) {
       const list = map.get(id) ?? [];
       list.push({ pageId: d.id, name: (d.get("name") as string) || "Untitled page", published: published.has(id) });

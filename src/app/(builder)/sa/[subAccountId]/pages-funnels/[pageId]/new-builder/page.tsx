@@ -1,6 +1,8 @@
 "use client";
 
 import { normalizePopupMap } from "@/types/pages-funnels-popup";
+import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
+import type { Data } from "@puckeditor/core";
 import { use, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -97,11 +99,23 @@ export default function NewBuilderPage({
   // mounted, the editor's own in-memory `data` state (inside the shell) is
   // the source of truth until the next explicit Save/autosave, exactly
   // like V1's own `blocks` state already works.
-  const initialData = useMemo(() => {
+  //
+  // Stored content is decoded here (puck-storage.ts). An UNREADABLE draft is
+  // a load error — never an empty canvas, which autosave would then write
+  // over the original content.
+  const initial = useMemo((): { data: Data } | { error: string } | null => {
     if (!page) return null;
-    if (page.puckDraftData) return page.puckDraftData;
-    return migratePageBlocksToPuckData(page.blocks);
+    if (page.puckDraftData != null) {
+      const decoded = decodeStoredPuckData(page.puckDraftData);
+      return decoded.ok ? { data: decoded.data } : { error: decoded.reason };
+    }
+    return { data: migratePageBlocksToPuckData(page.blocks) };
   }, [page]);
+  const initialData = initial && "data" in initial ? initial.data : null;
+  const draftUnreadable = !!initial && "error" in initial;
+  useEffect(() => {
+    if (initial && "error" in initial) console.error(`[new-builder] page ${pageId}: stored draft is unreadable (${initial.error}); not opening the editor.`);
+  }, [initial, pageId]);
 
   const puckPublishStatus = useMemo(
     () => (page ? derivePuckPublishStatus(page) : "v1-only"),
@@ -124,6 +138,9 @@ export default function NewBuilderPage({
     [subAccount, pageId]
   );
 
+  if (loadState === "ready" && draftUnreadable) {
+    return <PageLoadStateView state="error" backHref={saPath("/pages-funnels")} />;
+  }
   if (loadState !== "ready" || !page || !initialData) {
     return <PageLoadStateView state={loadState === "ready" ? "not-found" : loadState} backHref={saPath("/pages-funnels")} />;
   }

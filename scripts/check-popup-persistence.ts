@@ -1,6 +1,7 @@
 /**
- * Deterministic Page-owned Popup persistence QA. Emulator only — exercises the
- * REAL `savePuckDraft` / `publishPuckPage` (no copied persistence logic).
+ * Deterministic page + Popup persistence QA (page Puck storage and Popup
+ * storage). Emulator only — exercises the REAL `savePuckDraft` /
+ * `publishPuckPage` (no copied persistence logic).
  *
  * Run (the package script preloads the `server-only` shim the service needs):
  *   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-popup-persistence pnpm check:popup-persistence
@@ -11,6 +12,7 @@ import { getAdminDb } from "../src/lib/firebase/admin";
 import { savePuckDraft, publishPuckPage } from "../src/lib/server/pages-funnels-puck-service";
 import { createDefaultPopup, findStalePopupReferences, normalizePopupMap, type PopupDefinition } from "../src/types/pages-funnels-popup";
 import { FIRESTORE_MAX_FIELD_DEPTH, POPUP_CONTENT_MAX_DEPTH, fieldDepth } from "../src/lib/pages-funnels/popup-content";
+import { PUCK_CONTENT_MAX_DEPTH, decodeStoredPuckData } from "../src/lib/pages-funnels/puck-storage";
 import { applyPopupEditorChange, popupToEditorData } from "../src/lib/pages-funnels/popup-editor";
 import type { Data as PuckData } from "@puckeditor/core";
 
@@ -38,6 +40,10 @@ async function main() {
     return {
       ...d,
       raw: { draft: d.puckDraftPopups, published: d.puckPublishedPopups },
+      rawPage: { draft: d.puckDraftData, published: d.puckPublishedData },
+      // Page content decoded the way every reader does (puck-storage.ts); undefined when absent.
+      puckDraftData: d.puckDraftData == null ? undefined : (decodeStoredPuckData(d.puckDraftData) as { data?: unknown }).data ?? "UNREADABLE",
+      puckPublishedData: d.puckPublishedData == null ? undefined : (decodeStoredPuckData(d.puckPublishedData) as { data?: unknown }).data ?? "UNREADABLE",
       puckDraftPopups: d.puckDraftPopups ? normalizePopupMap(d.puckDraftPopups) : undefined,
       puckPublishedPopups: d.puckPublishedPopups ? normalizePopupMap(d.puckPublishedPopups) : undefined,
     } as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -180,6 +186,73 @@ async function main() {
       assert.ok(converted.raw.published.popup_legacy.content && !converted.raw.published.popup_legacy.contentJson, "published stays legacy until the next publish (no bulk rewrite)"); passed++;
     } finally {
       await db.collection("pages").doc(legacyPage).delete();
+    }
+
+    // ---- Page Puck storage (2026-11-03): page content stored as a puck-json-v1 envelope ----
+    const rawPage = (await readPage()).rawPage;
+    assert.equal(rawPage.draft.encoding, "puck-json-v1", "page draft stored as a puck-json-v1 envelope"); passed++;
+    assert.equal(typeof rawPage.draft.json, "string", "…holding the tree as a JSON string"); passed++;
+    assert.equal(rawPage.published.encoding, "puck-json-v1", "page published stored the same way"); passed++;
+    assert.ok(fieldDepth(rawPage.draft) === 1 && fieldDepth(rawPage.published) === 1, "stored page content is 1 level deep (was up to 18)"); passed++;
+    // Realistic Slice-5-style page Button: action → destination → Popup target metadata, plus more nested props.
+    const deepSection = (id: string, element: Record<string, unknown>) => ({ type: "Section", props: { id: `${id}-s`, background: { color: { gradient: { stops: [{ id: "g1", color: "#5E2574", position: 0 }] } } }, rows: [{ type: "Row", props: { id: `${id}-r`, columns: [{ type: "Column", props: { id: `${id}-c`, elements: [element] } }] } }] } });
+    const actionButton = { type: "Button", props: {
+      id: "btn-action", text: "Open",
+      action: { type: "none", destination: { kind: "popup", target: { popupId: "popup_a", meta: { analytics: { label: "cta", tags: ["hero"], context: { section: { id: "s1", variant: { name: "a" } } } } } } } },
+      background: { color: { gradient: { stops: [{ id: "s1", color: "#000", position: 0, extra: { a: { b: { c: 1 } } } }] } } },
+      styleConfig: { responsive: { mobile: { spacing: { padding: { top: { value: 8, unit: "px", meta: { source: { kind: "token" } } } } } } } },
+    } };
+    const deepPage = { root: { props: { pageBackground: { source: "color", color: { mode: "gradient", gradient: { type: "linear", angle: 90, stops: [{ id: "pb1", color: "#fff", position: 0 }] } } } } }, content: [deepSection("p1", actionButton)] } as unknown as PuckData;
+    const asMapsDepth = fieldDepth({ puckDraftData: deepPage });
+    assert.ok(asMapsDepth > FIRESTORE_MAX_FIELD_DEPTH, `this page as maps would be ${asMapsDepth} levels — beyond Firestore's ${FIRESTORE_MAX_FIELD_DEPTH}`); passed++;
+    const deepPageSaved = await publishPuckPage(subAccountId, pageId, deepPage, map);
+    assert.equal(deepPageSaved.ok, true, "…and it now saves + publishes (no Firestore nesting interaction)"); passed++;
+    const afterDeep = await readPage();
+    assert.deepEqual(afterDeep.puckDraftData, deepPage, "deep page draft round-trips exactly (actions, destinations, root Page Background)"); passed++;
+    assert.deepEqual(afterDeep.puckPublishedData, deepPage, "deep page published round-trips exactly"); passed++;
+    // Application sanity cap on page trees.
+    let pathological: Record<string, unknown> = { leaf: true };
+    for (let i = 0; i < PUCK_CONTENT_MAX_DEPTH + 2; i++) pathological = { n: pathological };
+    const tooDeepPage = { root: { props: {} }, content: [{ type: "Text", props: { id: "t", text: "x", junk: pathological } }] } as unknown as PuckData;
+    const tooDeepResult = await savePuckDraft(subAccountId, pageId, tooDeepPage, map);
+    assert.equal(!tooDeepResult.ok && tooDeepResult.status, 413, "page tree past the 48-level application cap → clear 413"); passed++;
+    const notPuck = await savePuckDraft(subAccountId, pageId, { root: {} } as unknown as PuckData, map);
+    assert.equal(!notPuck.ok && notPuck.status, 400, "page payload without a content array → 400"); passed++;
+    assert.deepEqual((await readPage()).puckDraftData, deepPage, "…refused writes changed nothing"); passed++;
+
+    // ---- Decoding: every malformed stored shape fails clearly (never decodes to an empty page) ----
+    const cases: [string, unknown, string][] = [
+      ["missing", undefined, "missing"],
+      ["invalid JSON", { encoding: "puck-json-v1", json: "{nope" }, "malformed-json"],
+      ["unsupported encoding", { encoding: "puck-json-v9", json: "{}" }, "unsupported-encoding"],
+      ["valid JSON, not a Puck tree", { encoding: "puck-json-v1", json: JSON.stringify({ root: {} }) }, "invalid-shape"],
+      ["envelope without json", { encoding: "puck-json-v1" }, "malformed-json"],
+      ["a bare string", "hello", "invalid-shape"],
+    ];
+    for (const [label, raw, reason] of cases) {
+      const r = decodeStoredPuckData(raw);
+      assert.ok(!r.ok && r.reason === reason, `decode ${label} → ${reason}`); passed++;
+    }
+    assert.deepEqual(decodeStoredPuckData(deepPage), { ok: true, data: deepPage, stored: "legacy" }, "legacy map-stored tree decodes as-is"); passed++;
+
+    // ---- Legacy page doc (structured maps): read, then converted on the next save / publish ----
+    const legacyPageDoc = `${pageId}-legacy-page`;
+    const legacyData = { root: { props: { pageBackground: { source: "color", color: { mode: "solid", solid: "#FAF7F2" } } } }, content: [deepSection("lg", { type: "Heading", props: { id: "lg-h", text: "Legacy page", level: "h2" } })] } as unknown as PuckData;
+    await db.collection("pages").doc(legacyPageDoc).set({ subAccountId, status: "published", blocks: [], puckDraftData: legacyData, puckPublishedData: legacyData });
+    try {
+      const before = await readPage(legacyPageDoc);
+      assert.deepEqual(before.puckPublishedData, legacyData, "legacy page reads unchanged (ids, root Page Background, content)"); passed++;
+      await savePuckDraft(subAccountId, legacyPageDoc, before.puckDraftData, {});
+      const afterSave = await readPage(legacyPageDoc);
+      assert.equal(afterSave.rawPage.draft.encoding, "puck-json-v1", "Save Draft converts the draft"); passed++;
+      assert.ok(Array.isArray(afterSave.rawPage.published.content), "…and leaves the published legacy tree alone"); passed++;
+      assert.deepEqual(afterSave.puckDraftData, legacyData, "…content identical after conversion"); passed++;
+      await publishPuckPage(subAccountId, legacyPageDoc, afterSave.puckDraftData, {});
+      const afterPublish = await readPage(legacyPageDoc);
+      assert.equal(afterPublish.rawPage.published.encoding, "puck-json-v1", "Publish converts the published tree"); passed++;
+      assert.deepEqual(afterPublish.puckPublishedData, legacyData, "…content identical after conversion"); passed++;
+    } finally {
+      await db.collection("pages").doc(legacyPageDoc).delete();
     }
     console.log(`Popup persistence QA: ${passed}/${passed} PASS`);
   } finally {
