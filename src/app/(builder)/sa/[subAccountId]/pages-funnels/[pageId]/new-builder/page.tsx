@@ -2,6 +2,7 @@
 
 import { normalizePopupMap } from "@/types/pages-funnels-popup";
 import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
+import { findUnknownBlockTypesInPage } from "@/lib/pages-funnels/puck/known-blocks";
 import type { Data } from "@puckeditor/core";
 import { use, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
@@ -9,6 +10,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { getPagesOnce, subscribeToPage } from "@/lib/firestore/pages-funnels";
 import {
   classifyPageLoadError,
+  PageCompatibilityView,
   PageLoadStateView,
   type PageLoadState,
 } from "@/components/pages-funnels/page-load-state";
@@ -138,6 +140,23 @@ export default function NewBuilderPage({
     [subAccount, pageId]
   );
 
+  // Unknown-block safety guard: a page holding block types this build doesn't
+  // know (saved by a newer build) is never opened for editing — Puck would
+  // drop or mangle them and autosave would write that back.
+  const unknownTypes = useMemo(() => (page ? findUnknownBlockTypesInPage(page) : []), [page]);
+  const currentBuilderHref = useMemo(() => {
+    if (typeof window === "undefined" || !process.env.NEXT_PUBLIC_APP_URL) return null;
+    try {
+      const canonical = new URL(process.env.NEXT_PUBLIC_APP_URL);
+      return canonical.origin === window.location.origin ? null : `${canonical.origin}${window.location.pathname}`;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  if (loadState === "ready" && page && unknownTypes.length) {
+    return <PageCompatibilityView pageName={page.name} unknownTypes={unknownTypes} backHref={saPath("/pages-funnels")} currentBuilderHref={currentBuilderHref} />;
+  }
   if (loadState === "ready" && draftUnreadable) {
     return <PageLoadStateView state="error" backHref={saPath("/pages-funnels")} />;
   }

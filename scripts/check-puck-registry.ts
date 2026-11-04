@@ -9,6 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { clientPuckConfig } from "../src/components/pages-funnels/puck/client-config";
+import { KNOWN_PUCK_BLOCK_TYPES } from "../src/lib/pages-funnels/puck/known-blocks";
 
 const categories = clientPuckConfig.categories ?? {};
 const elements = categories.elements?.components ?? [];
@@ -52,6 +53,14 @@ for (const name of requiredBusiness) {
 assert.ok(
   !dataMetrics.includes("DataTable") && !("DataTable" in components),
   "Data Table must not be exposed yet"
+);
+
+// Unknown-block safety guard: the recognised list must be exactly the registry,
+// or valid pages would be refused (missing entry) / unknown ones accepted (extra).
+assert.deepEqual(
+  [...KNOWN_PUCK_BLOCK_TYPES].sort(),
+  Object.keys(components).sort(),
+  "KNOWN_PUCK_BLOCK_TYPES (lib/pages-funnels/puck/known-blocks.ts) must list exactly the registered blocks"
 );
 
 console.log(

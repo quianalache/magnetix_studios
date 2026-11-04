@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/system/empty-state";
 
@@ -70,6 +70,63 @@ export function PageLoadStateView({
             <ArrowLeft />
             Back to Pages &amp; Funnels
           </Button>
+        }
+      />
+    </div>
+  );
+}
+
+/**
+ * Unknown-block safety guard (2026-11-04): the page holds block types this
+ * build of the builder doesn't know (a newer build saved them). The editor
+ * is never mounted — no canvas, no autosave, no Save Draft / Publish — so the
+ * page stays exactly as stored. When this build isn't running on the
+ * canonical app URL (a stale preview, an old deployment), it points to the
+ * current builder; it never redirects on its own.
+ */
+export function PageCompatibilityView({
+  pageName,
+  unknownTypes,
+  backHref,
+  currentBuilderHref,
+}: {
+  pageName: string;
+  unknownTypes: readonly string[];
+  backHref: string;
+  /** Same page in the canonical builder, or null when this already is it. */
+  currentBuilderHref: string | null;
+}) {
+  return (
+    <div className="bg-background flex h-dvh items-center justify-center px-4" data-page-compatibility-guard="">
+      <EmptyState
+        className="w-full max-w-lg"
+        icon={ShieldAlert}
+        title="This page can’t be edited in this version of the builder."
+        description={
+          <span className="space-y-2">
+            <span className="block">
+              “{pageName}” includes newer content that this version of the builder can’t safely edit. To protect it, editing, Save Draft and Publish are turned off here.
+            </span>
+            <span className="block font-medium">Nothing on this page has been changed.</span>
+            <span className="block text-xs">Newer content: {unknownTypes.join(", ")}</span>
+            <span className="block">
+              {currentBuilderHref ? "Open this page in the current builder to edit it." : "Reload to load the latest version of the builder, then try again."}
+            </span>
+          </span>
+        }
+        action={
+          <span className="flex flex-wrap justify-center gap-2">
+            {currentBuilderHref ? (
+              <Button render={<a href={currentBuilderHref} />}>
+                <ExternalLink />
+                Open in the current builder
+              </Button>
+            ) : null}
+            <Button variant="outline" render={<a href={backHref} />}>
+              <ArrowLeft />
+              Back to Pages &amp; Funnels
+            </Button>
+          </span>
         }
       />
     </div>

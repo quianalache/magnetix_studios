@@ -23,6 +23,7 @@ import {
 } from "@/lib/pages-funnels/popup-content";
 import { findNavigationProblem } from "@/lib/pages-funnels/navigation";
 import { findBookingProblem } from "@/lib/pages-funnels/booking-block";
+import { findUnknownBlockTypes, findUnknownBlockTypesInPage, unknownBlocksSaveError } from "@/lib/pages-funnels/puck/known-blocks";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -54,7 +55,7 @@ const PAGES_COLLECTION = "pages";
 
 export type PuckPersistenceResult =
   | { ok: true }
-  | { ok: false; error: string; status: 400 | 404 | 403 | 413 };
+  | { ok: false; error: string; status: 400 | 404 | 403 | 409 | 413 };
 
 const tooLarge = (error: string): PuckPersistenceResult => ({ ok: false, error, status: 413 });
 
@@ -72,6 +73,14 @@ function preparePageWrite(
   replacedFields: readonly string[]
 ): { page: EncodedPuckData; stored: StoredPopupMap } | PuckPersistenceResult {
   if (!isPuckData(data)) return { ok: false, error: "The page content couldn't be read. Reload the page and try again.", status: 400 };
+  // Unknown-block safety guard: this build must never write over content it
+  // can't represent — not over a STORED page holding block types it doesn't
+  // know (a newer build saved them; writing would strip or mangle them), and
+  // not from an incoming tree carrying such types. Nothing is written.
+  const storedUnknown = findUnknownBlockTypesInPage(currentDoc);
+  if (storedUnknown.length) return { ok: false, error: unknownBlocksSaveError(storedUnknown), status: 409 };
+  const incomingUnknown = findUnknownBlockTypes(data, popups);
+  if (incomingUnknown.length) return { ok: false, error: unknownBlocksSaveError(incomingUnknown), status: 400 };
   // Application sanity cap (NOT a Firestore limit — the tree is stored as a string).
   if (fieldDepth(data) > PUCK_CONTENT_MAX_DEPTH) {
     return tooLarge("This page has blocks nested too deeply to save. Move a block out of its nested container and try again.");
