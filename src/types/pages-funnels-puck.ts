@@ -73,6 +73,7 @@ export type PageActionType =
   | "sms"
   | "email"
   | "purchase"
+  | "booking"
   | "accept_upsell"
   | "decline_continue";
 
@@ -102,6 +103,10 @@ export type PageAction =
   | { type: "sms"; phoneNumber: string; message?: string }
   | { type: "email"; emailAddress: string; subject?: string }
   | { type: "purchase"; offerId: string }
+  /** "Go to booking page" (2026-11-04): a Booking Page in this sub-account,
+   *  by its immutable slug — the stored form of the canonical `booking`
+   *  destination. Its public URL is resolved at render time. */
+  | { type: "booking"; bookingPageSlug: string }
   | { type: "accept_upsell" }
   | { type: "decline_continue" };
 
@@ -177,6 +182,8 @@ export interface ResolvedActionTargets {
   pages: Record<string, { href: string } | null>;
   /** offerId → its public Offer/checkout URL, or null (missing, unpublished, other business). */
   offers: Record<string, { href: string } | null>;
+  /** Booking Page slug → its public booking URL, or null (missing, draft, other business). */
+  bookings?: Record<string, { href: string } | null>;
   /** Section/Hero ids on this page — the only valid scroll targets. */
   sectionIds: string[];
 }

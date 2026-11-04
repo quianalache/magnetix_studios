@@ -3,7 +3,7 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { resolveActionTargets } from "@/lib/server/page-action-targets";
 
 /**
- * GET ?subAccountId=…&pages=a,b&offers=c — resolves Button/Image "Go to
+ * GET ?subAccountId=…&pages=a,b&offers=c&bookings=d — resolves Button/Image "Go to
  * Page" / "Go to Offer" targets for the New Builder's client-side Preview
  * (published pages resolve on the server instead). Members only; targets
  * resolve only inside that sub-account (resolveActionTargets enforces it).
@@ -20,6 +20,6 @@ export async function GET(request: Request) {
   const list = (key: string) => (url.searchParams.get(key) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   // Preview has an explicit policy even though this slice only resolves
   // published targets: same tenant, no transactions, no draft leakage.
-  const resolved = await resolveActionTargets(subAccountId, { pageIds: list("pages"), offerIds: list("offers") }, "preview");
-  return NextResponse.json({ pages: resolved.pages, offers: resolved.offers });
+  const resolved = await resolveActionTargets(subAccountId, { pageIds: list("pages"), offerIds: list("offers"), bookingSlugs: list("bookings") }, "preview");
+  return NextResponse.json({ pages: resolved.pages, offers: resolved.offers, bookings: resolved.bookings ?? {} });
 }

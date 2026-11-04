@@ -12,9 +12,11 @@ import { canonicalizeStoredAction } from "@/lib/pages-funnels/action/normalize";
  *              schemes such as javascript: never render)
  *   page     — another Pages & Funnels page in this sub-account, by id
  *   purchase — "Go to Offer": an Offer in this sub-account, by id
+ *   booking  — "Go to booking page": a Booking Page in this sub-account, by
+ *              its slug (the canonical `booking` destination)
  *   scroll   — a Section on this page, by its stable Puck id
  *   call / email / sms — validated tel: / mailto: / sms: links
- * Object-bound targets (page, purchase) resolve ONLY through
+ * Object-bound targets (page, purchase, booking) resolve ONLY through
  * `ResolvedActionTargets`, which the server fills for this page's own
  * sub-account — a missing, unpublished or other-business target renders as a
  * button with no link instead of a broken one.
@@ -85,6 +87,10 @@ export function resolveActionLink(
       const href = opts.resolved?.offers[destination.offerId]?.href;
       return href ? { href, newTab: false } : none;
     }
+    case "booking": {
+      const href = opts.resolved?.bookings?.[destination.bookingPageSlug]?.href;
+      return href ? { href, newTab: false } : none;
+    }
     case "section": {
       if (!isSafeSectionId(destination.elementId)) return none;
       if (opts.resolved && !opts.resolved.sectionIds.includes(destination.elementId)) return none;
@@ -120,15 +126,17 @@ export function actionOpensNewTab(action: PageAction | undefined | null): boolea
 }
 
 /** Everything a page's actions point at, plus its Section ids (the valid scroll targets). */
-export function collectActionTargets(data: unknown): { pageIds: string[]; offerIds: string[]; sectionIds: string[] } {
+export function collectActionTargets(data: unknown): { pageIds: string[]; offerIds: string[]; bookingSlugs: string[]; sectionIds: string[] } {
   const pageIds = new Set<string>();
   const offerIds = new Set<string>();
+  const bookingSlugs = new Set<string>();
   const sectionIds = new Set<string>();
   const addTarget = (raw: unknown) => {
     const action = raw as PageAction | undefined;
     if (!action || typeof action !== "object") return;
     if (action.type === "page" && typeof action.pageId === "string" && action.pageId) pageIds.add(action.pageId);
     if (action.type === "purchase" && typeof action.offerId === "string" && action.offerId) offerIds.add(action.offerId);
+    if (action.type === "booking" && typeof action.bookingPageSlug === "string" && action.bookingPageSlug) bookingSlugs.add(action.bookingPageSlug);
   };
   const visit = (node: unknown) => {
     if (!node || typeof node !== "object") return;
@@ -155,7 +163,7 @@ export function collectActionTargets(data: unknown): { pageIds: string[]; offerI
   const d = data as { content?: unknown; zones?: Record<string, unknown> } | null;
   visit(d?.content);
   if (d?.zones) Object.values(d.zones).forEach(visit);
-  return { pageIds: [...pageIds], offerIds: [...offerIds], sectionIds: [...sectionIds] };
+  return { pageIds: [...pageIds], offerIds: [...offerIds], bookingSlugs: [...bookingSlugs], sectionIds: [...sectionIds] };
 }
 
 /**
@@ -175,6 +183,8 @@ export function normalizeStoredAction(raw: unknown): PageAction {
       return { type: "page", pageId: str(a.pageId), openInNewTab: a.openInNewTab === true };
     case "purchase":
       return { type: "purchase", offerId: str(a.offerId) };
+    case "booking":
+      return { type: "booking", bookingPageSlug: str(a.bookingPageSlug) };
     case "scroll":
       return { type: "scroll", targetElementId: str(a.targetElementId) };
     case "call":

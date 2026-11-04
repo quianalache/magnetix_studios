@@ -16,10 +16,11 @@ import {
   normalizePhoneNumber,
 } from "@/lib/pages-funnels/puck/action";
 import type { PageAction } from "@/types/pages-funnels-puck";
+import { BookingSourceFieldEditor } from "@/components/pages-funnels/puck/booking-fields";
 
 const useTypedPuck = createUsePuck();
 
-type LiveType = "none" | "url" | "page" | "purchase" | "scroll" | "call" | "email" | "sms" | "open_popup" | "close_popup";
+type LiveType = "none" | "url" | "page" | "purchase" | "booking" | "scroll" | "call" | "email" | "sms" | "open_popup" | "close_popup";
 
 /**
  * Where the ActionField is being used (Wave 2A Slice 5), provided by the
@@ -42,6 +43,7 @@ const BASE_ACTION_OPTIONS: { value: LiveType; label: string }[] = [
   { value: "url", label: "Go to URL" },
   { value: "page", label: "Go to page" },
   { value: "purchase", label: "Go to Offer (checkout)" },
+  { value: "booking", label: "Go to booking page" },
   { value: "scroll", label: "Scroll to section" },
   { value: "call", label: "Call" },
   { value: "email", label: "Email" },
@@ -59,6 +61,7 @@ function blank(type: LiveType): PageAction {
     case "url": return { type: "url", url: "", openInNewTab: false };
     case "page": return { type: "page", pageId: "", openInNewTab: false };
     case "purchase": return { type: "purchase", offerId: "" };
+    case "booking": return { type: "booking", bookingPageSlug: "" };
     case "scroll": return { type: "scroll", targetElementId: "" };
     case "call": return { type: "call", phoneNumber: "" };
     case "sms": return { type: "sms", phoneNumber: "" };
@@ -72,7 +75,7 @@ function blank(type: LiveType): PageAction {
 /**
  * Button / Image "Action" (2026-10-26) — pick what the click does, then fill
  * in only that action's fields. Objects Magnetix already owns (pages,
- * Offers, sections on this page) are chosen from lists and stored by id;
+ * Offers, Booking Pages, sections on this page) are chosen from lists and stored by id;
  * their public links are resolved when the page renders, so a renamed Offer
  * or a new custom domain never leaves a stale URL behind.
  */
@@ -125,6 +128,12 @@ export function ActionFieldEditor({
       {action.type === "url" && <UrlFields action={action} onChange={onChange} />}
       {action.type === "page" && <PageFields action={action} onChange={onChange} includeCurrentPage={includeCurrentPage} />}
       {action.type === "purchase" && <OfferFields action={action} onChange={onChange} />}
+      {action.type === "booking" && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">Booking page</Label>
+          <BookingSourceFieldEditor usage="link" value={action.bookingPageSlug} onChange={(bookingPageSlug) => onChange({ type: "booking", bookingPageSlug })} />
+        </div>
+      )}
       {action.type === "scroll" && <SectionFields action={action} onChange={onChange} />}
       {(action.type === "call" || action.type === "sms") && <PhoneFields action={action} onChange={onChange} />}
       {action.type === "email" && <EmailFields action={action} onChange={onChange} />}

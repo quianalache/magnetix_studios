@@ -171,13 +171,13 @@ export default function NewBuilderPreviewPage({
       // Button/Image "Go to Page" / "Go to Offer" targets (scroll targets
       // come from this page's own Section ids).
       const targets = collectActionTargets(collectable);
-      let resolvedActions: ResolvedActionTargets = { pages: {}, offers: {}, sectionIds: targets.sectionIds };
-      if (targets.pageIds.length || targets.offerIds.length) {
-        const qs = new URLSearchParams({ subAccountId, pages: targets.pageIds.join(","), offers: targets.offerIds.join(",") });
+      let resolvedActions: ResolvedActionTargets = { pages: {}, offers: {}, bookings: {}, sectionIds: targets.sectionIds };
+      if (targets.pageIds.length || targets.offerIds.length || targets.bookingSlugs.length) {
+        const qs = new URLSearchParams({ subAccountId, pages: targets.pageIds.join(","), offers: targets.offerIds.join(","), bookings: targets.bookingSlugs.join(",") });
         const res = await fetch(`/api/pages-funnels/puck/resolve-actions?${qs}`).catch(() => null);
         if (res?.ok) {
-          const json = (await res.json()) as Pick<ResolvedActionTargets, "pages" | "offers">;
-          resolvedActions = { ...resolvedActions, pages: json.pages ?? {}, offers: json.offers ?? {} };
+          const json = (await res.json()) as Pick<ResolvedActionTargets, "pages" | "offers" | "bookings">;
+          resolvedActions = { ...resolvedActions, pages: json.pages ?? {}, offers: json.offers ?? {}, bookings: json.bookings ?? {} };
         }
       }
 

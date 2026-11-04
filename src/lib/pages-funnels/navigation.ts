@@ -14,7 +14,7 @@ import { normalizeHex } from "@/lib/brand/brand-colors";
  * check, scroll → this page's Section id). Navigation only narrows which
  * actions are OFFERED:
  *   menu links — Go to page · Go to URL · Scroll to section
- *   CTA        — the same, plus Go to Offer (checkout)
+ *   CTA        — the same, plus Go to Offer (checkout) and Go to booking page
  * Call / Email / SMS / Popup actions are never offered here, and a stored
  * one reads as "no link" (never executed).
  *
@@ -42,9 +42,9 @@ export const NAV_PADDING_DEFAULT = 16;
 export const NAV_CUSTOM_FALLBACK = "#1F1B3A";
 
 export type NavLinkActionType = "none" | "url" | "page" | "scroll";
-export type NavCtaActionType = NavLinkActionType | "purchase";
+export type NavCtaActionType = NavLinkActionType | "purchase" | "booking";
 export const NAV_LINK_ACTION_TYPES: readonly NavLinkActionType[] = ["none", "page", "url", "scroll"];
-export const NAV_CTA_ACTION_TYPES: readonly NavCtaActionType[] = ["none", "page", "url", "scroll", "purchase"];
+export const NAV_CTA_ACTION_TYPES: readonly NavCtaActionType[] = ["none", "page", "url", "scroll", "purchase", "booking"];
 
 export interface NavigationLink {
   id: string;
@@ -259,8 +259,8 @@ const fail = (error: string): NavigationParseResult => ({ ok: false, error });
 function checkAction(raw: unknown, allowed: readonly string[], where: string): string | null {
   if (raw === undefined || raw === null) return null;
   if (!isObject(raw) || typeof raw.type !== "string") return `${where} has a destination that couldn't be read.`;
-  if (!allowed.includes(raw.type)) return `${where} can only link to a page, a web address or a section${allowed.includes("purchase") ? " (or an Offer)" : ""}.`;
-  for (const key of ["url", "pageId", "offerId", "targetElementId"] as const) {
+  if (!allowed.includes(raw.type)) return `${where} can only link to a page, a web address or a section${allowed.includes("purchase") ? " (or an Offer or booking page)" : ""}.`;
+  for (const key of ["url", "pageId", "offerId", "bookingPageSlug", "targetElementId"] as const) {
     if (raw[key] !== undefined && typeof raw[key] !== "string") return `${where} has a destination that couldn't be read.`;
   }
   return null;

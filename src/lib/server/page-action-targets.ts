@@ -13,7 +13,7 @@ import type { BookingPage } from "@/types/booking";
 
 /**
  * Resolves a page's object-bound Button/Image actions (Go to Page, Go to
- * Offer) to their authoritative public URLs — custom-domain aware, via the
+ * Offer, Go to booking page) to their authoritative public URLs — custom-domain aware, via the
  * same builders every other public link uses. Tenant-safe by construction:
  * a target resolves only when it belongs to `subAccountId` AND visitors can
  * open it (published page / published Offer). Anything else is null and the
@@ -114,13 +114,14 @@ export async function resolveDestination(input: ResolveDestinationInput): Promis
 
 export async function resolveActionTargets(
   subAccountId: string,
-  ids: { pageIds: string[]; offerIds: string[]; sectionIds?: string[] },
+  ids: { pageIds: string[]; offerIds: string[]; bookingSlugs?: string[]; sectionIds?: string[] },
   mode: Exclude<ActionContext, "builder"> = "published",
 ): Promise<ResolvedActionTargets> {
   const pageIds = [...new Set(ids.pageIds.filter((id) => ID.test(id)))].slice(0, 50);
   const offerIds = [...new Set(ids.offerIds.filter((id) => ID.test(id)))].slice(0, 50);
-  const result: ResolvedActionTargets = { pages: {}, offers: {}, sectionIds: ids.sectionIds ?? [] };
-  if (!subAccountId || (pageIds.length === 0 && offerIds.length === 0)) return result;
+  const bookingSlugs = [...new Set((ids.bookingSlugs ?? []).filter((slug) => ID.test(slug)))].slice(0, 50);
+  const result: ResolvedActionTargets = { pages: {}, offers: {}, bookings: {}, sectionIds: ids.sectionIds ?? [] };
+  if (!subAccountId || (pageIds.length === 0 && offerIds.length === 0 && bookingSlugs.length === 0)) return result;
 
   await Promise.all([
     ...pageIds.map(async (pageId) => {
@@ -130,6 +131,11 @@ export async function resolveActionTargets(
     ...offerIds.map(async (offerId) => {
       const resolved = await resolveDestination({ subAccountId, mode, destination: { type: "offer_checkout", offerId } });
       result.offers[offerId] = resolved.status === "resolved" ? { href: resolved.destination.href } : null;
+    }),
+    // Booking Pages: same workspace by path, published only (resolveDestination).
+    ...bookingSlugs.map(async (bookingPageSlug) => {
+      const resolved = await resolveDestination({ subAccountId, mode, destination: { type: "booking", bookingPageSlug } });
+      result.bookings![bookingPageSlug] = resolved.status === "resolved" ? { href: resolved.destination.href } : null;
     }),
   ]);
   return result;

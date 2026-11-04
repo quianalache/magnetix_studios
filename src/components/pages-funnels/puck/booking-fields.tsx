@@ -31,7 +31,16 @@ import type { BookingPage } from "@/types/booking";
  * only this workspace's Booking Pages can be chosen; the stored value is the
  * Booking Page's slug (its immutable id).
  */
-export function BookingSourceFieldEditor({ value, onChange }: { value: string | undefined; onChange: (slug: string) => void }) {
+export function BookingSourceFieldEditor({
+  value,
+  onChange,
+  usage = "block",
+}: {
+  value: string | undefined;
+  onChange: (slug: string) => void;
+  /** "link" = a Button / Image / menu-button destination (shared action picker). */
+  usage?: "block" | "link";
+}) {
   const sub = useOptionalSubAccount();
   const [pages, setPages] = useState<BookingPage[] | null>(null);
   useEffect(() => {
@@ -85,10 +94,16 @@ export function BookingSourceFieldEditor({ value, onChange }: { value: string | 
       ) : selected && selected.status !== "published" ? (
         <p className="flex items-start gap-1.5 text-xs text-amber-700" role="status">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          Draft booking page — visitors won&apos;t see this block until it&apos;s published.
+          {usage === "link"
+            ? "Draft booking page — visitors only get this link once it\u2019s published."
+            : "Draft booking page — visitors won\u2019t see this block until it\u2019s published."}
         </p>
       ) : (
-        <Hint>Uses this booking page&apos;s own availability, questions and confirmation.</Hint>
+        <Hint>
+          {usage === "link"
+            ? "Opens this booking page — availability, questions and confirmation come from it."
+            : "Uses this booking page\u2019s own availability, questions and confirmation."}
+        </Hint>
       )}
       {selected ? (
         <a

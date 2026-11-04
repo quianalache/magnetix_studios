@@ -1,4 +1,5 @@
 import type { PageAction } from "@/types/pages-funnels-puck";
+import { isBookingSlug } from "@/lib/pages-funnels/booking-block";
 import type { CanonicalPageAction, Destination, StoredActionInspection } from "@/types/pages-funnels-action";
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -39,6 +40,10 @@ export function canonicalizeStoredAction(raw: unknown): {
     case "purchase": {
       const offerId = text("offerId");
       return offerId && ID.test(offerId) ? { action: { type: "navigate", destination: { type: "offer_checkout", offerId } }, status: "supported", rawType, raw } : invalid();
+    }
+    case "booking": {
+      const bookingPageSlug = text("bookingPageSlug");
+      return isBookingSlug(bookingPageSlug) ? { action: { type: "navigate", destination: { type: "booking", bookingPageSlug } }, status: "supported", rawType, raw } : invalid();
     }
     case "scroll": {
       const elementId = text("targetElementId");
@@ -96,6 +101,7 @@ export function toLegacyPageAction(action: CanonicalPageAction): PageAction {
     case "external_url": return { type: "url", url: d.url, ...(action.openInNewTab ? { openInNewTab: true } : {}) };
     case "page": return { type: "page", pageId: d.pageId, ...(action.openInNewTab ? { openInNewTab: true } : {}) };
     case "offer_checkout": return { type: "purchase", offerId: d.offerId };
+    case "booking": return { type: "booking", bookingPageSlug: d.bookingPageSlug };
     case "section": return { type: "scroll", targetElementId: d.elementId };
     case "call": return { type: "call", phoneNumber: d.phoneNumber };
     case "sms": return { type: "sms", phoneNumber: d.phoneNumber, ...(d.message ? { message: d.message } : {}) };
