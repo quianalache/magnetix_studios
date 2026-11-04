@@ -56,13 +56,15 @@ export function gradientCssValue(
   if (!gradient || gradient.stops.length === 0) return undefined;
 
   const sorted = [...gradient.stops].sort((a, b) => a.position - b.position);
-  const stopsCss = sorted.map((s) => `${s.color} ${s.position}%`).join(", ");
+  const stopsCss = sorted
+    .map((s) => `${canonicalStopColor(s.color)} ${s.position}%`)
+    .join(", ");
 
   // A single stop can't form a real gradient — preview it as a flat fill
   // rather than emitting invalid/pointless gradient CSS (same "graceful
   // partial feedback while editing" principle Phase 2C established for a
   // single-color gradient-in-progress).
-  if (sorted.length === 1) return sorted[0].color;
+  if (sorted.length === 1) return canonicalStopColor(sorted[0].color);
 
   switch (gradient.type) {
     case "linear":
@@ -107,15 +109,35 @@ export const DEFAULT_BACKGROUND: BackgroundConfig = {
   blur: { enabled: false, intensity: 0 },
 };
 
-/** Hero's default background — a real, user-editable gradient. Matches the
- *  visual default this codebase used before Phase 2C/2D (originally a
- *  hardcoded, non-editable `linear-gradient(120deg, var(--accent) 0%,
- *  var(--primary) 100%)` baked into `SectionRender`) so existing Hero
- *  inserts don't suddenly look different — the user can change any of it
- *  the moment they open Background settings. Exported from here (not
- *  defined separately in config.tsx and presets/hero.ts) so the production
- *  registry's Hero component and the `buildHeroSection()` factory can't
- *  drift apart on what "Hero's default background" means. */
+/** The ONE canonical Hero default gradient (lavender → deep plum) — the
+ *  look the builder has always shown. Concrete colors, not theme variables:
+ *  Hero used to store `var(--accent)` / `var(--primary)`, which resolve to
+ *  the Magnetix palette inside the CRM (builder, Preview) but to the plain
+ *  near-white / near-black shadcn defaults on the public page, so the same
+ *  Hero looked different to visitors. */
+export const HERO_DEFAULT_GRADIENT_COLORS = {
+  start: "#F6F1FF",
+  end: "#3D1652",
+} as const;
+
+/** Legacy Hero stops still stored on existing pages (the old untouched
+ *  default). They render as the canonical colors everywhere, with no data
+ *  rewrite; on a public page these strings never meant anything else. */
+const LEGACY_THEME_STOP_COLORS: Record<string, string> = {
+  "var(--accent)": HERO_DEFAULT_GRADIENT_COLORS.start,
+  "var(--primary)": HERO_DEFAULT_GRADIENT_COLORS.end,
+};
+
+/** A gradient stop's color as rendered and as shown in the editor. */
+export function canonicalStopColor(color: string): string {
+  if (typeof color !== "string") return color;
+  return LEGACY_THEME_STOP_COLORS[color.trim()] ?? color;
+}
+
+/** Hero's default background — a real, user-editable gradient. Exported
+ *  from here (not defined separately in config.tsx and presets/hero.ts) so
+ *  the production registry's Hero component and the `buildHeroSection()`
+ *  factory can't drift apart on what "Hero's default background" means. */
 export const HERO_DEFAULT_BACKGROUND: BackgroundConfig = {
   source: "color",
   color: {
@@ -124,7 +146,10 @@ export const HERO_DEFAULT_BACKGROUND: BackgroundConfig = {
     gradient: {
       type: "linear",
       angle: 135,
-      stops: [stop("var(--accent)", 0), stop("var(--primary)", 100)],
+      stops: [
+        stop(HERO_DEFAULT_GRADIENT_COLORS.start, 0),
+        stop(HERO_DEFAULT_GRADIENT_COLORS.end, 100),
+      ],
     },
   },
   blur: { enabled: false, intensity: 0 },

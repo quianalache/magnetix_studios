@@ -309,6 +309,9 @@ export function ImageRender({
   style?: StyleConfig;
   size?: ImageSizeConfig;
 }) {
+  // The "No image set" box is an authoring aid only — a visitor (Preview
+  // or the public page) sees nothing rather than editor placeholder copy.
+  if (!src && !editing) return null;
   const link = resolveActionLink(action, { resolved, editing });
   const responsiveCss = resolveResponsiveCss(id, style);
   const sizeStyle = resolveImageSizeStyle(size);

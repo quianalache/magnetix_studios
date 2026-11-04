@@ -175,11 +175,15 @@ function ImageFigure({
   image,
   fit,
   aspect,
+  editing,
 }: {
   image: GalleryImage;
   fit: "cover" | "contain";
   aspect: "square" | "landscape" | "natural";
+  editing: boolean;
 }) {
+  // Same rule as ImageRender: the placeholder is editor-only.
+  if (!image.src && !editing) return null;
   const aspectClass =
     aspect === "square"
       ? "aspect-square"
@@ -234,6 +238,7 @@ export function GalleryRender({
               image={image}
               fit={fit}
               aspect={aspect}
+              editing={editing}
             />
           ))
         ) : (
@@ -287,7 +292,7 @@ export function SliderRender({
   return (
     <Shell id={id} style={style} className="space-y-3">
       <div className="relative aspect-[4/3] overflow-hidden rounded-lg">
-        <ImageFigure image={current} fit="cover" aspect="landscape" />
+        <ImageFigure image={current} fit="cover" aspect="landscape" editing={editing} />
         {showControls && images.length > 1 && (
           <>
             <button

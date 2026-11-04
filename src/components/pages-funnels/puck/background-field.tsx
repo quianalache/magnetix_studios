@@ -21,6 +21,7 @@ import {
   GRADIENT_TYPE_OPTIONS,
   MAX_GRADIENT_STOPS,
   MIN_GRADIENT_STOPS,
+  canonicalStopColor,
   gradientCssValue,
 } from "@/lib/pages-funnels/puck/background";
 import { newPuckNodeId } from "@/lib/pages-funnels/puck/ids";
@@ -267,9 +268,9 @@ function GradientEditor({
           {gradient.stops.map((s) => (
             <div
               key={s.id}
-              title={`${s.color} at ${s.position}%`}
+              title={`${canonicalStopColor(s.color)} at ${s.position}%`}
               className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
-              style={{ left: `${s.position}%`, backgroundColor: s.color }}
+              style={{ left: `${s.position}%`, backgroundColor: canonicalStopColor(s.color) }}
             />
           ))}
         </div>
@@ -278,7 +279,7 @@ function GradientEditor({
           {sortedStops.map((s) => (
             <div key={s.id} className="flex items-center gap-2">
               <ColorInput
-                value={s.color}
+                value={canonicalStopColor(s.color)}
                 onChange={(hex) => updateStop(s.id, { color: hex })}
               />
               <Input
