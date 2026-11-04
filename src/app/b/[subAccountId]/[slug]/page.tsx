@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { PublicBookingView } from "@/components/booking/public-booking-view";
-import { resolveBookingLogo } from "@/lib/brand/workspace-logo";
+import { publicBookingBranding, publicBookingPageData } from "@/lib/booking/public-payload";
 import type { BookingPage } from "@/types/booking";
 import type { SubAccountDoc } from "@/types";
 import type { Metadata } from "next";
@@ -57,27 +57,10 @@ export default async function PublicBookingPage({ params }: PageProps) {
 
   const sub = subSnap.data() as SubAccountDoc;
 
-  // Pick branding: per-page overrides win, sub-account defaults next,
-  // hardcoded fallback last. Keep it serialisable — server-to-client
-  // boundary requires plain JSON.
-  const branding = {
-    name: page.brandName || sub.name || "Schedule a meeting",
-    logoUrl: resolveBookingLogo(page, sub),
-    accentColor: page.accentColor ?? null,
-    displayFont: page.displayFont ?? null,
-  };
-
-  // Strip the Firestore Timestamp fields from the page before handing
-  // it to the client — we never need `createdAt` / `updatedAt` on the
-  // public surface and they're not JSON-serialisable as-is.
-  const pageForClient: Omit<BookingPage, "createdAt" | "updatedAt"> & {
-    createdAt: null;
-    updatedAt: null;
-  } = {
-    ...page,
-    createdAt: null,
-    updatedAt: null,
-  };
+  // The visitor-safe subset + branding, built the same way the Pages &
+  // Funnels Booking block builds them (lib/booking/public-payload.ts).
+  const pageForClient = publicBookingPageData({ ...page, slug });
+  const branding = publicBookingBranding(page, sub);
 
   return (
     <PublicBookingView

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CalendarClock,
   CheckCircle2,
@@ -11,44 +11,52 @@ import {
   Globe,
   Info,
 } from "lucide-react";
-import type { BookingPage, IntakeField } from "@/types/booking";
+import type { IntakeField } from "@/types/booking";
+import type { PublicBookingBranding, PublicBookingPageData } from "@/lib/booking/public-payload";
 import { readAttributionFromBrowser } from "@/lib/attribution";
-import { tenantBrandStyle, type TenantDisplayFont } from "@/lib/brand/tenant-brand";
+import { tenantBrandStyle } from "@/lib/brand/tenant-brand";
 import { PoweredByMagnetix } from "@/components/brand/powered-by-magnetix";
 import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 
 /**
- * Visitor-facing booking surface. Self-contained client component:
- * fetches availability, lets the visitor pick a day + time, collects
- * intake fields, and posts to the book endpoint.
- *
- * Slice 3 ships the picker + intake form; the submit currently shows a
- * "wired up next" placeholder. Slice 4 hooks it up to
- * POST /api/booking/[saId]/[slug]/book.
+ * Visitor-facing booking surface. `BookingExperience` is the booking flow
+ * itself — it fetches availability, lets the visitor pick a day + time,
+ * collects intake fields and posts to the book endpoint — and is the ONE
+ * implementation shared by the standalone booking page (`PublicBookingView`,
+ * below: brand lockup + footer around it) and the Pages & Funnels Booking
+ * block (Wave 2B-2), which embeds it inside a customer's page.
  *
  * Times are computed server-side in the page's timezone but RENDERED in
  * the visitor's browser timezone (detected at mount). A small dropdown
  * lets the visitor switch back to the page's tz if they prefer.
+ *
+ * Layout responds to the experience's OWN width (container queries), not
+ * the viewport, so it lays out the same in a full page and in a narrow
+ * column of a customer's page.
  */
 
 type SlotISO = { startAt: string; endAt: string };
 
-interface Branding {
-  name: string;
-  logoUrl: string | null;
-  accentColor: string | null;
-  /** Curated display font key (TENANT_DISPLAY_FONTS); null = system sans. */
-  displayFont?: TenantDisplayFont | null;
-}
+type Branding = PublicBookingBranding;
+
+/** The Booking Page fields the flow reads (a full BookingPage doc also fits). */
+type BookingPageData = PublicBookingPageData;
 
 interface Props {
   subAccountId: string;
-  page: Omit<BookingPage, "createdAt" | "updatedAt"> & {
-    createdAt: null;
-    updatedAt: null;
-  };
+  page: BookingPageData;
   branding: Branding;
 }
+
+/** Presentation switches for an embedded experience — display only, never booking settings. */
+export interface BookingExperienceDisplay {
+  showTitle: boolean;
+  showDescription: boolean;
+  showDetails: boolean;
+  card: boolean;
+}
+
+const FULL_DISPLAY: BookingExperienceDisplay = { showTitle: true, showDescription: true, showDetails: true, card: true };
 
 function detectBrowserTz(): string {
   try {
@@ -86,6 +94,69 @@ function formatShortDayInTz(dayKey: string, tz: string): string {
 }
 
 export function PublicBookingView({ subAccountId, page, branding }: Props) {
+  const brandStyle = tenantBrandStyle({
+    name: branding.name,
+    logoUrl: branding.logoUrl,
+    primary: branding.accentColor,
+    displayFont: branding.displayFont ?? null,
+  });
+  return (
+    <main
+      className="tenant-surface tenant-wash flex min-h-screen flex-col px-4 py-8 text-foreground sm:py-10"
+      style={brandStyle}
+    >
+      <AttributionVisitLogger
+        subAccountId={subAccountId}
+        pageType="booking"
+        pageId={page.slug}
+      />
+
+      {/* ── Tenant brand lockup — the business leads the page ── */}
+      <div className="mx-auto mb-6 flex items-center justify-center gap-2.5">
+        {branding.logoUrl ? (
+          // Decorative; alt is the business name.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={branding.logoUrl} alt={branding.name} className="h-10 w-auto max-w-[200px] rounded-md object-contain" />
+        ) : (
+          <>
+            <span className="tenant-mark flex size-9 items-center justify-center rounded-full" aria-hidden="true">
+              <CalendarClock className="size-4.5" />
+            </span>
+            <span className="tenant-display text-title-md">{branding.name}</span>
+          </>
+        )}
+      </div>
+
+      <BookingExperience subAccountId={subAccountId} page={page} branding={branding} className="mx-auto max-w-[56.25rem]" />
+
+      <footer className="mx-auto mt-auto flex justify-center pt-10">
+        <PoweredByMagnetix />
+      </footer>
+    </main>
+  );
+}
+
+/**
+ * The booking flow. `embedded` = inside a Pages & Funnels page (own tenant
+ * surface, h2 heading). `bookingDisabledReason` keeps everything real —
+ * availability, day and time selection, the intake form — but turns the
+ * final submit into an explained no-op (builder canvas, staff Preview), so
+ * authoring can never create an appointment.
+ */
+export function BookingExperience({
+  subAccountId,
+  page,
+  branding,
+  display = FULL_DISPLAY,
+  embedded = false,
+  bookingDisabledReason = null,
+  className = "",
+}: Props & {
+  display?: BookingExperienceDisplay;
+  embedded?: boolean;
+  bookingDisabledReason?: string | null;
+  className?: string;
+}) {
   const pageTz = page.timezone;
   const [viewerTz, setViewerTz] = useState(pageTz);
   const [slots, setSlots] = useState<SlotISO[]>([]);
@@ -201,58 +272,44 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
     .slice(0, 2)
     .toUpperCase();
 
+  const tzId = useId();
+  const Heading = embedded ? "h2" : "h1";
+  const showWho = display.showTitle;
   return (
-    <main
-      className="tenant-surface tenant-wash flex min-h-screen flex-col px-4 py-8 text-foreground sm:py-10"
-      style={brandStyle}
+    <div
+      className={`@container/booking w-full ${embedded ? "tenant-surface text-foreground" : ""} ${className}`}
+      style={embedded ? brandStyle : undefined}
+      data-booking-experience=""
     >
-      <AttributionVisitLogger
-        subAccountId={subAccountId}
-        pageType="booking"
-        pageId={page.slug}
-      />
-
-      {/* ── Tenant brand lockup — the business leads the page ── */}
-      <div className="mx-auto mb-6 flex items-center justify-center gap-2.5">
-        {branding.logoUrl ? (
-          // Decorative; alt is the business name.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={branding.logoUrl} alt={branding.name} className="h-10 w-auto max-w-[200px] rounded-md object-contain" />
-        ) : (
-          <>
-            <span className="tenant-mark flex size-9 items-center justify-center rounded-full" aria-hidden="true">
-              <CalendarClock className="size-4.5" />
-            </span>
-            <span className="tenant-display text-title-md">{branding.name}</span>
-          </>
-        )}
-      </div>
-
-      <article className="tenant-card mx-auto w-full max-w-[56.25rem] overflow-hidden">
+      <article className={`w-full overflow-hidden ${display.card ? "tenant-card" : ""}`}>
         {confirmation ? (
-          <div className="p-6 sm:p-10">
+          <div className="p-6 @xl/booking:p-10">
             <ConfirmationPanel confirmation={confirmation} page={page} />
           </div>
         ) : (
           <>
-            <div className="grid md:grid-cols-[minmax(0,1fr)_12.5rem] lg:grid-cols-[17.5rem_minmax(0,1fr)_12.5rem]">
+            <div className="grid @2xl/booking:grid-cols-[minmax(0,1fr)_12.5rem] @[52rem]/booking:grid-cols-[17.5rem_minmax(0,1fr)_12.5rem]">
               {/* ── Who + what ── */}
-              <section className="flex flex-col gap-3.5 border-b p-6 tenant-divider md:col-span-2 lg:col-span-1 lg:border-r lg:border-b-0">
-                {branding.logoUrl ? null : (
+              <section className="flex flex-col gap-3.5 border-b p-6 tenant-divider @2xl/booking:col-span-2 @[52rem]/booking:col-span-1 @[52rem]/booking:border-r @[52rem]/booking:border-b-0">
+                {showWho && !branding.logoUrl ? (
                   <span className="tenant-soft flex size-11 items-center justify-center rounded-full text-sm font-semibold" aria-hidden="true">
                     {initials}
                   </span>
-                )}
-                <div>
-                  <p className="text-xs text-muted-foreground">{branding.name}</p>
-                  <h1 className="tenant-display mt-1 text-[1.75rem] leading-[1.1] text-balance">{page.name}</h1>
-                </div>
+                ) : null}
+                {showWho ? (
+                  <div>
+                    <p className="text-xs text-muted-foreground">{branding.name}</p>
+                    <Heading className="tenant-display mt-1 text-[1.75rem] leading-[1.1] text-balance">{page.name}</Heading>
+                  </div>
+                ) : null}
                 <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <Clock className="size-4 shrink-0" aria-hidden="true" />
-                    {page.durationMinutes} minutes
-                  </li>
-                  {page.payment ? (
+                  {display.showDetails ? (
+                    <li className="flex items-center gap-2">
+                      <Clock className="size-4 shrink-0" aria-hidden="true" />
+                      {page.durationMinutes} minutes
+                    </li>
+                  ) : null}
+                  {display.showDetails && page.payment ? (
                     <li className="flex items-center gap-2">
                       <span className="tenant-soft rounded-full px-2 py-0.5 text-xs font-medium">
                         {page.payment.currency} {page.payment.amount} deposit
@@ -261,9 +318,9 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
                   ) : null}
                   <li className="flex items-center gap-2">
                     <Globe className="size-4 shrink-0" aria-hidden="true" />
-                    <label className="sr-only" htmlFor="b-tz">Times shown in</label>
+                    <label className="sr-only" htmlFor={tzId}>Times shown in</label>
                     <select
-                      id="b-tz"
+                      id={tzId}
                       value={viewerTz}
                       onChange={(e) => {
                         setViewerTz(e.target.value);
@@ -278,13 +335,13 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
                     </select>
                   </li>
                 </ul>
-                {page.description ? (
+                {display.showDescription && page.description ? (
                   <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{page.description}</p>
                 ) : null}
               </section>
 
               {/* ── Month calendar ── */}
-              <section className="border-b p-6 tenant-divider md:border-b-0" aria-label="Choose a day">
+              <section className="border-b p-6 tenant-divider @2xl/booking:border-b-0" aria-label="Choose a day">
                 {loading ? (
                   <div className="flex h-full min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading available times…
@@ -311,15 +368,15 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
               </section>
 
               {/* ── Times for the chosen day ── */}
-              <section className="flex flex-col gap-2 p-6 tenant-divider md:border-l md:px-[1.125rem]" aria-label="Choose a time">
+              <section className="flex flex-col gap-2 p-6 tenant-divider @2xl/booking:border-l @2xl/booking:px-[1.125rem]" aria-label="Choose a time">
                 {activeDay && !loading && !loadError ? (
                   <>
                     <h2 className="mb-1.5 text-sm font-semibold">{formatShortDayInTz(activeDay, viewerTz)}</h2>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-col">
+                    <div className="grid grid-cols-2 gap-2 @xl/booking:grid-cols-3 @2xl/booking:flex @2xl/booking:flex-col">
                       {activeDaySlots.map((s) => {
                         const isSelected = selectedSlot?.startAt === s.startAt;
                         return isSelected ? (
-                          <div key={s.startAt} className="col-span-2 flex gap-1.5 sm:col-span-3">
+                          <div key={s.startAt} className="col-span-2 flex gap-1.5 @xl/booking:col-span-3 @2xl/booking:col-span-1">
                             <button
                               type="button"
                               aria-pressed="true"
@@ -358,13 +415,14 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
 
             {/* ── Intake form (revealed after a time is picked) ── */}
             {selectedSlot ? (
-              <div ref={intakeRef} className="scroll-mt-6 border-t p-6 sm:p-8 tenant-divider">
+              <div ref={intakeRef} className="scroll-mt-6 border-t p-6 tenant-divider @xl/booking:p-8">
                 <IntakeFormSection
                   subAccountId={subAccountId}
                   slug={page.slug}
                   slot={selectedSlot}
                   viewerTz={viewerTz}
                   page={page}
+                  bookingDisabledReason={bookingDisabledReason}
                   onConfirmed={(c) => setConfirmation(c)}
                 />
               </div>
@@ -372,11 +430,7 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
           </>
         )}
       </article>
-
-      <footer className="mx-auto mt-auto flex justify-center pt-10">
-        <PoweredByMagnetix />
-      </footer>
-    </main>
+    </div>
   );
 }
 
@@ -473,6 +527,7 @@ function IntakeFormSection({
   slot,
   viewerTz,
   page,
+  bookingDisabledReason,
   onConfirmed,
 }: {
   subAccountId: string;
@@ -480,6 +535,7 @@ function IntakeFormSection({
   slot: SlotISO;
   viewerTz: string;
   page: Props["page"];
+  bookingDisabledReason: string | null;
   onConfirmed: (next: {
     status: "scheduled" | "awaiting_payment";
     paymentUrl: string | null;
@@ -496,6 +552,7 @@ function IntakeFormSection({
   // Snapshot on mount, same pattern as the hosted-form flow — before
   // anything could change window.location.
   const attributionRef = useRef(readAttributionFromBrowser());
+  const fid = useId();
 
   function setExtra(id: string, value: string) {
     setExtras((prev) => ({ ...prev, [id]: value }));
@@ -504,6 +561,11 @@ function IntakeFormSection({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    // Builder / staff Preview: never create an appointment.
+    if (bookingDisabledReason) {
+      setError(bookingDisabledReason);
+      return;
+    }
     if (!name.trim() || !email.trim() || !phone.trim()) {
       setError("Name, email, and phone are required.");
       return;
@@ -571,10 +633,10 @@ function IntakeFormSection({
         <span className="text-muted-foreground"> · {page.durationMinutes} min</span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Name" htmlFor="b-name" required>
+      <div className="grid gap-3 @xl/booking:grid-cols-2">
+        <Field label="Name" htmlFor={`${fid}-name`} required>
           <input
-            id="b-name"
+            id={`${fid}-name`}
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -582,9 +644,9 @@ function IntakeFormSection({
             required
           />
         </Field>
-        <Field label="Email" htmlFor="b-email" required>
+        <Field label="Email" htmlFor={`${fid}-email`} required>
           <input
-            id="b-email"
+            id={`${fid}-email`}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -593,9 +655,9 @@ function IntakeFormSection({
             required
           />
         </Field>
-        <Field label="Phone" htmlFor="b-phone" required className="sm:col-span-2">
+        <Field label="Phone" htmlFor={`${fid}-phone`} required className="@xl/booking:col-span-2">
           <input
-            id="b-phone"
+            id={`${fid}-phone`}
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -611,6 +673,7 @@ function IntakeFormSection({
           {page.intakeFields.map((f) => (
             <ExtraField
               key={f.id}
+              idPrefix={fid}
               field={f}
               value={extras[f.id] ?? ""}
               onChange={(v) => setExtra(f.id, v)}
@@ -631,8 +694,14 @@ function IntakeFormSection({
         </div>
       )}
 
+      {bookingDisabledReason && (
+        <p className="rounded-lg border border-dashed p-2.5 text-center text-xs text-muted-foreground" data-booking-disabled="">
+          {bookingDisabledReason}
+        </p>
+      )}
+
       {error && (
-        <p className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-700 dark:text-rose-400">
+        <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-700 dark:text-rose-400">
           {error}
         </p>
       )}
@@ -754,15 +823,17 @@ function ConfirmationPanel({
 }
 
 function ExtraField({
+  idPrefix,
   field,
   value,
   onChange,
 }: {
+  idPrefix: string;
   field: IntakeField;
   value: string;
   onChange: (next: string) => void;
 }) {
-  const id = `b-q-${field.id}`;
+  const id = `${idPrefix}-q-${field.id}`;
   return (
     <Field label={field.label} htmlFor={id} required={field.required}>
       {field.type === "textarea" ? (

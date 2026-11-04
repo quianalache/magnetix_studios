@@ -8,6 +8,8 @@ import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } f
 import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
 import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 import { resolveReadingToolPayloads } from "@/lib/server/reading-tool-payload";
+import { resolveBookingsForSubAccount } from "@/lib/server/page-booking-resolver";
+import { collectBookingSlugs } from "@/lib/pages-funnels/booking-block";
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
 import { getTenantBrandColorsServerSide } from "@/lib/server/brand-kit-service";
 import { resolveFeaturedOffers } from "@/lib/server/featured-offer-service";
@@ -87,6 +89,7 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
 
   // Only this page's own workspace's Forms render (a foreign id renders nothing).
   const resolvedForms = await resolveFormsForSubAccount(subAccountId, collectPuckFormIds(data));
+  const resolvedBookings = await resolveBookingsForSubAccount(subAccountId, collectBookingSlugs(data));
   const embedIds = collectPuckEmbedIds(data);
   const resolvedEmbeds = embedIds.length > 0 ? await resolveReadingToolPayloads(subAccountId, embedIds) : {};
   const resolvedActions = await resolvePageActionTargets(subAccountId, data);
@@ -109,7 +112,7 @@ export async function ReadingResultPageView({ page, wantsDraft }: { page: PageDo
       <Render
         config={serverPuckConfig}
         data={data}
-        metadata={{ subAccountId, resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, readingContext }}
+        metadata={{ subAccountId, resolvedForms, resolvedBookings, resolvedEmbeds, resolvedOffers, resolvedActions, brandColors, brandKit, pageId: page.id, readingContext }}
       />
     </>
   );

@@ -317,6 +317,35 @@ async function main() {
     assert.match((refused as { error: string }).error, /one level deep/, "…with a plain-language reason"); passed++;
     assert.deepEqual(navLabels((await readPage()).puckDraftData), ["Home", "About Us", "Contact", "Services"], "…and the refused save changed nothing"); passed++;
 
+    // ---- Wave 2B-2: Booking blocks live inside normal Page content (puck-json-v1) ----
+    const bookingPage = (slugs: string[], extra: Record<string, unknown> = {}) => ({
+      root: { props: {} },
+      content: [{ type: "Section", props: { id: "Section-b", rows: [{ type: "Row", props: { id: "Row-b", columns: [{ type: "Column", props: { id: "Column-b", elements:
+        slugs.map((slug, i) => ({ type: "Booking", props: { id: `Booking-${i}`, bookingPageSlug: slug, displayMode: i ? "button" : "embed",
+          display: { showTitle: true, showDescription: false, showDetails: true, card: true }, button: { label: "Book now", style: "primary", align: "center" }, ...extra } })) } }] } }] } }],
+    }) as unknown as PuckData;
+    const bookingProps = (d: unknown) => {
+      const els = (((d as PuckData).content[0].props as { rows: { props: { columns: { props: { elements: { props: Record<string, unknown> }[] } }[] } }[] }).rows[0].props.columns[0].props.elements);
+      return els.map((e) => e.props);
+    };
+    await publishPuckPage(subAccountId, pageId, bookingPage(["discovery-call"]), {});
+    assert.equal((await savePuckDraft(subAccountId, pageId, bookingPage(["strategy-session", "discovery-call"]), {})).ok, true, "Booking draft saves"); passed++;
+    let bRead = await readPage();
+    assert.equal(bRead.rawPage.draft.encoding, "puck-json-v1", "Booking stored in the normal puck-json-v1 page envelope"); passed++;
+    assert.deepEqual(bookingProps(bRead.puckDraftData).map((p) => p.bookingPageSlug), ["strategy-session", "discovery-call"], "reload: draft Booking sources round-trip (two independent blocks)"); passed++;
+    assert.deepEqual(bookingProps(bRead.puckDraftData).map((p) => p.id), ["Booking-0", "Booking-1"], "block ids stable"); passed++;
+    assert.deepEqual(bookingProps(bRead.puckDraftData)[0].display, { showTitle: true, showDescription: false, showDetails: true, card: true }, "display toggles round-trip"); passed++;
+    assert.deepEqual(bookingProps(bRead.puckPublishedData).map((p) => p.bookingPageSlug), ["discovery-call"], "published Booking source unchanged by Save Draft"); passed++;
+    await publishPuckPage(subAccountId, pageId, bookingPage(["strategy-session", "discovery-call"]), {});
+    bRead = await readPage();
+    assert.deepEqual(bookingProps(bRead.puckPublishedData).map((p) => p.bookingPageSlug), ["strategy-session", "discovery-call"], "Publish: published Booking source updated"); passed++;
+    for (const [bad, why] of [[{ bookingPageSlug: "../other-workspace" }, /booking page/], [{ displayMode: "calendar_only" }, /display mode/], [{ display: { card: "yes" } }, /display setting/], [{ button: { label: "x".repeat(41) } }, /at most 40/]] as const) {
+      const r = await savePuckDraft(subAccountId, pageId, bookingPage(["discovery-call"], bad as Record<string, unknown>), {});
+      assert.equal(r.ok, false, `malformed Booking refused at save (${Object.keys(bad)[0]})`); passed++;
+      assert.match((r as { error: string }).error, why); passed++;
+    }
+    assert.deepEqual(bookingProps((await readPage()).puckDraftData).map((p) => p.bookingPageSlug), ["strategy-session", "discovery-call"], "…and refused saves changed nothing"); passed++;
+
     console.log(`Popup persistence QA: ${passed}/${passed} PASS`);
   } finally {
     await db.collection("pages").doc(pageId).delete();

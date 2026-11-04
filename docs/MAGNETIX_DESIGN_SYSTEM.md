@@ -516,7 +516,7 @@ Route: `/sa/[id]/pages-funnels/[pageId]/new-builder` (route group `src/app/(buil
 | **Elements** | Heading, Text, RichText, Button, Image, Video, Divider, Spacer, Accordion, Icon, Tabs, Image Gallery, Image Slider, Logo Strip, Navigation (page-level; Wave 2B-1) | All pages |
 | **Data & Metrics** | Stats / Numbers, Animated Counter, Progress Bar, Progress Ring, Chart | All pages |
 | **Prebuilt Sections** | Hero | All pages |
-| **Business** | Form, Reading Tool, Testimonial / Proof, Countdown Timer, Pricing / Offer Summary | All pages |
+| **Business** | Form, Booking (embeds an existing Booking Page; Wave 2B-2), Reading Tool, Testimonial / Proof, Countdown Timer, Pricing / Offer Summary | All pages |
 | **Advanced** | CustomHtml | All pages, **including** Reading Result pages (since `f1923e8`) |
 | **Reading** | HumanDesignChart, AtAGlance, Centers, Channels, Gates, Variables, Skills, Mandala, MandalaActivations, AstrologyChart, AstrologyKeyFacts, AstrologyHouses, AstrologyPlacements, AstrologyAspects, GeneKeys | **Reading Result pages only** (`pageType: "reading_result"`) |
 | **Next Steps** | FeaturedOffer, MyMagnetixButton, PdfButton, ReadingReportButton | **Reading Result pages only** |

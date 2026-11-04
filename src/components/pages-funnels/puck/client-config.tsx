@@ -1,5 +1,6 @@
 "use client";
 
+import { BookingElementClientRender } from "@/components/pages-funnels/puck/booking-block";
 import { createPuckConfig } from "@/components/pages-funnels/puck/config";
 import { FormElementClientRender } from "@/components/pages-funnels/puck/form-client";
 import { ReadingToolElementClientRender } from "@/components/pages-funnels/puck/reading-tool-client";
@@ -13,4 +14,4 @@ import { CustomHtmlElementClientRender } from "@/components/pages-funnels/puck/c
  * matching the same referential-stability discipline `constants.ts` applies
  * to `iframe`/`metadata`/`viewports` (master spec §3/§12).
  */
-export const clientPuckConfig = createPuckConfig(FormElementClientRender, ReadingToolElementClientRender, CustomHtmlElementClientRender);
+export const clientPuckConfig = createPuckConfig(FormElementClientRender, ReadingToolElementClientRender, CustomHtmlElementClientRender, BookingElementClientRender);

@@ -141,6 +141,10 @@ export interface PuckPageMetadata {
   /** Public Reading Tool blocks, pre-resolved by the published route
    *  (undefined in the editor/preview, which fetch on demand). */
   resolvedEmbeds?: Record<string, ReadingToolPayload | null>;
+  /** Booking blocks (Wave 2B-2): Booking Pages resolved from THIS page's own
+   *  workspace by slug — by the published route (published Booking Pages
+   *  only) or Preview (via resolve-booking). Undefined in the builder. */
+  resolvedBookings?: Record<string, import("@/lib/booking/public-payload").BookingBlockPayload | null>;
   /** Offer Summary bindings resolved from this page's active sub-account. */
   resolvedOffers?: Record<string, FeaturedOfferPayload | null>;
   /**

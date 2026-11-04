@@ -102,6 +102,19 @@ import {
   NavigationStyleFieldEditor,
 } from "@/components/pages-funnels/puck/navigation-fields";
 import {
+  BookingButtonFieldEditor,
+  BookingDisplayFieldEditor,
+  BookingLayoutFieldEditor,
+  BookingSourceFieldEditor,
+} from "@/components/pages-funnels/puck/booking-fields";
+import {
+  DEFAULT_BOOKING_BUTTON,
+  DEFAULT_BOOKING_DISPLAY,
+  type BookingButton,
+  type BookingDisplay,
+  type BookingDisplayMode,
+} from "@/lib/pages-funnels/booking-block";
+import {
   DEFAULT_NAVIGATION_CTA,
   DEFAULT_NAVIGATION_STYLE,
   NAV_LOGO_HEIGHT_DEFAULT,
@@ -125,7 +138,7 @@ import {
  * Registry scope is deliberately Phase 1 only, per the master spec's
  * explicit instruction: LAYOUT (Section/Row/Column) + core ELEMENTS
  * (Heading/Text/Button/Image/Video/Divider/Spacer/Accordion) + BUSINESS
- * (Form only — NOT Booking/Checkout yet). No Funnel logic anywhere in this
+ * (Form, and Booking since Wave 2B-2 — NOT Checkout yet). No Funnel logic anywhere in this
  * file (master spec §12 — Puck must never be taught what a funnel is).
  */
 
@@ -133,6 +146,17 @@ export interface FormComponentProps {
   id: string;
   formId: string;
   formName: string;
+  style?: StyleConfig;
+  metadata?: PuckPageMetadata;
+}
+
+/** Booking block (Wave 2B-2) — client variant fetches its Booking Page, server reads metadata. */
+export interface BookingComponentProps {
+  id: string;
+  bookingPageSlug: string;
+  displayMode: BookingDisplayMode;
+  display: BookingDisplay;
+  button: BookingButton;
   style?: StyleConfig;
   metadata?: PuckPageMetadata;
 }
@@ -589,6 +613,48 @@ const navigationLayoutField: CustomField<NavigationStyle> = {
   ),
 };
 
+/**
+ * Booking (Wave 2B-2) settings — choose an existing Booking Page and how to
+ * present it (booking-fields.tsx). Booking rules are never edited here.
+ */
+const bookingSourceField: CustomField<string> = {
+  type: "custom",
+  label: "Booking page",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Booking page">
+      <BookingSourceFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const bookingLayoutField: CustomField<BookingDisplayMode> = {
+  type: "custom",
+  label: "Layout",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Layout">
+      <BookingLayoutFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const bookingDisplayField: CustomField<BookingDisplay> = {
+  type: "custom",
+  label: "Display",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Display">
+      <BookingDisplayFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const bookingButtonField: CustomField<BookingButton> = {
+  type: "custom",
+  label: "Button",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Button">
+      <BookingButtonFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const bookingStyleField = makeStyleField({ spacing: true, responsive: true, visibility: true });
+
 const offerSummaryField: CustomField<string> = {
   type: "custom",
   label: "Offer",
@@ -665,7 +731,8 @@ const SECTION_SHARED_FIELDS = {
 export function createPuckConfig(
   FormComponent: React.ComponentType<FormComponentProps>,
   ReadingToolComponent: React.ComponentType<ReadingToolComponentProps>,
-  CustomHtmlComponent: React.ComponentType<CustomHtmlComponentProps>
+  CustomHtmlComponent: React.ComponentType<CustomHtmlComponentProps>,
+  BookingComponent: React.ComponentType<BookingComponentProps>
 ): Config {
   return {
     // Puck's default `title` root field was never read by anything (page
@@ -717,6 +784,7 @@ export function createPuckConfig(
         title: "Business",
         components: [
           "Form",
+          "Booking",
           "ReadingTool",
           "Testimonial",
           "Countdown",
@@ -990,6 +1058,7 @@ export function createPuckConfig(
               "Spacer",
               "Accordion",
               "Form",
+              "Booking",
               "ReadingTool",
               "CustomHtml",
               ...ALL_READING_COMPONENT_NAMES,
@@ -1944,6 +2013,43 @@ export function createPuckConfig(
             id={id}
             formId={formId}
             formName={formName}
+            style={style}
+            metadata={puck.metadata as PuckPageMetadata}
+          />
+        ),
+      },
+
+      // Booking (Wave 2B-2) — embeds an existing Magnetix Booking Page. Only
+      // the reference + presentation are stored; the booking engine owns
+      // availability, timezone, questions and confirmation.
+      Booking: {
+        label: "Booking",
+        fields: {
+          bookingPageSlug: bookingSourceField,
+          displayMode: bookingLayoutField,
+          display: bookingDisplayField,
+          button: bookingButtonField,
+          style: bookingStyleField,
+        },
+        defaultProps: {
+          bookingPageSlug: "",
+          displayMode: "embed",
+          display: DEFAULT_BOOKING_DISPLAY,
+          button: DEFAULT_BOOKING_BUTTON,
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        // Only the group that applies to the chosen layout is shown.
+        resolveFields: (data, { fields }) => {
+          const { display, button, ...rest } = fields;
+          return (data.props.displayMode === "button" ? { ...rest, button } : { ...rest, display }) as typeof fields;
+        },
+        render: ({ id, bookingPageSlug, displayMode, display, button, style, puck }) => (
+          <BookingComponent
+            id={id}
+            bookingPageSlug={bookingPageSlug}
+            displayMode={displayMode}
+            display={display}
+            button={button}
             style={style}
             metadata={puck.metadata as PuckPageMetadata}
           />

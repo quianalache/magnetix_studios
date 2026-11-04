@@ -1,6 +1,7 @@
 import {
   LayoutPanelTop,
   PanelTop,
+  CalendarClock,
   Rows3,
   Columns3,
   Heading as HeadingIcon,
@@ -75,6 +76,7 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   Accordion: ChevronsUpDown,
   Hero: GalleryHorizontal,
   Form: FileText,
+  Booking: CalendarClock,
   ReadingTool: Sparkles,
   // Reading Result Page blocks (2026-10-21)
   HumanDesignChart: Hexagon,

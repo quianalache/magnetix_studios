@@ -12,6 +12,7 @@ import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config"
 import { collectPuckFeaturedOfferIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
 import { collectActionTargets } from "@/lib/pages-funnels/puck/action";
+import { collectBookingSlugs } from "@/lib/pages-funnels/booking-block";
 import type { ResolvedActionTargets } from "@/types/pages-funnels-puck";
 import { getPage } from "@/lib/firestore/pages-funnels";
 import { readReadingPreviewHandoff } from "@/lib/energetic-decoder/reading-preview-handoff";
@@ -187,6 +188,14 @@ export default function NewBuilderPreviewPage({
         resolvedOffers[id] = res?.ok ? (((await res.json()) as { offer?: FeaturedOfferPayload | null }).offer ?? null) : null;
       }));
 
+      // Booking blocks: this page's own workspace, via the page-anchored resolver.
+      const bookingSlugs = collectBookingSlugs(data);
+      let resolvedBookings: NonNullable<PuckPageMetadata["resolvedBookings"]> = {};
+      if (bookingSlugs.length) {
+        const res = await fetch(`/api/pages-funnels/puck/resolve-booking?pageId=${encodeURIComponent(pageId)}&slugs=${encodeURIComponent(bookingSlugs.join(","))}`).catch(() => null);
+        resolvedBookings = res?.ok ? (((await res.json()) as { bookings?: typeof resolvedBookings }).bookings ?? {}) : {};
+      }
+
       if (cancelled) return;
       setState({
         status: "ready",
@@ -197,6 +206,7 @@ export default function NewBuilderPreviewPage({
           resolvedForms,
           resolvedOffers,
           resolvedActions,
+          resolvedBookings,
           pageId,
           ...(readingContext !== undefined
             ? {
