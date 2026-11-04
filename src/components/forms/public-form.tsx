@@ -19,10 +19,7 @@ import {
 } from "@/types/forms";
 import { inputElementStyle, labelElementStyle } from "@/lib/forms/appearance";
 import type { ContactAttribution } from "@/types/contacts";
-import {
-  readAttributionFromBrowser,
-  trackLeadEvent,
-} from "@/lib/attribution";
+import { readAttributionFromBrowser } from "@/lib/attribution";
 
 interface PublicFormProps {
   form: LeadForm;
@@ -287,11 +284,8 @@ export function PublicForm({ form }: PublicFormProps) {
         setApiError(data.error ?? "Something went wrong. Please try again.");
         return;
       }
-      // Fire the Meta Pixel Lead event before any redirect — once the
-      // browser navigates, the pixel script unloads with the page.
-      trackLeadEvent({
-        utmCampaign: attributionRef.current?.utmCampaign ?? null,
-      });
+      // No Meta Pixel `Lead` event here (Wave 3 owner decision): a tenant's
+      // form submission must never feed Magnetix's own advertising pixel.
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
         return;

@@ -5,6 +5,7 @@ import { resolveCustomBrand } from "@/lib/landing/resolve-brand";
 import { resolveHeroVariant } from "@/lib/hero-variant-server";
 import { getSubAccountByCustomDomain } from "@/lib/domains/custom-domain-service";
 
+import { MagnetixNoscriptTracking } from "@/components/magnetix-noscript-tracking";
 import { AnnouncementBar } from "@/components/landing/announcement-bar";
 import { Navbar as LeadStackNavbar } from "@/components/landing/navbar";
 import { Hero as LeadStackHero } from "@/components/landing/hero";
@@ -87,6 +88,7 @@ export default async function HomePage() {
     const brand = await resolveCustomBrand();
     return (
       <div className="flex min-h-screen flex-col">
+        <MagnetixNoscriptTracking />
         <CustomNavbar brand={brand} />
         <main className="flex-1">
           <CustomHero brand={brand} />
@@ -103,6 +105,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      <MagnetixNoscriptTracking />
       <AnnouncementBar />
       <LeadStackNavbar />
       <main className="flex-1">

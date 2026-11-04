@@ -13,6 +13,7 @@ import {
   syncBunnyHostedVideo,
 } from "@/lib/server/bunny-stream-service";
 import { listSharesForSubAccount, revokeSharesForAsset, shareView } from "@/lib/server/assets/media-share-service";
+import { AUDIO_MIME_TYPES } from "@/lib/pages-funnels/audio";
 import {
   COMMUNITY_FILE_MIME_ALLOWLIST,
   MAX_COMMUNITY_FILE_BYTES,
@@ -72,6 +73,7 @@ export function kindOf(a: Pick<MediaAsset, "mediaType">): MediaLibraryKind {
   if (a.mediaType === "image") return "image";
   if (a.mediaType === "video" || a.mediaType === "recording") return "video";
   if (a.mediaType === "document") return "document";
+  if (a.mediaType === "audio") return "audio";
   return "other";
 }
 
@@ -137,7 +139,27 @@ async function usageMap(t: Tenant, assets: MediaAsset[]): Promise<Map<string, Me
   // public copy's URL — removing it would break them, so it counts as a use).
   for (const a of assets) {
     if (a.publicImage?.url) {
-      push(a.id, { kind: "public_image", label: "Public image link", detail: "Used on pages, emails or course images", href: null });
+      push(a.id, kindOf(a) === "audio"
+        ? { kind: "public_image", label: "Public audio link", detail: "Used by Audio blocks on pages", href: null }
+        : { kind: "public_image", label: "Public image link", detail: "Used on pages, emails or course images", href: null });
+    }
+  }
+
+  // Pages & Funnels pages that play a hosted video from the Media Library
+  // (Wave 3 Video block). The page tree stores the asset id, so a match in
+  // its draft / published content or popups counts as a use — deleting the
+  // video would silently break the page.
+  const videoIds = assets.filter((a) => kindOf(a) === "video").map((a) => a.id);
+  if (videoIds.length) {
+    const pages = await db.collection("pages").where("subAccountId", "==", t.subAccountId).get();
+    for (const page of pages.docs) {
+      const d = page.data();
+      const text = JSON.stringify([d.puckDraftData ?? null, d.puckPublishedData ?? null, d.puckDraftPopups ?? null, d.puckPublishedPopups ?? null]);
+      for (const id of videoIds) {
+        if (text.includes(`"mediaAssetId":"${id}"`) || text.includes(`\\"mediaAssetId\\":\\"${id}\\"`)) {
+          push(id, { kind: "page", label: "Pages & Funnels", detail: (d.name as string) || "Page", href: `/pages-funnels/${page.id}/new-builder` });
+        }
+      }
     }
   }
 
@@ -242,25 +264,27 @@ function safeExt(name: string, fallback: string): string {
   return /^[a-z0-9]{1,8}$/.test(ext) ? ext : fallback;
 }
 
-export function classifyUpload(mimeType: string): "image" | "document" | null {
+export function classifyUpload(mimeType: string): "image" | "document" | "audio" | null {
   if ((COMMUNITY_IMAGE_MIME_ALLOWLIST as readonly string[]).includes(mimeType)) return "image";
+  // Audio (Wave 3 Audio block) — same 15 MB cap and private storage as documents.
+  if ((AUDIO_MIME_TYPES as readonly string[]).includes(mimeType)) return "audio";
   if ((COMMUNITY_FILE_MIME_ALLOWLIST as readonly string[]).includes(mimeType)) return "document";
   return null;
 }
 
 /** Server-side validation shared by every Media Library upload path. */
-export function validateLibraryUpload(mimeType: string, size: number): "image" | "document" {
+export function validateLibraryUpload(mimeType: string, size: number): "image" | "document" | "audio" {
   const kind = classifyUpload(mimeType);
   if (!kind) {
     throw new MediaLibraryError(
       mimeType.startsWith("video/")
         ? "Upload videos with “Upload video” — they're hosted on Bunny Stream."
-        : "That file type isn't supported. Use an image (JPG, PNG, GIF, WebP) or a PDF, Word, Excel, PowerPoint, CSV or text file."
+        : "That file type isn't supported. Use an image (JPG, PNG, GIF, WebP), an audio file (MP3, M4A, WAV, OGG) or a PDF, Word, Excel, PowerPoint, CSV or text file."
     );
   }
   const max = kind === "image" ? MEDIA_IMAGE_MAX_BYTES : MEDIA_DOCUMENT_MAX_BYTES;
   if (!Number.isFinite(size) || size <= 0) throw new MediaLibraryError("That file is empty.");
-  if (size > max) throw new MediaLibraryError(`File is too large — keep ${kind === "image" ? "images" : "documents"} under ${Math.round(max / 1024 / 1024)} MB.`);
+  if (size > max) throw new MediaLibraryError(`File is too large — keep ${kind === "image" ? "images" : kind === "audio" ? "audio files" : "documents"} under ${Math.round(max / 1024 / 1024)} MB.`);
   return kind;
 }
 
@@ -268,6 +292,34 @@ export function mediaBucketName(): string {
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) throw new MediaLibraryError("File uploads aren't configured on this deployment.", 503);
   return bucketName;
+}
+
+/**
+ * Magic-byte check for audio (Wave 3), so a renamed file can't be stored —
+ * or later made public — as audio. Covers the AUDIO_MIME_TYPES containers.
+ */
+export function looksLikeAudio(buf: Buffer, mimeType: string): boolean {
+  const b = buf;
+  const ascii = (start: number, len: number) => (b.length >= start + len ? b.subarray(start, start + len).toString("latin1") : "");
+  switch (mimeType) {
+    case "audio/mpeg":
+      // ID3 tag, or an MPEG frame sync (11 set bits).
+      return ascii(0, 3) === "ID3" || (b.length > 2 && b[0] === 0xff && (b[1] & 0xe0) === 0xe0);
+    case "audio/mp4":
+    case "audio/x-m4a":
+      return ascii(4, 4) === "ftyp";
+    case "audio/aac":
+      return (b.length > 2 && b[0] === 0xff && (b[1] & 0xf6) === 0xf0) || ascii(0, 3) === "ID3";
+    case "audio/wav":
+    case "audio/x-wav":
+      return ascii(0, 4) === "RIFF" && ascii(8, 4) === "WAVE";
+    case "audio/ogg":
+      return ascii(0, 4) === "OggS";
+    case "audio/webm":
+      return b.length > 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3;
+    default:
+      return false;
+  }
 }
 
 /** Magic-byte check for images, so a renamed non-image can't be stored (or later published) as one. */
@@ -300,6 +352,9 @@ export async function storeLibraryFile(
   const kind = validateLibraryUpload(input.mimeType, input.bytes.length);
   if (kind === "image" && !looksLikeImage(input.bytes, input.mimeType)) {
     throw new MediaLibraryError("That file isn't a valid image.");
+  }
+  if (kind === "audio" && !looksLikeAudio(input.bytes, input.mimeType)) {
+    throw new MediaLibraryError("That file isn't a valid audio file.");
   }
   const bucketName = mediaBucketName();
   const ref = input.assetRef ?? col(t.subAccountId).doc();

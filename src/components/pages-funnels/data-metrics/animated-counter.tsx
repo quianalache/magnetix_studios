@@ -5,6 +5,9 @@ import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model"
 import type { MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
 import { PROGRESS_COLOR_NOTICE_TEXT, resolveProgressColor } from "@/lib/pages-funnels/data-metrics/progress-color";
 import type { BrandColor } from "@/types/brand-kit";
+import { hasText, plainText } from "@/lib/pages-funnels/pricing";
+import { InlinePlaceholderStyle, placeholderProps } from "@/components/pages-funnels/puck/inline-placeholder";
+
 import {
   counterDurationMs,
   counterValueAt,
@@ -31,8 +34,9 @@ export interface AnimatedCounterProps extends MetricFormatConfig {
   endValue?: number | string;
   prefix?: string;
   suffix?: string;
-  label?: string;
-  supportingText?: string;
+  /** Strings, or Puck inline-editor nodes in the builder (Wave 3). */
+  label?: import("react").ReactNode;
+  supportingText?: import("react").ReactNode;
   durationSeconds?: number;
   animation?: EnterAnimationMode;
   alignment?: PuckAlignment;
@@ -117,14 +121,15 @@ export function AnimatedCounterRender({
         </p>
         <p className="sr-only">
           {finalText}
-          {label ? ` ${label}` : ""}
+          {hasText(label) ? ` ${plainText(label)}` : ""}
         </p>
-        {label ? (
-          <p aria-hidden="true" className="text-body font-medium">
+        <InlinePlaceholderStyle editing={editing} />
+        {editing || hasText(label) ? (
+          <p aria-hidden="true" className="text-body font-medium" {...placeholderProps(editing, "Label")}>
             {label}
           </p>
         ) : null}
-        {supportingText ? <p className="text-muted-foreground text-body-sm">{supportingText}</p> : null}
+        {editing || hasText(supportingText) ? <p className="text-muted-foreground text-body-sm" {...placeholderProps(editing, "Supporting text (optional)")}>{supportingText}</p> : null}
       </div>
       {editing && paint.notice ? (
         <p className="text-caption text-muted-foreground mt-2" data-progress-color-notice={paint.notice}>

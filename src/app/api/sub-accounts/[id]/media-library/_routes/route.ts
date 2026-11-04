@@ -19,7 +19,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   if (access instanceof NextResponse) return access;
   const url = new URL(request.url);
   const kindParam = url.searchParams.get("kind");
-  const kind = (["image", "video", "document", "other"] as const).includes(kindParam as MediaLibraryKind)
+  const kind = (["image", "video", "document", "audio", "other"] as const).includes(kindParam as MediaLibraryKind)
     ? (kindParam as MediaLibraryKind)
     : undefined;
   try {

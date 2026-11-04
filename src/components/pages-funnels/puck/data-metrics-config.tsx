@@ -216,8 +216,8 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
       endValue: metricNumberField("End value", { placeholder: "e.g. 10000" }),
       prefix: { type: "text", label: "Before the number (e.g. $)" },
       suffix: { type: "text", label: "After the number (e.g. +)" },
-      label: { type: "text", label: "Label" },
-      supportingText: { type: "text", label: "Supporting text (optional)" },
+      label: { type: "text", label: "Label", contentEditable: true },
+      supportingText: { type: "text", label: "Supporting text (optional)", contentEditable: true },
       ...formatFields,
       animation: {
         type: "select",
@@ -270,8 +270,8 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
     fields: {
       currentValue: metricNumberField("Current value", { placeholder: "e.g. 750" }),
       targetValue: metricNumberField("Target value", { placeholder: "e.g. 1000" }),
-      label: { type: "text", label: "Label" },
-      supportingText: { type: "text", label: "Supporting text (optional)" },
+      label: { type: "text", label: "Label", contentEditable: true },
+      supportingText: { type: "text", label: "Supporting text (optional)", contentEditable: true },
       valueDisplay: {
         type: "select",
         label: "Show the numbers as",
@@ -342,8 +342,8 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
           { label: "Nothing", value: "none" },
         ],
       },
-      label: { type: "text", label: "Label" },
-      supportingText: { type: "text", label: "Supporting text (optional)" },
+      label: { type: "text", label: "Label", contentEditable: true },
+      supportingText: { type: "text", label: "Supporting text (optional)", contentEditable: true },
       ...formatFields,
       size: {
         type: "select",
@@ -397,7 +397,7 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
         label: "Chart type",
         render: ({ value, onChange }) => <ChartTypeFieldEditor value={value} onChange={onChange} />,
       },
-      title: { type: "text", label: "Title" },
+      title: { type: "text", label: "Title", contentEditable: true },
       titleSize: {
         type: "radio",
         label: "Title size",
@@ -407,7 +407,7 @@ export function createDataMetricsComponents(styleField: Fields[string]) {
           { label: "Large", value: "large" },
         ],
       },
-      description: { type: "textarea", label: "Description (optional)" },
+      description: { type: "textarea", label: "Description (optional)", contentEditable: true },
       rows: {
         type: "array",
         label: "Data",

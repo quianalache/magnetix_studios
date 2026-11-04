@@ -60,6 +60,9 @@ export function usePuckPersistence({
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Revert draft to published (Wave 3): while the server replaces the draft,
+  // no autosave may write the old draft back over it.
+  const suspendedRef = useRef(false);
 
   useEffect(() => {
     latestDataRef.current = data;
@@ -72,6 +75,7 @@ export function usePuckPersistence({
   const publishEndpoint = `/api/sub-accounts/${subAccountId}/pages-funnels/${pageId}/puck-publish`;
 
   const runSave = useCallback(async () => {
+    if (suspendedRef.current) return;
     if (savingRef.current) {
       pendingRef.current = true;
       return;
@@ -113,7 +117,7 @@ export function usePuckPersistence({
   // Debounced autosave — fires only when `data` has genuinely changed since
   // the last successful save (or since mount, if nothing has saved yet).
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || suspendedRef.current) return;
     const serialized = JSON.stringify({ data, popups });
     if (serialized === lastSavedSerializedRef.current) return;
 
@@ -185,7 +189,29 @@ export function usePuckPersistence({
     }
   }, [publishEndpoint]);
 
+  /**
+   * Stops autosave and waits for an in-flight save to finish. Used before an
+   * action that replaces the stored draft on the server (Revert); call
+   * `resume()` if that action fails.
+   */
+  const suspend = useCallback(async () => {
+    suspendedRef.current = true;
+    pendingRef.current = false;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    for (let i = 0; i < 100 && savingRef.current; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }, []);
+  const resume = useCallback(() => {
+    suspendedRef.current = false;
+  }, []);
+
   return {
+    suspend,
+    resume,
     saveState,
     saveError,
     saveDraft,

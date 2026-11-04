@@ -1,5 +1,7 @@
 import type {
   BackgroundConfig,
+  BackgroundImageSize,
+  FocalPoint,
   GradientConfig,
   GradientType,
 } from "@/types/pages-funnels-puck";
@@ -30,17 +32,113 @@ export function backgroundCssValue(
   }
 
   if (background.source === "image") {
-    return background.image?.url
-      ? `url("${background.image.url}") center / cover no-repeat`
-      : undefined;
+    const url = safeBackgroundImageUrl(background.image?.url);
+    if (!url) return undefined;
+    // No position set = exactly the original output ("center"), so image
+    // backgrounds saved before Wave 3 render byte-identically.
+    const position = background.image?.position
+      ? (({ x, y }) => `${x}% ${y}%`)(clampFocalPoint(background.image.position))
+      : "center";
+    const size = BACKGROUND_IMAGE_SIZES.includes(background.image?.size as BackgroundImageSize)
+      ? background.image!.size!
+      : "cover";
+    const repeat = background.image?.repeat === true ? "repeat" : "no-repeat";
+    return `url("${url}") ${position} / ${size} ${repeat}`;
   }
 
-  // "video" has no CSS `background` equivalent — a real video background
-  // needs an actual <video> element layered behind content, not a style
-  // string. Not built this phase (§8: "Image/Video background editing
-  // remains limited in this task") — returning undefined here is honest,
-  // not a bug: there is nothing to preview until that element exists.
+  // "video" — background video is explicitly out of scope (Wave 3) and no
+  // longer offered in the editor; a stored "video" source renders nothing.
   return undefined;
+}
+
+export const BACKGROUND_IMAGE_SIZES: readonly BackgroundImageSize[] = ["cover", "contain", "auto"];
+export const DEFAULT_FOCAL_POINT: FocalPoint = { x: 50, y: 50 };
+
+/** 0–100 percentages; anything else falls back to centered. */
+export function clampFocalPoint(point: FocalPoint | undefined | null): FocalPoint {
+  const c = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 50);
+  return { x: c(point?.x), y: c(point?.y) };
+}
+
+/**
+ * Only an absolute http(s) URL may be written into CSS `url("…")`, with
+ * the characters that could break out of the string percent-encoded.
+ * Anything else renders no image (safe render).
+ */
+export function safeBackgroundImageUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw.trim() || raw.length > 2048) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    return u.href.replace(/["'()\\\s]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+  } catch {
+    return null;
+  }
+}
+
+/** The overlay tint to paint over an image background, or null. */
+export function backgroundOverlay(
+  background: BackgroundConfig | undefined,
+  resolveColor: (setting: NonNullable<BackgroundConfig["overlay"]>["color"]) => string | null
+): { color: string; opacity: number } | null {
+  if (!background || background.source !== "image" || !background.overlay?.enabled) return null;
+  if (!safeBackgroundImageUrl(background.image?.url)) return null;
+  const opacity = Math.min(100, Math.max(0, Number(background.overlay.opacity) || 0));
+  if (opacity === 0) return null;
+  const color = resolveColor(background.overlay.color) ?? "#000000";
+  return { color, opacity: opacity / 100 };
+}
+
+/**
+ * Strict save-time check for a background value (Wave 3 image fields).
+ * Only the image/overlay parts are new; older shapes pass unchanged.
+ */
+export function backgroundProblem(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const bg = raw as Partial<BackgroundConfig>;
+  const image = bg.image as Partial<NonNullable<BackgroundConfig["image"]>> | undefined;
+  if (image !== undefined && image !== null) {
+    if (typeof image !== "object") return "A background image couldn't be read.";
+    if (image.url !== undefined && typeof image.url !== "string") return "A background image couldn't be read.";
+    if (image.url && !safeBackgroundImageUrl(image.url)) return "A background image must be a public https image.";
+    if (image.size !== undefined && !BACKGROUND_IMAGE_SIZES.includes(image.size as BackgroundImageSize)) return "A background image size isn't supported.";
+    if (image.repeat !== undefined && typeof image.repeat !== "boolean") return "A background image couldn't be read.";
+    if (image.position !== undefined) {
+      const p = image.position as Partial<FocalPoint>;
+      const ok = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 100;
+      if (!p || typeof p !== "object" || !ok(p.x) || !ok(p.y)) return "A background image position must be between 0% and 100%.";
+    }
+  }
+  const overlay = bg.overlay as Partial<NonNullable<BackgroundConfig["overlay"]>> | undefined;
+  if (overlay !== undefined && overlay !== null) {
+    if (typeof overlay !== "object" || (overlay.enabled !== undefined && typeof overlay.enabled !== "boolean")) return "A background overlay couldn't be read.";
+    if (overlay.opacity !== undefined && (typeof overlay.opacity !== "number" || overlay.opacity < 0 || overlay.opacity > 100)) return "Overlay opacity must be between 0% and 100%.";
+    const c = overlay.color as { source?: unknown; custom?: unknown } | undefined;
+    if (c !== undefined && (typeof c !== "object" || !["default", "brand", "custom"].includes(String(c?.source)))) return "A background overlay color couldn't be read.";
+    if (c?.source === "custom" && (typeof c.custom !== "string" || !/^#[0-9a-fA-F]{6}$/.test(c.custom))) return "Overlay color must be a hex color.";
+  }
+  return null;
+}
+
+/** Walks a Puck tree (any depth) and checks every background value. */
+export function findBackgroundProblem(data: unknown): string | null {
+  const seen = new Set<object>();
+  let problem: string | null = null;
+  const visit = (value: unknown, key: string | null) => {
+    if (problem || !value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) return value.forEach((v) => visit(v, null));
+    if (key === "background" || key === "pageBackground") {
+      const p = backgroundProblem(value);
+      if (p) {
+        problem = p;
+        return;
+      }
+    }
+    for (const [k, v] of Object.entries(value)) visit(v, k);
+  };
+  visit(data, null);
+  return problem;
 }
 
 /**

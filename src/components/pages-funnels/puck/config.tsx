@@ -2,6 +2,7 @@ import type { Config, CustomField } from "@puckeditor/core";
 import type {
   PuckPageMetadata,
   PageAction,
+  FocalPoint,
   BackgroundConfig,
   CustomHtmlArtifact,
   StyleConfig,
@@ -18,6 +19,16 @@ import {
   HERO_DEFAULT_BACKGROUND,
 } from "@/lib/pages-funnels/puck/background";
 import { BackgroundFieldEditor } from "@/components/pages-funnels/puck/background-field";
+import { ColumnOrderFieldEditor } from "@/components/pages-funnels/puck/column-order-field";
+import { FocalPointField } from "@/components/pages-funnels/puck/focal-point-field";
+import { AudioSourceField, MediaVideoField } from "@/components/pages-funnels/puck/media-source-fields";
+import { EmbedUrlField, IconColorField, SocialLinksItemsField, SocialLinksStyleField } from "@/components/pages-funnels/puck/wave3-fields";
+import { resolveIconColor } from "@/lib/pages-funnels/icon-color";
+import { AudioRender, EmbedRender, SocialLinksRender } from "@/components/pages-funnels/puck/media-blocks";
+import { DEFAULT_EMBED_PROPS, EMBED_HEIGHT_LIMITS } from "@/lib/pages-funnels/embed";
+import { DEFAULT_AUDIO_PROPS, type AudioSource } from "@/lib/pages-funnels/audio";
+import { DEFAULT_SOCIAL_ITEMS, DEFAULT_SOCIAL_STYLE } from "@/lib/pages-funnels/social-links";
+import type { ColumnOrderConfig } from "@/lib/pages-funnels/puck/column-order";
 import { StyleFieldEditor } from "@/components/pages-funnels/puck/style-field";
 import { FormFieldEditor } from "@/components/pages-funnels/puck/form-field";
 import { ReadingToolFieldEditor } from "@/components/pages-funnels/puck/reading-tool-field";
@@ -332,16 +343,15 @@ const imageSizeField = {
         { label: "Fill", value: "fill" },
       ],
     },
-    objectPosition: {
-      type: "select" as const,
-      label: "Object Position",
-      options: [
-        { label: "Center", value: "center" },
-        { label: "Top", value: "top" },
-        { label: "Bottom", value: "bottom" },
-        { label: "Left", value: "left" },
-        { label: "Right", value: "right" },
-      ],
+    // Wave 3: one shared focal-point control (also used by background
+    // images) replaces the old 5-option Object Position select. Older
+    // images keep their stored objectPosition until a focal point is set.
+    focalPoint: {
+      type: "custom" as const,
+      label: "Focal point (with Height set)",
+      render: ({ value, onChange }: { value: unknown; onChange: (v: FocalPoint) => void }) => (
+        <FocalPointField label="Focal point (with Height set)" value={value as FocalPoint | undefined} onChange={onChange} />
+      ),
     },
     alignment: {
       type: "radio" as const,
@@ -438,9 +448,13 @@ const videoPlaybackField = {
         { label: "No", value: false },
       ],
     },
+    // Wave 3: upload / Media Library picker (raw URL stays under Advanced).
     posterUrl: {
-      type: "text" as const,
-      label: "Poster Image URL (direct video files only)",
+      type: "custom" as const,
+      label: "Poster image (video files only)",
+      render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) => (
+        <ImageFieldEditor label="Poster image (video files only)" value={value as string | undefined} onChange={onChange} removable />
+      ),
     },
   },
 };
@@ -844,11 +858,12 @@ export function createPuckConfig(
       render: (props: {
         children?: React.ReactNode;
         pageBackground?: BackgroundConfig;
-        puck?: { isEditing?: boolean };
+        puck?: { isEditing?: boolean; metadata?: unknown };
       }) => (
         <PageRootRender
           background={props.pageBackground}
           editing={!!props.puck?.isEditing}
+          brandKit={(props.puck?.metadata as PuckPageMetadata | undefined)?.brandKit}
         >
           {props.children}
         </PageRootRender>
@@ -865,10 +880,13 @@ export function createPuckConfig(
           "Button",
           "Image",
           "Video",
+          "Audio",
+          "Embed",
           "Divider",
           "Spacer",
           "Accordion",
           "Icon",
+          "SocialLinks",
           "Tabs",
           "ImageGallery",
           "ImageSlider",
@@ -928,9 +946,11 @@ export function createPuckConfig(
           paddingTop,
           paddingBottom,
           rows,
+          puck,
         }) => (
           <SectionRender
             id={id}
+            brandKit={(puck?.metadata as PuckPageMetadata | undefined)?.brandKit}
             background={background}
             style={style}
             maxWidth={maxWidth}
@@ -1052,9 +1072,11 @@ export function createPuckConfig(
           paddingTop,
           paddingBottom,
           rows,
+          puck,
         }) => (
           <SectionRender
             id={id}
+            brandKit={(puck?.metadata as PuckPageMetadata | undefined)?.brandKit}
             background={background}
             style={style}
             maxWidth={maxWidth}
@@ -1080,6 +1102,13 @@ export function createPuckConfig(
               { label: "Center", value: "center" },
               { label: "Bottom", value: "bottom" },
             ],
+          },
+          columnOrder: {
+            type: "custom",
+            label: "Column order",
+            render: ({ value, onChange }) => (
+              <ColumnOrderFieldEditor value={value as ColumnOrderConfig | undefined} onChange={onChange} />
+            ),
           },
           columns: { type: "slot", allow: ["Column"] },
         },
@@ -1117,9 +1146,11 @@ export function createPuckConfig(
             },
           ],
         },
-        render: ({ id, background, style, gap, verticalAlign, columns }) => (
+        render: ({ id, background, style, gap, verticalAlign, columnOrder, columns, puck }) => (
           <RowRender
             id={id}
+            brandKit={(puck?.metadata as PuckPageMetadata | undefined)?.brandKit}
+            columnOrder={columnOrder}
             background={background}
             style={style}
             gap={gap}
@@ -1155,6 +1186,9 @@ export function createPuckConfig(
               "Button",
               "Image",
               "Video",
+              "Audio",
+              "Embed",
+              "SocialLinks",
               "Divider",
               "Spacer",
               "Accordion",
@@ -1198,6 +1232,7 @@ export function createPuckConfig(
         }) => (
           <ColumnRender
             id={id}
+            brandKit={(puck?.metadata as PuckPageMetadata | undefined)?.brandKit}
             background={background}
             style={style}
             width={width}
@@ -1402,26 +1437,133 @@ export function createPuckConfig(
         label: "Video",
         fields: {
           url: { type: "text", label: "Video URL" },
-          caption: { type: "text", label: "Caption (optional)" },
+          // Wave 3: a hosted video from the Media Library (wins over the URL).
+          mediaVideo: {
+            type: "custom",
+            label: "Media Library video",
+            render: ({ value, onChange }) => <MediaVideoField value={value} onChange={onChange} />,
+          },
+          caption: { type: "text", label: "Caption (optional)", contentEditable: true },
           size: videoSizeField,
           playback: videoPlaybackField,
           style: mediaStyleField,
         },
         defaultProps: {
           url: "",
+          mediaVideo: null,
           caption: "",
           size: DEFAULT_VIDEO_SIZE,
           playback: {},
           style: DEFAULT_STYLE_CONFIG,
         },
-        render: ({ id, url, caption, size, playback, style }) => (
+        render: ({ id, url, mediaVideo, caption, size, playback, style, puck }) => (
           <VideoRender
             id={id}
             url={url}
+            mediaVideo={mediaVideo}
+            resolvedVideos={(puck.metadata as PuckPageMetadata | undefined)?.resolvedVideos}
+            editing={puck.isEditing}
             caption={caption}
             size={size}
             playback={playback}
             style={style}
+          />
+        ),
+      },
+
+      Embed: {
+        label: "Embed",
+        fields: {
+          url: {
+            type: "custom",
+            label: "Link to embed",
+            render: ({ value, onChange }) => <EmbedUrlField value={value as string | undefined} onChange={onChange} />,
+          },
+          title: { type: "text", label: "Accessible title (optional)" },
+          sizing: {
+            type: "select",
+            label: "Size",
+            options: [
+              { label: "Automatic (best for this provider)", value: "auto" },
+              { label: "Aspect ratio", value: "ratio" },
+              { label: "Fixed height", value: "height" },
+            ],
+          },
+          aspectRatio: {
+            type: "select",
+            label: "Aspect ratio",
+            options: [
+              { label: "16:9 (widescreen)", value: "16:9" },
+              { label: "4:3", value: "4:3" },
+              { label: "1:1 (square)", value: "1:1" },
+              { label: "9:16 (vertical)", value: "9:16" },
+            ],
+          },
+          heightPx: { type: "number", label: "Height (px)", min: EMBED_HEIGHT_LIMITS.min, max: EMBED_HEIGHT_LIMITS.max },
+          maxWidth: {
+            type: "select",
+            label: "Width",
+            options: [
+              { label: "Full width", value: "full" },
+              { label: "Medium (720px)", value: "medium" },
+              { label: "Narrow (480px)", value: "narrow" },
+            ],
+          },
+          alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS },
+          style: mediaStyleField,
+        },
+        resolveFields: (data, { fields }) => {
+          const next = { ...fields } as Record<string, unknown>;
+          if (data.props.sizing !== "ratio") delete next.aspectRatio;
+          if (data.props.sizing !== "height") delete next.heightPx;
+          return next as typeof fields;
+        },
+        defaultProps: { ...DEFAULT_EMBED_PROPS, style: DEFAULT_STYLE_CONFIG },
+        render: ({ id, puck, ...props }) => <EmbedRender id={id} {...props} editing={puck.isEditing} />,
+      },
+
+      Audio: {
+        label: "Audio",
+        fields: {
+          source: {
+            type: "custom",
+            label: "Audio file",
+            render: ({ value, onChange }) => <AudioSourceField value={value as AudioSource | undefined} onChange={onChange} />,
+          },
+          title: { type: "text", label: "Title (optional)", contentEditable: true },
+          caption: { type: "textarea", label: "Caption (optional)", contentEditable: true },
+          style: mediaStyleField,
+        },
+        defaultProps: { ...DEFAULT_AUDIO_PROPS, style: DEFAULT_STYLE_CONFIG },
+        render: ({ id, source, title, caption, style, puck }) => (
+          <AudioRender id={id} source={source} title={title} caption={caption} style={style} editing={puck.isEditing} />
+        ),
+      },
+
+      SocialLinks: {
+        label: "Social Links",
+        fields: {
+          items: {
+            type: "custom",
+            label: "Links",
+            render: ({ value, onChange }) => <SocialLinksItemsField value={value} onChange={onChange} />,
+          },
+          socialStyle: {
+            type: "custom",
+            label: "Appearance",
+            render: ({ value, onChange }) => <SocialLinksStyleField value={value} onChange={onChange} />,
+          },
+          style: generalElementStyleField,
+        },
+        defaultProps: { items: DEFAULT_SOCIAL_ITEMS, socialStyle: DEFAULT_SOCIAL_STYLE, style: DEFAULT_STYLE_CONFIG },
+        render: ({ id, items, socialStyle, style, puck }) => (
+          <SocialLinksRender
+            id={id}
+            items={items}
+            socialStyle={socialStyle}
+            style={style}
+            editing={puck.isEditing}
+            brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit}
           />
         ),
       },
@@ -1483,8 +1625,8 @@ export function createPuckConfig(
             type: "array",
             label: "Items",
             arrayFields: {
-              title: { type: "text", label: "Title" },
-              content: { type: "textarea", label: "Content" },
+              title: { type: "text", label: "Title", contentEditable: true },
+              content: { type: "textarea", label: "Content", contentEditable: true },
             },
             defaultItemProps: { title: "Question", content: "Answer" },
             getItemSummary: (item) => item.title || "Untitled item",
@@ -1507,12 +1649,13 @@ export function createPuckConfig(
         // Puck's `array` field manages each item's own stable `id` — passed
         // straight through to AccordionRender, which needs real per-item
         // ids anyway (React keys, and the single-open `name` grouping).
-        render: ({ id, items, allowMultiple, style }) => (
+        render: ({ id, items, allowMultiple, style, puck }) => (
           <AccordionRender
             id={id}
             items={items}
             allowMultiple={allowMultiple}
             style={style}
+            editing={puck.isEditing}
           />
         ),
       },
@@ -1540,8 +1683,17 @@ export function createPuckConfig(
             label: "Alignment",
             options: ALIGN_OPTIONS,
           },
-          color: { type: "text", label: "Color (optional)" },
-          background: { type: "text", label: "Background (optional)" },
+          // Wave 3: Default / Brand color / Custom (legacy hex strings still render).
+          color: {
+            type: "custom",
+            label: "Color",
+            render: ({ value, onChange }) => <IconColorField label="Icon color" value={value} onChange={onChange} defaultLabel="Default (text color)" />,
+          },
+          background: {
+            type: "custom",
+            label: "Background",
+            render: ({ value, onChange }) => <IconColorField label="Background" value={value} onChange={onChange} defaultLabel="Default (none)" />,
+          },
           style: generalElementStyleField,
         },
         defaultProps: {
@@ -1558,8 +1710,8 @@ export function createPuckConfig(
             name={p.name}
             size={p.size}
             alignment={p.alignment}
-            color={p.color}
-            background={p.background}
+            color={resolveIconColor(p.color, (p.puck.metadata as PuckPageMetadata | undefined)?.brandKit)}
+            background={resolveIconColor(p.background, (p.puck.metadata as PuckPageMetadata | undefined)?.brandKit)}
             style={p.style}
           />
         ),
@@ -1571,8 +1723,8 @@ export function createPuckConfig(
             type: "array",
             label: "Tabs",
             arrayFields: {
-              label: { type: "text", label: "Label" },
-              content: { type: "textarea", label: "Content" },
+              label: { type: "text", label: "Label", contentEditable: true },
+              content: { type: "textarea", label: "Content", contentEditable: true },
             },
             defaultItemProps: { label: "Tab", content: "Add content here." },
             getItemSummary: (item) => item.label || "Tab",
@@ -1602,6 +1754,7 @@ export function createPuckConfig(
             activeIndex={p.activeIndex}
             alignment={p.alignment}
             style={p.style}
+            editing={p.puck.isEditing}
           />
         ),
       },
@@ -1736,11 +1889,18 @@ export function createPuckConfig(
             type: "array",
             label: "Testimonials",
             arrayFields: {
-              quote: { type: "textarea", label: "Quote" },
-              name: { type: "text", label: "Name" },
-              role: { type: "text", label: "Role / company" },
-              imageUrl: { type: "text", label: "Avatar URL (optional)" },
-              sourceLabel: { type: "text", label: "Source label (optional)" },
+              quote: { type: "textarea", label: "Quote", contentEditable: true },
+              name: { type: "text", label: "Name", contentEditable: true },
+              role: { type: "text", label: "Role / company", contentEditable: true },
+              // Wave 3: Media Library / upload picker instead of a raw URL.
+              imageUrl: {
+                type: "custom",
+                label: "Avatar (optional)",
+                render: ({ value, onChange }) => (
+                  <ImageFieldEditor label="Avatar (optional)" value={value as string | undefined} onChange={onChange} removable />
+                ),
+              },
+              sourceLabel: { type: "text", label: "Source label (optional)", contentEditable: true },
             },
             defaultItemProps: {
               quote: "Add a real customer quote.",
@@ -1865,11 +2025,12 @@ export function createPuckConfig(
             arrayFields: {
               value: { type: "text", label: "Value" },
               prefix: { type: "text", label: "Prefix (optional)" },
-              label: { type: "text", label: "Label" },
+              label: { type: "text", label: "Label", contentEditable: true },
               suffix: { type: "text", label: "Suffix (optional)" },
               supportingText: {
                 type: "text",
                 label: "Supporting text (optional)",
+                contentEditable: true,
               },
               sourceNote: {
                 type: "text",

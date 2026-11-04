@@ -45,9 +45,14 @@ import { MediaLibraryImageButton } from "@/components/assets/media-library-image
 export function ImageFieldEditor({
   value,
   onChange,
+  label = "Image",
+  removable = false,
 }: {
   value: string | undefined;
   onChange: (value: string) => void;
+  label?: string;
+  /** Shows a Remove action once an image is set (Wave 3 media pickers). */
+  removable?: boolean;
 }) {
   const sub = useOptionalSubAccount();
   const params = useParams<{ pageId?: string }>();
@@ -79,7 +84,7 @@ export function ImageFieldEditor({
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs font-semibold">Image</Label>
+      <Label className="text-xs font-semibold">{label}</Label>
 
       {src && (
         <div className="border-border bg-muted flex items-center gap-2 overflow-hidden rounded-md border p-1.5">
@@ -92,6 +97,11 @@ export function ImageFieldEditor({
           <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
             {filenameFromUrl(src)}
           </span>
+          {removable && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")} aria-label={`Remove ${label.toLowerCase()}`}>
+              Remove
+            </Button>
+          )}
         </div>
       )}
 
@@ -119,17 +129,18 @@ export function ImageFieldEditor({
             )}
             {uploading ? "Uploading…" : src ? "Replace Image" : "Upload Image"}
           </Button>
-          {!src && (
-            <MediaLibraryImageButton
-              subAccountId={sub!.subAccountId}
-              onPick={(url) => {
-                setError(null);
-                onChange(url);
-              }}
-              disabled={uploading}
-              className="w-full"
-            />
-          )}
+          {/* Wave 3: also offered once an image is set, so a library image
+              can replace it directly (no remove-first step). */}
+          <MediaLibraryImageButton
+            subAccountId={sub!.subAccountId}
+            label={src ? "Replace from Media Library" : "Choose from Media Library"}
+            onPick={(url) => {
+              setError(null);
+              onChange(url);
+            }}
+            disabled={uploading}
+            className="w-full"
+          />
           {error && <p className="text-destructive text-xs">{error}</p>}
         </>
       ) : (

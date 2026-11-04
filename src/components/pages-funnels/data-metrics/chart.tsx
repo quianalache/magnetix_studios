@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { hasText, plainText } from "@/lib/pages-funnels/pricing";
+import { InlinePlaceholderStyle, placeholderProps } from "@/components/pages-funnels/puck/inline-placeholder";
 import type { StyleConfig } from "@/types/pages-funnels-puck";
 import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model";
 import {
@@ -45,8 +47,9 @@ const TITLE_SIZE_CLASS: Record<ChartTitleSize, string> = {
 export interface ChartProps extends MetricFormatConfig {
   id: string;
   chartType?: ChartType;
-  title?: string;
-  description?: string;
+  /** Strings, or Puck inline-editor nodes in the builder (Wave 3). */
+  title?: import("react").ReactNode;
+  description?: import("react").ReactNode;
   rows?: ChartRowProp[];
   sort?: ChartSort;
   showValues?: boolean;
@@ -167,23 +170,25 @@ export function ChartRender({
     <BlockShell id={id} style={style}>
       <figure
         className="m-0 flex flex-col gap-4"
-        aria-labelledby={title ? titleId : undefined}
-        aria-describedby={[description ? descId : "", summaryId].filter(Boolean).join(" ")}
+        aria-labelledby={hasText(title) ? titleId : undefined}
+        aria-describedby={[hasText(description) ? descId : "", summaryId].filter(Boolean).join(" ")}
         data-chart-type={type}
       >
-        {title || description ? (
+        <InlinePlaceholderStyle editing={editing} />
+        {editing || hasText(title) || hasText(description) ? (
           <figcaption className="flex flex-col gap-1">
-            {title ? (
+            {editing || hasText(title) ? (
               <p
                 id={titleId}
                 className={TITLE_SIZE_CLASS[titleSize] ?? TITLE_SIZE_CLASS.medium}
-                style={{ fontWeight: style?.typography?.fontWeight ?? 600 }}
+                {...placeholderProps(editing, "Chart title")}
+                style={{ fontWeight: style?.typography?.fontWeight ?? 600, ...placeholderProps(editing, "Chart title").style }}
               >
                 {title}
               </p>
             ) : null}
-            {description ? (
-              <p id={descId} className="text-muted-foreground text-body-sm">
+            {editing || hasText(description) ? (
+              <p id={descId} className="text-muted-foreground text-body-sm" {...placeholderProps(editing, "Description (optional)")}>
                 {description}
               </p>
             ) : null}
@@ -222,7 +227,7 @@ export function ChartRender({
         <p id={summaryId} className="sr-only">
           {summary}
         </p>
-        <DataTable title={title} data={data} fmt={fmt} total={pie?.total ?? null} />
+        <DataTable title={plainText(title)} data={data} fmt={fmt} total={pie?.total ?? null} />
         {notes.map((n) => (
           <p key={n} className="text-muted-foreground text-caption">
             {n}

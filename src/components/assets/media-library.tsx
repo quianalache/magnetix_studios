@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   Play,
   Search,
+  AudioLines,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { assetsCall } from "@/lib/client/assets-api";
@@ -164,7 +165,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
   }
 
   function Thumb({ i, className }: { i: MediaLibraryItem; className?: string }) {
-    const Icon = i.kind === "image" ? ImageIcon : i.kind === "video" ? Film : FileText;
+    const Icon = i.kind === "image" ? ImageIcon : i.kind === "video" ? Film : i.kind === "audio" ? AudioLines : FileText;
     return (
       <span className={cn("bg-muted relative flex items-center justify-center overflow-hidden", className)}>
         {i.thumbnailUrl ? (
@@ -192,7 +193,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
   }
 
   function usageChips(i: MediaLibraryItem) {
-    const labels = [...new Set(i.usage.map((u) => (u.kind === "course_lesson" ? "Courses" : u.kind === "resource" ? "Resources" : "Shared")))];
+    const labels = [...new Set(i.usage.map((u) => (u.kind === "course_lesson" ? "Courses" : u.kind === "resource" ? "Resources" : u.kind === "page" ? "Pages" : "Shared")))];
     return (
       <span className="flex flex-wrap gap-1">
         {labels.slice(0, 2).map((l) => (
@@ -206,7 +207,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
 
   return (
     <div className="space-y-6">
-      <input ref={fileInput} type="file" multiple className="sr-only" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt" onChange={(e) => { void uploadFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={fileInput} type="file" multiple className="sr-only" accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt" onChange={(e) => { void uploadFiles(e.target.files); e.target.value = ""; }} />
       <input ref={videoInput} type="file" className="sr-only" accept="video/*" onChange={(e) => { void uploadVideo(e.target.files?.[0]); e.target.value = ""; }} />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -222,7 +223,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
           <Input id="media-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search media by name, tags, or keyword…" className="bg-background pl-9" />
         </label>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <FilterSelect id="media-kind" icon={FileText} label="File type" value={kind} onChange={setKind} options={[{ value: "all", label: "All File Types" }, { value: "image", label: "Images" }, { value: "video", label: "Videos" }, { value: "document", label: "Documents" }]} />
+          <FilterSelect id="media-kind" icon={FileText} label="File type" value={kind} onChange={setKind} options={[{ value: "all", label: "All File Types" }, { value: "image", label: "Images" }, { value: "video", label: "Videos" }, { value: "document", label: "Documents" }, { value: "audio", label: "Audio" }]} />
           <FilterSelect id="media-usage" icon={Layers} label="Usage" value={usage} onChange={setUsage} options={[{ value: "all", label: "All Usage" }, { value: "used", label: "In use" }, { value: "unused", label: "Not used yet" }, { value: "shared", label: "Shared replay links" }]} />
           <FilterSelect id="media-when" icon={CalendarDays} label="Upload date" value={when} onChange={setWhen} options={[{ value: "all", label: "All Upload Dates" }, { value: "7", label: "Last 7 days" }, { value: "30", label: "Last 30 days" }, { value: "90", label: "Last 90 days" }]} />
           <FilterSelect id="media-source" icon={Database} label="Storage" value={source} onChange={setSource} options={[{ value: "all", label: "All Sources" }, { value: "firebase", label: "Magnetix files" }, { value: "bunny", label: "Bunny videos" }]} />

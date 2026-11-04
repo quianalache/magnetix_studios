@@ -18,6 +18,9 @@ const business = categories.business?.components ?? [];
 const components = clientPuckConfig.components ?? {};
 
 const requiredElements = [
+  "Audio",
+  "Embed",
+  "SocialLinks",
   "Icon",
   "Tabs",
   "ImageGallery",
@@ -64,5 +67,5 @@ assert.deepEqual(
 );
 
 console.log(
-  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics + Navigation + Booking + Pricing)`
+  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics + Navigation + Booking + Pricing + Wave 3 media)`
 );

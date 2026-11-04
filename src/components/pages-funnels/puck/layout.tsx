@@ -4,7 +4,8 @@ import type {
   StyleConfig,
 } from "@/types/pages-funnels-puck";
 import { COLUMN_SPAN_CLASS } from "@/lib/pages-funnels/puck/constants";
-import { BackgroundLayer } from "@/components/pages-funnels/puck/background-layer";
+import { BackgroundLayer, type BrandKitColors } from "@/components/pages-funnels/puck/background-layer";
+import { columnOrderCss, type ColumnOrderConfig } from "@/lib/pages-funnels/puck/column-order";
 import {
   resolveBaseStyleProps,
   resolveResponsiveCss,
@@ -115,8 +116,10 @@ export function SectionRender({
   paddingTop,
   paddingBottom,
   rows: Rows,
+  brandKit,
 }: {
   id: string;
+  brandKit?: BrandKitColors;
   background: BackgroundConfig;
   style?: StyleConfig;
   maxWidth: SectionMaxWidthOption;
@@ -137,14 +140,14 @@ export function SectionRender({
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      {fullWidthBackground && <BackgroundLayer background={background} />}
+      {fullWidthBackground && <BackgroundLayer background={background} brandKit={brandKit} />}
       <div
         className="relative z-10 mx-auto flex flex-col gap-8"
         style={{ maxWidth: contentMaxWidth }}
       >
         {!fullWidthBackground && (
           <div className="absolute inset-0 -z-10" aria-hidden>
-            <BackgroundLayer background={background} />
+            <BackgroundLayer background={background} brandKit={brandKit} />
           </div>
         )}
         <Rows allow={["Row"]} />
@@ -160,8 +163,13 @@ export function RowRender({
   gap,
   verticalAlign,
   columns: Columns,
+  brandKit,
+  columnOrder,
 }: {
   id: string;
+  brandKit?: BrandKitColors;
+  /** Per-device column order (Wave 3) — reverse stacking per device. */
+  columnOrder?: ColumnOrderConfig;
   background: BackgroundConfig;
   style?: StyleConfig;
   gap: number;
@@ -173,6 +181,7 @@ export function RowRender({
   }>;
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
+  const orderCss = columnOrderCss(id, columnOrder);
   return (
     // This outer div carries ONLY relative/overflow-hidden (+ System A's
     // base style) for the background layer — never grid/gap CSS, which
@@ -186,7 +195,8 @@ export function RowRender({
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      <BackgroundLayer background={background} />
+      {orderCss && <style dangerouslySetInnerHTML={{ __html: orderCss }} />}
+      <BackgroundLayer background={background} brandKit={brandKit} />
       <Columns
         allow={["Column"]}
         className="relative z-10 grid grid-cols-12"
@@ -234,8 +244,10 @@ export function ColumnRender({
   alignment,
   elements: Elements,
   dragRef,
+  brandKit,
 }: {
   id: string;
+  brandKit?: BrandKitColors;
   background: BackgroundConfig;
   style?: StyleConfig;
   width: PuckColumnWidth;
@@ -260,7 +272,7 @@ export function ColumnRender({
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      <BackgroundLayer background={background} />
+      <BackgroundLayer background={background} brandKit={brandKit} />
       <Elements
         allow={[
           "Heading",
@@ -310,7 +322,9 @@ export function PageRootRender({
   background,
   editing = false,
   children,
+  brandKit,
 }: {
+  brandKit?: BrandKitColors;
   background?: BackgroundConfig;
   editing?: boolean;
   children?: React.ReactNode;
@@ -327,7 +341,7 @@ export function PageRootRender({
       style={{ backgroundColor: "#ffffff" }}
     >
       <div className="absolute inset-0 -z-10" aria-hidden>
-        <BackgroundLayer background={background} />
+        <BackgroundLayer background={background} brandKit={brandKit} />
       </div>
       {children}
     </div>

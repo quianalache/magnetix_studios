@@ -24,6 +24,9 @@ import {
   mediaAlignmentClass,
 } from "@/lib/pages-funnels/puck/media-size";
 import { resolveVideoEmbed } from "@/lib/pages-funnels/puck/video";
+import { normalizeMediaVideo, withBunnyPlaybackFlags } from "@/lib/pages-funnels/puck/media-video";
+import { hasText, plainText } from "@/lib/pages-funnels/pricing";
+import { InlinePlaceholderStyle, placeholderProps } from "@/components/pages-funnels/puck/inline-placeholder";
 import { BackgroundLayer } from "@/components/pages-funnels/puck/background-layer";
 
 /**
@@ -374,23 +377,61 @@ export function VideoRender({
   style,
   size,
   playback,
+  mediaVideo,
+  resolvedVideos,
+  editing = false,
 }: {
   id: string;
   url: string;
-  caption: string;
+  /** A string, or Puck's inline editor node in the builder (Wave 3). */
+  caption: ReactNode;
   style?: StyleConfig;
   size?: VideoSizeConfig;
   playback?: VideoPlaybackConfig;
+  /** Wave 3: a Media Library hosted video — wins over `url`. */
+  mediaVideo?: unknown;
+  /** Playback URLs minted for this page's Media Library videos. */
+  resolvedVideos?: Record<string, string | null>;
+  editing?: boolean;
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
-  const embed = resolveVideoEmbed(url, playback);
+  const libraryVideo = normalizeMediaVideo(mediaVideo);
+  const libraryPlayback = libraryVideo ? resolvedVideos?.[libraryVideo.assetId] ?? null : null;
+  const embed = libraryVideo
+    ? libraryPlayback
+      ? ({ kind: "iframe", src: withBunnyPlaybackFlags(libraryPlayback, { autoplay: playback?.autoplay, muted: playback?.muted, loop: playback?.loop }) } as const)
+      : ({ kind: "none" } as const)
+    : resolveVideoEmbed(url, playback);
+  const captionText = plainText(caption).trim();
   const boxStyle: CSSProperties = {
     ...resolveBaseStyleProps(style),
     ...resolveVideoSizeStyle(size),
     aspectRatio: videoAspectRatioValue(size?.aspectRatio),
   };
+  const captionNode = (editing || hasText(caption)) ? (
+    <p className="text-muted-foreground text-xs" {...placeholderProps(editing, "Add a caption (optional)")}>{caption}</p>
+  ) : null;
+  // A Media Library video in the builder: a labelled stand-in (playback
+  // tokens are minted for Preview and the live page, not the canvas).
+  if (libraryVideo && editing && !libraryPlayback) {
+    return (
+      <div id={id} className="space-y-1.5">
+        <InlinePlaceholderStyle editing={editing} />
+        {responsiveCss && <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />}
+        <div className={`flex ${mediaAlignmentClass(size?.alignment)}`}>
+          <div className="border-border bg-muted text-muted-foreground flex w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border text-sm" style={boxStyle}>
+            <span className="font-medium">{libraryVideo.title || "Media Library video"}</span>
+            <span className="text-caption">Plays in Preview and on the live page</span>
+          </div>
+        </div>
+        {captionNode}
+      </div>
+    );
+  }
+  if (embed.kind === "none" && !editing) return null;
   return (
     <div id={id} className="space-y-1.5">
+      <InlinePlaceholderStyle editing={editing} />
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
@@ -404,10 +445,11 @@ export function VideoRender({
               {embed.kind === "iframe" ? (
                 <iframe
                   src={embed.src}
-                  title={caption || "Video"}
+                  title={captionText || libraryVideo?.title || "Video"}
                   className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
+                  style={editing ? { pointerEvents: "none" } : undefined}
                 />
               ) : (
                 <video
@@ -417,20 +459,21 @@ export function VideoRender({
                   muted={embed.muted}
                   loop={embed.loop}
                   controls={embed.controls}
-                  poster={embed.posterUrl ?? undefined}
+                  poster={embed.posterUrl && /^https?:\/\//i.test(embed.posterUrl) ? embed.posterUrl : undefined}
                   playsInline
                 />
               )}
             </div>
           </div>
-          {caption && (
-            <p className="text-muted-foreground text-xs">{caption}</p>
-          )}
+          {captionNode}
         </>
       ) : (
-        <div className="border-border bg-muted text-muted-foreground flex h-56 w-full items-center justify-center rounded-xl border border-dashed text-sm">
-          No video set
-        </div>
+        <>
+          <div className="border-border bg-muted text-muted-foreground flex h-56 w-full items-center justify-center rounded-xl border border-dashed text-sm">
+            No video set
+          </div>
+          {captionNode}
+        </>
       )}
     </div>
   );
@@ -467,9 +510,10 @@ export function SpacerRender({ height }: { height: number }) {
 }
 
 export interface AccordionItemData {
-  id: string;
-  title: string;
-  content: string;
+  id?: string;
+  /** Strings, or Puck's inline-editor nodes in the builder (Wave 3). */
+  title: ReactNode;
+  content: ReactNode;
 }
 
 /**
@@ -483,41 +527,45 @@ export function AccordionRender({
   items,
   allowMultiple,
   style,
+  editing = false,
 }: {
   id: string;
   items: AccordionItemData[];
   allowMultiple?: boolean;
   style?: StyleConfig;
+  editing?: boolean;
 }) {
-  // Scoped to this Accordion instance's own id (not a fixed string) — a page
-  // can hold more than one Accordion, and native `<details name="...">`
-  // grouping is global to the whole document by name, so two different
-  // Accordion elements sharing one name would incorrectly close each
-  // other's items. Same fix V2's renderer already uses (element.id).
-  const groupName = allowMultiple === false ? id : undefined;
+  // Single-open: native <details name> grouping (no JS). In the builder
+  // (Wave 3) every item is shown open, so each answer can be edited on the
+  // canvas, and the summary doesn't toggle while you type in it.
+  const groupName = allowMultiple === false && !editing ? id : undefined;
   const responsiveCss = resolveResponsiveCss(id, style);
   return (
     <div id={id} className="space-y-3" style={resolveBaseStyleProps(style)}>
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      {items.map((item) => (
+      <InlinePlaceholderStyle editing={editing} />
+      {items.map((item, index) => (
         <details
-          key={item.id}
+          key={item.id ?? index}
           name={groupName}
+          open={editing ? true : undefined}
           className="group border-border bg-card rounded-xl border p-4"
         >
-          <summary className="cursor-pointer text-sm font-semibold group-open:mb-2 marker:content-none">
+          <summary
+            className="cursor-pointer text-sm font-semibold group-open:mb-2 marker:content-none"
+            onClick={editing ? (event) => event.preventDefault() : undefined}
+            {...placeholderProps(editing, "Question")}
+          >
             {item.title}
           </summary>
-          <p className="text-muted-foreground text-sm">{item.content}</p>
+          <p className="text-muted-foreground text-sm" {...placeholderProps(editing, "Answer")}>{item.content}</p>
         </details>
       ))}
     </div>
   );
 }
-
-// ---------- shared style maps ----------
 
 const ALIGN_CLASS: Record<PuckAlignment, string> = {
   left: "text-left",

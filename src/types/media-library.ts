@@ -8,10 +8,10 @@ import type { MediaAssetStatus, MediaAssetType, MediaStorageProvider } from "@/t
  * videos are the existing Bunny-hosted MediaAssets.
  */
 
-export type MediaLibraryKind = "image" | "video" | "document" | "other";
+export type MediaLibraryKind = "image" | "video" | "document" | "audio" | "other";
 
 export interface MediaUsage {
-  kind: "course_lesson" | "resource" | "replay_link" | "public_image";
+  kind: "course_lesson" | "resource" | "replay_link" | "public_image" | "page";
   label: string;
   detail: string;
   /** In-app link to the place it's used. */

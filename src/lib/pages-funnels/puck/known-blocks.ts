@@ -18,12 +18,12 @@ import { normalizePopupMap } from "@/types/pages-funnels-popup";
  * Adding a block: register it in config.tsx AND add its type here.
  */
 export const KNOWN_PUCK_BLOCK_TYPES = [
-  "Accordion", "AnimatedCounter", "AstrologyAspects", "AstrologyChart", "AstrologyHouses", "AstrologyKeyFacts",
+  "Accordion", "AnimatedCounter", "Audio", "AstrologyAspects", "AstrologyChart", "AstrologyHouses", "AstrologyKeyFacts",
   "AstrologyPlacements", "AtAGlance", "Booking", "Button", "Centers", "Channels", "Chart", "Column", "Countdown",
-  "CustomHtml", "Divider", "FeaturedOffer", "Form", "Gates", "GeneKeys", "Heading", "Hero", "HumanDesignChart",
+  "CustomHtml", "Divider", "Embed", "FeaturedOffer", "Form", "Gates", "GeneKeys", "Heading", "Hero", "HumanDesignChart",
   "Icon", "Image", "ImageGallery", "ImageSlider", "LogoStrip", "Mandala", "MandalaActivations", "MyMagnetixButton",
   "Navigation", "OfferSummary", "PdfButton", "PricingComparison", "ProgressBar", "ProgressRing", "ReadingReportButton", "ReadingTool",
-  "RichText", "Row", "Section", "Skills", "Spacer", "Stats", "Tabs", "Testimonial", "Text", "Variables", "Video",
+  "RichText", "Row", "Section", "Skills", "SocialLinks", "Spacer", "Stats", "Tabs", "Testimonial", "Text", "Variables", "Video",
 ] as const;
 
 const KNOWN = new Set<string>(KNOWN_PUCK_BLOCK_TYPES);

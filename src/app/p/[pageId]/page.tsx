@@ -18,6 +18,9 @@ import { ReadingResultPageView } from "@/components/pages-funnels/reading-result
 import { resolvePageActionTargets } from "@/lib/server/page-action-targets";
 import { getTenantBrandColorsServerSide } from "@/lib/server/brand-kit-service";
 import { resolveFeaturedOffers } from "@/lib/server/featured-offer-service";
+import { publicPageMetadata, resolvePageSettings, safeTrackingIds } from "@/lib/pages-funnels/page-settings";
+import { TenantPageTracking } from "@/components/pages-funnels/tenant-page-tracking";
+import { resolveMediaVideosForPage } from "@/lib/server/page-media-resolver";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +33,42 @@ export const dynamic = "force-dynamic";
  * every published page had a New Builder snapshot. Reading Result Pages take
  * their own branch below. This route never writes to Firestore.
  */
-/** Browser title: the published page's SEO title, else its name (2026-10-16 public surfaces). */
+/**
+ * Public document head from the page's PUBLISHED Page Settings (Wave 3 —
+ * settings go live on Publish): title, description, Open Graph / Twitter
+ * card, and robots. A page without Wave 3 settings falls back to its legacy
+ * flat `seo` field (see page-settings.ts). The description is always set
+ * explicitly (null when empty) so a tenant page never inherits Magnetix's own
+ * site description from the root layout. Works identically on custom
+ * domains, which serve this same route.
+ */
 export async function generateMetadata({ params }: { params: Promise<{ pageId: string }> }): Promise<Metadata> {
   try {
     const { pageId } = await params;
-    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as { status?: string; name?: string; pageType?: string; seo?: { title?: string } } | undefined;
+    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as Pick<PageDoc, "status" | "name" | "pageType" | "seo" | "puckPublishedData"> | undefined;
     if (!page || page.status !== "published") return {};
+    const decoded = page.puckPublishedData ? decodeStoredPuckData(page.puckPublishedData) : null;
+    const settings = resolvePageSettings(decoded?.ok ? decoded.data : null, page.seo);
     // A Reading Result Page shows one person's Reading — never indexed.
+    const isReading = page.pageType === "reading_result";
+    const meta = publicPageMetadata({ settings, pageName: page.name ?? "", forceNoindex: isReading });
+    const title = publicTitle(meta.title);
     return {
-      title: publicTitle(page.seo?.title || page.name),
-      ...(page.pageType === "reading_result" ? { robots: { index: false, follow: false } } : {}),
+      title,
+      description: meta.description,
+      openGraph: {
+        type: "website",
+        title,
+        description: meta.description ?? undefined,
+        ...(meta.image ? { images: [{ url: meta.image }] } : {}),
+      },
+      twitter: {
+        card: meta.image ? "summary_large_image" : "summary",
+        title,
+        description: meta.description ?? undefined,
+        ...(meta.image ? { images: [meta.image] } : {}),
+      },
+      ...(meta.noindex ? { robots: isReading ? { index: false, follow: false } : { index: false } } : {}),
     };
   } catch {
     return {};
@@ -99,12 +128,17 @@ export default async function PublicPagePreview({
   // Booking blocks: published Booking Pages in this page's own workspace only.
   const resolvedBookings = await resolveBookingsForSubAccount(page.subAccountId, collectBookingSlugs(publishedData));
   const qaPopupId = typeof query.qa_popup === "string" && page.name.startsWith("QA ·") ? query.qa_popup : null;
-  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, resolvedBookings, brandColors, brandKit, pageId: page.id, publishedPopups };
+  // Media Library videos (Wave 3): fresh short-lived playback per visit, own workspace only.
+  const resolvedVideos = await resolveMediaVideosForPage(page, collectable);
+  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, resolvedBookings, resolvedVideos, brandColors, brandKit, pageId: page.id, publishedPopups };
   // The host holds ONLY this page's PUBLISHED Popups: an Open Popup action can
   // never reach a draft-only Popup or another page's Popup (Slice 5).
+  // The tenant's own tracking, from the PUBLISHED settings only.
+  const tracking = safeTrackingIds(resolvePageSettings(publishedData, page.seo).tracking);
   return (
     <PopupHost popups={publishedPopups} initialPopupId={qaPopupId} metadata={metadata} automaticTriggers>
       <Render config={serverPuckConfig} data={publishedData} metadata={metadata} />
+      <TenantPageTracking {...tracking} />
     </PopupHost>
   );
 }

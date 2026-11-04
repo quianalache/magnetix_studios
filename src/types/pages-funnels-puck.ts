@@ -150,6 +150,8 @@ export interface PuckPageMetadata {
    *  workspace by slug — by the published route (published Booking Pages
    *  only) or Preview (via resolve-booking). Undefined in the builder. */
   resolvedBookings?: Record<string, import("@/lib/booking/public-payload").BookingBlockPayload | null>;
+  /** Media Library videos on this page → short-lived playback URL (Wave 3). */
+  resolvedVideos?: Record<string, string | null>;
   /** Offer Summary bindings resolved from this page's active sub-account. */
   resolvedOffers?: Record<string, FeaturedOfferPayload | null>;
   /**
@@ -257,12 +259,41 @@ export interface BackgroundBlurConfig {
   intensity: number;
 }
 
+/** Where an image sits inside its box — a focal point in percent (0–100),
+ *  shared by background images and the Image block (Wave 3). */
+export interface FocalPoint {
+  x: number;
+  y: number;
+}
+
+export type BackgroundImageSize = "cover" | "contain" | "auto";
+
+/** Image background (Wave 3). `url` is a public image (upload or Media
+ *  Library public copy). Missing fields read as the original behaviour:
+ *  centered, cover, no-repeat. */
+export interface BackgroundImageConfig {
+  url: string;
+  position?: FocalPoint;
+  size?: BackgroundImageSize;
+  repeat?: boolean;
+}
+
+/** Tint over an image background, from the Brand / Custom color model. */
+export interface BackgroundOverlayConfig {
+  enabled: boolean;
+  color: { source: "default" | "brand" | "custom"; brandColorId?: string; custom?: string };
+  /** 0–100 (%). */
+  opacity: number;
+}
+
 export interface BackgroundConfig {
   source: BackgroundSource;
   color: ColorBackgroundConfig;
-  /** Typed now, no field UI yet — see file doc comment. */
-  image?: { url: string };
+  image?: BackgroundImageConfig;
+  /** Reserved; background video is out of scope (Wave 3) — never rendered and
+   *  no longer offered in the editor. */
   video?: { url: string };
+  overlay?: BackgroundOverlayConfig;
   blur: BackgroundBlurConfig;
 }
 
@@ -526,6 +557,8 @@ export interface ImageSizeConfig {
    *  natural ratio already. */
   objectFit?: "cover" | "contain" | "fill";
   objectPosition?: "center" | "top" | "bottom" | "left" | "right";
+  /** Focal point in % (Wave 3) — wins over the legacy `objectPosition`. */
+  focalPoint?: FocalPoint;
   /** Horizontal position of the image WITHIN its column — independent of
    *  `width`, e.g. a 50%-width image can sit left/center/right of its
    *  column. */

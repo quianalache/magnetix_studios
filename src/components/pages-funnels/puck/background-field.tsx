@@ -25,6 +25,10 @@ import {
   gradientCssValue,
 } from "@/lib/pages-funnels/puck/background";
 import { newPuckNodeId } from "@/lib/pages-funnels/puck/ids";
+import { ImageFieldEditor } from "@/components/pages-funnels/puck/image-field";
+import { FocalPointField } from "@/components/pages-funnels/puck/focal-point-field";
+import { NavColorField } from "@/components/pages-funnels/puck/navigation-fields";
+import type { BackgroundImageSize } from "@/types/pages-funnels-puck";
 
 /**
  * Production Background field editor — Phase 2D task §3/§4/§5/§7/§8. A
@@ -65,24 +69,32 @@ export function BackgroundFieldEditor({
   function patchBlur(partial: Partial<BackgroundConfig["blur"]>) {
     patch({ blur: { ...bg.blur, ...partial } });
   }
+  const image = bg.image ?? { url: "" };
+  function patchImage(partial: Partial<NonNullable<BackgroundConfig["image"]>>) {
+    patch({ image: { ...image, ...partial } });
+  }
+  const overlay = bg.overlay ?? { enabled: false, color: { source: "default" as const }, opacity: 40 };
+  function patchOverlay(partial: Partial<NonNullable<BackgroundConfig["overlay"]>>) {
+    patch({ overlay: { ...overlay, ...partial } });
+  }
+  // Background video is out of scope (Wave 3); a stored "video" source shows
+  // as None so there is no dead control.
+  const source: BackgroundSource = bg.source === "video" ? "none" : bg.source;
 
   return (
     <div className="space-y-4 px-1 pb-2">
-      {/* Source: Color | Image | Video (§8) — Image/Video are typed and
-          selectable so the mental model is right, but their own field UI
-          isn't built this phase, per the task's explicit scope limit. */}
+      {/* Source: None | Color | Image. Background video is out of scope. */}
       <div className="space-y-1.5">
         <Label className="text-muted-foreground text-xs font-medium">
           Background
         </Label>
         <SegmentedControl<BackgroundSource>
-          value={bg.source}
-          onChange={(source) => patch({ source })}
+          value={source}
+          onChange={(next) => patch({ source: next })}
           options={[
             { value: "none", label: "None" },
             { value: "color", label: "Color" },
             { value: "image", label: "Image" },
-            { value: "video", label: "Video" },
           ]}
         />
       </div>
@@ -115,12 +127,76 @@ export function BackgroundFieldEditor({
         </div>
       )}
 
-      {(bg.source === "image" || bg.source === "video") && (
-        <p className="border-border bg-muted text-muted-foreground rounded-lg border border-dashed p-3 text-xs">
-          {bg.source === "image" ? "Image" : "Video"} backgrounds aren&apos;t
-          editable yet — this is reserved for a future phase. Choose Color for
-          now.
-        </p>
+      {source === "image" && (
+        <div className="border-border space-y-4 rounded-lg border p-3" data-background-image-field="">
+          <ImageFieldEditor
+            label="Background image"
+            value={image.url}
+            onChange={(url) => patchImage({ url })}
+            removable
+          />
+          {image.url ? (
+            <>
+              <FocalPointField
+                label="Position"
+                imageUrl={image.url}
+                value={image.position}
+                onChange={(position) => patchImage({ position })}
+              />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Size</Label>
+                <SegmentedControl<BackgroundImageSize>
+                  value={image.size ?? "cover"}
+                  onChange={(size) => patchImage({ size })}
+                  options={[
+                    { value: "cover", label: "Cover" },
+                    { value: "contain", label: "Contain" },
+                    { value: "auto", label: "Original" },
+                  ]}
+                />
+              </div>
+              {(image.size ?? "cover") !== "cover" && (
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="background-image-repeat" className="text-xs font-medium">Repeat image</Label>
+                  <Switch id="background-image-repeat" checked={image.repeat === true} onCheckedChange={(v) => patchImage({ repeat: !!v })} />
+                </div>
+              )}
+              <div className="border-border space-y-3 rounded-lg border p-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="background-overlay-toggle" className="text-xs font-medium">Overlay</Label>
+                  <Switch id="background-overlay-toggle" checked={overlay.enabled} onCheckedChange={(v) => patchOverlay({ enabled: !!v })} />
+                </div>
+                {overlay.enabled && (
+                  <>
+                    <NavColorField
+                      label="Overlay color"
+                      value={overlay.color}
+                      onChange={(color) => patchOverlay({ color })}
+                      defaultLabel="Default (black)"
+                    />
+                    <div className="space-y-1">
+                      <div className="text-muted-foreground flex items-center justify-between text-xs">
+                        <span>Opacity</span>
+                        <span>{overlay.opacity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={overlay.opacity}
+                        aria-label="Overlay opacity"
+                        onChange={(e) => patchOverlay({ opacity: Number(e.target.value) })}
+                        className="accent-primary w-full"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-muted-foreground text-caption">Upload an image or choose one from your Media Library.</p>
+          )}
+        </div>
       )}
 
       {/* Blur (§7) — grouped with Background, optional, independent of

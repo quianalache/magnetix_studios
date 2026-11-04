@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import {
   ArrowRight,
   Check,
@@ -14,6 +14,8 @@ import {
 import type { FeaturedOfferPayload } from "@/types/reading-blocks";
 import type { PuckAlignment, StyleConfig } from "@/types/pages-funnels-puck";
 import { BlockShell as Shell } from "@/components/pages-funnels/data-metrics/block-shell";
+import { hasText } from "@/lib/pages-funnels/pricing";
+import { InlinePlaceholderStyle, placeholderProps } from "@/components/pages-funnels/puck/inline-placeholder";
 import { parseCountdownTarget } from "@/lib/pages-funnels/puck/countdown";
 import { clampSliderIntervalMs } from "@/lib/pages-funnels/puck/slider";
 import { MetricGrid } from "@/components/pages-funnels/data-metrics/metric-grid";
@@ -27,12 +29,13 @@ export interface GalleryImage {
   src: string;
   alt: string;
 }
+/** Text fields are strings, or Puck's inline-editor nodes in the builder. */
 export interface ProofItem {
-  quote: string;
-  name: string;
-  role: string;
+  quote: ReactNode;
+  name: ReactNode;
+  role: ReactNode;
   imageUrl: string;
-  sourceLabel: string;
+  sourceLabel: ReactNode;
 }
 export interface LogoItem {
   src: string;
@@ -41,8 +44,9 @@ export interface LogoItem {
 export type LogoSize = "small" | "medium" | "large";
 export interface StatItem {
   value: string;
-  label: string;
-  supportingText: string;
+  /** Strings, or Puck inline-editor nodes in the builder (Wave 3). */
+  label: ReactNode;
+  supportingText: ReactNode;
   prefix?: string;
   suffix?: string;
   sourceNote?: string;
@@ -108,49 +112,72 @@ export function TabsRender({
   activeIndex,
   alignment,
   style,
+  editing = false,
 }: {
   id: string;
-  items: { label: string; content: string }[];
+  /** Text is a string, or Puck's inline-editor node in the builder (Wave 3). */
+  items: { label: ReactNode; content: ReactNode }[];
   activeIndex: number;
   alignment: PuckAlignment;
   style?: StyleConfig;
+  editing?: boolean;
 }) {
   const [active, setActive] = useState(
     Math.max(0, Math.min(activeIndex ?? 0, Math.max(0, items.length - 1)))
   );
   const base = useId();
+  const tabClass =
+    "border-border focus-visible:ring-ring data-[active=true]:bg-primary data-[active=true]:text-primary-foreground rounded-md border px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none";
   return (
     <Shell id={id} style={style} className="space-y-4">
+      <InlinePlaceholderStyle editing={editing} />
       <div
         role="tablist"
         aria-label="Content tabs"
         className={`flex flex-wrap gap-2 ${justifyClass[alignment]}`}
       >
-        {items.map((item, index) => (
-          <button
-            key={`${base}-${index}`}
-            type="button"
-            role="tab"
-            aria-selected={active === index}
-            aria-controls={`${base}-panel-${index}`}
-            id={`${base}-tab-${index}`}
-            onClick={() => setActive(index)}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-                event.preventDefault();
-                setActive((index + 1) % items.length);
-              }
-              if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-                event.preventDefault();
-                setActive((index - 1 + items.length) % items.length);
-              }
-            }}
-            className="border-border focus-visible:ring-ring data-[active=true]:bg-primary data-[active=true]:text-primary-foreground rounded-md border px-3 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
-            data-active={active === index}
-          >
-            {item.label || `Tab ${index + 1}`}
-          </button>
-        ))}
+        {items.map((item, index) =>
+          editing ? (
+            // Builder: the label is edited on the canvas, so the tab is not
+            // a <button> (a button would swallow typing and caret keys).
+            // Clicking still switches the panel shown.
+            <div
+              key={`${base}-${index}`}
+              role="tab"
+              aria-selected={active === index}
+              data-active={active === index}
+              onClick={() => setActive(index)}
+              className={`${tabClass} cursor-text`}
+              {...placeholderProps(true, `Tab ${index + 1}`)}
+            >
+              {item.label}
+            </div>
+          ) : (
+            <button
+              key={`${base}-${index}`}
+              type="button"
+              role="tab"
+              aria-selected={active === index}
+              aria-controls={`${base}-panel-${index}`}
+              id={`${base}-tab-${index}`}
+              onClick={() => setActive(index)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActive((index + 1) % items.length);
+                }
+                if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActive((index - 1 + items.length) % items.length);
+                }
+              }}
+              className={tabClass}
+              data-active={active === index}
+            >
+              {hasText(item.label) ? item.label : `Tab ${index + 1}`}
+            </button>
+          )
+        )}
       </div>
       {items.map(
         (item, index) =>
@@ -158,10 +185,11 @@ export function TabsRender({
             <div
               key={`${base}-content-${index}`}
               role="tabpanel"
-              tabIndex={0}
+              tabIndex={editing ? undefined : 0}
               id={`${base}-panel-${index}`}
               aria-labelledby={`${base}-tab-${index}`}
               className="border-border text-body-sm rounded-lg border p-4"
+              {...placeholderProps(editing, "Tab content")}
             >
               {item.content}
             </div>
@@ -353,12 +381,14 @@ export function ProofRender({
   style?: StyleConfig;
   editing?: boolean;
 }) {
+  // Text fields are edited on the canvas (Wave 3), so in the builder they
+  // arrive as Puck's inline-editor nodes — read them with hasText().
   const hasContent = items.some(
     (item) =>
-      item.quote || item.name || item.role || item.imageUrl || item.sourceLabel
+      hasText(item.quote) || hasText(item.name) || hasText(item.role) || !!item.imageUrl || hasText(item.sourceLabel)
   );
   if (!hasContent && !editing) return null;
-  if (!hasContent)
+  if (items.length === 0)
     return (
       <Shell id={id} style={style}>
         <div className="border-border bg-muted/30 text-muted-foreground text-body-sm flex min-h-32 items-center justify-center rounded-lg border border-dashed px-4 text-center">
@@ -368,33 +398,44 @@ export function ProofRender({
     );
   return (
     <Shell id={id} style={style} className="grid gap-4 md:grid-cols-2">
-      {items.map((item, index) => (
-        <figure
-          key={`${item.name}-${index}`}
-          className={`border-border rounded-lg border p-5 ${alignClass[alignment]}`}
-        >
-          <blockquote className="text-body italic">“{item.quote}”</blockquote>
-          <figcaption className="mt-4 flex items-center gap-3">
-            <>
-              {item.imageUrl && (
-                <img
-                  src={item.imageUrl}
-                  alt=""
-                  className="h-10 w-10 rounded-full object-cover"
-                />
+      <InlinePlaceholderStyle editing={editing} />
+      {items.map((item, index) => {
+        const avatar = typeof item.imageUrl === "string" && /^https?:\/\//i.test(item.imageUrl) ? item.imageUrl : null;
+        const showRole = editing || hasText(item.role);
+        const showSource = editing || hasText(item.sourceLabel);
+        return (
+          <figure
+            key={index}
+            className={`border-border rounded-lg border p-5 ${alignClass[alignment]}`}
+          >
+            {(editing || hasText(item.quote)) && (
+              <blockquote className="text-body italic">
+                “<span {...placeholderProps(editing, "Quote")}>{item.quote}</span>”
+              </blockquote>
+            )}
+            <figcaption className="mt-4 flex items-center gap-3">
+              {avatar && (
+                // eslint-disable-next-line @next/next/no-img-element -- public avatar image chosen in Settings
+                <img src={avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
               )}
-            </>
-            <span>
-              <strong className="text-body-sm block">
-                {item.name || "Name"}
-              </strong>
-              <span className="text-muted-foreground text-caption">
-                {[item.role, item.sourceLabel].filter(Boolean).join(" · ")}
+              <span>
+                {(editing || hasText(item.name)) && (
+                  <strong className="text-body-sm block" {...placeholderProps(editing, "Name")}>
+                    {item.name}
+                  </strong>
+                )}
+                {(showRole || showSource) && (
+                  <span className="text-muted-foreground text-caption">
+                    {showRole && <span {...placeholderProps(editing, "Role or company")}>{item.role}</span>}
+                    {showRole && showSource && (editing || (hasText(item.role) && hasText(item.sourceLabel))) ? " · " : null}
+                    {showSource && <span {...placeholderProps(editing, "Source (optional)")}>{item.sourceLabel}</span>}
+                  </span>
+                )}
               </span>
-            </span>
-          </figcaption>
-        </figure>
-      ))}
+            </figcaption>
+          </figure>
+        );
+      })}
     </Shell>
   );
 }
@@ -472,7 +513,7 @@ export function StatsRender({
   editing?: boolean;
 }) {
   const hasContent = items.some(
-    (item) => item.value || item.label || item.supportingText
+    (item) => item.value || hasText(item.label) || hasText(item.supportingText)
   );
   if (!hasContent && !editing) return null;
   if (!hasContent)
@@ -506,6 +547,7 @@ export function StatsRender({
         alignment={alignment}
         gap={gap}
         dividers={dividers}
+        editing={editing}
       />
     </Shell>
   );

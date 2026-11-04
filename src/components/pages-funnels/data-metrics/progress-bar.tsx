@@ -6,6 +6,9 @@ import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model"
 import type { MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
 import { PROGRESS_COLOR_NOTICE_TEXT, resolveProgressColor } from "@/lib/pages-funnels/data-metrics/progress-color";
 import type { BrandColor } from "@/types/brand-kit";
+import { hasText } from "@/lib/pages-funnels/pricing";
+import { InlinePlaceholderStyle, placeholderProps } from "@/components/pages-funnels/puck/inline-placeholder";
+
 import {
   BAR_THICKNESS_PX,
   computeProgress,
@@ -20,8 +23,9 @@ export interface ProgressBarProps extends MetricFormatConfig {
   id: string;
   currentValue?: number | string;
   targetValue?: number | string;
-  label?: string;
-  supportingText?: string;
+  /** Strings, or Puck inline-editor nodes in the builder (Wave 3). */
+  label?: import("react").ReactNode;
+  supportingText?: import("react").ReactNode;
   valueDisplay?: ProgressValueDisplay;
   showPercentage?: boolean;
   thickness?: ProgressThickness;
@@ -98,7 +102,7 @@ export function ProgressBarRender({
             aria-valuemax={state.target}
             aria-valuenow={state.ariaNow}
             aria-valuetext={progressAriaText(state, fmt)}
-            {...(label ? { "aria-labelledby": labelId } : { "aria-label": "Progress" })}
+            {...(hasText(label) ? { "aria-labelledby": labelId } : { "aria-label": "Progress" })}
             className="relative min-w-0 flex-1 overflow-hidden rounded-full"
             style={{ height, background: paint.track }}
           >
@@ -118,7 +122,8 @@ export function ProgressBarRender({
             </span>
           ) : null}
         </div>
-        {valueText || label || supportingText ? (
+        <InlinePlaceholderStyle editing={editing} />
+        {valueText || editing || hasText(label) || hasText(supportingText) ? (
           <div
             className={
               centered
@@ -128,16 +133,17 @@ export function ProgressBarRender({
           >
             <div className="min-w-0">
               {valueText ? <p className="text-section font-semibold tabular-nums">{valueText}</p> : null}
-              {label ? (
-                <p id={labelId} className="text-muted-foreground text-body-sm">
+              {editing || hasText(label) ? (
+                <p id={labelId} className="text-muted-foreground text-body-sm" {...placeholderProps(editing, "Label")}>
                   {label}
                 </p>
               ) : null}
             </div>
-            {supportingText ? (
+            {editing || hasText(supportingText) ? (
               <p
                 className="text-body-sm font-medium"
-                style={{ color: paint.text }}
+                {...placeholderProps(editing, "Supporting text (optional)")}
+                style={{ color: paint.text, ...placeholderProps(editing, "Supporting text (optional)").style }}
               >
                 {supportingText}
               </p>

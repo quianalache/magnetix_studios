@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
+import { CUSTOM_BRAND } from "@/config/landing";
+import { classifyTrackingSurface } from "@/lib/tracking/surfaces";
 
 /**
  * Site-wide analytics + support widget loaders. Skipped on /embed/* so
  * the web-chat iframe doesn't accidentally render Crisp's widget inside
  * itself (two overlapping chat widgets = visual chaos) and so we don't
  * fire spurious PageView events from inside an embedded chat.
+ *
+ * Magnetix's own Meta Pixel + GTM load ONLY on Magnetix-owned surfaces
+ * (Wave 3 owner decision — see `lib/tracking/surfaces.ts`): never on a
+ * tenant's public Page, Booking, Form, Quote, Community, portal… nor on a
+ * tenant custom domain. The decision needs the browser's host, so the
+ * trackers are only ever added after mount — nothing tracking-related is in
+ * the server-rendered HTML, and a tenant surface never gets them at all.
  *
  * Each tag is opt-in via its env var — leave unset to disable that tag
  * entirely (same as before; behavior on real pages is unchanged).
@@ -20,6 +29,15 @@ import { usePathname } from "next/navigation";
 export function AnalyticsScripts() {
   const pathname = usePathname();
   const isEmbed = pathname?.startsWith("/embed/") ?? false;
+  const [magnetixSurface, setMagnetixSurface] = useState(false);
+  useEffect(() => {
+    setMagnetixSurface(
+      classifyTrackingSurface(pathname ?? "/", window.location.host, {
+        appUrl: process.env.NEXT_PUBLIC_APP_URL,
+        primaryDomain: CUSTOM_BRAND.primaryDomain,
+      }) === "magnetix"
+    );
+  }, [pathname]);
 
   // Auto-open Crisp when ?chat=1 is in the URL. The afterInteractive
   // Crisp loader resets window.$crisp = [] on boot, so a push that fires
@@ -49,12 +67,12 @@ export function AnalyticsScripts() {
 
   return (
     <>
-      {process.env.NEXT_PUBLIC_GTM_ID && (
+      {magnetixSurface && process.env.NEXT_PUBLIC_GTM_ID && (
         <Script id="gtm-script" strategy="afterInteractive">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${process.env.NEXT_PUBLIC_GTM_ID}');`}
         </Script>
       )}
-      {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
+      {magnetixSurface && process.env.NEXT_PUBLIC_META_PIXEL_ID && (
         <Script id="meta-pixel" strategy="afterInteractive">
           {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${process.env.NEXT_PUBLIC_META_PIXEL_ID}');fbq('track','PageView');`}
         </Script>

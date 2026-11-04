@@ -65,6 +65,8 @@ import {
 import { createPopupEditorConfig } from "@/components/pages-funnels/puck/popup-editor-config";
 import { ActionFieldContext, type ActionFieldContextValue } from "@/components/pages-funnels/puck/action-field";
 import { PopupEditorContext } from "@/components/pages-funnels/puck/popup-edit-canvas";
+import { PageSettingsButton, type PageSettingsDialogProps } from "@/components/pages-funnels/puck/page-settings-dialog";
+import { resolvePageSettings, withPageSettings, type PageSettings } from "@/lib/pages-funnels/page-settings";
 import { applyPopupEditorChange, popupToEditorData } from "@/lib/pages-funnels/popup-editor";
 import { comparePopupCreationOrder, createDefaultPopup, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
 import {
@@ -180,6 +182,10 @@ export interface MagnetixPuckEditorShellProps {
   readingResult?: ReadingResultPageSettings | null;
   /** Human page-type label shown in the header ("Landing Page", "Reading Result Page"…). */
   pageTypeLabel?: string;
+  /** Whether a published copy exists (Revert draft to published needs one). */
+  hasPublishedCopy?: boolean;
+  /** Pre-Wave 3 flat SEO field — the Page Settings fallback for older trees. */
+  legacySeo?: { title?: string; description?: string; ogImage?: string } | null;
 }
 
 export function MagnetixPuckEditorShell({
@@ -197,6 +203,8 @@ export function MagnetixPuckEditorShell({
   publishedPopups: initialPublishedPopups = null,
   readingResult = null,
   pageTypeLabel,
+  hasPublishedCopy = false,
+  legacySeo = null,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
@@ -251,6 +259,8 @@ export function MagnetixPuckEditorShell({
   const [persistenceEnabled, setPersistenceEnabled] = useState(false);
 
   const {
+    suspend,
+    resume,
     saveState,
     saveError,
     saveDraft,
@@ -440,6 +450,74 @@ export function MagnetixPuckEditorShell({
     }
   }, [publish]);
 
+  // ── Page Settings (Wave 3) ──────────────────────────────────────────────
+  // Publishable settings live in the page's draft tree (`root.props.
+  // pageSettings`): reading them uses the latest draft, writing them goes
+  // through Puck so the change is an ordinary draft edit (autosave, undo,
+  // "Unpublished changes", Publish).
+  const legacySeoKey = JSON.stringify(legacySeo ?? null);
+  const readPageSettings = useCallback(
+    () => resolvePageSettings(latestDataRef.current as never, JSON.parse(legacySeoKey)),
+    [legacySeoKey]
+  );
+  const applyPageSettings = useCallback((settings: PageSettings) => {
+    const puck = getPuckRef.current?.();
+    if (!puck) {
+      toast.error("The editor isn't ready yet. Try again in a moment.");
+      return;
+    }
+    const next = withPageSettings(puck.appState.data, settings);
+    puck.dispatch({ type: "setData", data: { root: next.root } as Partial<Data> });
+  }, []);
+  const pageSettingsAction = useCallback(async (action: "unpublish" | "revert") => {
+    const res = await fetch("/api/pages-funnels/puck/page-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageId, action }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(json.error ?? "Something went wrong. Try again.");
+  }, [pageId]);
+  const handleUnpublish = useCallback(async () => {
+    try {
+      await pageSettingsAction("unpublish");
+      toast.success("Page unpublished");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't unpublish the page.");
+      return false;
+    }
+  }, [pageSettingsAction]);
+  const handleRevert = useCallback(async () => {
+    // No autosave may write the old draft back while the server replaces it.
+    await suspend();
+    try {
+      await pageSettingsAction("revert");
+    } catch (err) {
+      resume();
+      toast.error(err instanceof Error ? err.message : "Couldn't revert the draft.");
+      return false;
+    }
+    toast.success("Draft reverted to the published version");
+    // The editor holds the draft in memory; reload so it opens the reverted one.
+    window.setTimeout(() => window.location.reload(), 400);
+    return true;
+  }, [pageSettingsAction, suspend, resume]);
+  // Read by the header button through context, so a rename or unpublish
+  // (which changes these values) never rebuilds Puck's header overrides.
+  const pageSettingsValue = useMemo<PageSettingsDialogProps>(() => ({
+    pageId,
+    pageName,
+    liveUrl,
+    isReadingResult: readingResult != null,
+    isPublished: pageStatus === "published" && hasPublishedCopy,
+    hasPublishedCopy,
+    readSettings: readPageSettings,
+    applySettings: applyPageSettings,
+    onUnpublish: handleUnpublish,
+    onRevert: handleRevert,
+  }), [pageId, pageName, liveUrl, readingResult, pageStatus, hasPublishedCopy, readPageSettings, applyPageSettings, handleUnpublish, handleRevert]);
+
   /**
    * Live published-page link UX (real user QA blocker — Publish reported
    * success but gave no obvious way to open/copy the actual public page).
@@ -595,6 +673,7 @@ export function MagnetixPuckEditorShell({
             </DropdownMenu>
           </>
         )}
+        {!isPopupSurface && <PageSettingsHeaderButton />}
         <Button variant="outline" size="sm" onClick={openPreview}>
           <Eye className="h-4 w-4" /> Preview
         </Button>
@@ -672,6 +751,7 @@ export function MagnetixPuckEditorShell({
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col" data-editing-surface={isPopupSurface ? "popup" : "page"}>
       <div className="min-h-0 flex-1">
+        <PageSettingsContext.Provider value={pageSettingsValue}>
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
             <PublishStatusContext.Provider value={{ state: publishState, error: publishError }}>
@@ -699,6 +779,7 @@ export function MagnetixPuckEditorShell({
             </PublishStatusContext.Provider>
           </SaveStatusContext.Provider>
         </ReadingResultSettingsContext.Provider>
+        </PageSettingsContext.Provider>
       </div>
     </div>
   );
@@ -715,6 +796,12 @@ const POPUP_PLUGINS: Plugin[] = [
 ];
 
 /** Name of the Popup being edited, read by the header and Layers through context so `overrides` stay stable while it changes. */
+const PageSettingsContext = createContext<PageSettingsDialogProps | null>(null);
+function PageSettingsHeaderButton() {
+  const value = useContext(PageSettingsContext);
+  return value ? <PageSettingsButton {...value} /> : null;
+}
+
 const EditingPopupContext = createContext<{ name: string | null; onBackToPage: () => void }>({ name: null, onBackToPage: () => {} });
 
 function PopupHeaderContext() {
@@ -800,6 +887,9 @@ function PageStatusBadge({
   }
   if (puckPublishStatus === "published-outdated") {
     return <StatusPill tone="warning" className="shrink-0">Unpublished changes</StatusPill>;
+  }
+  if (puckPublishStatus === "unpublished") {
+    return <StatusPill tone="neutral" className="shrink-0">Unpublished</StatusPill>;
   }
   return <StatusPill tone="success" className="shrink-0">Published</StatusPill>;
 }

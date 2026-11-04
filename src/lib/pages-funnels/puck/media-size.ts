@@ -1,3 +1,4 @@
+import { clampFocalPoint } from "@/lib/pages-funnels/puck/background";
 import type { CSSProperties } from "react";
 import type {
   ImageSizeConfig,
@@ -41,7 +42,10 @@ export function resolveImageSizeStyle(
     // height simply has nothing to affect rather than needing to be
     // separately reset.
     if (size.objectFit) style.objectFit = size.objectFit;
-    if (size.objectPosition) style.objectPosition = size.objectPosition;
+    if (size.focalPoint) {
+      const { x, y } = clampFocalPoint(size.focalPoint);
+      style.objectPosition = `${x}% ${y}%`;
+    } else if (size.objectPosition) style.objectPosition = size.objectPosition;
   }
   return style;
 }

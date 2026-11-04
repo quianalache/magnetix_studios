@@ -6,6 +6,9 @@ import type { MetricFormatConfig } from "@/lib/pages-funnels/data-metrics/model"
 import type { MetricAccent } from "@/lib/pages-funnels/data-metrics/accent";
 import { PROGRESS_COLOR_NOTICE_TEXT, resolveProgressColor } from "@/lib/pages-funnels/data-metrics/progress-color";
 import type { BrandColor } from "@/types/brand-kit";
+import { hasText } from "@/lib/pages-funnels/pricing";
+import { InlinePlaceholderStyle, placeholderProps } from "@/components/pages-funnels/puck/inline-placeholder";
+
 import { formatChartValue } from "@/lib/pages-funnels/data-metrics/chart";
 import {
   RING_SIZE_PX,
@@ -25,8 +28,9 @@ export interface ProgressRingProps extends MetricFormatConfig {
   currentValue?: number | string;
   targetValue?: number | string;
   centerDisplay?: "percentage" | "value" | "none";
-  label?: string;
-  supportingText?: string;
+  /** Strings, or Puck inline-editor nodes in the builder (Wave 3). */
+  label?: import("react").ReactNode;
+  supportingText?: import("react").ReactNode;
   size?: RingSize;
   thickness?: ProgressThickness;
   alignment?: "left" | "center";
@@ -114,7 +118,7 @@ export function ProgressRingRender({
           aria-valuemax={state.target}
           aria-valuenow={state.ariaNow}
           aria-valuetext={progressAriaText(state, fmt)}
-          {...(label ? { "aria-labelledby": labelId } : { "aria-label": "Progress" })}
+          {...(hasText(label) ? { "aria-labelledby": labelId } : { "aria-label": "Progress" })}
           className="relative shrink-0"
           style={{ width: px, maxWidth: "100%", aspectRatio: "1 / 1" }}
         >
@@ -145,14 +149,15 @@ export function ProgressRingRender({
             </span>
           ) : null}
         </div>
-        {label || supportingText ? (
+        <InlinePlaceholderStyle editing={editing} />
+        {editing || hasText(label) || hasText(supportingText) ? (
           <div className="min-w-0">
-            {label ? (
-              <p id={labelId} className="text-title-md font-semibold">
+            {editing || hasText(label) ? (
+              <p id={labelId} className="text-title-md font-semibold" {...placeholderProps(editing, "Label")}>
                 {label}
               </p>
             ) : null}
-            {supportingText ? <p className="text-muted-foreground text-body mt-1">{supportingText}</p> : null}
+            {editing || hasText(supportingText) ? <p className="text-muted-foreground text-body mt-1" {...placeholderProps(editing, "Supporting text (optional)")}>{supportingText}</p> : null}
           </div>
         ) : null}
       </div>

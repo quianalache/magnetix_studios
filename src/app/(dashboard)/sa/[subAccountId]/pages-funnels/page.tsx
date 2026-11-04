@@ -260,7 +260,7 @@ function PageCard({
   // task). Never show/enable a live-link action for a page that's never
   // actually been published from either editor — master spec's explicit
   // "do not show a fake link for an unpublished page" requirement.
-  const hasLivePage = page.status === "published" || !!page.puckPublishedData;
+  const hasLivePage = page.status === "published" && !!page.puckPublishedData;
   const liveUrl = buildPublishedPageUrl({ subAccount, pageId: page.id });
 
   async function copyLiveLink() {

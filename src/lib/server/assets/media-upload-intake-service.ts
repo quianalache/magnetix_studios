@@ -57,7 +57,7 @@ interface IntakeDoc {
   sizeBytes: number;
   filename: string;
   title: string;
-  kind: "image" | "document";
+  kind: "image" | "document" | "audio";
   status: "pending" | "completed" | "failed";
   mediaAssetId: string | null;
   createdAt: unknown;

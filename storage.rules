@@ -143,7 +143,8 @@ service firebase.storage {
     // too large for the app server's request cap go browser → Storage into
     // a per-person intake folder. CREATE only — no read, overwrite or
     // delete — only into the signed-in person's own {uid} folder, capped at
-    // the Media Library's document limit, allowed types only. Nothing here
+    // the Media Library's document limit, allowed types only (audio added
+    // for the page builder's Audio block, Wave 3). Nothing here
     // is served: the server validates the object against its intake record,
     // moves it to the private media-library/ path and deletes it.
     match /media-uploads/{uid}/{intakeId}/{fileName} {
@@ -153,7 +154,7 @@ service firebase.storage {
         && request.resource.size > 0
         && request.resource.size <= 15 * 1024 * 1024
         && request.resource.contentType.matches(
-          '^(image/(jpeg|png|webp|gif)|application/pdf|application/msword|application/vnd[.]openxmlformats-officedocument[.](wordprocessingml[.]document|spreadsheetml[.]sheet|presentationml[.]presentation)|application/vnd[.]ms-(excel|powerpoint)|text/(csv|plain))$'
+          '^(image/(jpeg|png|webp|gif)|audio/(mpeg|mp4|x-m4a|aac|wav|x-wav|ogg|webm)|application/pdf|application/msword|application/vnd[.]openxmlformats-officedocument[.](wordprocessingml[.]document|spreadsheetml[.]sheet|presentationml[.]presentation)|application/vnd[.]ms-(excel|powerpoint)|text/(csv|plain))$'
         );
     }
 

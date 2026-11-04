@@ -24,6 +24,10 @@ import {
 import { findNavigationProblem } from "@/lib/pages-funnels/navigation";
 import { findBookingProblem } from "@/lib/pages-funnels/booking-block";
 import { findPricingProblem } from "@/lib/pages-funnels/pricing";
+import { findPageSettingsProblem } from "@/lib/pages-funnels/page-settings";
+import { findBackgroundProblem } from "@/lib/pages-funnels/puck/background";
+import { findColumnOrderProblem } from "@/lib/pages-funnels/puck/column-order";
+import { findWave3BlockProblem } from "@/lib/pages-funnels/puck/wave3-validation";
 import { findUnknownBlockTypes, findUnknownBlockTypesInPage, unknownBlocksSaveError } from "@/lib/pages-funnels/puck/known-blocks";
 
 /**
@@ -96,6 +100,14 @@ function preparePageWrite(
   if (bookingProblem) return { ok: false, error: bookingProblem, status: 400 };
   const pricingProblem = findPricingProblem(data);
   if (pricingProblem) return { ok: false, error: pricingProblem, status: 400 };
+  const settingsProblem = findPageSettingsProblem(data as never);
+  if (settingsProblem) return { ok: false, error: settingsProblem, status: 400 };
+  const backgroundIssue = findBackgroundProblem(data) ?? findBackgroundProblem(popups);
+  if (backgroundIssue) return { ok: false, error: backgroundIssue, status: 400 };
+  const columnOrderIssue = findColumnOrderProblem(data) ?? findColumnOrderProblem(popups);
+  if (columnOrderIssue) return { ok: false, error: columnOrderIssue, status: 400 };
+  const blockIssue = findWave3BlockProblem(data) ?? findWave3BlockProblem(popups);
+  if (blockIssue) return { ok: false, error: blockIssue, status: 400 };
 
   // Malformed Popups are refused, never silently dropped (dropping would delete them on save).
   const incoming = popups && typeof popups === "object" && !Array.isArray(popups) ? Object.keys(popups) : [];
@@ -238,4 +250,59 @@ export async function publishPuckPage(
     updatedAt: now,
   });
   return { ok: true };
+}
+
+// ── Page management (Wave 3 Page Settings) ──────────────────────────────────
+//
+// Page NAME is internal management metadata: it changes immediately and never
+// touches content, the page id, or the URL (public URLs are `/p/{id}`).
+// Unpublish and Revert act on the existing draft / published pair:
+//   - Unpublish flips `status` back to "draft". Both the draft and the
+//     published copies (content, popups, publishable Page Settings) are kept;
+//     the public route serves only `status === "published"`, so the page
+//     404s until it's published again. Publishing again is the ordinary
+//     Publish (the current draft becomes the live page).
+//   - Revert copies the published content AND published popups back over the
+//     draft in one transaction — Page Settings live inside the content tree,
+//     so they revert with it. The published copy is untouched.
+
+export async function renamePuckPage(subAccountId: string, pageId: string, name: string): Promise<PuckPersistenceResult> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return owned;
+  await owned.ref.update({ name, updatedAt: FieldValue.serverTimestamp() });
+  return { ok: true };
+}
+
+export async function unpublishPuckPage(subAccountId: string, pageId: string): Promise<PuckPersistenceResult> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return owned;
+  if (owned.doc.status !== "published") {
+    return { ok: false, error: "This page isn't published.", status: 409 };
+  }
+  await owned.ref.update({ status: "draft", unpublishedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  return { ok: true };
+}
+
+export async function revertPuckDraftToPublished(subAccountId: string, pageId: string): Promise<PuckPersistenceResult> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return owned;
+  return getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(owned.ref);
+    const doc = snap.data() as Record<string, unknown> | undefined;
+    if (!doc || doc.subAccountId !== subAccountId) return { ok: false, error: "Page not found", status: 404 } as const;
+    if (doc.puckPublishedData == null) {
+      return { ok: false, error: "This page has never been published, so there's nothing to revert to.", status: 409 } as const;
+    }
+    const unknown = findUnknownBlockTypesInPage(doc);
+    if (unknown.length) return { ok: false, error: unknownBlocksSaveError(unknown), status: 409 } as const;
+    tx.update(owned.ref, {
+      puckDraftData: doc.puckPublishedData,
+      puckDraftPopups: doc.puckPublishedPopups ?? {},
+      // The draft now equals the published copy: same timestamp, so the
+      // builder shows "Published" (not "Unpublished changes").
+      puckDraftUpdatedAt: doc.puckPublishedAt ?? null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { ok: true } as const;
+  });
 }

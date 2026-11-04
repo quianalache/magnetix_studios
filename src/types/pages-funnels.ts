@@ -290,6 +290,8 @@ export interface PageDoc {
   createdAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
   publishedAt: Timestamp | FieldValue | null;
+  /** Set when the page was last unpublished (Wave 3 Page Settings). */
+  unpublishedAt?: Timestamp | FieldValue | null;
   /**
    * Puck persistence (Puck Persistence + Publish Foundation task, master
    * spec §24.12). Entirely additive — every field below is optional and

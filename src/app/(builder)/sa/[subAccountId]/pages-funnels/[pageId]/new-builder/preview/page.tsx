@@ -15,6 +15,8 @@ import { collectActionTargets } from "@/lib/pages-funnels/puck/action";
 import { collectBookingSlugs } from "@/lib/pages-funnels/booking-block";
 import type { ResolvedActionTargets } from "@/types/pages-funnels-puck";
 import { getPage } from "@/lib/firestore/pages-funnels";
+import { resolvePageSettings } from "@/lib/pages-funnels/page-settings";
+import { collectMediaVideoIds } from "@/lib/pages-funnels/puck/media-video";
 import { readReadingPreviewHandoff } from "@/lib/energetic-decoder/reading-preview-handoff";
 import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext } from "@/types/reading-blocks";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
@@ -119,6 +121,13 @@ export default function NewBuilderPreviewPage({
         }
       }
 
+      // Preview shows the DRAFT Page Settings where meaningful: the tab
+      // title. Tenant tracking never loads here (only the live page has it).
+      if (!cancelled) {
+        const settings = resolvePageSettings(data as never, page?.seo);
+        document.title = `Preview · ${settings.seoTitle.trim() || page?.name || "Page"}`;
+      }
+
       let readingContext: ReadingBlockContext | null | undefined;
       if (page?.pageType === "reading_result") {
         const offerIds = collectPuckFeaturedOfferIds(data);
@@ -196,6 +205,14 @@ export default function NewBuilderPreviewPage({
         resolvedBookings = res?.ok ? (((await res.json()) as { bookings?: typeof resolvedBookings }).bookings ?? {}) : {};
       }
 
+      // Media Library videos (Wave 3): playback URLs minted for this preview.
+      const videoIds = collectMediaVideoIds(data, previewPopups);
+      let resolvedVideos: NonNullable<PuckPageMetadata["resolvedVideos"]> = {};
+      if (videoIds.length) {
+        const res = await fetch(`/api/pages-funnels/puck/resolve-media?pageId=${encodeURIComponent(pageId)}&videos=${encodeURIComponent(videoIds.join(","))}`).catch(() => null);
+        resolvedVideos = res?.ok ? (((await res.json()) as { videos?: typeof resolvedVideos }).videos ?? {}) : {};
+      }
+
       if (cancelled) return;
       setState({
         status: "ready",
@@ -207,6 +224,7 @@ export default function NewBuilderPreviewPage({
           resolvedOffers,
           resolvedActions,
           resolvedBookings,
+          resolvedVideos,
           pageId,
           ...(readingContext !== undefined
             ? {

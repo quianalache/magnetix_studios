@@ -22,7 +22,7 @@ import type { PageDoc } from "@/types/pages-funnels";
  *   but the draft has been edited/saved since — the public page is still
  *   showing the OLDER published snapshot, not these newer changes.
  */
-export type PuckPublishStatus = "v1-only" | "published" | "published-outdated";
+export type PuckPublishStatus = "v1-only" | "published" | "published-outdated" | "unpublished";
 
 function toMillis(
   value: Timestamp | FieldValue | null | undefined
@@ -42,9 +42,11 @@ export function derivePuckPublishStatus(
   page: Pick<
     PageDoc,
     "puckPublishedData" | "puckPublishedAt" | "puckDraftUpdatedAt"
-  >
+  > & { status?: PageDoc["status"] }
 ): PuckPublishStatus {
   if (!page.puckPublishedData) return "v1-only";
+  // Unpublished (Wave 3): a published copy exists but the page is offline.
+  if (page.status !== undefined && page.status !== "published") return "unpublished";
 
   const publishedMs = toMillis(page.puckPublishedAt);
   const draftMs = toMillis(page.puckDraftUpdatedAt);

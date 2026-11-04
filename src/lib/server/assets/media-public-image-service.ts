@@ -8,6 +8,7 @@ import {
   classifyUpload,
   kindOf,
   loadTenantAsset,
+  looksLikeAudio,
   looksLikeImage,
   mediaBucketName,
   mediaCollection,
@@ -45,14 +46,28 @@ function publicDownloadUrl(bucket: string, key: string, token: string) {
   return `${base}/v0/b/${bucket}/o/${encodeURIComponent(key)}?alt=media&token=${token}`;
 }
 
-function assertPublishable(a: MediaAsset) {
-  if (kindOf(a) !== "image" || classifyUpload(a.storage.mimeType) !== "image") {
-    throw new MediaLibraryError("Only images can be made public.", 400);
-  }
+/**
+ * Images, and (Wave 3) audio files for the page builder's Audio block, can
+ * get one explicit public copy. Documents and videos never can (videos use
+ * replay links / signed playback instead). The copy is recorded in the same
+ * `publicImage` field for both kinds — the name predates audio.
+ */
+function publishableKind(a: MediaAsset): "image" | "audio" {
+  const kind = kindOf(a);
+  const upload = classifyUpload(a.storage.mimeType);
+  if (kind === "image" && upload === "image") return "image";
+  if (kind === "audio" && upload === "audio") return "audio";
+  throw new MediaLibraryError("Only images and audio files can be made public.", 400);
+}
+
+function assertPublishable(a: MediaAsset): "image" | "audio" {
+  const kind = publishableKind(a);
+  const noun = kind === "audio" ? "audio file" : "image";
   if (a.storage.provider !== "firebase" || !a.storage.key) {
-    throw new MediaLibraryError("This image isn't stored in the Media Library.", 400);
+    throw new MediaLibraryError(`This ${noun} isn't stored in the Media Library.`, 400);
   }
-  if (a.status !== "ready") throw new MediaLibraryError("This image isn't ready yet.", 409);
+  if (a.status !== "ready") throw new MediaLibraryError(`This ${noun} isn't ready yet.`, 409);
+  return kind;
 }
 
 /**
@@ -66,17 +81,24 @@ export async function ensurePublicImage(
   isAdmin: boolean
 ): Promise<{ url: string; created: boolean }> {
   const a = await loadTenantAsset(t, assetId);
-  assertPublishable(a);
+  const kind = assertPublishable(a);
   if (a.publicImage?.url) return { url: a.publicImage.url, created: false };
   if (!isAdmin) {
-    throw new MediaLibraryError("This image is private. Ask a sub-account admin to make it public for use on pages and emails.", 403);
+    throw new MediaLibraryError(
+      kind === "audio"
+        ? "This audio file is private. Ask a sub-account admin to make it public for use on pages."
+        : "This image is private. Ask a sub-account admin to make it public for use on pages and emails.",
+      403
+    );
   }
 
   const bucketName = mediaBucketName();
   const bucket = getStorage().bucket(bucketName);
   const [bytes] = await bucket.file(a.storage.key).download();
-  if (!looksLikeImage(bytes, a.storage.mimeType)) throw new MediaLibraryError("That file isn't a valid image.", 400);
-  const ext = (a.storage.key.split(".").pop() || "img").replace(/[^a-z0-9]/gi, "").slice(0, 8) || "img";
+  if (kind === "image" ? !looksLikeImage(bytes, a.storage.mimeType) : !looksLikeAudio(bytes, a.storage.mimeType)) {
+    throw new MediaLibraryError(kind === "audio" ? "That file isn't a valid audio file." : "That file isn't a valid image.", 400);
+  }
+  const ext = (a.storage.key.split(".").pop() || "bin").replace(/[^a-z0-9]/gi, "").slice(0, 8) || "bin";
   const key = `media-public/${t.subAccountId}/${a.id}/${randomUUID()}.${ext}`;
   const token = randomUUID();
   await bucket.file(key).save(bytes, {

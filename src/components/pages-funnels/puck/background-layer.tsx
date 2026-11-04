@@ -1,6 +1,9 @@
 import { cn } from "@/lib/utils";
 import type { BackgroundConfig } from "@/types/pages-funnels-puck";
-import { backgroundCssValue } from "@/lib/pages-funnels/puck/background";
+import { backgroundCssValue, backgroundOverlay } from "@/lib/pages-funnels/puck/background";
+import { resolveNavColor } from "@/lib/pages-funnels/navigation";
+
+export type BrandKitColors = readonly { id: string; hex: string }[] | undefined;
 
 /**
  * The ONE shared background rendering primitive — Section, Row, and Column
@@ -28,28 +31,45 @@ import { backgroundCssValue } from "@/lib/pages-funnels/puck/background";
  */
 export function BackgroundLayer({
   background,
+  brandKit,
 }: {
   background: BackgroundConfig | undefined;
+  /** The page's Brand colors — resolves a Brand-color overlay (Wave 3). */
+  brandKit?: BrandKitColors;
 }) {
   const value = backgroundCssValue(background);
   const blurEnabled =
     !!background?.blur?.enabled && background.blur.intensity > 0;
+  // Image overlay (Wave 3): a separate, un-blurred tint layer above the image
+  // and below the content, so text stays crisp and readable.
+  const overlay = backgroundOverlay(background, (setting) => resolveNavColor(setting, brandKit));
 
   if (!value && !blurEnabled) return null;
 
   return (
-    <div
-      aria-hidden
-      className={cn(
-        "pointer-events-none absolute",
-        blurEnabled ? "-inset-6" : "inset-0"
+    <>
+      <div
+        aria-hidden
+        data-background-layer=""
+        className={cn(
+          "pointer-events-none absolute",
+          blurEnabled ? "-inset-6" : "inset-0"
+        )}
+        style={{
+          background: value,
+          filter: blurEnabled
+            ? `blur(${background!.blur.intensity}px)`
+            : undefined,
+        }}
+      />
+      {overlay && (
+        <div
+          aria-hidden
+          data-background-overlay=""
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundColor: overlay.color, opacity: overlay.opacity }}
+        />
       )}
-      style={{
-        background: value,
-        filter: blurEnabled
-          ? `blur(${background!.blur.intensity}px)`
-          : undefined,
-      }}
-    />
+    </>
   );
 }

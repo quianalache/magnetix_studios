@@ -101,9 +101,8 @@ function splitFieldsByGroup(
  * General/Styles/Animations organization (master spec §24.2): the header
  * is unchanged; below it, Puck's own real field inputs (never modified,
  * never duplicated) are split into General and Styles tabs via
- * `splitFieldsByGroup` above, with a third Animations tab that's honestly
- * empty this task (System A explicitly excludes animation controls — see
- * §21 of the animations spec section). Uses the public `createUsePuck()`
+ * `splitFieldsByGroup` above. (The empty "Animations — coming soon" tab
+ * was removed in Wave 3: animations aren't built, so no dead tab.) Uses the public `createUsePuck()`
  * hook (`selectedItem`) exactly as Phase 2B already did — see that
  * function's own doc history for why `createUsePuck()` over the bare
  * `usePuck()`.
@@ -121,7 +120,7 @@ export function MagnetixSettingsPanel({ children, popupMode = false }: { childre
   // See `lastActiveSettingsTab`'s doc comment: seed from module state (not
   // a hardcoded "general") so a Puck-triggered remount of this component
   // reproduces the user's last tab choice instead of silently resetting it.
-  const [activeTab, setActiveTab] = useState(lastActiveSettingsTab);
+  const [activeTab, setActiveTab] = useState(lastActiveSettingsTab === "styles" ? "styles" : "general");
 
   return (
     <div className="flex h-full flex-col">
@@ -148,7 +147,7 @@ export function MagnetixSettingsPanel({ children, popupMode = false }: { childre
           <EmptyTabNote>
             {popupMode
               ? "Select a block inside the popup to edit it. Click the popup frame (or its layer) to come back here."
-              : <>Select a block on the canvas to edit it. The page&rsquo;s name, address and SEO are in Pages &amp; Funnels.</>}
+              : <>Select a block on the canvas to edit it. The page&rsquo;s name, SEO, social preview and tracking are in Page settings (top bar).</>}
           </EmptyTabNote>
         </div>
       ) : groups ? (
@@ -164,7 +163,6 @@ export function MagnetixSettingsPanel({ children, popupMode = false }: { childre
           <TabsList className="mx-4 mt-3 self-start">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="styles">Styles</TabsTrigger>
-            <TabsTrigger value="animations">Animations</TabsTrigger>
           </TabsList>
           <TabsContent
             value="general"
@@ -185,14 +183,6 @@ export function MagnetixSettingsPanel({ children, popupMode = false }: { childre
             ) : (
               <EmptyTabNote>This element has no style controls.</EmptyTabNote>
             )}
-          </TabsContent>
-          <TabsContent
-            value="animations"
-            className="min-h-0 flex-1 overflow-y-auto"
-          >
-            <EmptyTabNote>
-              Animations are coming soon.
-            </EmptyTabNote>
           </TabsContent>
         </Tabs>
       ) : (

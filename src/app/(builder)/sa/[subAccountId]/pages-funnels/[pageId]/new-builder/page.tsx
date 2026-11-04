@@ -134,7 +134,7 @@ export default function NewBuilderPage({
   // real Publish click writes `puckPublishedData`/`status` — no extra
   // plumbing needed for "View Live Page appears right after Publish."
   const hasLivePage =
-    !!page && (page.status === "published" || !!page.puckPublishedData);
+    !!page && page.status === "published" && !!page.puckPublishedData;
   const liveUrl = useMemo(
     () => buildPublishedPageUrl({ subAccount, pageId }),
     [subAccount, pageId]
@@ -175,6 +175,8 @@ export default function NewBuilderPage({
       backHref={saPath("/pages-funnels")}
       previewHref={saPath(`/pages-funnels/${page.id}/new-builder/preview`)}
       hasLivePage={hasLivePage}
+      hasPublishedCopy={page.puckPublishedData != null}
+      legacySeo={page.seo ?? null}
       liveUrl={liveUrl}
       initialData={initialData}
       initialPopups={normalizePopupMap(page.puckDraftPopups)}

@@ -93,35 +93,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} ${dmSerifDisplay.variable} antialiased`}
       >
-        {process.env.NEXT_PUBLIC_GTM_ID && (
-          <noscript>
-            <iframe
-              src={`https://www.googletagmanager.com/ns.html?id=${process.env.NEXT_PUBLIC_GTM_ID}`}
-              height="0"
-              width="0"
-              style={{ display: "none", visibility: "hidden" }}
-            />
-          </noscript>
-        )}
         <Providers>{children}</Providers>
         <SwRegister />
         <PwaLinks />
         <RefTracker />
-        {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
-          <noscript>
-            {/* Meta Pixel no-JS fallback — must be a bare <img> tag.
-                next/image requires client JS and can't run inside <noscript>,
-                which is the entire reason this fallback exists. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              height="1"
-              width="1"
-              style={{ display: "none" }}
-              alt=""
-              src={`https://www.facebook.com/tr?id=${process.env.NEXT_PUBLIC_META_PIXEL_ID}&ev=PageView&noscript=1`}
-            />
-          </noscript>
-        )}
+        {/* Magnetix GTM / Meta Pixel load only on Magnetix-owned surfaces —
+            see AnalyticsScripts and MagnetixNoscriptTracking. */}
         <AnalyticsScripts />
       </body>
     </html>
