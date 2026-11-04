@@ -32,7 +32,7 @@ const requiredDataMetrics = [
   "ProgressRing",
   "Chart",
 ] as const;
-const requiredBusiness = ["Booking", "Testimonial", "Countdown", "OfferSummary"] as const;
+const requiredBusiness = ["Booking", "PricingComparison", "Testimonial", "Countdown", "OfferSummary"] as const;
 
 for (const name of requiredElements) {
   assert.ok(elements.includes(name), `elements category is missing ${name}`);
@@ -64,5 +64,5 @@ assert.deepEqual(
 );
 
 console.log(
-  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics + Navigation + Booking)`
+  `PASS: client New Builder registry exposes ${requiredElements.length + requiredDataMetrics.length + requiredBusiness.length} native blocks (Wave 1 + Data & Metrics + Navigation + Booking + Pricing)`
 );

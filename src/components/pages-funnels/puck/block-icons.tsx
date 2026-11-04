@@ -2,6 +2,7 @@ import {
   LayoutPanelTop,
   PanelTop,
   CalendarClock,
+  Columns4,
   Rows3,
   Columns3,
   Heading as HeadingIcon,
@@ -77,6 +78,7 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   Hero: GalleryHorizontal,
   Form: FileText,
   Booking: CalendarClock,
+  PricingComparison: Columns4,
   ReadingTool: Sparkles,
   // Reading Result Page blocks (2026-10-21)
   HumanDesignChart: Hexagon,

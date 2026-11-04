@@ -566,7 +566,7 @@ export function NavigationStyleFieldEditor({ value, onChange }: { value: unknown
 }
 
 /** Default · Brand color · Custom — the existing Brand Colors controls; no other palette is offered. */
-function NavColorField({ label, value, onChange, defaultLabel }: { label: string; value: NavColorSetting; onChange: (v: NavColorSetting) => void; defaultLabel: string }) {
+export function NavColorField({ label, value, onChange, defaultLabel }: { label: string; value: NavColorSetting; onChange: (v: NavColorSetting) => void; defaultLabel: string }) {
   const brand = useBrandColors();
   const setting = normalizeNavColor(value);
   const options = [

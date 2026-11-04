@@ -22,7 +22,7 @@ export const KNOWN_PUCK_BLOCK_TYPES = [
   "AstrologyPlacements", "AtAGlance", "Booking", "Button", "Centers", "Channels", "Chart", "Column", "Countdown",
   "CustomHtml", "Divider", "FeaturedOffer", "Form", "Gates", "GeneKeys", "Heading", "Hero", "HumanDesignChart",
   "Icon", "Image", "ImageGallery", "ImageSlider", "LogoStrip", "Mandala", "MandalaActivations", "MyMagnetixButton",
-  "Navigation", "OfferSummary", "PdfButton", "ProgressBar", "ProgressRing", "ReadingReportButton", "ReadingTool",
+  "Navigation", "OfferSummary", "PdfButton", "PricingComparison", "ProgressBar", "ProgressRing", "ReadingReportButton", "ReadingTool",
   "RichText", "Row", "Section", "Skills", "Spacer", "Stats", "Tabs", "Testimonial", "Text", "Variables", "Video",
 ] as const;
 

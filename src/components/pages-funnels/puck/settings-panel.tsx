@@ -22,7 +22,7 @@ const useTypedPuck = createUsePuck();
  * special-case each component type — a field belongs under "Styles" if
  * (and only if) its name is one of these three, everywhere.
  */
-const STYLE_FIELD_NAMES = new Set(["style", "styleConfig", "background", "navStyle"]);
+const STYLE_FIELD_NAMES = new Set(["style", "styleConfig", "background", "navStyle", "pricingStyle"]);
 
 /**
  * Persisted OUTSIDE React's fiber tree entirely (module scope), not in

@@ -158,6 +158,11 @@ export function collectActionTargets(data: unknown): { pageIds: string[]; offerI
       addTarget((props.cta as { action?: unknown } | null | undefined)?.action);
       return;
     }
+    // Pricing / Comparison (Wave 2C): each card's button.
+    if (n.type === "PricingComparison") {
+      for (const card of Array.isArray(props.cards) ? props.cards : []) addTarget((card as { action?: unknown } | null)?.action);
+      return;
+    }
     for (const value of Object.values(props)) if (Array.isArray(value)) value.forEach(visit);
   };
   const d = data as { content?: unknown; zones?: Record<string, unknown> } | null;

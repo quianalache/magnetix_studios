@@ -92,6 +92,17 @@ import {
 import { LogoSizeFieldEditor } from "@/components/pages-funnels/puck/logo-size-field";
 import { LOGO_HEIGHT_DEFAULT } from "@/lib/pages-funnels/puck/logo";
 import { NavigationRender } from "@/components/pages-funnels/puck/navigation-block";
+import { PricingComparisonRender } from "@/components/pages-funnels/puck/pricing-block";
+import { PricingStyleFieldEditor } from "@/components/pages-funnels/puck/pricing-fields";
+import {
+  NEW_PRICING_CARD,
+  PRICE_MODES,
+  PRICE_MODE_LABELS,
+  defaultPricingProps,
+  plainText,
+  syncPricingProps,
+  type PricingStyle,
+} from "@/lib/pages-funnels/pricing";
 import {
   NavigationAriaLabelFieldEditor,
   NavigationCtaFieldEditor,
@@ -655,6 +666,95 @@ const bookingButtonField: CustomField<BookingButton> = {
 };
 const bookingStyleField = makeStyleField({ spacing: true, responsive: true, visibility: true });
 
+/**
+ * Pricing / Comparison (Wave 2C). Native Puck array fields (add, reorder,
+ * duplicate, delete come built in); every visible text is a `contentEditable`
+ * field, so it can be typed on the canvas and the settings rail edits the SAME
+ * draft value. Presentation only — no Offer source; the button is the shared
+ * Action field.
+ */
+const pricingText = (label: string) => ({ type: "text" as const, label, contentEditable: true });
+const pricingArea = (label: string) => ({ type: "textarea" as const, label, contentEditable: true });
+const pricingCardsField = {
+  type: "array" as const,
+  label: "Cards",
+  max: 8,
+  getItemSummary: (card: { title?: unknown }, index?: number) => plainText(card?.title) || `Card ${(index ?? 0) + 1}`,
+  defaultItemProps: NEW_PRICING_CARD,
+  arrayFields: {
+    title: pricingText("Title"),
+    description: pricingArea("Description"),
+    featured: { type: "radio" as const, label: "Featured", options: [{ label: "No", value: false }, { label: "Yes", value: true }] },
+    badge: pricingText("Badge (e.g. Most popular, Save 20%)"),
+    priceMode: { type: "select" as const, label: "Price display", options: PRICE_MODES.map((value) => ({ label: PRICE_MODE_LABELS[value], value })) },
+    price: pricingText("Price"),
+    priceTo: pricingText("Up to (Range)"),
+    period: pricingText("Per (Subscription: month · Per unit: seat)"),
+    customPrice: pricingText("Price text (Free / Custom)"),
+    previousPrice: pricingText("Previous price"),
+    billingLabel: pricingText("Billing label (e.g. Billed monthly)"),
+    pricingCaption: pricingText("Pricing caption"),
+    items: {
+      type: "array" as const,
+      label: "List items",
+      max: 20,
+      getItemSummary: (it: { text?: unknown }, index?: number) => plainText(it?.text) || `Item ${(index ?? 0) + 1}`,
+      defaultItemProps: { text: "New item" },
+      arrayFields: { text: pricingText("Item") },
+    },
+    ctaLabel: pricingText("Button label"),
+    action: actionField,
+    ctaStyle: {
+      type: "select" as const,
+      label: "Button style",
+      options: [
+        { label: "Primary", value: "primary" },
+        { label: "Secondary", value: "secondary" },
+        { label: "Outline", value: "outline" },
+      ],
+    },
+    ctaCaption: pricingText("Button caption"),
+  },
+};
+const pricingRowsField = {
+  type: "array" as const,
+  label: "Comparison rows",
+  max: 30,
+  getItemSummary: (row: { label?: unknown }, index?: number) => plainText(row?.label) || `Row ${(index ?? 0) + 1}`,
+  defaultItemProps: { label: "New row", cells: [] },
+  arrayFields: {
+    label: pricingText("Row label"),
+    cells: {
+      type: "array" as const,
+      label: "Values (one per card, in card order)",
+      getItemSummary: (cell: { kind?: string; text?: unknown }, index?: number) =>
+        `Card ${(index ?? 0) + 1}: ${cell?.kind === "included" ? "Included" : cell?.kind === "excluded" ? "Not included" : plainText(cell?.text) || "—"}`,
+      arrayFields: {
+        kind: {
+          type: "select" as const,
+          label: "Value",
+          options: [
+            { label: "Text", value: "text" },
+            { label: "Included", value: "included" },
+            { label: "Not included", value: "excluded" },
+          ],
+        },
+        text: pricingText("Text"),
+      },
+    },
+  },
+};
+const pricingStyleField: CustomField<PricingStyle> = {
+  type: "custom",
+  label: "Card style",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Card style">
+      <PricingStyleFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const pricingBlockStyleField = makeStyleField({ spacing: true, responsive: true, visibility: true });
+
 const offerSummaryField: CustomField<string> = {
   type: "custom",
   label: "Offer",
@@ -785,6 +885,7 @@ export function createPuckConfig(
         components: [
           "Form",
           "Booking",
+          "PricingComparison",
           "ReadingTool",
           "Testimonial",
           "Countdown",
@@ -1059,6 +1160,7 @@ export function createPuckConfig(
               "Accordion",
               "Form",
               "Booking",
+              "PricingComparison",
               "ReadingTool",
               "CustomHtml",
               ...ALL_READING_COMPONENT_NAMES,
@@ -1202,7 +1304,8 @@ export function createPuckConfig(
       Button: {
         label: "Button",
         fields: {
-          text: { type: "text", label: "Button Text" },
+          // Inline-editable on the canvas (2026-11-04); the builder button has no link, so clicking edits, never navigates.
+          text: { type: "text", label: "Button Text", contentEditable: true },
           action: actionField,
           style: {
             type: "select",
@@ -1947,6 +2050,50 @@ export function createPuckConfig(
           />
         ),
       },
+      // Pricing / Comparison (Wave 2C) — presentation-only pricing cards and
+      // a generic comparison table; see lib/pages-funnels/pricing.ts.
+      PricingComparison: {
+        label: "Pricing / Comparison",
+        fields: {
+          heading: pricingArea("Heading"),
+          subheading: pricingArea("Subheading"),
+          layout: {
+            type: "radio",
+            label: "Layout",
+            options: [
+              { label: "Grid", value: "grid" },
+              { label: "Carousel", value: "carousel" },
+              { label: "Comparison table", value: "table" },
+            ],
+          },
+          cards: pricingCardsField,
+          tableLabel: pricingText("First column heading"),
+          rows: pricingRowsField,
+          pricingStyle: pricingStyleField,
+          style: pricingBlockStyleField,
+        },
+        defaultProps: { ...defaultPricingProps(), style: DEFAULT_STYLE_CONFIG },
+        // Comparison rows only show in the table layout (their data is kept either way).
+        resolveFields: (data, { fields }) => {
+          if (data.props.layout === "table") return fields;
+          return Object.fromEntries(Object.entries(fields).filter(([key]) => key !== "tableLabel" && key !== "rows")) as typeof fields;
+        },
+        // Stable ids + one comparison cell per card; returns the same props when nothing needs fixing.
+        resolveData: ({ props }) => {
+          const next = syncPricingProps(props as Record<string, unknown>);
+          return next === props ? { props } : { props: next as typeof props };
+        },
+        render: ({ id, puck, ...props }) => (
+          <PricingComparisonRender
+            id={id}
+            {...props}
+            editing={puck.isEditing}
+            resolved={(puck.metadata as PuckPageMetadata | undefined)?.resolvedActions}
+            brandKit={(puck.metadata as PuckPageMetadata | undefined)?.brandKit}
+          />
+        ),
+      },
+
       OfferSummary: {
         label: "Pricing / Offer Summary",
         fields: {

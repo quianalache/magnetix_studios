@@ -221,7 +221,8 @@ export function ButtonRender({
   editing = false,
 }: {
   id: string;
-  text: string;
+  /** A string, or Puck's inline editor node in the builder (`contentEditable`). */
+  text: ReactNode;
   action: PageAction;
   /** Page/Offer/section targets resolved for this page (metadata.resolvedActions). */
   resolved?: ResolvedActionTargets;

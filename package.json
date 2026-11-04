@@ -19,6 +19,7 @@
     "check:popup-rendering": "tsx scripts/check-popup-rendering.ts",
     "check:popup-actions": "tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-popup-actions.ts",
     "check:popup-triggers": "tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-popup-triggers.ts",
+    "check:pricing": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-pricing.ts",
     "check:unknown-blocks": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-unknown-blocks.ts",
     "check:booking-destination": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-booking-destination.ts",
     "check:booking": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-booking-block.ts",

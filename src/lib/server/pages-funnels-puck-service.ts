@@ -23,6 +23,7 @@ import {
 } from "@/lib/pages-funnels/popup-content";
 import { findNavigationProblem } from "@/lib/pages-funnels/navigation";
 import { findBookingProblem } from "@/lib/pages-funnels/booking-block";
+import { findPricingProblem } from "@/lib/pages-funnels/pricing";
 import { findUnknownBlockTypes, findUnknownBlockTypesInPage, unknownBlocksSaveError } from "@/lib/pages-funnels/puck/known-blocks";
 
 /**
@@ -93,6 +94,8 @@ function preparePageWrite(
   if (navigationProblem) return { ok: false, error: navigationProblem, status: 400 };
   const bookingProblem = findBookingProblem(data);
   if (bookingProblem) return { ok: false, error: bookingProblem, status: 400 };
+  const pricingProblem = findPricingProblem(data);
+  if (pricingProblem) return { ok: false, error: pricingProblem, status: 400 };
 
   // Malformed Popups are refused, never silently dropped (dropping would delete them on save).
   const incoming = popups && typeof popups === "object" && !Array.isArray(popups) ? Object.keys(popups) : [];
