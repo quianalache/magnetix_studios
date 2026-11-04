@@ -50,9 +50,15 @@ const PLACEHOLDERS: Record<string, string> = {
   period: "per…",
   tableLabel: "First column heading",
 };
-const PLACEHOLDER_CSS = Object.entries(PLACEHOLDERS)
-  .map(([key, label]) => `[data-pricing-block] [data-pricing-field="${key}"] [contenteditable]:empty::before{content:"${label}";opacity:.45;font-weight:400}`)
-  .join("");
+/** Free / Custom price text left empty shows its default label — at full weight, exactly as visitors see it. */
+const DEFAULT_PRICE_LABEL: Record<"free" | "custom", string> = { free: "Free", custom: "Let’s talk" };
+const PLACEHOLDER_CSS =
+  Object.entries(PLACEHOLDERS)
+    .map(([key, label]) => `[data-pricing-block] [data-pricing-field="${key}"] [contenteditable]:empty::before{content:"${label}";opacity:.45;font-weight:400}`)
+    .join("") +
+  Object.entries(DEFAULT_PRICE_LABEL)
+    .map(([mode, label]) => `[data-pricing-block] [data-price-default="${mode}"] [contenteditable]:empty::before{content:"${label}"}`)
+    .join("");
 
 export function PricingComparisonRender({ id, style, editing = false, resolved, brandKit, ...raw }: PricingRenderProps) {
   const p = normalizePricing(raw);
@@ -151,10 +157,16 @@ export function PricingComparisonRender({ id, style, editing = false, resolved, 
 /** The price line for a card, by its display mode. Labels like "From" and "/" are layout, not copy. */
 function PriceDisplay({ card, editing }: { card: PricingCard; editing: boolean }) {
   const mode = card.priceMode;
+  // Free / Custom: the owner's text, else the default label. In the builder the
+  // (empty) inline editor stays so it can be typed into, showing the default.
   const main =
-    mode === "free" ? (show(card.customPrice, editing) ? card.customPrice : "Free")
-    : mode === "custom" ? (show(card.customPrice, editing) ? card.customPrice : "Let’s talk")
-    : card.price;
+    mode === "free" || mode === "custom"
+      ? hasText(card.customPrice)
+        ? card.customPrice
+        : editing
+          ? <span data-price-default={mode}>{card.customPrice}</span>
+          : DEFAULT_PRICE_LABEL[mode]
+      : card.price;
   const per = mode === "subscription" || mode === "perUnit" ? card.period : null;
   return (
     <div className="flex flex-col gap-1" data-pricing-field="price" data-price-mode={mode}>

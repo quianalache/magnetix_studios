@@ -124,6 +124,15 @@ async function offline() {
     assert.match(priceText("custom"), /Let’s talk/);
     assert.match(priceText("custom", { customPrice: "Request a quote" }), /Request a quote/);
   });
+  await check("builder: empty Free / Custom text keeps the inline editor and shows the default label (as visitors see it)", () => {
+    const node = h("span", { contentEditable: "plaintext-only", value: "" } as Record<string, unknown>);
+    for (const [mode, label] of [["free", "Free"], ["custom", "Let’s talk"]] as const) {
+      const out = html(withCard(0, { priceMode: mode, customPrice: node }), { editing: true });
+      assert.match(out, new RegExp(`data-price-default="${mode}"`));
+      assert.ok(out.includes(`[data-price-default="${mode}"] [contenteditable]:empty::before{content:"${label}"}`), mode);
+    }
+    assert.ok(!html(withCard(0, { priceMode: "free", customPrice: "" })).includes("data-price-default"), "public renders the plain label");
+  });
   await check("every price mode renders without errors", () => {
     for (const mode of PRICE_MODES) assert.doesNotThrow(() => html(withCard(0, { priceMode: mode })));
   });
