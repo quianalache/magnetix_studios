@@ -1,5 +1,6 @@
 import "server-only";
 
+import { syncGroupMemberCount } from "@/lib/server/community-member-count";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
@@ -651,7 +652,7 @@ export async function joinGroupServerSide(opts: {
   }
 
   if (becomesActive) {
-    await groupRef.update({ memberCount: FieldValue.increment(1) });
+    await syncGroupMemberCount(opts.subAccountId, opts.groupId);
     void emitWebhookEvent({
       subAccountId: opts.subAccountId,
       agencyId: opts.agencyId,
@@ -934,7 +935,7 @@ export async function approveMembershipServerSide(opts: {
     | undefined;
 
   await memRef.update({ status: "active" });
-  await groupRef.update({ memberCount: FieldValue.increment(1) });
+  await syncGroupMemberCount(opts.subAccountId, opts.groupId);
 
   // Points & Rewards — `joinGroupServerSide` only awards "Invite a new
   // member" for a join that becomes active immediately; an approval-gated
@@ -1092,7 +1093,7 @@ export async function setMembershipStatusServerSide(opts: {
     });
   }
   if (wasActive && !willActive) {
-    await groupRef.update({ memberCount: FieldValue.increment(-1) });
+    await syncGroupMemberCount(opts.subAccountId, opts.groupId);
     const [memberSnap, subSnap] = await Promise.all([
       getAdminDb()
         .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
@@ -1117,6 +1118,6 @@ export async function setMembershipStatusServerSide(opts: {
       });
     }
   } else if (!wasActive && willActive) {
-    await groupRef.update({ memberCount: FieldValue.increment(1) });
+    await syncGroupMemberCount(opts.subAccountId, opts.groupId);
   }
 }

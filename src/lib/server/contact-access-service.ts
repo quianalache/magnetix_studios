@@ -1,5 +1,6 @@
 import "server-only";
 
+import { syncGroupMemberCount } from "@/lib/server/community-member-count";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
@@ -687,9 +688,7 @@ async function grantComplimentaryCommunityAccess(opts: {
       }
       throw err;
     }
-    await db
-      .doc(`subAccounts/${subAccountId}/communityGroups/${groupId}`)
-      .update({ memberCount: FieldValue.increment(1) });
+    await syncGroupMemberCount(subAccountId, groupId);
     void emitWebhookEvent({
       subAccountId,
       agencyId,

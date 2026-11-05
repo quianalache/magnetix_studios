@@ -1,5 +1,6 @@
 import "server-only";
 
+import { syncGroupMemberCount } from "@/lib/server/community-member-count";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
@@ -226,7 +227,7 @@ export async function markPurchasePaidServerSide(opts: {
       { merge: true }
     );
     if (!wasActive) {
-      await groupRef.update({ memberCount: FieldValue.increment(1) });
+      await syncGroupMemberCount(opts.subAccountId, opts.groupId);
       void emitWebhookEvent({
         subAccountId: opts.subAccountId,
         agencyId: purchase.agencyId,

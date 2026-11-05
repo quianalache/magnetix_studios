@@ -111,6 +111,29 @@ export async function listCoursePagePinsForPost(opts: {
   });
 }
 
+/**
+ * A lesson's pins, oldest first. Equality-only query + in-memory sort
+ * (2026-11-05): the previous `.orderBy("createdAt")` needed a composite
+ * index that was never declared, so every native course lesson page threw
+ * FAILED_PRECONDITION in production ("blank page, back to Classroom").
+ * A lesson has a handful of pins at most, so sorting here is free and the
+ * query runs on Firestore's automatic single-field indexes.
+ */
+async function lessonPinDocs(opts: {
+  subAccountId: string;
+  groupId: string;
+  courseId: string;
+  lessonId: string;
+}) {
+  const snap = await pinsCol(opts.subAccountId, opts.groupId)
+    .where("courseId", "==", opts.courseId)
+    .where("lessonId", "==", opts.lessonId)
+    .get();
+  return [...snap.docs].sort(
+    (a, b) => (toMillis(a.data().createdAt) ?? 0) - (toMillis(b.data().createdAt) ?? 0)
+  );
+}
+
 /** Every post pinned to a given course lesson — the course-page embed. */
 export async function listPostIdsPinnedToLesson(opts: {
   subAccountId: string;
@@ -118,12 +141,8 @@ export async function listPostIdsPinnedToLesson(opts: {
   courseId: string;
   lessonId: string;
 }): Promise<string[]> {
-  const snap = await pinsCol(opts.subAccountId, opts.groupId)
-    .where("courseId", "==", opts.courseId)
-    .where("lessonId", "==", opts.lessonId)
-    .orderBy("createdAt", "asc")
-    .get();
-  return snap.docs.map((d) => d.data().postId as string);
+  const docs = await lessonPinDocs(opts);
+  return docs.map((d) => d.data().postId as string);
 }
 
 /** Deletion cleanup (2026-09-03) — a deleted post must not leave orphaned
@@ -172,18 +191,14 @@ export async function listCoursePageEmbeddedPosts(opts: {
   lessonId: string;
   viewerMemberId: string;
 }): Promise<CoursePageEmbeddedPost[]> {
-  const snap = await pinsCol(opts.subAccountId, opts.groupId)
-    .where("courseId", "==", opts.courseId)
-    .where("lessonId", "==", opts.lessonId)
-    .orderBy("createdAt", "asc")
-    .get();
-  if (snap.empty) return [];
+  const docs = await lessonPinDocs(opts);
+  if (docs.length === 0) return [];
 
   const { getFeedPost } = await import("@/lib/server/community-feed-service");
   const { renderCommunityPostHtml } = await import("@/lib/community/post-html");
 
   const results = await Promise.all(
-    snap.docs.map(async (d) => {
+    docs.map(async (d) => {
       const post = await getFeedPost({
         subAccountId: opts.subAccountId,
         groupId: opts.groupId,

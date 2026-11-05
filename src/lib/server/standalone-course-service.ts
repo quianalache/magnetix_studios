@@ -1,5 +1,6 @@
 import "server-only";
 
+import { syncGroupMemberCount } from "@/lib/server/community-member-count";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getBunnyAsset, updateBunnyLessonReference } from "@/lib/server/bunny-stream-service";
@@ -502,7 +503,7 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
       courseId: opts.courseId,
     });
     if (!wasActive) {
-      await groupRef.update({ memberCount: FieldValue.increment(1) });
+      await syncGroupMemberCount(opts.subAccountId, groupId);
       void emitWebhookEvent({
         subAccountId: opts.subAccountId,
         agencyId: opts.agencyId,

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { syncGroupMemberCount } from "@/lib/server/community-member-count";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { ensureMember, findMemberByEmail } from "@/lib/community/member-account";
@@ -414,10 +415,8 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
         report.errors.push({ entity: "community_memberships", externalId: m.skoolUserId, message: String(err) });
       }
     }
-    if (opts.commit && membersAdded > 0) {
-      await db
-        .doc(`subAccounts/${opts.subAccountId}/communityGroups/${groupId}`)
-        .update({ memberCount: FieldValue.increment(membersAdded) });
+    if (opts.commit && membersAdded > 0 && groupId) {
+      await syncGroupMemberCount(opts.subAccountId, groupId);
     }
   }
 
