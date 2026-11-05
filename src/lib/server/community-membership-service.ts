@@ -2,6 +2,7 @@ import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { syncGroupMemberCount } from "@/lib/server/community-member-count";
+import { resolveEffectiveBaseRoster, type EffectiveMembershipRecord, type MembershipRosterIdentity } from "@/lib/community/membership-roster";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import {
   allows,
@@ -323,20 +324,29 @@ export interface LevelMemberRow {
 export async function listLevelMembers(sa: string, g: string, levelId: string): Promise<LevelMemberRow[]> {
   const db = getAdminDb();
   const level = await levelsCol(sa, g).doc(levelId).get();
-  if (!level.exists) throw new MembershipLevelError("Membership level not found.", 404);
   const levels = await listMembershipLevels(sa, g);
-  const activeLevelIds = new Set(levels.filter((l) => l.status === "active" && !l.isBase).map((l) => l.id));
+  const target = level.exists ? toLevel(level.id, level.data()!) : levelId === "base" ? levels.find((l) => l.isBase) : null;
+  if (!target && levelId !== "base") throw new MembershipLevelError("Membership level not found.", 404);
+  if (target?.isBase || levelId === "base") {
+    const memberships = await listMembershipIds(sa, g);
+    const identities = new Map<string, MembershipRosterIdentity>();
+    for (const membership of memberships) {
+      const member = (await db.doc(`subAccounts/${sa}/members/${membership.id}`).get()).data();
+      identities.set(membership.id, { memberId: membership.id, name: member?.displayName ?? "", email: member?.email ?? "" });
+    }
+    return resolveEffectiveBaseRoster(
+      memberships.map((membership) => ({ memberId: membership.id, status: membership.status, levelIds: membership.levelIds })) satisfies EffectiveMembershipRecord[],
+      levels,
+      identities,
+    );
+  }
   const rows: LevelMemberRow[] = [];
   for (const m of await listMembershipIds(sa, g)) {
     if (m.status !== "active") continue;
     const member = (await db.doc(`subAccounts/${sa}/members/${m.id}`).get()).data();
     const base = { memberId: m.id, name: member?.displayName ?? "", email: member?.email ?? "" };
-    if (level.data()!.isBase) {
-      if (!m.levelIds.some((id) => activeLevelIds.has(id))) rows.push({ ...base, source: "base", grantId: null, grantedAtMs: null });
-    } else {
-      const grants = await grantsCol(sa, g, m.id).where("levelId", "==", levelId).where("status", "==", "active").get();
-      for (const d of grants.docs) rows.push({ ...base, source: d.data().source, grantId: d.id, grantedAtMs: d.data().grantedAtMs ?? null });
-    }
+    const grants = await grantsCol(sa, g, m.id).where("levelId", "==", levelId).where("status", "==", "active").get();
+    for (const d of grants.docs) rows.push({ ...base, source: d.data().source, grantId: d.id, grantedAtMs: d.data().grantedAtMs ?? null });
   }
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
