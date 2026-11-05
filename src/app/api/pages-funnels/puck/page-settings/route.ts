@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { pageSubAccountId } from "@/lib/server/page-form-resolver";
 import {
+  duplicatePuckPage,
   renamePuckPage,
   revertPuckDraftToPublished,
   unpublishPuckPage,
@@ -11,8 +12,8 @@ import {
 import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
 
 /**
- * Page Settings management actions (Wave 3): rename (immediate), unpublish,
- * and revert draft to published. A static route (no dynamic segment) so it
+ * Page management actions: rename (immediate), unpublish, revert draft to
+ * published (Wave 3) and duplicate (pre-Funnel safety). A static route (no dynamic segment) so it
  * costs nothing against Vercel's route limit; the page's own workspace is
  * looked up from the page id and the caller must be that workspace's admin —
  * the same requirement as Save Draft / Publish. Publishable settings (SEO,
@@ -48,6 +49,12 @@ export async function POST(request: Request) {
     case "revert":
       result = await revertPuckDraftToPublished(subAccountId, pageId);
       break;
+    case "duplicate": {
+      // Pre-Funnel safety: duplication is server-side and same-workspace only.
+      const dup = await duplicatePuckPage(subAccountId, pageId, access.uid);
+      if (!dup.ok) return NextResponse.json({ error: dup.error }, { status: dup.status });
+      return NextResponse.json({ ok: true, pageId: dup.pageId });
+    }
     default:
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }

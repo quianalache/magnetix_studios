@@ -177,37 +177,26 @@ export async function updatePageMeta(
   });
 }
 
+/**
+ * Duplicate a page (pre-Funnel safety, 2026-11-05): done on the server, which
+ * checks the workspace and copies the current draft, draft Popups and Page
+ * Settings into a new Draft page (see `duplicatePuckPage`). Signature kept so
+ * existing callers don't change; `scope` / `createdByUid` are re-derived on
+ * the server from the session.
+ */
 export async function duplicatePage(
-  scope: TenantScope,
-  createdByUid: string,
+  _scope: TenantScope,
+  _createdByUid: string,
   source: PageDoc
 ): Promise<string> {
-  const ref = await addDoc(collection(getFirebaseDb(), PAGES), {
-    name: `${source.name} (Copy)`,
-    slug: slugify(`${source.name}-copy`),
-    pageType: source.pageType,
-    goal: source.goal,
-    status: "draft",
-    origin: source.origin,
-    funnelId: null,
-    blocks: source.blocks,
-    seo: source.seo,
-    templateId: source.templateId,
-    agencyId: scope.agencyId,
-    subAccountId: scope.subAccountId,
-    createdByUid,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    publishedAt: null,
-    // New Builder content travels with the copy (as a draft — the copy is
-    // never published), and so do a Reading Result Page's settings
-    // (2026-10-21). Without this a copied New Builder page came out empty.
-    ...((source.puckDraftData ?? source.puckPublishedData)
-      ? { puckDraftData: source.puckDraftData ?? source.puckPublishedData, puckDraftUpdatedAt: serverTimestamp() }
-      : {}),
-    ...(source.readingResult ? { readingResult: source.readingResult } : {}),
+  const res = await fetch("/api/pages-funnels/puck/page-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pageId: source.id, action: "duplicate" }),
   });
-  return ref.id;
+  const json = (await res.json().catch(() => ({}))) as { pageId?: string; error?: string };
+  if (!res.ok || !json.pageId) throw new Error(json.error ?? "Couldn't duplicate page.");
+  return json.pageId;
 }
 
 export async function deletePage(id: string): Promise<void> {

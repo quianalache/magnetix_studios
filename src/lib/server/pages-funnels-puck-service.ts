@@ -306,3 +306,58 @@ export async function revertPuckDraftToPublished(subAccountId: string, pageId: s
     return { ok: true } as const;
   });
 }
+
+/**
+ * Duplicate a page (pre-Funnel safety, 2026-11-05) — server-side, so the
+ * copy is tenancy-checked and complete. The copy is a NEW, independent page in
+ * the SAME workspace built from the source's CURRENT DRAFT experience:
+ *   - draft content (Page Settings live inside it, so SEO / social image /
+ *     noindex / tracking come along),
+ *   - draft Popups with their triggers, content and actions,
+ *   - Reading Result settings and the legacy fields the page list shows.
+ * It starts as a Draft with NO published snapshot, so it isn't public until
+ * someone publishes it. Popup ids are page-local keys (each page stores its
+ * own popup map), so they're kept as-is: every Open Popup action in the
+ * copied content still points at the copied popup. Nothing shared or
+ * historical is copied (publish history, analytics, AI generation telemetry).
+ */
+export async function duplicatePuckPage(
+  subAccountId: string,
+  sourcePageId: string,
+  uid: string
+): Promise<{ ok: true; pageId: string } | Exclude<PuckPersistenceResult, { ok: true }>> {
+  const owned = await loadOwnedPage(subAccountId, sourcePageId);
+  if ("ok" in owned) return owned as Exclude<PuckPersistenceResult, { ok: true }>;
+  const src = owned.doc;
+  const unknown = findUnknownBlockTypesInPage(src);
+  if (unknown.length) return { ok: false, error: unknownBlocksSaveError(unknown), status: 409 };
+  const baseName = typeof src.name === "string" && src.name.trim() ? src.name.trim() : "Untitled page";
+  const suffix = " (Copy)";
+  const name = baseName.length + suffix.length > 60 ? `${baseName.slice(0, 60 - suffix.length).trimEnd()}${suffix}` : `${baseName}${suffix}`;
+  const draft = src.puckDraftData ?? src.puckPublishedData ?? null;
+  const popups = src.puckDraftPopups ?? src.puckPublishedPopups ?? {};
+  const now = FieldValue.serverTimestamp();
+  const ref = getAdminDb().collection(PAGES_COLLECTION).doc();
+  await ref.set({
+    name,
+    slug: typeof src.slug === "string" ? `${src.slug}-copy`.slice(0, 120) : "",
+    pageType: src.pageType ?? "generic",
+    goal: src.goal ?? "other",
+    status: "draft",
+    origin: src.origin ?? "blank",
+    funnelId: null,
+    blocks: Array.isArray(src.blocks) ? src.blocks : [],
+    seo: src.seo ?? { title: "", description: "", ogImage: "" },
+    templateId: src.templateId ?? null,
+    agencyId: src.agencyId ?? null,
+    subAccountId,
+    createdByUid: uid,
+    createdAt: now,
+    updatedAt: now,
+    publishedAt: null,
+    ...(draft ? { puckDraftData: draft, puckDraftUpdatedAt: now } : {}),
+    puckDraftPopups: popups,
+    ...(src.readingResult ? { readingResult: src.readingResult } : {}),
+  });
+  return { ok: true, pageId: ref.id };
+}
