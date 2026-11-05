@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { pageServableOnHost } from "@/lib/domains/custom-domain-service";
 import { Render } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
@@ -45,8 +47,10 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ pageId: string }> }): Promise<Metadata> {
   try {
     const { pageId } = await params;
-    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as Pick<PageDoc, "status" | "name" | "pageType" | "seo" | "puckPublishedData"> | undefined;
+    const page = (await getAdminDb().collection("pages").doc(pageId).get()).data() as Pick<PageDoc, "status" | "name" | "pageType" | "seo" | "puckPublishedData" | "subAccountId"> | undefined;
     if (!page || page.status !== "published") return {};
+    // A custom domain describes only its own workspace's Pages.
+    if (!(await pageServableOnHost((await headers()).get("host"), page.subAccountId))) return {};
     const decoded = page.puckPublishedData ? decodeStoredPuckData(page.puckPublishedData) : null;
     const settings = resolvePageSettings(decoded?.ok ? decoded.data : null, page.seo);
     // A Reading Result Page shows one person's Reading — never indexed.
@@ -89,6 +93,9 @@ export default async function PublicPagePreview({
   const snap = await db.collection("pages").doc(pageId).get();
   if (!snap.exists) notFound();
   const page = { id: snap.id, ...(snap.data() as Omit<PageDoc, "id">) };
+  // Custom-domain ownership (pre-Funnel safety): a workspace's custom domain
+  // serves only that workspace's Pages; anything else reads as not-found.
+  if (!(await pageServableOnHost((await headers()).get("host"), page.subAccountId))) notFound();
 
   // Reading Result Pages (2026-10-21) render a Reading — see the component.
   if (page.pageType === "reading_result") {

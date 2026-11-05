@@ -2,6 +2,9 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { isPlatformHost } from "@/lib/tracking/surfaces";
+import { CUSTOM_BRAND } from "@/config/landing";
+import { decidePageHost } from "@/lib/domains/page-host";
 import {
   addDomainToProject,
   getDomainStatus,
@@ -256,4 +259,29 @@ export async function getSubAccountByCustomDomain(
   const data = doc.data() as SubAccountDoc;
   if (data.customDomain?.status !== "verified") return null;
   return { ...data, id: doc.id };
+}
+
+/**
+ * May this request host serve a Page belonging to `pageSubAccountId`?
+ * Platform hosts serve every workspace's published Pages (canonical
+ * `/p/{pageId}` links keep working); a custom domain serves only its own
+ * workspace's Pages. See decidePageHost (page-host.ts).
+ */
+export async function pageServableOnHost(
+  hostHeader: string | null,
+  pageSubAccountId: string | null | undefined,
+): Promise<boolean> {
+  const host = (hostHeader ?? "").trim();
+  const platform = isPlatformHost(host, {
+    appUrl: process.env.NEXT_PUBLIC_APP_URL ?? null,
+    primaryDomain: CUSTOM_BRAND.primaryDomain,
+  });
+  const hostSub = platform ? null : await getSubAccountByCustomDomain(host);
+  return (
+    decidePageHost({
+      isPlatformHost: platform,
+      hostSubAccountId: hostSub?.id ?? null,
+      pageSubAccountId,
+    }) === "allow"
+  );
 }
