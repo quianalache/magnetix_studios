@@ -86,9 +86,18 @@ async function emulator() {
       await db.doc(`subAccounts/${SA}/members/m${i}`).set({ subAccountId: SA, agencyId: "ag", email: `m${i}@example.com`, status: "active", displayName: `M ${i}`, contactId: null });
       await gref.collection("memberships").doc(`m${i}`).set({ memberId: `m${i}`, status: i < 3 ? "active" : "removed", role: "member", level: 1, points: 0 });
     }
-    await check("stale cache (72) is repaired to the active count (3)", async () => {
+    await check("stale cache (72) is repaired to the active count (3), writing only memberCount", async () => {
+      const before = Object.keys((await gref.get()).data()!).sort();
       assert.equal(await count.syncGroupMemberCount(SA, G), 3);
       assert.equal(await cached(), 3);
+      assert.deepEqual(Object.keys((await gref.get()).data()!).sort(), before, "no new fields on the group doc");
+    });
+    await check("group doc stays plain for Client Components (no Timestamp/class values after sync)", async () => {
+      const data = (await gref.get()).data()!;
+      for (const [k, v] of Object.entries(data)) {
+        if (k === "createdAt" || k === "updatedAt") continue;
+        assert.ok(v === null || typeof v !== "object" || Array.isArray(v) || Object.getPrototypeOf(v) === Object.prototype, `non-plain field ${k}`);
+      }
     });
     await check("join, duplicate join, remove, ban and re-activate keep cache == active count", async () => {
       await db.doc(`subAccounts/${SA}/members/new`).set({ subAccountId: SA, agencyId: "ag", email: "new@example.com", status: "active", displayName: "New", contactId: null });

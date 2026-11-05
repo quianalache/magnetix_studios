@@ -1,6 +1,5 @@
 import "server-only";
 
-import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 
 /**
@@ -29,7 +28,11 @@ export async function syncGroupMemberCount(subAccountId: string, groupId: string
     const count = await countActiveGroupMembers(subAccountId, groupId);
     await getAdminDb()
       .doc(`subAccounts/${subAccountId}/communityGroups/${groupId}`)
-      .update({ memberCount: count, memberCountSyncedAt: FieldValue.serverTimestamp() });
+      // Only the number: the group doc is handed to Client Components
+      // (Community Settings), so it must never gain a Timestamp field here
+      // (2026-11-05 regression — a `memberCountSyncedAt` Timestamp broke
+      // Settings with "Only plain objects can be passed to Client Components").
+      .update({ memberCount: count });
     return count;
   } catch (err) {
     console.warn("[community-member-count] recount failed", subAccountId, groupId, err);
