@@ -271,7 +271,7 @@ export async function sendCommunityActivationEmail(
   }
 
   const groupSlug = (groupSnap.data()?.slug as string) || c.groupId;
-  const nextPath = `/api/my/enter?subAccountId=${encodeURIComponent(c.subAccountId)}&next=${encodeURIComponent(`/c/${c.subAccountId}/${groupSlug}`)}`;
+  const nextPath = `/api/my/enter?subAccountId=${encodeURIComponent(c.subAccountId)}&next=${encodeURIComponent(`/c/${c.subAccountId}/${groupSlug}/community`)}`;
   const token = await createPersonPasswordToken({
     personId,
     email,

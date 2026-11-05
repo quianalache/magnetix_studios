@@ -128,7 +128,7 @@ async function emulator() {
       const token = new URL(link.replace(/&amp;/g, "&")).searchParams.get("token")!;
       const r = await pw.consumePersonPasswordToken({ token, password: "a-strong-pass-123" });
       assert.equal(r.ok, true, JSON.stringify(r));
-      assert.equal((r as { nextPath: string }).nextPath, `/api/my/enter?subAccountId=${SA}&next=${encodeURIComponent(`/c/${SA}/test-circle`)}`);
+      assert.equal((r as { nextPath: string }).nextPath, `/api/my/enter?subAccountId=${SA}&next=${encodeURIComponent(`/c/${SA}/test-circle/community`)}`);
       assert.ok((await db.doc(`people/${existingPerson.id}`).get()).data()!.passwordHash);
       const again = await pw.consumePersonPasswordToken({ token, password: "another-pass-456" });
       assert.equal(again.ok, false, "used link refused");
