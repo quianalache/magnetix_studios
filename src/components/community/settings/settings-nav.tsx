@@ -13,6 +13,8 @@ import {
   Trophy,
 } from "lucide-react";
 import {
+  communitySettingsAccessHref,
+  communitySettingsNotificationsHref,
   communitySettingsBrandingHref,
   communitySettingsHref,
   communitySettingsNavigationHref,
@@ -22,7 +24,7 @@ import {
 } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "branding" | "navigation" | "points-rewards" | "skool-import";
+export type SettingsSection = "general" | "branding" | "navigation" | "access" | "notifications" | "points-rewards" | "skool-import";
 
 /**
  * Community Settings left nav. General, Branding, Navigation, and (as of
@@ -73,6 +75,14 @@ export function SettingsNav({
     { key: "general", label: "General", icon: SettingsIcon, href: communitySettingsHref(link, groupSlug) },
     { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
     { key: "navigation", label: "Navigation", icon: LayoutGrid, href: communitySettingsNavigationHref(link, groupSlug) },
+    // Access & Membership + Notifications & Digest (2026-11-05) — workspace
+    // communities only; agency communities keep them as coming soon.
+    ...(link.agencyGroupId
+      ? []
+      : [
+          { key: "access" as const, label: "Access & Membership", icon: Shield, href: communitySettingsAccessHref(link, groupSlug) },
+          { key: "notifications" as const, label: "Notifications & Digest", icon: Bell, href: communitySettingsNotificationsHref(link, groupSlug) },
+        ]),
     {
       key: "points-rewards",
       label: "Points & Rewards",
@@ -95,7 +105,7 @@ export function SettingsNav({
   // sections below.
   const inertSections = link.agencyGroupId
     ? [{ key: "skool-import", label: "Skool Import", icon: Download }, ...INERT_SECTIONS]
-    : INERT_SECTIONS;
+    : INERT_SECTIONS.filter((s) => s.key !== "access" && s.key !== "notifications");
 
   return (
     <nav className="space-y-0.5">

@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { resolveMemberAccessServerSide } from "@/lib/server/community-membership-service";
 import {
   communityGroupsRoot,
   tenantScope,
@@ -542,28 +543,41 @@ export async function ensureChannelsForGroup(
   return ensureChannelsForGroupByScope(tenantScope(saId), groupId);
 }
 
+/**
+ * Membership Levels (2026-11-05): `memberId` is REQUIRED so no caller can
+ * forget it. On top of the existing private-channel rule, a non-moderator
+ * only sees channels their Membership Level(s) grant. Inaccessible channels
+ * are hidden — the same convention private channels already use.
+ */
 export async function listChannelsAndSectionsForViewer(opts: {
   subAccountId: string;
   groupId: string;
   isModerator: boolean;
+  memberId: string | null;
 }): Promise<ChannelsAndSections> {
-  return listChannelsAndSectionsForViewerByScope({
+  const base = await listChannelsAndSectionsForViewerByScope({
     scope: tenantScope(opts.subAccountId),
     groupId: opts.groupId,
     isModerator: opts.isModerator,
   });
+  if (opts.isModerator) return base;
+  const access = await resolveMemberAccessServerSide(opts);
+  if (access.channels === "all") return base;
+  const allowed = access.channels;
+  return { sections: base.sections, channels: base.channels.filter((c) => allowed.has(c.id)) };
 }
 
 export async function getInaccessibleChannelNames(opts: {
   subAccountId: string;
   groupId: string;
   isModerator: boolean;
+  memberId: string | null;
 }): Promise<Set<string>> {
-  return getInaccessibleChannelNamesByScope({
-    scope: tenantScope(opts.subAccountId),
-    groupId: opts.groupId,
-    isModerator: opts.isModerator,
-  });
+  if (opts.isModerator) return new Set();
+  const visible = await listChannelsAndSectionsForViewer(opts);
+  const visibleNames = new Set(visible.channels.map((c) => c.name));
+  const all = await ensureChannelsForGroupByScope(tenantScope(opts.subAccountId), opts.groupId);
+  return new Set(all.filter((c) => !visibleNames.has(c.name)).map((c) => c.name));
 }
 
 export async function getChannelByName(

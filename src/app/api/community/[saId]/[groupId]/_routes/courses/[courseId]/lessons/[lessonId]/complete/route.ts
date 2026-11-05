@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { nativeCourseIncludedForMember } from "@/lib/server/community-course-access";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { markLessonCompleteServerSide } from "@/lib/server/community-classroom-service";
 
@@ -22,6 +23,17 @@ export async function POST(
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
     return NextResponse.json({ error: access.message }, { status: access.status });
+  }
+  if (
+    !(await nativeCourseIncludedForMember({
+      subAccountId: saId,
+      groupId,
+      courseId,
+      memberId: access.member.id,
+      isModerator: access.membership.role === "moderator",
+    }))
+  ) {
+    return NextResponse.json({ error: "This course isn't included in your membership" }, { status: 403 });
   }
   const result = await markLessonCompleteServerSide({
     subAccountId: saId,

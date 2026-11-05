@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveMemberAccessServerSide } from "@/lib/server/community-membership-service";
+import { allows } from "@/lib/community/membership-access";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import {
   getChannelByName,
@@ -49,14 +51,21 @@ export async function GET(
     subAccountId: saId,
     groupId,
     isModerator: access.membership.role === "moderator",
+    memberId: access.member.id,
+  });
+  const levelAccess = await resolveMemberAccessServerSide({
+    subAccountId: saId,
+    groupId,
+    memberId: access.member.id,
+    isModerator: access.membership.role === "moderator",
   });
   return NextResponse.json({
     events: events
       .filter(
         (event) =>
           access.membership.role === "moderator" ||
-          !event.channel ||
-          !inaccessible.has(event.channel)
+          ((!event.channel || !inaccessible.has(event.channel)) &&
+            allows(levelAccess.events, event.id))
       )
       .map(serializeEvent),
   });

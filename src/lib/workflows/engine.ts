@@ -917,6 +917,7 @@ const execGrantCommunityAccess: NodeExecutor = async (ctx) => {
     agencyId: ctx.agencyId,
     groupId,
     memberId,
+    trusted: true,
   });
   if (result.status === "payment_required")
     throw new Error("community_payment_required");

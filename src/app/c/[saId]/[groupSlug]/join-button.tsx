@@ -108,6 +108,8 @@ export function JoinButton({
         router.refresh();
       } else if (data.status === "payment_required") {
         setError("This group requires payment — coming soon.");
+      } else if (data.status === "invite_only") {
+        setError("This community is invite only. Ask the host for an invitation.");
       } else {
         router.refresh();
       }

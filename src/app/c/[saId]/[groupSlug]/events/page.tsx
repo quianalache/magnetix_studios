@@ -1,4 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { resolveMemberAccessServerSide } from "@/lib/server/community-membership-service";
+import { allows } from "@/lib/community/membership-access";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { listCommunityEventsServerSide } from "@/lib/server/community-event-service";
@@ -50,14 +52,22 @@ export default async function CommunityEventsPage({
     avatarUrl: member.avatarUrl,
     level: membership.level,
   };
-  const [events, inaccessible] = await Promise.all([
+  const [allEvents, inaccessible, levelAccess] = await Promise.all([
     listCommunityEventsServerSide(saId, group.id),
     getInaccessibleChannelNames({
       subAccountId: saId,
       groupId: group.id,
       isModerator: membership.role === "moderator",
+      memberId: member.id,
+    }),
+    resolveMemberAccessServerSide({
+      subAccountId: saId,
+      groupId: group.id,
+      memberId: member.id,
+      isModerator: membership.role === "moderator",
     }),
   ]);
+  const events = allEvents.filter((e) => allows(levelAccess.events, e.id));
   return (
     <CommunityShell
       saId={saId}

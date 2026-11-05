@@ -159,6 +159,7 @@ export async function PATCH(
         subAccountId: saId,
         groupId,
         isModerator,
+        memberId: access.member.id,
       });
       if (inaccessible.has(category)) {
         return NextResponse.json(

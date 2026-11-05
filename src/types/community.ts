@@ -105,7 +105,9 @@ export interface Member {
  * Lives at `subAccounts/{saId}/communityGroups/{groupId}`.
  */
 export type GroupAccess = "free" | "paid";
-export type GroupJoinPolicy = "open" | "approval";
+/** "invite" (2026-11-05): no self-serve joins — only staff, admin-added
+ *  members, purchases/entitlements and automations can add people. */
+export type GroupJoinPolicy = "open" | "approval" | "invite";
 export type GroupStatus = "draft" | "published";
 export type CommunityAboutMediaType = "image" | "video";
 export type CommunityBillingInterval = "one_time" | "month" | "year";

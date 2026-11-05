@@ -1,5 +1,6 @@
 import "server-only";
 
+import { communityDeliveryFor, getCommunityNotificationSettings } from "@/lib/server/community-notification-prefs";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createNotification } from "@/lib/server/notification-service";
 import type { NotificationEmailOutcome } from "@/lib/server/notification-email-service";
@@ -134,7 +135,118 @@ function tenantNotifyAdapter(
       ),
     buildLiveRoomDestination: (groupSlug, roomId) =>
       enterHref(subAccountId, `/c/${subAccountId}/${groupSlug}/live/${roomId}`),
+    groupId,
+    gate: (memberId, personId, category, channelName) =>
+      communityDeliveryFor({ subAccountId, groupId, memberId, personId, category, channelName }),
+    postChannel: async (postId) => {
+      const snap = await getAdminDb()
+        .doc(`subAccounts/${subAccountId}/communityGroups/${groupId}/posts/${postId}`)
+        .get();
+      return (snap.data()?.category as string | undefined) || null;
+    },
   };
+}
+
+/**
+ * Community Notifications & Digest (2026-11-05) — a new post. Every active
+ * member except the author who can access the post's channel (Membership
+ * Level + private channels) and hasn't turned "New content" off. Bounded
+ * fan-out; one notification per (post, person) via the dedupe key.
+ */
+export async function notifyCommunityNewPost(opts: {
+  subAccountId: string;
+  groupId: string;
+  postId: string;
+  authorMemberId: string;
+  channel: string | null;
+  postTitle: string;
+}): Promise<void> {
+  const adapter = tenantNotifyAdapter(opts.subAccountId, opts.groupId);
+  const [community, authorName, settings, roster] = await Promise.all([
+    adapter.getCommunityMeta(),
+    adapter.resolveActorName(opts.authorMemberId),
+    getCommunityNotificationSettings(opts.subAccountId, opts.groupId),
+    getAdminDb()
+      .collection(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`)
+      .where("status", "==", "active")
+      .limit(2000)
+      .get(),
+  ]);
+  const destination = adapter.buildPostDestination(community.slug, opts.postId);
+  for (const d of roster.docs) {
+    if (d.id === opts.authorMemberId) continue;
+    const personId = await adapter.resolvePersonId(d.id);
+    if (!personId) continue;
+    const delivery = await communityDeliveryFor({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      memberId: d.id,
+      personId,
+      category: "content",
+      channelName: opts.channel,
+      settings,
+    });
+    if (!delivery) continue;
+    await createNotification({
+      personId,
+      subAccountId: opts.subAccountId,
+      eventType: "community.post.created",
+      objectType: "post",
+      objectId: opts.postId,
+      actorMemberId: opts.authorMemberId,
+      title: `${authorName} posted in ${community.name}: ${opts.postTitle.slice(0, 120)}`,
+      destination,
+      meta: { communityName: community.name, actorName: authorName, groupId: opts.groupId },
+      sourceObjectId: opts.postId,
+      inApp: delivery.inApp,
+      skipEmail: !delivery.email,
+    });
+  }
+}
+
+/** New-member alert for the community's moderators. */
+export async function notifyCommunityMemberJoined(opts: {
+  subAccountId: string;
+  groupId: string;
+  memberId: string;
+}): Promise<void> {
+  const adapter = tenantNotifyAdapter(opts.subAccountId, opts.groupId);
+  const [community, newName, mods] = await Promise.all([
+    adapter.getCommunityMeta(),
+    adapter.resolveActorName(opts.memberId),
+    getAdminDb()
+      .collection(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`)
+      .where("role", "==", "moderator")
+      .get(),
+  ]);
+  for (const d of mods.docs) {
+    if (d.id === opts.memberId || d.data().status !== "active") continue;
+    const personId = await adapter.resolvePersonId(d.id);
+    if (!personId) continue;
+    const delivery = await communityDeliveryFor({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      memberId: d.id,
+      personId,
+      category: "member_joined",
+      channelName: null,
+    });
+    if (!delivery) continue;
+    await createNotification({
+      personId,
+      subAccountId: opts.subAccountId,
+      eventType: "community.member.joined",
+      objectType: "community",
+      objectId: opts.groupId,
+      actorMemberId: opts.memberId,
+      title: `${newName} joined ${community.name}`,
+      destination: enterHref(opts.subAccountId, `/c/${opts.subAccountId}/${community.slug}/members`),
+      meta: { communityName: community.name, actorName: newName, groupId: opts.groupId },
+      sourceObjectId: `${opts.groupId}:${opts.memberId}`,
+      inApp: delivery.inApp,
+      skipEmail: !delivery.email,
+    });
+  }
 }
 
 async function resolvePersonIdForMember(

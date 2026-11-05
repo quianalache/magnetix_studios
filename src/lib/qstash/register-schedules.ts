@@ -75,6 +75,13 @@ const SCHEDULES: ScheduleSpec[] = [
       "Reconcile completed or failed Community recording Egress jobs stuck in processing.",
   },
   {
+    scheduleId: "leadstack-community-digest",
+    path: "/api/cron/community-digest",
+    cron: "0 14 * * *",
+    description:
+      "Community digests that are due (daily / weekly on Mondays / monthly on the 1st). Off unless a community turns it on.",
+  },
+  {
     scheduleId: "leadstack-task-rollover",
     path: "/api/cron/task-rollover",
     cron: "10 * * * *",

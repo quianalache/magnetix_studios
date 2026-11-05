@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { notifyCommunityNewPost } from "@/lib/server/notification-producers";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import {
   createPostServerSide,
@@ -127,6 +128,7 @@ export async function POST(
       subAccountId: saId,
       groupId,
       isModerator,
+      memberId: access.member.id,
     });
     if (inaccessible.has(category)) {
       return NextResponse.json(
@@ -164,6 +166,20 @@ export async function POST(
     commentsDisabled: body.commentsDisabled === true,
     poll,
   });
+
+  // Community Notifications (2026-11-05): fan out AFTER the response so a
+  // post never waits on notifications. Respects each member's channel
+  // access and notification preferences.
+  after(() =>
+    notifyCommunityNewPost({
+      subAccountId: saId,
+      groupId,
+      postId: post.id,
+      authorMemberId: access.member.id,
+      channel: category ?? null,
+      postTitle: title,
+    }).catch((err) => console.warn("[community/posts] new-post notifications failed", err))
+  );
 
   // The stored `post.poll` is the raw server shape — `createPostServerSide`
   // never computes a viewer-safe view. The moderator who just created this

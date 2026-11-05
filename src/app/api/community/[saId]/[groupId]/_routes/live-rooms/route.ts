@@ -139,6 +139,7 @@ export async function POST(
       subAccountId: saId,
       groupId,
       isModerator: false,
+      memberId: access.member.id,
     });
     const channel = await getChannelByName(saId, groupId, found.room.channel);
     if (inaccessible.has(found.room.channel) || channel?.private) {

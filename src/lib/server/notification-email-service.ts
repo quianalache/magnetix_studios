@@ -68,6 +68,8 @@ const EMAIL_ELIGIBLE_EVENT_TYPES = [
   "community.access.granted",
   "community.reply",
   "community.mention",
+  "community.post.created",
+  "community.member.joined",
   "reading.ready",
 ] as const satisfies readonly NotificationEventType[];
 
@@ -285,6 +287,8 @@ const CTA_LABELS: Record<EmailEligibleEventType, string> = {
   "community.access.granted": "View in MyMagnetix",
   "community.reply": "View reply",
   "community.mention": "View mention",
+  "community.post.created": "Read the post",
+  "community.member.joined": "Say hello",
   "reading.ready": "Open your Reading in MyMagnetix",
 };
 
@@ -305,6 +309,8 @@ const SUBJECT_BY_CATEGORY: Partial<
   "booking.cancelled": () => "Your booking was cancelled",
   "community.reply": (b) => `New activity in ${b}`,
   "community.mention": (b) => `New activity in ${b}`,
+  "community.post.created": (_b, meta) => `New post in ${meta.communityName ?? "your community"}`,
+  "community.member.joined": (_b, meta) => `Someone new joined ${meta.communityName ?? "your community"}`,
   "reading.ready": (_b, meta) =>
     `Your ${meta.readingName ?? "reading"} is ready`,
 };
@@ -329,7 +335,13 @@ function renderNotificationEmail(
       ? `${appUrl}/api/my/login/verify?token=${encodeURIComponent(signPersonMagicLinkToken(recipientEmail))}&next=${encodeURIComponent(n.destination)}`
       : `${appUrl}${n.destination}`;
 
-  const text = [n.title, "", `${ctaLabel}: ${ctaHref}`, "", businessName].join(
+  // Community activity emails are optional — they always say where to
+  // change that (MyMagnetix → Settings → this community).
+  const manageHref =
+    n.eventType.startsWith("community.") && n.meta.groupId && n.subAccountId
+      ? `${appUrl}/my/settings/community/${encodeURIComponent(n.meta.groupId)}?subAccountId=${encodeURIComponent(n.subAccountId)}`
+      : null;
+  const text = [n.title, "", `${ctaLabel}: ${ctaHref}`, "", businessName, ...(manageHref ? ["", `Manage notifications: ${manageHref}`] : [])].join(
     "\n"
   );
 
@@ -338,6 +350,7 @@ function renderNotificationEmail(
     `
       <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#1a1a22;">${escapeHtml(n.title)}</p>
       ${primaryCta(ctaHref, ctaLabel)}
+      ${manageHref ? `<p style="margin:24px 0 0;font-size:12px;color:#6a6a74;"><a href="${escapeHtml(manageHref)}" style="color:#6a6a74;">Manage notification settings</a></p>` : ""}
     `
   );
 

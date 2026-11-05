@@ -26,6 +26,7 @@ export async function GET(
       subAccountId: saId,
       groupId,
       isModerator: access.membership.role === "moderator",
+      memberId: access.member.id,
     });
     return NextResponse.json({ ok: true, ...data });
   } catch (err) {

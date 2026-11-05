@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveMemberAccessServerSide } from "@/lib/server/community-membership-service";
+import { allows } from "@/lib/community/membership-access";
 import { AccessToken, TrackSource } from "livekit-server-sdk";
 import { livekitConfig } from "@/lib/livekit/config";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
@@ -34,12 +36,26 @@ export async function POST(
     found.session.status !== "live"
   )
     return NextResponse.json({ error: "Event is not live" }, { status: 404 });
+  if (access.membership.role !== "moderator") {
+    const levelAccess = await resolveMemberAccessServerSide({
+      subAccountId: saId,
+      groupId,
+      memberId: access.member.id,
+      isModerator: false,
+    });
+    if (!allows(levelAccess.events, found.event.id))
+      return NextResponse.json(
+        { error: "This event isn't included in your membership" },
+        { status: 403 }
+      );
+  }
   if (access.membership.role !== "moderator" && found.event.channel) {
     const channel = await getChannelByName(saId, groupId, found.event.channel);
     const inaccessible = await getInaccessibleChannelNames({
       subAccountId: saId,
       groupId,
       isModerator: false,
+      memberId: access.member.id,
     });
     if (!channel || channel.private || inaccessible.has(found.event.channel))
       return NextResponse.json(

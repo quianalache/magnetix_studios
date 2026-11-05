@@ -60,6 +60,10 @@ export interface CreateNotificationInput {
   /** In-app only — skip the email channel (e.g. an Embed with MyMagnetix
    *  on but email off). Default false: unchanged behavior. */
   skipEmail?: boolean;
+  /** Community notification preferences (2026-11-05): false = the member
+   *  turned in-app off for this category. The record is still written (the
+   *  email needs it) but hidden and pre-read, so it never shows in the bell. */
+  inApp?: boolean;
 }
 
 /**
@@ -85,7 +89,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
     sanitizeIdSegment(input.personId),
   ].join(":");
 
-  const doc: Omit<NotificationDoc, "id" | "createdAt"> & { createdAt: FieldValue } = {
+  const doc: Omit<NotificationDoc, "id" | "createdAt" | "readAt"> & { createdAt: FieldValue; readAt: FieldValue | null; hidden?: boolean } = {
     personId: input.personId,
     subAccountId: input.subAccountId,
     eventType: input.eventType,
@@ -96,7 +100,8 @@ export async function createNotification(input: CreateNotificationInput): Promis
     title: input.title,
     message: input.message ?? null,
     destination: input.destination,
-    readAt: null,
+    readAt: input.inApp === false ? FieldValue.serverTimestamp() : null,
+    ...(input.inApp === false ? { hidden: true } : {}),
     createdAt: FieldValue.serverTimestamp(),
     dedupeKey,
     meta: input.meta ?? {},
@@ -165,7 +170,7 @@ export async function listRecentNotificationsForPerson(personId: string): Promis
     .orderBy("createdAt", "desc")
     .limit(LIST_LIMIT)
     .get();
-  return snap.docs.map((d) => toNotification(d.id, d.data()));
+  return snap.docs.filter((d) => d.data().hidden !== true).map((d) => toNotification(d.id, d.data()));
 }
 
 /** Real count, not derived from the (possibly truncated) list above — a

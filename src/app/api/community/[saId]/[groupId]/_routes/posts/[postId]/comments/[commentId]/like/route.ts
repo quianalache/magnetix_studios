@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
+import { viewerCanAccessPost } from "@/lib/server/community-feed-service";
 import { toggleLikeServerSide } from "@/lib/server/community-feed-service";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,17 @@ export async function POST(
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
     return NextResponse.json({ error: access.message }, { status: access.status });
+  }
+  if (
+    !(await viewerCanAccessPost({
+      subAccountId: saId,
+      groupId,
+      postId,
+      memberId: access.member.id,
+      isModerator: access.membership.role === "moderator",
+    }))
+  ) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
   try {
     const result = await toggleLikeServerSide({

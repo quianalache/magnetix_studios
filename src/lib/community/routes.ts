@@ -245,6 +245,16 @@ export function communitySettingsBrandingHref(
   return `${communitySettingsHref(b, groupSlug)}/branding`;
 }
 
+/** Community Settings → Access & Membership (2026-11-05). */
+export function communitySettingsAccessHref(b: CommunityLinkBase, groupSlug: string): string {
+  return `${communitySettingsHref(b, groupSlug)}/access`;
+}
+
+/** Community Settings → Notifications & Digest (2026-11-05). */
+export function communitySettingsNotificationsHref(b: CommunityLinkBase, groupSlug: string): string {
+  return `${communitySettingsHref(b, groupSlug)}/notifications`;
+}
+
 /** Community Settings → Navigation — same shape as Branding (diverges
  *  before `/settings`, not after it). */
 export function communitySettingsNavigationHref(

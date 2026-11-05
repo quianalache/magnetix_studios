@@ -82,6 +82,7 @@ export default async function CommunityFeedPage({
     subAccountId: saId,
     groupId: group.id,
     isModerator: viewerIsModerator,
+    memberId: member.id,
   });
   // Same fix `settings/page.tsx` already needed for `group` — raw Firestore
   // Admin SDK Timestamp CLASS instances (`createdAt`/`updatedAt`) can't

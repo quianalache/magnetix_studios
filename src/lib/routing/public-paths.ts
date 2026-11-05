@@ -70,6 +70,8 @@ export const PUBLIC_PATHS = [
   // Hourly optional task rollover (Projects & Tasks Phase 2). QStash-
   // scheduled; signature-verified inside the route.
   "/api/cron/task-rollover",
+  // Community digest (2026-11-05) — QStash-signed, like the crons above.
+  "/api/cron/community-digest",
   "/api/landing/metrics",
   "/api/landing/recent-purchases",
   // Live-visitors heartbeat ping for the agency dashboard's world map.

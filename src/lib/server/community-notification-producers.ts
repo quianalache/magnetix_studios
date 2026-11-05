@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createNotification } from "@/lib/server/notification-service";
+import type { CommunityNotificationCategory, NotificationDelivery } from "@/types/community-membership";
 
 /**
  * Community Shared Architecture Phase 1 (2026-09-19) — the ONE place the
@@ -52,6 +53,28 @@ export interface CommunityNotifyAdapter {
   getCommunityMeta(): Promise<{ name: string; slug: string }>;
   buildPostDestination(groupSlug: string, postId: string): string;
   buildLiveRoomDestination(groupSlug: string, roomId: string): string;
+  /** Tenant communities (2026-11-05): community defaults + the member's
+   *  own preferences + channel access. Null = don't notify. Absent (agency
+   *  communities) = notify in-app and by email, as before. */
+  gate?(
+    candidateId: string,
+    personId: string,
+    category: CommunityNotificationCategory,
+    channelName: string | null
+  ): Promise<NotificationDelivery | null>;
+  postChannel?(postId: string): Promise<string | null>;
+  groupId?: string;
+}
+
+async function deliveryFor(
+  adapter: CommunityNotifyAdapter,
+  candidateId: string,
+  personId: string,
+  category: CommunityNotificationCategory,
+  channelName: string | null
+): Promise<NotificationDelivery | null> {
+  if (!adapter.gate) return { email: true, inApp: true };
+  return adapter.gate(candidateId, personId, category, channelName);
 }
 
 export async function notifyCommunityReplyShared(
@@ -70,6 +93,9 @@ export async function notifyCommunityReplyShared(
 
   const personId = await adapter.resolvePersonId(opts.recipientId);
   if (!personId) return;
+  const channel = adapter.postChannel ? await adapter.postChannel(opts.postId) : null;
+  const delivery = await deliveryFor(adapter, opts.recipientId, personId, "replies", channel);
+  if (!delivery) return;
 
   const [commenterName, community] = await Promise.all([
     adapter.resolveActorName(opts.commenterId),
@@ -87,10 +113,12 @@ export async function notifyCommunityReplyShared(
       ? `${commenterName} replied to you in ${community.name}`
       : `${commenterName} replied to your post in ${community.name}`,
     destination: adapter.buildPostDestination(community.slug, opts.postId),
-    meta: { communityName: community.name, actorName: commenterName },
+    meta: { communityName: community.name, actorName: commenterName, groupId: adapter.groupId },
     // The reply itself (commentId) is the recurring unit — each distinct
     // reply is its own real notification, never deduped against a prior one.
     sourceObjectId: opts.commentId,
+    inApp: delivery.inApp,
+    skipEmail: !delivery.email,
   });
 }
 
@@ -118,11 +146,14 @@ export async function notifyCommunityMentionsShared(
     adapter.getCommunityMeta(),
   ]);
   const destination = adapter.buildPostDestination(community.slug, opts.postId);
+  const channel = adapter.postChannel ? await adapter.postChannel(opts.postId) : null;
 
   await Promise.all(
     targets.map(async (candidateId) => {
       const personId = await adapter.resolvePersonId(candidateId);
       if (!personId) return;
+      const delivery = await deliveryFor(adapter, candidateId, personId, "replies", channel);
+      if (!delivery) return;
       await createNotification({
         personId,
         subAccountId: adapter.subAccountId,
@@ -132,9 +163,11 @@ export async function notifyCommunityMentionsShared(
         actorMemberId: opts.authorId,
         title: `${authorName} mentioned you in ${community.name}`,
         destination,
-        meta: { communityName: community.name, actorName: authorName },
+        meta: { communityName: community.name, actorName: authorName, groupId: adapter.groupId },
         // One mention notification per (content item, recipient).
         sourceObjectId: `${opts.contentObjectId}:${candidateId}`,
+        inApp: delivery.inApp,
+        skipEmail: !delivery.email,
       });
     })
   );
@@ -187,9 +220,13 @@ export async function notifyCommunityLiveStartedShared(
       if (privateChannel && !candidate.isModerator) return;
       const personId = await adapter.resolvePersonId(candidate.id);
       if (!personId) return;
+      const delivery = await deliveryFor(adapter, candidate.id, personId, "content", opts.channel);
+      if (!delivery) return;
       await createNotification({
         personId,
         subAccountId: adapter.subAccountId,
+        inApp: delivery.inApp,
+        skipEmail: !delivery.email,
         eventType: "community.live.started",
         objectType: "live-room",
         objectId: opts.roomId,

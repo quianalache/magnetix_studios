@@ -1,5 +1,6 @@
 import "server-only";
 
+import { endLevelsForOfferPurchase, grantLevelsForOfferPurchase } from "@/lib/server/community-membership-service";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 
 import type Stripe from "stripe";
@@ -698,6 +699,13 @@ export async function grantCourseOfferAccessServerSide(opts: {
     ...(snap.data() as Omit<CourseOfferPurchase, "id">),
   };
   if (purchase.status === "paid") {
+    await grantLevelsForOfferPurchase({
+      subAccountId: opts.subAccountId,
+      offerId: opts.offerId,
+      purchaseId: purchase.id,
+      memberId: purchase.memberId,
+      agencyId: purchase.agencyId,
+    }).catch((err) => console.warn("[course-offer] membership level grant retry failed", err));
     const retryProjectGrant = await instantiateProjectEntitlements({
       subAccountId: opts.subAccountId,
       agencyId: purchase.agencyId,
@@ -863,6 +871,16 @@ export async function grantCourseOfferAccessServerSide(opts: {
       { merge: true }
     );
   }
+
+  // Community Membership Levels (2026-11-05): a paid Offer grants every
+  // Membership Level connected to it. Idempotent; never blocks fulfillment.
+  await grantLevelsForOfferPurchase({
+    subAccountId: opts.subAccountId,
+    offerId: opts.offerId,
+    purchaseId: purchase.id,
+    memberId: purchase.memberId,
+    agencyId: purchase.agencyId,
+  }).catch((err) => console.warn("[course-offer] membership level grant failed", err));
 
   void emitWebhookEvent({
     subAccountId: opts.subAccountId,
@@ -1252,6 +1270,15 @@ export async function handleCourseOfferSubscriptionDeleted(
   if (snap.empty) return;
   const purchase = snap.docs[0].data() as Omit<CourseOfferPurchase, "id">;
   await snap.docs[0].ref.update({ status: "canceled" });
+  // Membership Levels: the paid level from THIS purchase ends; the member
+  // stays in the community and falls back to the Base Membership.
+  await endLevelsForOfferPurchase({
+    subAccountId,
+    offerId,
+    purchaseId: snap.docs[0].id,
+    memberId: purchase.memberId,
+    reason: "subscription_ended",
+  }).catch((err) => console.warn("[course-offer] membership level end failed", err));
   const expiresAt = new Date();
   for (const courseId of purchase.courseIds) {
     await stampAccessWindow({

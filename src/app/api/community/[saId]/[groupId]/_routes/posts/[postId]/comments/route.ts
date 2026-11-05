@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
+import { viewerCanAccessPost } from "@/lib/server/community-feed-service";
 import {
   createCommentServerSide,
   listComments,
@@ -24,6 +25,17 @@ export async function GET(
       { error: access.message },
       { status: access.status }
     );
+  }
+  if (
+    !(await viewerCanAccessPost({
+      subAccountId: saId,
+      groupId,
+      postId,
+      memberId: access.member.id,
+      isModerator: access.membership.role === "moderator",
+    }))
+  ) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
   const comments = await listComments({
     subAccountId: saId,
@@ -57,6 +69,17 @@ export async function POST(
       { error: access.message },
       { status: access.status }
     );
+  }
+  if (
+    !(await viewerCanAccessPost({
+      subAccountId: saId,
+      groupId,
+      postId,
+      memberId: access.member.id,
+      isModerator: access.membership.role === "moderator",
+    }))
+  ) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
   // Phase D — the author's "allow comments/replies" toggle is enforced

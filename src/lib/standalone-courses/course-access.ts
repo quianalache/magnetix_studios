@@ -1,5 +1,8 @@
 import "server-only";
 
+import { standaloneCourseLevelDecision } from "@/lib/server/community-membership-service";
+import { getCourseOffersForCourse } from "@/lib/server/course-offer-service";
+import { hasPaidCourseOffer } from "@/lib/server/course-offer-purchase-service";
 import {
   getStandaloneCoursesGate,
   type StandaloneCoursesGate,
@@ -97,6 +100,23 @@ export async function checkStandaloneCourseEntitlementForMember(
       memberId
     );
     if (!paid) return false;
+  } else {
+    // Community Membership Levels (2026-11-05): an OPEN course linked to a
+    // community whose Base Membership leaves it out is reserved for the
+    // levels that include it. Any valid source still grants it: a level
+    // that includes it, a paid purchase of the course, a paid Offer that
+    // bundles it, or a complimentary grant (above). A course's own price
+    // ("purchase" access, above) is never waived by a level.
+    const linked = course.linkedCommunityGroupIds ?? [];
+    if (linked.length) {
+      const decision = await standaloneCourseLevelDecision(course.subAccountId, course.id, linked, memberId);
+      if (decision.gated && !decision.levelAllows) {
+        const bought =
+          (await hasPaidStandaloneCourse(course.subAccountId, course.id, memberId)) ||
+          (await hasPaidOfferIncludingCourse(course.subAccountId, course.id, memberId));
+        if (!bought) return false;
+      }
+    }
   }
   // Offer Access rules (Course Offers feature) — a course granted via an
   // Offer with a "begin at date" or "restrict to N days" rule stamps the
@@ -173,4 +193,13 @@ export async function requireCourseApiAccess(
     return { kind: "error", status: 401, message: "Sign in first" };
   }
   return { kind: "ok", gate, course, member };
+}
+
+/** A paid Course Offer purchase that bundles this course. */
+async function hasPaidOfferIncludingCourse(saId: string, courseId: string, memberId: string): Promise<boolean> {
+  const offers = await getCourseOffersForCourse(saId, courseId).catch(() => []);
+  for (const o of offers) {
+    if (await hasPaidCourseOffer(saId, o.id, memberId)) return true;
+  }
+  return false;
 }

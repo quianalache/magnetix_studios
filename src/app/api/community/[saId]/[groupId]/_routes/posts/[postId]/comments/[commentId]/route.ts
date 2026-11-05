@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
+import { viewerCanAccessPost } from "@/lib/server/community-feed-service";
 import {
   deleteCommentServerSide,
   getCommentAuthor,
@@ -38,6 +39,17 @@ export async function PATCH(
       { error: access.message },
       { status: access.status }
     );
+  }
+  if (
+    !(await viewerCanAccessPost({
+      subAccountId: saId,
+      groupId,
+      postId,
+      memberId: access.member.id,
+      isModerator: access.membership.role === "moderator",
+    }))
+  ) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
   const authorId = await getCommentAuthor({
@@ -116,6 +128,17 @@ export async function DELETE(
       { error: access.message },
       { status: access.status }
     );
+  }
+  if (
+    !(await viewerCanAccessPost({
+      subAccountId: saId,
+      groupId,
+      postId,
+      memberId: access.member.id,
+      isModerator: access.membership.role === "moderator",
+    }))
+  ) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
   const authorId = await getCommentAuthor({

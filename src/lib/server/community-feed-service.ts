@@ -384,6 +384,7 @@ export async function listFeed(opts: {
     scope: tenantScope(opts.subAccountId),
     groupId: opts.groupId,
     viewerIsModerator: opts.viewerIsModerator === true,
+    viewerMemberId: opts.viewerMemberId,
     category: opts.category,
     postLimit: opts.limit ?? 100,
   });
@@ -442,6 +443,7 @@ export async function getFeedPost(opts: {
     groupId: opts.groupId,
     postId: opts.postId,
     viewerIsModerator: opts.viewerIsModerator === true,
+    viewerMemberId: opts.viewerMemberId,
   });
   if (!post) return null;
   const authors = await hydrateAuthors(opts.subAccountId, opts.groupId, [
@@ -1116,4 +1118,27 @@ export async function updateCommentServerSide(opts: {
   await deleteAttachmentStorage(removed, opts.subAccountId);
 
   return { ok: true, sanitizedBody };
+}
+
+/**
+ * Membership Levels / private channels (2026-11-05): may this member act on
+ * this post (comment, like, vote)? Same rule as reading it — a post in a
+ * channel the viewer can't access reads as not found. Used by the
+ * interaction routes, which previously took any post id.
+ */
+export async function viewerCanAccessPost(opts: {
+  subAccountId: string;
+  groupId: string;
+  postId: string;
+  memberId: string;
+  isModerator: boolean;
+}): Promise<boolean> {
+  const post = await getFeedPostByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    postId: opts.postId,
+    viewerIsModerator: opts.isModerator,
+    viewerMemberId: opts.memberId,
+  });
+  return post !== null;
 }

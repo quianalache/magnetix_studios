@@ -99,6 +99,7 @@ export default async function StaffCommunityFeedPage({
     subAccountId: saId,
     groupId: group.id,
     isModerator: viewerIsModerator,
+    memberId: member.id,
   });
   const clientChannels = channels.map((c) => ({
     ...c,

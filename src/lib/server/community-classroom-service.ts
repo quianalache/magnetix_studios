@@ -1,5 +1,6 @@
 import "server-only";
 
+import { nativeCourseIncludedForMember } from "@/lib/server/community-course-access";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
@@ -548,6 +549,19 @@ export async function listCoursesForMember(opts: {
               : "";
           locked = { reason: `Buy${price}`, purchasable: true };
         }
+      }
+
+      if (
+        !locked &&
+        !(await nativeCourseIncludedForMember({
+          subAccountId: opts.subAccountId,
+          groupId: opts.groupId,
+          courseId: course.id,
+          memberId: opts.memberId,
+          isModerator: opts.membership.role === "moderator",
+        }))
+      ) {
+        locked = { reason: "Not included in your membership", purchasable: false };
       }
 
       return {

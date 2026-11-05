@@ -146,6 +146,8 @@ export async function listFeedPostsByScope(opts: {
   scope: CommunityOwnerScope;
   groupId: string;
   viewerIsModerator: boolean;
+  /** Tenant Membership Levels — the viewer, for level channel access. */
+  viewerMemberId?: string | null;
   category?: string | null;
   /** `null` = no cap (Agency's existing behavior); a number = tenant's
    *  existing `.limit()` + pinned-backfill behavior. */
@@ -192,6 +194,7 @@ export async function listFeedPostsByScope(opts: {
             subAccountId: opts.scope.subAccountId,
             groupId: opts.groupId,
             isModerator: false,
+            memberId: opts.viewerMemberId ?? null,
           })
         : await getInaccessibleAgencyChannelNames({
             agencyId: opts.scope.agencyId,
@@ -224,6 +227,7 @@ export async function getFeedPostByScope(opts: {
   groupId: string;
   postId: string;
   viewerIsModerator: boolean;
+  viewerMemberId?: string | null;
 }): Promise<CommunityPost | null> {
   const snap = await postsColByScope(opts.scope, opts.groupId)
     .doc(opts.postId)
@@ -237,6 +241,7 @@ export async function getFeedPostByScope(opts: {
             subAccountId: opts.scope.subAccountId,
             groupId: opts.groupId,
             isModerator: false,
+            memberId: opts.viewerMemberId ?? null,
           })
         : await getInaccessibleAgencyChannelNames({
             agencyId: opts.scope.agencyId,

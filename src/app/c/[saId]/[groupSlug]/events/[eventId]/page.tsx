@@ -1,4 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { resolveMemberAccessServerSide } from "@/lib/server/community-membership-service";
+import { allows } from "@/lib/community/membership-access";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { getCommunityEventServerSide } from "@/lib/server/community-event-service";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
@@ -43,11 +45,21 @@ export default async function CommunityEventDetailPage({
     eventId
   );
   if (!event) notFound();
+  if (access.membership.role !== "moderator") {
+    const levelAccess = await resolveMemberAccessServerSide({
+      subAccountId: saId,
+      groupId: access.group.id,
+      memberId: access.member.id,
+      isModerator: false,
+    });
+    if (!allows(levelAccess.events, event.id)) notFound();
+  }
   if (access.membership.role !== "moderator" && event.channel) {
     const inaccessible = await getInaccessibleChannelNames({
       subAccountId: saId,
       groupId: access.group.id,
       isModerator: false,
+      memberId: access.member.id,
     });
     if (inaccessible.has(event.channel)) notFound();
   }

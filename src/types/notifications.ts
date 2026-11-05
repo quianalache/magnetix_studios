@@ -25,6 +25,9 @@ export type NotificationEventType =
   | "community.reply"
   | "community.mention"
   | "community.live.started"
+  // Community Notifications & Digest (2026-11-05)
+  | "community.post.created"
+  | "community.member.joined"
   // Booking loop (2026-08-26): the public booking flow now emits reliable
   // internal events for all three lifecycle transitions — see
   // notification-producers.ts's notifyBookingCreated/Rescheduled/Cancelled
@@ -97,6 +100,8 @@ export interface NotificationDoc {
     actorName?: string;
     bookingName?: string;
     readingName?: string;
+    /** Community events — for the "Manage notifications" email footer. */
+    groupId?: string;
   };
 }
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nativeCourseIncludedForMember } from "@/lib/server/community-course-access";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
@@ -70,6 +71,16 @@ export default async function LessonPlayerPage({
     const paid = await hasPaidCourse(saId, group.id, courseId, member.id);
     if (!paid) redirect(catalog);
   }
+  if (
+    !(await nativeCourseIncludedForMember({
+      subAccountId: saId,
+      groupId: group.id,
+      courseId,
+      memberId: member.id,
+      isModerator: membership.role === "moderator",
+    }))
+  )
+    redirect(catalog);
 
   if (!tree.lessons.some((l) => l.id === lessonId)) {
     const first = tree.lessons[0];

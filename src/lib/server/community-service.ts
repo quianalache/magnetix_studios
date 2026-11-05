@@ -5,7 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
-import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
+import { notifyCommunityAccessGranted, notifyCommunityMemberJoined } from "@/lib/server/notification-producers";
 import {
   ABOUT_BENEFITS_MAX,
   ABOUT_BENEFIT_DESCRIPTION_MAX,
@@ -380,7 +380,12 @@ export async function updateGroupServerSide(opts: {
     updates.brandColor =
       p.theme[p.theme.mode === "dark" ? "dark" : "light"].primary;
   }
-  if (p.joinPolicy) updates.joinPolicy = p.joinPolicy;
+  if (p.joinPolicy) {
+    if (p.joinPolicy !== "open" && p.joinPolicy !== "approval" && p.joinPolicy !== "invite") {
+      throw new Error("Community access must be Open, Approval Required or Invite Only.");
+    }
+    updates.joinPolicy = p.joinPolicy;
+  }
   if (p.status) updates.status = p.status;
   if (Array.isArray(p.categories)) {
     // Normalize: trim, drop empties, dedupe, always keep "General" first.
@@ -525,7 +530,8 @@ export type JoinOutcome =
   | { status: "active" }
   | { status: "pending" }
   | { status: "already"; membershipStatus: GroupMembership["status"] }
-  | { status: "payment_required" };
+  | { status: "payment_required" }
+  | { status: "invite_only" };
 
 /**
  * Join a published group. Free + open → active immediately. Approval-policy →
@@ -556,6 +562,9 @@ export async function joinGroupServerSide(opts: {
    *  through a personal invite link. Only ever takes effect on a genuinely
    *  NEW membership (see below) — an "already" outcome never overwrites an
    *  existing membership's referrer, and never re-awards a point. */
+  /** Invite Only communities: true for server-trusted adds (automations)
+   *  — never for a visitor's own join request. */
+  trusted?: boolean;
   invitedByMemberId?: string;
 }): Promise<JoinOutcome> {
   const db = getAdminDb();
@@ -596,6 +605,10 @@ export async function joinGroupServerSide(opts: {
     .get();
   const email = memberSnap.data()?.email as string | undefined;
   const staff = !!email && (await isStaffEmail(opts.subAccountId, email));
+
+  if (group.joinPolicy === "invite" && !staff && opts.trusted !== true) {
+    return { status: "invite_only" };
+  }
 
   if (group.access === "paid" && !staff) {
     // Paid join is wired in Slice 6 (one-time PayPal + admin mark-paid).
@@ -653,6 +666,11 @@ export async function joinGroupServerSide(opts: {
 
   if (becomesActive) {
     await syncGroupMemberCount(opts.subAccountId, opts.groupId);
+    if (isNewJoin) {
+      void notifyCommunityMemberJoined({ subAccountId: opts.subAccountId, groupId: opts.groupId, memberId: opts.memberId }).catch((err) =>
+        console.warn("[community] member-joined notification failed", err)
+      );
+    }
     void emitWebhookEvent({
       subAccountId: opts.subAccountId,
       agencyId: opts.agencyId,
@@ -936,6 +954,9 @@ export async function approveMembershipServerSide(opts: {
 
   await memRef.update({ status: "active" });
   await syncGroupMemberCount(opts.subAccountId, opts.groupId);
+  void notifyCommunityMemberJoined({ subAccountId: opts.subAccountId, groupId: opts.groupId, memberId: opts.memberId }).catch((err) =>
+    console.warn("[community] member-joined notification failed", err)
+  );
 
   // Points & Rewards — `joinGroupServerSide` only awards "Invite a new
   // member" for a join that becomes active immediately; an approval-gated

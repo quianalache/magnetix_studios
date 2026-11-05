@@ -8,12 +8,14 @@ import {
   ChevronRight,
   CircleHelp,
   LockKeyhole,
+  Loader2,
   MessageCircle,
   MonitorSmartphone,
   Radio,
   UserRound,
 } from "lucide-react";
 import type { PersonCommunityItem } from "@/lib/server/mymagnetix-service";
+import { Switch } from "@/components/ui/switch";
 
 type DeviceState =
   | "checking"
@@ -254,6 +256,47 @@ export function CommunityNotificationSettings({
 }: {
   community: PersonCommunityItem;
 }) {
+  type Category = "member_joined" | "content" | "replies";
+  type Delivery = { email: boolean; inApp: boolean };
+  type Prefs = { digestFrequency: "off" | "daily" | "weekly" | "monthly"; digest: boolean; events: Record<Category, Delivery> };
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const query = new URLSearchParams({ groupId: community.groupId });
+  if (community.subAccountId) query.set("subAccountId", community.subAccountId);
+  const endpoint = `/api/my/notifications/community-prefs?${query.toString()}`;
+  useEffect(() => {
+    if (!community.subAccountId) {
+      setError("Member notification preferences are currently available for workspace communities only.");
+      return;
+    }
+    let cancelled = false;
+    fetch(endpoint, { cache: "no-store" }).then(async (response) => {
+      const body = (await response.json().catch(() => ({}))) as Prefs & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Couldn't load preferences.");
+      if (!cancelled) setPrefs(body);
+    }).catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Couldn't load preferences."); });
+    return () => { cancelled = true; };
+  }, [endpoint, community.subAccountId]);
+  function updateDelivery(category: Category, channel: keyof Delivery, value: boolean) {
+    setPrefs((current) => current ? ({ ...current, events: { ...current.events, [category]: { ...current.events[category], [channel]: value } } }) : current);
+  }
+  async function save() {
+    if (!prefs) return;
+    setSaving(true);
+    try {
+      const response = await fetch(endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events: prefs.events, digest: prefs.digest ? "inherit" : false }) });
+      const body = (await response.json().catch(() => ({}))) as Prefs & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Couldn't save preferences.");
+      setPrefs(body);
+    } catch (err) { setError(err instanceof Error ? err.message : "Couldn't save preferences."); }
+    finally { setSaving(false); }
+  }
+  const rows: { key: Category; title: string; description: string }[] = [
+    { key: "member_joined", title: "New member alerts", description: "When someone joins this community." },
+    { key: "content", title: "Content updates", description: "When new posts, courses, or events are published." },
+    { key: "replies", title: "Comments, replies & mentions", description: "When someone replies to or mentions you." },
+  ];
   return (
     <div className="mx-auto max-w-4xl">
       <Link
@@ -287,23 +330,12 @@ export function CommunityNotificationSettings({
             </p>
           </div>
         </div>
-        <div className="p-5 sm:p-7">
-          <FutureToggle
-            label="Replies to my posts"
-            description="Get notified when someone replies to your posts."
-          />
-          <FutureToggle
-            label="Replies to my comments"
-            description="Get notified when someone replies to your comments."
-          />
-          <FutureToggle
-            label="Mentions"
-            description="Get notified when someone mentions you."
-          />
-          <FutureToggle
-            label="Live sessions"
-            description="Get notified when a live session is starting or live now."
-          />
+        <div className="space-y-5 p-5 sm:p-7">
+          {error && <p className="rounded-lg bg-status-danger-bg p-3 text-micro text-status-danger-fg">{error}</p>}
+          <div className="grid grid-cols-[minmax(0,1fr)_58px_58px] items-center gap-2 border-b border-border pb-2 text-overline font-semibold text-muted-foreground"><span>Community activity</span><span>Email</span><span>In-App</span></div>
+          <div className="divide-y divide-border">{rows.map((row) => <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_58px_58px] items-center gap-2 py-3"><div><p className="text-caption font-semibold text-foreground">{row.title}</p><p className="mt-0.5 text-overline text-muted-foreground">{row.description}</p></div><Switch aria-label={`${row.title} email`} checked={prefs?.events[row.key].email ?? false} onCheckedChange={(value) => updateDelivery(row.key, "email", value)} disabled={!prefs || saving} /><Switch aria-label={`${row.title} in-app`} checked={prefs?.events[row.key].inApp ?? false} onCheckedChange={(value) => updateDelivery(row.key, "inApp", value)} disabled={!prefs || saving} /></div>)}</div>
+          <div className="rounded-xl border border-border bg-muted p-4"><div className="flex items-center justify-between gap-4"><div><p className="text-caption font-semibold text-foreground">Community digest</p><p className="mt-0.5 text-overline text-muted-foreground">Use the community&apos;s digest schedule, or turn it off for yourself.</p></div><Switch aria-label="Community digest" checked={prefs?.digest ?? false} onCheckedChange={(value) => setPrefs((current) => current ? ({ ...current, digest: value }) : current)} disabled={!prefs || saving} /></div>{prefs && <p className="mt-3 text-overline text-muted-foreground">Community schedule: <span className="font-semibold text-foreground">{prefs.digestFrequency === "off" ? "Off" : prefs.digestFrequency[0].toUpperCase() + prefs.digestFrequency.slice(1)}</span></p>}</div>
+          <div className="flex justify-end"><button onClick={save} disabled={!prefs || saving || !!error} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-caption font-semibold text-primary-foreground disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {saving ? "Saving…" : "Save preferences"}</button></div>
         </div>
       </div>
     </div>

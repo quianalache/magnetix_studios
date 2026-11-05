@@ -95,7 +95,11 @@ function joinSubtext(
   if (state === "pending") return "Pending approval — you'll be notified once approved.";
   const price = group.access === "paid" ? priceLabel : "Free";
   const access =
-    group.joinPolicy === "approval" ? "Approval required" : "Anyone can join";
+    group.joinPolicy === "approval"
+      ? "Approval required"
+      : group.joinPolicy === "invite"
+        ? "Invite only"
+        : "Anyone can join";
   return `${price} · ${access}`;
 }
 
