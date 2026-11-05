@@ -21,9 +21,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ off
   const paid = await hasPaidAgencyCourseOffer(agencyId, offerId, person.id);
   if (!paid) return NextResponse.json({ paid: false });
 
-  const upsell = await getPublishedAgencyOneClickUpsell(agencyId, offerId);
-  if (!upsell) return NextResponse.json({ paid: true, oneClickUpsell: null });
-  const targetOffer = await getAgencyCourseOffer(agencyId, upsell.targetOfferId);
+  // Archived offers keep their purchase status but never sell anything new.
+  const trigger = await getAgencyCourseOffer(agencyId, offerId);
+  const upsell = trigger?.visibility === "published" ? await getPublishedAgencyOneClickUpsell(agencyId, offerId) : null;
+  const targetOffer = upsell ? await getAgencyCourseOffer(agencyId, upsell.targetOfferId) : null;
+  if (!upsell || targetOffer?.visibility !== "published") return NextResponse.json({ paid: true, oneClickUpsell: null });
   return NextResponse.json({
     paid: true,
     oneClickUpsell: {

@@ -55,7 +55,11 @@ export async function GET(request: Request, ctx: Ctx) {
       contentSets: contentSets.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault })),
       chartDesigns: chartSets.sets.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault })),
       courses: courses.map((c) => ({ id: c.id, title: c.title, published: !!c.published })),
-      offers: offers.map((o) => ({ id: o.id, title: o.title, published: o.visibility === "published" })),
+      // Archived Offers (pre-Funnel safety) aren't offered for new choices; one
+      // this embed already uses stays listed, labelled, so it isn't silently lost.
+      offers: offers
+        .filter((o) => o.visibility !== "archived" || JSON.stringify(embed).includes(`"${o.id}"`))
+        .map((o) => ({ id: o.id, title: o.visibility === "archived" ? `${o.title} (Archived)` : o.title, published: o.visibility === "published" })),
       resultPages,
       systems: "error" in systems
         ? { humanDesign: false, astrology: false }

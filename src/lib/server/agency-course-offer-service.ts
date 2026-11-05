@@ -160,8 +160,28 @@ export async function updateAgencyCourseOfferServerSide(opts: {
   await offerDoc(opts.agencyId, opts.offerId).update(updates);
 }
 
-export async function deleteAgencyCourseOfferServerSide(opts: { agencyId: string; offerId: string }): Promise<void> {
-  await getAdminDb().recursiveDelete(offerDoc(opts.agencyId, opts.offerId));
+/** Agency sibling of `archiveCourseOfferServerSide` — archive, never delete. */
+export async function archiveAgencyCourseOfferServerSide(opts: { agencyId: string; offerId: string; uid: string }): Promise<"archived" | "not_found"> {
+  const ref = offerDoc(opts.agencyId, opts.offerId);
+  return getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "not_found";
+    if (snap.get("visibility") === "archived") return "archived";
+    tx.update(ref, { visibility: "archived", archivedAt: FieldValue.serverTimestamp(), archivedByUid: opts.uid, updatedAt: FieldValue.serverTimestamp() });
+    return "archived";
+  });
+}
+
+/** Agency sibling of `restoreCourseOfferServerSide`. */
+export async function restoreAgencyCourseOfferServerSide(opts: { agencyId: string; offerId: string }): Promise<"restored" | "not_found" | "not_archived"> {
+  const ref = offerDoc(opts.agencyId, opts.offerId);
+  return getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "not_found";
+    if (snap.get("visibility") !== "archived") return "not_archived";
+    tx.update(ref, { visibility: "draft", archivedAt: null, archivedByUid: null, updatedAt: FieldValue.serverTimestamp() });
+    return "restored";
+  });
 }
 
 function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {

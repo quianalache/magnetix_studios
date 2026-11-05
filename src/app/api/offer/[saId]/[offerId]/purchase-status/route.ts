@@ -21,7 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ saId: string; offerId: string }> },
 ) {
   const { saId, offerId } = await params;
-  const access = await requireOfferApiAccess(saId, offerId);
+  const access = await requireOfferApiAccess(saId, offerId, { historical: true });
   if (access.kind === "error") {
     return NextResponse.json(
       { error: access.message },
@@ -31,11 +31,13 @@ export async function GET(
   const paid = await hasPaidCourseOffer(saId, offerId, access.member.id);
   if (!paid) return NextResponse.json({ paid: false });
 
-  const oneClickUpsell = await getOneClickUpsellForOffer(saId, offerId);
-  if (!oneClickUpsell) {
+  // Archived offers keep their purchase status, but never sell anything new:
+  // no upsell from an archived offer, and never TO a non-published one.
+  const oneClickUpsell = access.offer.visibility === "published" ? await getOneClickUpsellForOffer(saId, offerId) : null;
+  const targetOffer = oneClickUpsell ? await getCourseOffer(saId, oneClickUpsell.targetOfferId) : null;
+  if (!oneClickUpsell || targetOffer?.visibility !== "published") {
     return NextResponse.json({ paid: true, oneClickUpsell: null });
   }
-  const targetOffer = await getCourseOffer(saId, oneClickUpsell.targetOfferId);
   return NextResponse.json({
     paid: true,
     oneClickUpsell: {

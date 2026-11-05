@@ -2,11 +2,11 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Loader2, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
@@ -26,10 +26,10 @@ import type { StandaloneCourse } from "@/types/standalone-courses";
  * upsell-service.ts).
  */
 export default function AgencyCourseOfferEditorPage({ params }: { params: Promise<{ offerId: string }> }) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { offerId } = use(params);
   const { agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
-  const router = useRouter();
   const apiBase = `/api/agency/course-offers/${offerId}`;
 
   const [offer, setOffer] = useState<CourseOffer | null>(null);
@@ -158,7 +158,8 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
           recurringInterval: type === "recurring" ? recurringInterval : null,
           trialDays: type === "recurring" ? trialDays : null,
           priceTextOverride: priceTextOverride.trim() || null,
-          visibility: published ? "published" : "draft",
+          // An archived offer keeps its state until restored (pre-Funnel safety).
+          ...(offer?.visibility === "archived" ? {} : { visibility: published ? "published" : "draft" }),
           discountCodesEnabled,
           showRecentPurchasePopup,
           checkoutSettings,
@@ -177,13 +178,30 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
     }
   }
 
-  async function remove() {
-    if (!confirm("Delete this offer? Existing purchases and access are unaffected.")) return;
-    const res = await fetch(apiBase, { method: "DELETE" });
+  // Archive replaces delete (pre-Funnel safety): purchases, subscriptions,
+  // upsells and history are kept; the offer just stops being purchasable.
+  async function archive() {
+    const ok = await confirm({
+      title: "Archive this offer?",
+      description: "It stops being available to buy and disappears from Offer pickers. Its purchases, subscriptions, upsells and history are kept, and you can restore it any time.",
+      confirmLabel: "Archive offer",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const res = await fetch(apiBase, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "archive" }) });
     if (res.ok) {
-      toast.success("Offer deleted");
-      router.push("/agency/course-offers");
-    }
+      toast.success("Offer archived");
+      setOffer((o) => (o ? { ...o, visibility: "archived" } : o));
+      setPublished(false);
+    } else toast.error("Couldn't archive offer");
+  }
+
+  async function restore() {
+    const res = await fetch(apiBase, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore" }) });
+    if (res.ok) {
+      toast.success("Offer restored as a draft. Publish it when it's ready to sell.");
+      setOffer((o) => (o ? { ...o, visibility: "draft" } : o));
+    } else toast.error("Couldn't restore offer");
   }
 
   return (
@@ -204,13 +222,25 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
           <Link href={`/agency/course-offers/${offerId}/purchases`}>
             <Button variant="outline" size="sm">Purchases</Button>
           </Link>
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {offer.visibility === "archived" ? (
+            <Button variant="outline" size="sm" onClick={restore}>
+              <ArchiveRestore className="h-4 w-4" /> Restore
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={archive} title="Archive offer">
+              <Archive className="h-4 w-4" /> Archive
+            </Button>
+          )}
         </div>
       </div>
 
       <h1 className="text-2xl font-semibold tracking-tight">{offer.title}</h1>
+      {offer.visibility === "archived" && (
+        <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground" data-offer-archived="">
+          This offer is archived. It can&apos;t be bought, but its purchases, subscriptions and history are kept. Restore it to sell it again.
+        </p>
+      )}
+      {confirmDialog}
 
       <div className="space-y-4 rounded-xl border bg-card p-4">
         <div className="space-y-1.5">

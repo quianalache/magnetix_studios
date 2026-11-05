@@ -15,6 +15,15 @@ import type { PaymentMode } from "./tenancy";
  */
 export type OfferType = "free" | "oneTime" | "recurring";
 export type OfferVisibility = "draft" | "published";
+/**
+ * A Course Offer's lifecycle (pre-Funnel safety, 2026-11-05). `archived`
+ * replaces deletion: an archived Offer can't be bought (every public /
+ * checkout path requires `"published"`), but the Offer, its purchases,
+ * subscriptions, upsells and fulfillment history are all kept. Restore puts
+ * it back to `"draft"`; publishing again runs the normal checks. Upsells keep
+ * the plain draft/published `OfferVisibility`.
+ */
+export type CourseOfferVisibility = OfferVisibility | "archived";
 export type RecurringInterval = "day" | "week" | "month" | "year";
 
 export interface CourseOfferAccess {
@@ -119,7 +128,10 @@ export interface CourseOffer {
   paymentMode?: PaymentMode;
   /** Custom checkout price display, e.g. "Free Trial", "Limited Time Only". */
   priceTextOverride: string | null;
-  visibility: OfferVisibility;
+  visibility: CourseOfferVisibility;
+  /** When the Offer was archived (null / absent when not archived). */
+  archivedAt?: Timestamp | FieldValue | null;
+  archivedByUid?: string | null;
   /** Bumped on every save — surfaces as a "Version N" badge. Informational only. */
   version: number;
   thumbnailUrl: string | null;

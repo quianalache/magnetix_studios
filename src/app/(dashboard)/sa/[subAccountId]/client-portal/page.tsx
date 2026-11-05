@@ -187,7 +187,9 @@ export default function ClientPortalSettingsPage() {
         .map((page) => ({ id: page.slug, label: page.name }));
     }
     if (type === "offer")
-      return offers.map((offer) => ({ id: offer.id, label: offer.title }));
+      return offers
+        .filter((offer) => offer.visibility !== "archived")
+        .map((offer) => ({ id: offer.id, label: offer.title }));
     return [];
   }
 

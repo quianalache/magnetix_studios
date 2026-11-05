@@ -26,12 +26,12 @@ export function OfferUpsellTab({
   );
 
   const otherOffers = useMemo(
-    () => allOffers.filter((o) => o.id !== offer.id),
+    () => allOffers.filter((o) => o.id !== offer.id && o.visibility !== "archived"),
     [allOffers, offer.id],
   );
   const targetTitle = useMemo(() => {
     const map = new Map<string, string>();
-    for (const o of allOffers) map.set(o.id, o.title);
+    for (const o of allOffers) map.set(o.id, o.visibility === "archived" ? `${o.title} (Archived)` : o.title);
     return map;
   }, [allOffers]);
   const hasOneClick = upsells.some((u) => u.type === "oneClick");

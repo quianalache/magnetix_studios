@@ -19,7 +19,7 @@ import type { CourseOffer, OfferVisibility } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 import type { ProjectTemplate } from "@/types/projects";
 
-type VisibilityFilter = "published" | "draft" | "all";
+type VisibilityFilter = "published" | "draft" | "all" | "archived";
 
 function priceLabel(offer: CourseOffer): string {
   if (offer.priceTextOverride) return offer.priceTextOverride;
@@ -104,7 +104,8 @@ export function OffersList({
   const filtered = useMemo(() => {
     return offers
       .filter((o) => !courseId || o.courseIds.includes(courseId))
-      .filter((o) => filter === "all" || o.visibility === filter)
+      // "All" = active offers; archived ones live in their own view.
+      .filter((o) => (filter === "all" ? o.visibility !== "archived" : o.visibility === filter))
       .filter((o) => o.title.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [offers, courseId, filter, search]);
@@ -156,6 +157,7 @@ export function OffersList({
               { value: "published", label: "Published" },
               { value: "draft", label: "Draft" },
               { value: "all", label: "All" },
+              { value: "archived", label: "Archived" },
             ]}
           />
         </div>
@@ -173,7 +175,9 @@ export function OffersList({
           <p className="text-muted-foreground text-[13px]">
             {offers.length === 0
               ? "No offers yet. Create one to start bundling and pricing your products."
-              : "No offers match this filter."}
+              : filter === "archived"
+                ? "No archived offers."
+                : "No offers match this filter."}
           </p>
         </div>
       ) : (
@@ -219,24 +223,30 @@ export function OffersList({
                       {priceLabel(offer)}
                     </td>
                     <td className="px-3 py-2.5">
+                      {offer.visibility === "archived" ? (
+                        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase" data-offer-archived="">
+                          Archived
+                        </span>
+                      ) : (
                       <select
-                        value={offer.visibility}
-                        onChange={(e) =>
-                          updateVisibility(
-                            offer,
-                            e.target.value as OfferVisibility
-                          )
-                        }
-                        className={cn(
-                          "focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground rounded-full border-0 px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase focus-visible:ring-1 focus-visible:outline-none [&>option]:normal-case",
-                          offer.visibility === "published"
-                            ? "bg-status-success-bg text-status-success-fg"
-                            : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400"
-                        )}
-                      >
-                        <option value="published">Published</option>
-                        <option value="draft">Draft</option>
-                      </select>
+                          value={offer.visibility}
+                          onChange={(e) =>
+                            updateVisibility(
+                              offer,
+                              e.target.value as OfferVisibility
+                            )
+                          }
+                          className={cn(
+                            "focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground rounded-full border-0 px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase focus-visible:ring-1 focus-visible:outline-none [&>option]:normal-case",
+                            offer.visibility === "published"
+                              ? "bg-status-success-bg text-status-success-fg"
+                              : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400"
+                          )}
+                        >
+                          <option value="published">Published</option>
+                          <option value="draft">Draft</option>
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="text-muted-foreground flex items-center gap-1">

@@ -1,4 +1,5 @@
 import "server-only";
+import { getPublishedAgencyOneClickUpsell } from "@/lib/server/agency-course-offer-upsell-service";
 
 import type Stripe from "stripe";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
@@ -95,7 +96,8 @@ export async function startAgencyCourseOfferStripeCheckoutServerSide(opts: {
   returnUrl: string;
 }): Promise<{ clientSecret: string }> {
   const offer = await getAgencyCourseOffer(opts.agencyId, opts.offerId);
-  if (!offer || offer.type === "free" || !offer.priceCents) {
+  // Pre-Funnel safety: new purchases need a published (never archived) offer.
+  if (!offer || offer.visibility !== "published" || offer.type === "free" || !offer.priceCents) {
     throw new Error("This offer isn't for sale.");
   }
   const amountCents = offer.priceCents;
@@ -316,6 +318,12 @@ export async function chargeOneClickUpsellForAgencyServerSide(opts: {
   const targetOffer = await getAgencyCourseOffer(opts.agencyId, opts.targetOfferId);
   if (!targetOffer || targetOffer.type === "free" || !targetOffer.priceCents) {
     return { ok: false, needsManualCheckout: true };
+  }
+  // Pre-Funnel safety: only the configured, published one-click upsell, and
+  // only to a published (not draft / archived) offer.
+  const configured = await getPublishedAgencyOneClickUpsell(opts.agencyId, opts.triggerOfferId);
+  if (targetOffer.visibility !== "published" || configured?.targetOfferId !== opts.targetOfferId) {
+    return { ok: false };
   }
 
   const stripe = getStripeServer();

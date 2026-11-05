@@ -31,6 +31,7 @@ import type { PayPalConfig } from "@/types";
 import type { ContactAttribution } from "@/types/contacts";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { getOneClickUpsellForOffer } from "@/lib/server/course-offer-upsell-service";
 import {
   formatActivityAmount,
   recordContactActivity,
@@ -239,7 +240,9 @@ export async function requestCourseOfferPaypalServerSide(opts: {
   const agencyId = (sub?.agencyId as string) ?? "";
 
   const offer = await getCourseOffer(opts.subAccountId, opts.offerId);
-  if (!offer || offer.type === "free" || !offer.priceCents) {
+  // Pre-Funnel safety: a NEW purchase needs a published offer (never draft /
+  // archived) — defence in depth behind the route's own access check.
+  if (!offer || offer.visibility !== "published" || offer.type === "free" || !offer.priceCents) {
     throw new Error("This offer isn't for sale.");
   }
   const amountCents = offer.priceCents;
@@ -319,7 +322,9 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   paymentMode?: "test" | "live";
 }): Promise<{ clientSecret: string }> {
   const offer = await getCourseOffer(opts.subAccountId, opts.offerId);
-  if (!offer || offer.type === "free" || !offer.priceCents) {
+  // Pre-Funnel safety: a NEW purchase needs a published offer (never draft /
+  // archived) — defence in depth behind the route's own access check.
+  if (!offer || offer.visibility !== "published" || offer.type === "free" || !offer.priceCents) {
     throw new Error("This offer isn't for sale.");
   }
   const subSnap = await getAdminDb()
@@ -1427,6 +1432,13 @@ export async function chargeOneClickUpsellServerSide(opts: {
   );
   if (!targetOffer || targetOffer.type === "free" || !targetOffer.priceCents) {
     return { ok: false, needsManualCheckout: true };
+  }
+  // Pre-Funnel safety: only the trigger's configured, published one-click
+  // upsell can be charged, and only to a published (not draft / archived)
+  // offer. The target id comes from the browser, so it's never trusted alone.
+  const configured = await getOneClickUpsellForOffer(opts.subAccountId, opts.triggerOfferId);
+  if (targetOffer.visibility !== "published" || configured?.targetOfferId !== opts.targetOfferId) {
+    return { ok: false };
   }
 
   const stripe = getStripeServer();

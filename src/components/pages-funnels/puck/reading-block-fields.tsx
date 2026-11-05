@@ -49,6 +49,8 @@ interface OfferOption {
   id: string;
   title: string;
   published: boolean;
+  /** Archived Offers are hidden from new choices; a selected one is kept + flagged. */
+  archived?: boolean;
 }
 
 export function FeaturedOfferPickerField({ value, onChange }: { value: string | undefined; onChange: (value: string) => void }) {
@@ -59,14 +61,16 @@ export function FeaturedOfferPickerField({ value, onChange }: { value: string | 
     let cancelled = false;
     fetch(`/api/sub-accounts/${sub.subAccountId}/energetic-decoder/featured-offers`)
       .then((r) => r.json())
-      .then((d) => !cancelled && setOffers(d.offers ?? []))
+      .then((d) => !cancelled && setOffers(((d.offers ?? []) as OfferOption[]).filter((o) => !o.archived || o.id === value)))
       .catch(() => !cancelled && setOffers([]));
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the archived filter keeps the value selected at load
   }, [sub?.subAccountId]);
   const offersHref = sub ? sub.saPath("/courses") : "#";
-  const label = (o: OfferOption) => (o.published ? o.title : `${o.title} (Draft)`);
+  const label = (o: OfferOption) => (o.archived ? `${o.title} (Archived)` : o.published ? o.title : `${o.title} (Draft)`);
+  const selectedArchived = offers?.find((o) => o.id === value)?.archived === true;
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-semibold">Offer</Label>
@@ -91,6 +95,9 @@ export function FeaturedOfferPickerField({ value, onChange }: { value: string | 
             ))}
           </SelectContent>
         </Select>
+      )}
+      {selectedArchived && (
+        <p className="text-destructive text-xs">This Offer is archived, so visitors don’t see it. Restore it in Offers or choose another.</p>
       )}
       <p className="text-muted-foreground text-micro leading-snug">
         Price, billing terms and what it includes always come from the Offer itself — this block can’t change them.

@@ -25,6 +25,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const offers = await listCourseOffers(subAccountId).catch(() => []);
   return NextResponse.json({
     ok: true,
-    offers: offers.map((o) => ({ id: o.id, title: o.title, published: o.visibility === "published" })),
+    // `archived` (pre-Funnel safety): pickers hide archived Offers from new
+    // choices but keep (and flag) one that's already selected.
+    offers: offers.map((o) => ({ id: o.id, title: o.title, published: o.visibility === "published", archived: o.visibility === "archived" })),
   });
 }

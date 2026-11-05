@@ -8,7 +8,7 @@ import type {
   ButtonAlign,
 } from "@/types/course-theme";
 import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
-import type { OfferType, OfferVisibility } from "@/types/course-offers";
+import type { OfferType, CourseOfferVisibility } from "@/types/course-offers";
 
 /**
  * Renderers for the theme's customizable block types. Deliberately
@@ -28,7 +28,8 @@ export interface CrossSellTargetInfo {
   priceCents: number | null;
   currency: string | null;
   type: OfferType;
-  visibility: OfferVisibility;
+  /** Archived targets are never shown (only "published" renders). */
+  visibility: CourseOfferVisibility;
 }
 
 /**

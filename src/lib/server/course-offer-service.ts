@@ -173,6 +173,7 @@ export interface CourseOfferPatch {
   recurringInterval?: RecurringInterval | null;
   trialDays?: number | null;
   priceTextOverride?: string | null;
+  /** draft / published only — archive + restore have their own actions. */
   visibility?: OfferVisibility;
   thumbnailUrl?: string | null;
   discountCodesEnabled?: boolean;
@@ -278,11 +279,49 @@ export async function updateCourseOfferServerSide(opts: {
   await offerDoc(opts.subAccountId, opts.offerId).update(updates);
 }
 
-export async function deleteCourseOfferServerSide(opts: {
+/**
+ * Archive instead of delete (pre-Funnel safety, 2026-11-05). The Offer stays,
+ * and so does everything under it — purchases, upsells, subscription and
+ * fulfillment history — because those records are what subscription
+ * webhooks, entitlement checks, invoices, reporting and workflow history
+ * resolve against. An archived Offer simply stops being purchasable: every
+ * public page, signup, checkout and upsell path already requires
+ * `visibility === "published"`. There is deliberately no hard-delete path.
+ */
+export async function archiveCourseOfferServerSide(opts: {
   subAccountId: string;
   offerId: string;
-}): Promise<void> {
-  await getAdminDb().recursiveDelete(offerDoc(opts.subAccountId, opts.offerId));
+  uid: string;
+}): Promise<"archived" | "not_found"> {
+  const ref = offerDoc(opts.subAccountId, opts.offerId);
+  return getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "not_found";
+    if (snap.get("visibility") === "archived") return "archived";
+    tx.update(ref, {
+      visibility: "archived",
+      archivedAt: FieldValue.serverTimestamp(),
+      archivedByUid: opts.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return "archived";
+  });
+}
+
+/** Restore an archived Offer to Draft. Publishing it again runs the normal
+ *  publish checks; nothing is recreated (prices are built at checkout). */
+export async function restoreCourseOfferServerSide(opts: {
+  subAccountId: string;
+  offerId: string;
+}): Promise<"restored" | "not_found" | "not_archived"> {
+  const ref = offerDoc(opts.subAccountId, opts.offerId);
+  return getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "not_found";
+    if (snap.get("visibility") !== "archived") return "not_archived";
+    tx.update(ref, { visibility: "draft", archivedAt: null, archivedByUid: null, updatedAt: FieldValue.serverTimestamp() });
+    return "restored";
+  });
 }
 
 function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {

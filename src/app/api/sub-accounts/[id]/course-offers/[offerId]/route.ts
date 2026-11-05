@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { requireCourseOffersStaff } from "@/lib/course-offers/staff-guard";
 import {
   buildClientProjectTemplateBundlesServerSide,
-  deleteCourseOfferServerSide,
+  archiveCourseOfferServerSide,
   getCourseOffer,
+  restoreCourseOfferServerSide,
   updateCourseOfferServerSide,
   type CourseOfferPatch,
 } from "@/lib/server/course-offer-service";
@@ -20,11 +21,32 @@ export async function PATCH(
   const access = await requireCourseOffersStaff(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  let patch: CourseOfferPatch & { projectTemplateIds?: string[] };
+  let patch: CourseOfferPatch & { projectTemplateIds?: string[]; action?: unknown };
   try {
     patch = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  // Archive / restore (pre-Funnel safety): explicit actions, never a plain edit.
+  if (patch.action === "archive") {
+    const r = await archiveCourseOfferServerSide({ subAccountId, offerId, uid: access.uid });
+    return r === "not_found" ? NextResponse.json({ error: "Offer not found" }, { status: 404 }) : NextResponse.json({ ok: true, visibility: "archived" });
+  }
+  if (patch.action === "restore") {
+    const r = await restoreCourseOfferServerSide({ subAccountId, offerId });
+    if (r === "not_found") return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+    if (r === "not_archived") return NextResponse.json({ error: "This offer isn't archived." }, { status: 409 });
+    return NextResponse.json({ ok: true, visibility: "draft" });
+  }
+  if (patch.action !== undefined) return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  if (patch.visibility !== undefined && patch.visibility !== "draft" && patch.visibility !== "published") {
+    return NextResponse.json({ error: "Use Archive to archive an offer." }, { status: 400 });
+  }
+  if (patch.visibility !== undefined) {
+    const current = await getCourseOffer(subAccountId, offerId);
+    if (current?.visibility === "archived") {
+      return NextResponse.json({ error: "This offer is archived. Restore it before publishing." }, { status: 409 });
+    }
   }
   if (Array.isArray(patch.projectTemplateIds)) {
     try {
@@ -84,6 +106,9 @@ export async function DELETE(
   const { id: subAccountId, offerId } = await ctx.params;
   const access = await requireCourseOffersStaff(request, subAccountId);
   if (access instanceof NextResponse) return access;
-  await deleteCourseOfferServerSide({ subAccountId, offerId });
-  return NextResponse.json({ ok: true });
+  // DELETE archives (pre-Funnel safety). Offers are never hard-deleted: their
+  // purchases, subscriptions and upsells must outlive them.
+  const r = await archiveCourseOfferServerSide({ subAccountId, offerId, uid: access.uid });
+  if (r === "not_found") return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+  return NextResponse.json({ ok: true, archived: true });
 }

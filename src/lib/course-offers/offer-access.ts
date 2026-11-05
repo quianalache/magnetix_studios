@@ -42,16 +42,24 @@ export type OfferApiAccess =
   | { kind: "ok"; gate: StandaloneCoursesGate; offer: CourseOffer; member: Member }
   | { kind: "error"; status: number; message: string };
 
+/**
+ * `historical: true` (pre-Funnel safety): also accept an ARCHIVED offer — for
+ * read-only history a past buyer still needs (purchase status after
+ * checkout). Anything that starts a NEW purchase must use the default
+ * (published only).
+ */
 export async function requireOfferApiAccess(
   saId: string,
   offerId: string,
+  opts: { historical?: boolean } = {},
 ): Promise<OfferApiAccess> {
   const gate = await getStandaloneCoursesGate(saId);
   if (!gate || !gate.enabled) {
     return { kind: "error", status: 404, message: "Not found" };
   }
   const offer = await getCourseOffer(saId, offerId);
-  if (!offer || offer.visibility !== "published") {
+  const visible = offer && (offer.visibility === "published" || (opts.historical === true && offer.visibility === "archived"));
+  if (!offer || !visible) {
     return { kind: "error", status: 404, message: "Offer not found" };
   }
   const member = await getCurrentMember(saId);

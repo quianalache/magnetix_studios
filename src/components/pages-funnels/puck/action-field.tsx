@@ -255,7 +255,7 @@ function PageFields({ action, onChange, includeCurrentPage }: { action: Extract<
 
 function OfferFields({ action, onChange }: { action: Extract<PageAction, { type: "purchase" }>; onChange: (a: PageAction) => void }) {
   const sub = useOptionalSubAccount();
-  const [offers, setOffers] = useState<{ id: string; title: string; published: boolean }[] | null>(null);
+  const [offers, setOffers] = useState<{ id: string; title: string; published: boolean; archived?: boolean }[] | null>(null);
   useEffect(() => {
     if (!sub?.subAccountId) return;
     let cancelled = false;
@@ -268,25 +268,28 @@ function OfferFields({ action, onChange }: { action: Extract<PageAction, { type:
     };
   }, [sub?.subAccountId]);
   const selected = offers?.find((o) => o.id === action.offerId);
+  // Archived Offers can't be chosen anew, but an existing choice is kept and flagged.
+  const choices = offers?.filter((o) => !o.archived || o.id === action.offerId) ?? [];
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-semibold">Offer</Label>
       {offers === null ? (
         <Loading what="Offers" />
-      ) : offers.length === 0 ? (
+      ) : choices.length === 0 ? (
         <Hint>No Offers yet. Create one in Offers first.</Hint>
       ) : (
         <OptionSelect
           aria-label="Offer"
           value={action.offerId || null}
           onChange={(offerId) => onChange({ ...action, offerId: offerId ?? "" })}
-          options={offers.map((o) => ({ value: o.id, label: o.published ? o.title : `${o.title} (Draft)` }))}
+          options={choices.map((o) => ({ value: o.id, label: o.archived ? `${o.title} (Archived)` : o.published ? o.title : `${o.title} (Draft)` }))}
           placeholder="Choose an Offer…"
           className="w-full"
         />
       )}
       {offers && action.offerId && !selected && <Hint tone="warning">That Offer no longer exists. Choose another.</Hint>}
-      {selected && !selected.published && <Hint tone="warning">Visitors only get this link once the Offer is published.</Hint>}
+      {selected?.archived && <Hint tone="warning">This Offer is archived, so visitors get no link. Restore it in Offers or choose another.</Hint>}
+      {selected && !selected.archived && !selected.published && <Hint tone="warning">Visitors only get this link once the Offer is published.</Hint>}
       <Hint>Opens the Offer&apos;s own checkout page — price and terms always come from the Offer.</Hint>
     </div>
   );

@@ -9,7 +9,8 @@ import {
   Link2,
   Loader2,
   Palette,
-  Trash2,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import {
   subscribeToCourseOffer,
@@ -20,6 +21,7 @@ import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildOfferUrl } from "@/lib/domains/public-url";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/system/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfferDetailsTab } from "@/components/course-offers/offer-details-tab";
 import { OfferUpsellTab } from "@/components/course-offers/offer-upsell-tab";
@@ -42,6 +44,7 @@ export default function CourseOfferDetailPage({
   );
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("details");
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(
     () =>
@@ -97,19 +100,36 @@ export default function CourseOfferDetailPage({
     else toast.error(d.error ?? "Couldn't update");
   }
 
-  async function deleteOffer() {
+  // Archive replaces delete (pre-Funnel safety): purchases, subscriptions,
+  // upsells and history are kept; the Offer just stops being purchasable.
+  async function archiveOffer() {
     if (!offer) return;
-    if (!confirm(`Delete "${offer.title}"? This can't be undone.`)) return;
-    const res = await fetch(
-      `/api/sub-accounts/${subAccountId}/course-offers/${offer.id}`,
-      { method: "DELETE" }
-    );
-    if (res.ok) {
-      toast.success("Offer deleted.");
-      window.location.href = `/sa/${subAccountId}/courses`;
-    } else {
-      toast.error("Couldn't delete offer");
-    }
+    const ok = await confirm({
+      title: `Archive "${offer.title}"?`,
+      description: "It stops being available to buy and disappears from Offer pickers. Its purchases, subscriptions, upsells and history are kept, and you can restore it any time.",
+      confirmLabel: "Archive offer",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/sub-accounts/${subAccountId}/course-offers/${offer.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "archive" }),
+    });
+    if (res.ok) toast.success("Offer archived.");
+    else toast.error("Couldn't archive offer");
+  }
+
+  async function restoreOffer() {
+    if (!offer) return;
+    const res = await fetch(`/api/sub-accounts/${subAccountId}/course-offers/${offer.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "restore" }),
+    });
+    const d = (await res.json().catch(() => ({}))) as { error?: string };
+    if (res.ok) toast.success("Offer restored as a draft. Publish it when it's ready to sell.");
+    else toast.error(d.error ?? "Couldn't restore offer");
   }
 
   if (!loaded) {
@@ -164,19 +184,28 @@ export default function CourseOfferDetailPage({
               </Button>
             </a>
           )}
-          <Button variant="outline" size="sm" onClick={togglePublish}>
-            {offer.visibility === "published" ? "Published" : "Draft"}
-          </Button>
-          <Button
-            variant="destructive"
-            size="icon-sm"
-            onClick={deleteOffer}
-            title="Delete offer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {offer.visibility === "archived" ? (
+            <Button variant="outline" size="sm" onClick={restoreOffer}>
+              <ArchiveRestore className="h-3.5 w-3.5" /> Restore
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={togglePublish}>
+                {offer.visibility === "published" ? "Published" : "Draft"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={archiveOffer} title="Archive offer">
+                <Archive className="h-3.5 w-3.5" /> Archive
+              </Button>
+            </>
+          )}
         </div>
       </div>
+      {offer.visibility === "archived" && (
+        <p className="bg-muted text-muted-foreground rounded-lg px-3 py-2 text-[13px]" data-offer-archived="">
+          This offer is archived. It can&apos;t be bought and isn&apos;t offered in pickers, but its purchases, subscriptions and history are kept. Restore it to sell it again.
+        </p>
+      )}
+      {confirmDialog}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
         <TabsList>

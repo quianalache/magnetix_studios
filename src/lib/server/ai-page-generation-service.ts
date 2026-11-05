@@ -150,6 +150,7 @@ async function resolveBinding(subAccountId: string, binding: Binding): Promise<B
   if (binding.type === "offer") {
     const offer = (await listCourseOffers(subAccountId)).find((item) => item.id === binding.id);
     if (!offer) throw new AiPageGenerationError("Choose an Offer from this workspace.");
+    if (offer.visibility === "archived") throw new AiPageGenerationError("That Offer is archived. Choose an active Offer.");
     return { kind: "offer", id: offer.id, title: offer.title, description: cleanText(offer.descriptionHtml, 800), priceLabel: offer.priceTextOverride || (offer.priceCents == null ? "Free" : `${offer.currency ?? "USD"} ${(offer.priceCents / 100).toFixed(2)}`), href: `/offer/${subAccountId}/${offer.id}` };
   }
   if (binding.type === "webinar") {
@@ -207,7 +208,7 @@ export async function listAiPageSources(subAccountId: string) {
   ]);
   return {
     forms: forms.docs.map((doc) => ({ id: doc.id, name: cleanText(doc.get("name"), 160) || "Untitled form" })),
-    offers: offers.map((offer) => ({ id: offer.id, name: offer.title, visibility: offer.visibility, price: offer.priceTextOverride || offer.priceCents })),
+    offers: offers.filter((offer) => offer.visibility !== "archived").map((offer) => ({ id: offer.id, name: offer.title, visibility: offer.visibility, price: offer.priceTextOverride || offer.priceCents })),
     webinars: webinars.map((webinar) => ({ id: webinar.id, name: webinar.title, slug: webinar.slug, status: webinar.status, startAt: dateLabel(webinar.startAt, webinar.timezone), timezone: webinar.timezone })),
   };
 }
