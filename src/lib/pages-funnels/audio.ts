@@ -11,6 +11,10 @@ export interface AudioSource {
   src: string;
   /** Media Library asset the public copy came from ("" for a direct link). */
   mediaAssetId: string;
+  /** Display only (Wave 3 mockup review): the original file name + size, so
+   *  Settings shows "episode.mp3 · 5.8 MB" instead of the public copy's id. */
+  fileName?: string;
+  sizeBytes?: number;
 }
 
 export interface AudioBlockProps {
@@ -52,6 +56,8 @@ export function audioBlockProblem(props: Record<string, unknown>): string | null
   if (source?.src !== undefined && typeof source.src !== "string") return "An Audio file couldn't be read.";
   if (typeof source?.src === "string" && source.src.trim() && !safeAudioSrc(source.src)) return "An Audio file must be a public https link.";
   if (source?.mediaAssetId !== undefined && (typeof source.mediaAssetId !== "string" || source.mediaAssetId.length > 128)) return "An Audio file couldn't be read.";
+  if (source?.fileName !== undefined && (typeof source.fileName !== "string" || source.fileName.length > 200)) return "An Audio file couldn't be read.";
+  if (source?.sizeBytes !== undefined && (typeof source.sizeBytes !== "number" || !Number.isFinite(source.sizeBytes) || source.sizeBytes < 0)) return "An Audio file couldn't be read.";
   if (props.title !== undefined && (typeof props.title !== "string" || props.title.length > AUDIO_LIMITS.title)) return `An Audio title must be ${AUDIO_LIMITS.title} characters or fewer.`;
   if (props.caption !== undefined && (typeof props.caption !== "string" || props.caption.length > AUDIO_LIMITS.caption)) return `An Audio caption must be ${AUDIO_LIMITS.caption} characters or fewer.`;
   return null;

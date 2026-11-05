@@ -98,25 +98,28 @@ export function SocialLinksItemsField({ value, onChange }: { value: unknown; onC
         const bad = !!item.url.trim() && !socialHref(item);
         return (
           <div key={item.id} className="border-border space-y-2 rounded-lg border p-2.5" data-social-item={item.network}>
+            {/* Header: brand icon + full network name + compact actions
+                (Wave 3 mockup review: the name must never be truncated). */}
             <div className="flex items-center gap-2">
               <Icon size={16} aria-hidden />
-              <OptionSelect<SocialNetwork>
-                aria-label="Network"
-                value={item.network}
-                onChange={(network) => network && patch(item.id, { network })}
-                options={SOCIAL_NETWORKS.map((n) => ({ value: n, label: SOCIAL_NETWORK_LABEL[n] }))}
-                className="min-w-0 flex-1"
-              />
-              <Button type="button" variant="ghost" size="sm" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{SOCIAL_NETWORK_LABEL[item.network]}</span>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Move up" disabled={index === 0} onClick={() => move(index, -1)}>
                 <ArrowUp className="h-3.5 w-3.5" />
               </Button>
-              <Button type="button" variant="ghost" size="sm" aria-label="Move down" disabled={index === items.length - 1} onClick={() => move(index, 1)}>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Move down" disabled={index === items.length - 1} onClick={() => move(index, 1)}>
                 <ArrowDown className="h-3.5 w-3.5" />
               </Button>
-              <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${SOCIAL_NETWORK_LABEL[item.network]}`} onClick={() => set(items.filter((x) => x.id !== item.id))}>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${SOCIAL_NETWORK_LABEL[item.network]}`} onClick={() => set(items.filter((x) => x.id !== item.id))}>
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
+            <OptionSelect<SocialNetwork>
+              aria-label="Network"
+              value={item.network}
+              onChange={(network) => network && patch(item.id, { network })}
+              options={SOCIAL_NETWORKS.map((n) => ({ value: n, label: SOCIAL_NETWORK_LABEL[n] }))}
+              className="w-full"
+            />
             <Input
               value={item.url}
               placeholder={item.network === "email" ? "you@example.com" : "https://…"}

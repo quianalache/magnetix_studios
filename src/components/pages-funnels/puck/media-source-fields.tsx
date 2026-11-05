@@ -12,7 +12,7 @@ import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
 import { assetsCall } from "@/lib/client/assets-api";
 import { uploadToMediaLibrary } from "@/lib/client/media-library-upload";
 import { normalizeMediaVideo, type MediaVideoRef } from "@/lib/pages-funnels/puck/media-video";
-import { AUDIO_MIME_TYPES, safeAudioSrc } from "@/lib/pages-funnels/audio";
+import { AUDIO_MIME_TYPES, safeAudioSrc, type AudioSource } from "@/lib/pages-funnels/audio";
 import type { MediaLibraryItem } from "@/types/media-library";
 
 /**
@@ -74,8 +74,8 @@ export function AudioSourceField({
   value,
   onChange,
 }: {
-  value: { src?: string; mediaAssetId?: string } | undefined;
-  onChange: (v: { src: string; mediaAssetId: string }) => void;
+  value: AudioSource | undefined;
+  onChange: (v: AudioSource) => void;
 }) {
   const sub = useOptionalSubAccount();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -88,8 +88,9 @@ export function AudioSourceField({
 
   async function makePublic(item: MediaLibraryItem) {
     if (!subAccountId) return;
+    const meta = { fileName: item.filename || item.title, ...(item.sizeBytes != null ? { sizeBytes: item.sizeBytes } : {}) };
     if (item.publicUrl) {
-      onChange({ src: item.publicUrl, mediaAssetId: item.id });
+      onChange({ src: item.publicUrl, mediaAssetId: item.id, ...meta });
       return;
     }
     const ok = await confirm({
@@ -101,7 +102,7 @@ export function AudioSourceField({
     setBusy(true);
     try {
       const r = await assetsCall<{ url: string }>(`/api/sub-accounts/${subAccountId}/media-library/${item.id}/public-image`, { method: "POST", json: {} });
-      onChange({ src: r.url, mediaAssetId: item.id });
+      onChange({ src: r.url, mediaAssetId: item.id, ...meta });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -133,7 +134,10 @@ export function AudioSourceField({
       {src ? (
         <div className="border-border bg-muted flex items-center gap-2 rounded-md border p-1.5">
           <AudioLines className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-xs">{fileName(src)}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-medium">{value?.fileName || fileName(src)}</span>
+            {value?.sizeBytes ? <span className="text-muted-foreground block text-caption">{(value.sizeBytes / 1048576).toFixed(1)} MB</span> : null}
+          </span>
           <Button type="button" variant="ghost" size="sm" onClick={() => onChange({ src: "", mediaAssetId: "" })}>Remove</Button>
         </div>
       ) : null}

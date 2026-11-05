@@ -307,6 +307,10 @@ async function offline() {
     assert.match(audioBlockProblem({ source: { src: "ftp://x" } })!, /https/);
     assert.match(audioBlockProblem({ title: "x".repeat(161) })!, /title/);
     assert.equal(audioBlockProblem({ source: { src: "https://x.com/a.mp3", mediaAssetId: "abc" }, title: "t", caption: "c" }), null);
+    assert.equal(audioBlockProblem({ source: { src: "https://x.com/a.mp3", mediaAssetId: "abc", fileName: "episode.mp3", sizeBytes: 6080931 } }), null, "display name + size allowed");
+    assert.match(audioBlockProblem({ source: { src: "https://x.com/a.mp3", sizeBytes: -1 } })!, /couldn't be read/);
+    const field = read("src/components/pages-funnels/puck/media-source-fields.tsx");
+    assert.match(field, /value\?\.fileName \|\| fileName\(src\)/, "Settings shows the original file name");
   });
   await check("Audio: Media Library accepts audio (types, magic bytes, storage rule, public copy)", async () => {
     const svc = await import("../src/lib/server/assets/media-library-service");
@@ -347,6 +351,11 @@ async function offline() {
     assert.match(editing, /YouTube \(no link yet\)/);
     assert.doesNotMatch(editing, /href=/, "builder links don't navigate");
     assert.deepEqual(normalizeSocialItems(items.slice().reverse()).map((i) => i.id), ["c", "b", "a"], "order is the stored order");
+  });
+  await check("Social Links settings: each link shows its full network name (mockup review)", () => {
+    const field = read("src/components/pages-funnels/puck/wave3-fields.tsx");
+    assert.match(field, /<span className="min-w-0 flex-1 truncate text-sm font-medium">\{SOCIAL_NETWORK_LABEL\[item\.network\]\}<\/span>/);
+    assert.match(field, /aria-label="Network"[\s\S]{0,500}className="w-full"/);
   });
   await check("Social Links strict save", () => {
     assert.equal(socialLinksProblem({ items: [{ id: "a", network: "x", url: "https://x.com/acme", label: "" }] }), null);
