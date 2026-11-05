@@ -112,17 +112,35 @@ function tokenDigest(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Where a set-password link may send the person afterwards. Server-chosen
+ * only (stored on the token, never read from the URL) and limited to the
+ * MyMagnetix surface: `/my/...` or the `/api/my/enter` member bridge.
+ */
+export function safePersonPasswordNextPath(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 500) return null;
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  return value === "/my" || value.startsWith("/my/") || value.startsWith("/api/my/enter?") ? value : null;
+}
+
 export async function createPersonPasswordToken({
   personId,
   email,
   purpose,
+  ttlMs,
+  nextPath,
 }: {
   personId: string;
   email: string;
-  purpose: "setup" | "reset";
+  purpose: "setup" | "reset" | "activation";
+  /** Defaults to 1 hour. Community activation emails use a longer window. */
+  ttlMs?: number;
+  /** Validated with safePersonPasswordNextPath; dropped when unsafe. */
+  nextPath?: string | null;
 }): Promise<string> {
   const token = randomBytes(32).toString("base64url");
   const digest = tokenDigest(token);
+  const next = safePersonPasswordNextPath(nextPath);
   await getAdminDb()
     .doc(`personPasswordTokens/${digest}`)
     .set({
@@ -130,8 +148,9 @@ export async function createPersonPasswordToken({
       email: normalizeEmail(email),
       purpose,
       createdAt: FieldValue.serverTimestamp(),
-      expiresAt: Timestamp.fromMillis(Date.now() + RESET_TTL_MS),
+      expiresAt: Timestamp.fromMillis(Date.now() + (ttlMs ?? RESET_TTL_MS)),
       usedAt: null,
+      ...(next ? { nextPath: next } : {}),
     });
   return token;
 }
@@ -143,7 +162,7 @@ export async function consumePersonPasswordToken({
   token: string;
   password: string;
 }): Promise<
-  | { ok: true; personId: string; sessionToken: string }
+  | { ok: true; personId: string; sessionToken: string; nextPath: string | null }
   | { ok: false; error: string }
 > {
   const validationError = validatePersonPassword(password);
@@ -154,7 +173,7 @@ export async function consumePersonPasswordToken({
   const tokenRef = db.doc(`personPasswordTokens/${digest}`);
 
   const result = await db.runTransaction<
-    { ok: true; personId: string; sessionToken: string } | { ok: false; error: string }
+    { ok: true; personId: string; sessionToken: string; nextPath: string | null } | { ok: false; error: string }
   >(async (tx) => {
     const tokenSnap = await tx.get(tokenRef);
     if (!tokenSnap.exists) return { ok: false, error: "Invalid or expired link." };
@@ -163,6 +182,7 @@ export async function consumePersonPasswordToken({
       email?: string;
       expiresAt?: Timestamp;
       usedAt?: Timestamp | null;
+      nextPath?: string;
     };
     if (tokenData.usedAt) return { ok: false, error: "Invalid or expired link." };
     if (!tokenData.personId || !tokenData.email) {
@@ -196,7 +216,12 @@ export async function consumePersonPasswordToken({
     tx.set(tokenRef, { usedAt: FieldValue.serverTimestamp() }, { merge: true });
 
     const sessionToken = signPersonSessionToken(tokenData.personId, tokenData.email);
-    return { ok: true, personId: tokenData.personId, sessionToken };
+    return {
+      ok: true,
+      personId: tokenData.personId,
+      sessionToken,
+      nextPath: safePersonPasswordNextPath(tokenData.nextPath),
+    };
   });
 
   return result;

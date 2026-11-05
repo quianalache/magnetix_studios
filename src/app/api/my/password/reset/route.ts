@@ -25,5 +25,8 @@ export async function POST(request: Request) {
   }
 
   await setPersonSessionCookie(result.sessionToken);
-  return NextResponse.json({ ok: true, redirectTo: "/gateway" });
+  // A community activation link carries its own server-chosen destination
+  // (the member's community via the /api/my/enter bridge); everything else
+  // keeps going to the gateway.
+  return NextResponse.json({ ok: true, redirectTo: result.nextPath ?? "/gateway" });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 
 export function PersonResetPasswordForm({ token }: { token: string }) {
@@ -66,7 +67,20 @@ export function PersonResetPasswordForm({ token }: { token: string }) {
           className="h-10 w-full rounded-[9px] border border-[#E4E4E4] bg-white px-3 text-sm text-[#202124] outline-none placeholder:text-[#909090]"
         />
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && (
+        <p className="text-xs text-red-600" role="alert">
+          {error}
+          {error === "Invalid or expired link." && (
+            <>
+              {" "}
+              <Link href="/my/login" className="font-semibold underline">
+                Request a new link
+              </Link>{" "}
+              (choose “Forgot password?”).
+            </>
+          )}
+        </p>
+      )}
       <button
         type="submit"
         disabled={submitting}
