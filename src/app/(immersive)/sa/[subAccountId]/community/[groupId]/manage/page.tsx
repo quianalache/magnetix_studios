@@ -36,7 +36,6 @@ import { AboutRichTextEditor } from "@/components/community/about-rich-text-edit
 import { ImageUpload } from "@/components/community/image-upload";
 import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
-import { ColorInput } from "@/components/ui/color-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type {
@@ -186,9 +185,6 @@ export default function CommunityGroupSettingsPage({
               .split(",")
               .map((c) => c.trim())
               .filter(Boolean),
-            links: links.filter((l) => l.url.trim()),
-            guidelinesHtml: guidelines,
-            sidebarCards,
           }),
         }
       );
@@ -399,6 +395,14 @@ export default function CommunityGroupSettingsPage({
         </p>
       </div>
 
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-foreground">
+        Community Home content now has one canonical editor under{" "}
+        <Link className="font-semibold underline" href={`/sa/${subAccountId}/community/${groupId}/settings/home`}>
+          Community Settings → Community Home
+        </Link>
+        . The legacy Home fields below remain visible for reference but are read-only.
+      </div>
+
       <fieldset disabled={!isAdmin || saving} className="space-y-5">
         <div className="space-y-1.5">
           <Label htmlFor="status">Status</Label>
@@ -427,16 +431,16 @@ export default function CommunityGroupSettingsPage({
         </div>
 
         <div className="space-y-2">
-          <Label>Links</Label>
+          <Label>Links (read-only)</Label>
           <p className="text-muted-foreground text-xs">
-            Shown in the community sidebar (e.g. your website, a resource). Up
-            to 10.
+            Shown in the community sidebar. Edit these from Community Home (up to 3).
           </p>
           {links.map((l, i) => (
             <div key={i} className="flex gap-2">
               <Input
                 value={l.label}
                 placeholder="Label"
+                disabled
                 onChange={(e) => {
                   const next = [...links];
                   next[i] = { ...next[i], label: e.target.value };
@@ -447,6 +451,7 @@ export default function CommunityGroupSettingsPage({
               <Input
                 value={l.url}
                 placeholder="https://…"
+                disabled
                 onChange={(e) => {
                   const next = [...links];
                   next[i] = { ...next[i], url: e.target.value };
@@ -458,6 +463,7 @@ export default function CommunityGroupSettingsPage({
                 type="button"
                 variant="ghost"
                 size="sm"
+                disabled
                 onClick={() => setLinks(links.filter((_, j) => j !== i))}
               >
                 <Trash2 className="h-4 w-4" />
@@ -468,6 +474,7 @@ export default function CommunityGroupSettingsPage({
             type="button"
             variant="ghost"
             size="sm"
+            disabled
             onClick={() => setLinks([...links, { label: "", url: "" }])}
           >
             <Plus className="h-4 w-4" /> Add link
@@ -479,7 +486,7 @@ export default function CommunityGroupSettingsPage({
           <AboutRichTextEditor
             value={guidelines}
             onChange={setGuidelines}
-            disabled={!isAdmin || saving}
+            disabled
           />
           <p
             className={`text-right text-xs ${
@@ -512,7 +519,7 @@ export default function CommunityGroupSettingsPage({
               variant="ghost"
               size="sm"
               onClick={addSidebarCard}
-              disabled={sidebarCards.length >= SIDEBAR_CARDS_MAX}
+              disabled
             >
               <Plus className="h-4 w-4" /> Add card
             </Button>
@@ -543,11 +550,12 @@ export default function CommunityGroupSettingsPage({
                       )
                     }
                     aspect="video"
-                    disabled={!isAdmin}
+                    disabled
                   />
                   <div className="grid gap-2">
                     <Input
                       value={card.heading}
+                      disabled
                       onChange={(e) =>
                         updateSidebarCard(i, {
                           heading: e.target.value.slice(
@@ -561,6 +569,7 @@ export default function CommunityGroupSettingsPage({
                     />
                     <textarea
                       value={card.body}
+                      disabled
                       onChange={(e) =>
                         updateSidebarCard(i, {
                           body: e.target.value.slice(0, SIDEBAR_CARD_BODY_MAX),
@@ -574,6 +583,7 @@ export default function CommunityGroupSettingsPage({
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Input
                         value={card.buttonLabel}
+                        disabled
                         onChange={(e) =>
                           updateSidebarCard(i, {
                             buttonLabel: e.target.value.slice(
@@ -587,24 +597,22 @@ export default function CommunityGroupSettingsPage({
                       />
                       <Input
                         value={card.buttonUrl}
+                        disabled
                         onChange={(e) =>
                           updateSidebarCard(i, { buttonUrl: e.target.value })
                         }
                         placeholder="https://…"
                       />
                     </div>
-                    <ColorInput
-                      label="Button color (optional — falls back to brand color)"
-                      value={card.accentColor ?? ""}
-                      onChange={(hex) =>
-                        updateSidebarCard(i, { accentColor: hex || null })
-                      }
-                    />
+                    <div className="text-xs text-muted-foreground">
+                      Button color: {card.accentColor || "community brand"}
+                    </div>
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
+                    disabled
                     onClick={() =>
                       setSidebarCards(sidebarCards.filter((_, j) => j !== i))
                     }

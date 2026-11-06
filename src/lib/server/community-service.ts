@@ -12,10 +12,6 @@ import {
   ABOUT_BENEFIT_TITLE_MAX,
   ABOUT_MAX_CHARS,
   GUIDELINES_MAX_CHARS,
-  SIDEBAR_CARDS_MAX,
-  SIDEBAR_CARD_BODY_MAX,
-  SIDEBAR_CARD_BUTTON_LABEL_MAX,
-  SIDEBAR_CARD_HEADING_MAX,
   TAGLINE_MAX_CHARS,
 } from "@/config/community";
 import {
@@ -44,15 +40,9 @@ import type {
   ResourceLink,
 } from "@/types/community";
 import { recordContactActivity } from "@/lib/server/contact-activity";
+import { normalizeCommunityLinks, normalizeCommunitySidebarCards } from "@/lib/community/home-settings";
 
-/** Normalize an admin-entered link list: trim, drop empties, cap at 10. */
-function cleanLinks(links: ResourceLink[]): ResourceLink[] {
-  return links
-    .filter((l) => l && l.url?.trim())
-    .map((l) => ({ label: l.label?.trim() || l.url.trim(), url: l.url.trim() }))
-    .slice(0, 10);
-}
-
+/** Normalize an admin-entered link list: trim, drop empties, cap at 3. */
 function cleanAboutMedia(
   items: CommunityAboutMediaItem[] | undefined
 ): CommunityAboutMediaItem[] {
@@ -103,28 +93,6 @@ function cleanGuidelinesHtml(candidate: string): string {
 
 /** Normalize admin-entered sidebar cards: trim, drop cards with no heading,
  *  cap field lengths, cap at {@link SIDEBAR_CARDS_MAX}, re-sequence order. */
-function cleanSidebarCards(
-  cards: CommunitySidebarCard[] | undefined
-): CommunitySidebarCard[] {
-  return (cards ?? [])
-    .filter((c) => c && c.heading?.trim())
-    .map((c, index) => ({
-      id: c.id?.trim() || `card-${Date.now()}-${index}`,
-      heading: c.heading.trim().slice(0, SIDEBAR_CARD_HEADING_MAX),
-      body: (c.body ?? "").trim().slice(0, SIDEBAR_CARD_BODY_MAX),
-      imageUrl: c.imageUrl?.trim() || null,
-      buttonLabel: (c.buttonLabel ?? "")
-        .trim()
-        .slice(0, SIDEBAR_CARD_BUTTON_LABEL_MAX),
-      buttonUrl: (c.buttonUrl ?? "").trim(),
-      accentColor: c.accentColor?.trim() || null,
-      order: Number.isFinite(c.order) ? c.order : index,
-    }))
-    .sort((a, b) => a.order - b.order)
-    .slice(0, SIDEBAR_CARDS_MAX)
-    .map((c, index) => ({ ...c, order: index }));
-}
-
 /** About page "What You'll Get Inside" — same normalize-and-cap shape as
  *  {@link cleanSidebarCards}. Drops an item with no title (an icon+empty
  *  card isn't a real benefit); description is optional. */
@@ -403,11 +371,11 @@ export async function updateGroupServerSide(opts: {
     const deduped = Array.from(new Set(["General", ...cleaned]));
     updates.categories = deduped.slice(0, 60);
   }
-  if (Array.isArray(p.links)) updates.links = cleanLinks(p.links);
+  if (Array.isArray(p.links)) updates.links = normalizeCommunityLinks(p.links);
   if (typeof p.guidelinesHtml === "string")
     updates.guidelinesHtml = cleanGuidelinesHtml(p.guidelinesHtml);
   if (Array.isArray(p.sidebarCards))
-    updates.sidebarCards = cleanSidebarCards(p.sidebarCards);
+    updates.sidebarCards = normalizeCommunitySidebarCards(p.sidebarCards);
   if (Array.isArray(p.navigation))
     updates.navigation = normalizeNavigation(p.navigation);
   if (p.access) {

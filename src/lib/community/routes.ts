@@ -270,6 +270,14 @@ export function communitySettingsNavigationHref(
   return `${communitySettingsHref(b, groupSlug)}/navigation`;
 }
 
+/** Community Settings → Community Home. */
+export function communitySettingsHomeHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
+  return `${communitySettingsHref(b, groupSlug)}/home`;
+}
+
 /**
  * Community Settings → Points & Rewards. ONE route (not one per tab) —
  * Overview/Points System/Levels/Rewards/Winners are client-side tabs

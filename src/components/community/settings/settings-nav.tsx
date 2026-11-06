@@ -6,10 +6,8 @@ import {
   Layers,
   LayoutGrid,
   Palette,
-  Puzzle,
   Settings as SettingsIcon,
   Shield,
-  SlidersHorizontal,
   Trophy,
 } from "lucide-react";
 import {
@@ -18,13 +16,14 @@ import {
   communitySettingsBrandingHref,
   communitySettingsHref,
   communitySettingsNavigationHref,
+  communitySettingsHomeHref,
   communitySettingsPointsRewardsHref,
   communitySettingsSkoolImportHref,
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "branding" | "navigation" | "access" | "notifications" | "points-rewards" | "skool-import";
+export type SettingsSection = "general" | "branding" | "navigation" | "home" | "access" | "notifications" | "points-rewards" | "skool-import";
 
 /**
  * Community Settings left nav. General, Branding, Navigation, and (as of
@@ -39,12 +38,7 @@ export type SettingsSection = "general" | "branding" | "navigation" | "access" |
  * throughout Settings.
  */
 const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [
-  { key: "access", label: "Access & Membership", icon: Shield },
-  { key: "home", label: "Community Home", icon: Layers },
-  { key: "notifications", label: "Notifications & Digest", icon: Bell },
   { key: "moderation", label: "Moderation", icon: Gauge },
-  { key: "integrations", label: "Integrations", icon: Puzzle },
-  { key: "advanced", label: "Advanced", icon: SlidersHorizontal },
 ];
 
 export function SettingsNav({
@@ -75,6 +69,9 @@ export function SettingsNav({
     { key: "general", label: "General", icon: SettingsIcon, href: communitySettingsHref(link, groupSlug) },
     { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
     { key: "navigation", label: "Navigation", icon: LayoutGrid, href: communitySettingsNavigationHref(link, groupSlug) },
+    ...(link.agencyGroupId
+      ? []
+      : [{ key: "home" as const, label: "Community Home", icon: Layers, href: communitySettingsHomeHref(link, groupSlug) }]),
     // Access & Membership + Notifications & Digest (2026-11-05) — workspace
     // communities only; agency communities keep them as coming soon.
     ...(link.agencyGroupId
@@ -104,7 +101,11 @@ export function SettingsNav({
   // shown as inert rather than a dead link, same convention as the
   // sections below.
   const inertSections = link.agencyGroupId
-    ? [{ key: "skool-import", label: "Skool Import", icon: Download }, ...INERT_SECTIONS]
+    ? [
+        { key: "home", label: "Community Home", icon: Layers },
+        { key: "skool-import", label: "Skool Import", icon: Download },
+        ...INERT_SECTIONS,
+      ]
     : INERT_SECTIONS.filter((s) => s.key !== "access" && s.key !== "notifications");
 
   return (

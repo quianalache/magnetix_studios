@@ -19,6 +19,9 @@ export const TAGLINE_MAX_CHARS = 100;
  *  reusing the same rich-text editor + sanitizer. Enforced server + client. */
 export const GUIDELINES_MAX_CHARS = 1000;
 
+/** Max number of owner-configurable Home utility links. */
+export const SIDEBAR_LINKS_MAX = 3;
+
 /** Max number of owner-configurable Home sidebar content cards (Part 6). */
 export const SIDEBAR_CARDS_MAX = 2;
 

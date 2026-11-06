@@ -7,6 +7,8 @@ import type {
   CommunityTheme,
   GroupJoinPolicy,
   NavItem,
+  CommunitySidebarCard,
+  ResourceLink,
 } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +69,9 @@ export async function PATCH(
     aboutMedia?: CommunityAboutMediaItem[];
     aboutBenefits?: CommunityAboutBenefit[];
     showAboutBenefits?: boolean;
+    links?: ResourceLink[];
+    guidelinesHtml?: string;
+    sidebarCards?: CommunitySidebarCard[];
   };
   try {
     body = await request.json();
@@ -93,6 +98,9 @@ export async function PATCH(
       aboutMedia: body.aboutMedia,
       aboutBenefits: body.aboutBenefits,
       showAboutBenefits: body.showAboutBenefits,
+      links: body.links,
+      guidelinesHtml: body.guidelinesHtml,
+      sidebarCards: body.sidebarCards,
     },
   });
   if (!group) {
