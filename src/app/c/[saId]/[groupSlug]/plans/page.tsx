@@ -24,9 +24,9 @@ export default async function CommunityPlansPage({ params }: { params: Promise<{
   const planRows = await Promise.all(plans.map(async (plan) => ({
     ...plan,
     offers: {
-      monthly: plan.billingOfferIds.monthly ? await getCourseOffer(saId, plan.billingOfferIds.monthly) : null,
-      annual: plan.billingOfferIds.annual ? await getCourseOffer(saId, plan.billingOfferIds.annual) : null,
-      oneTime: plan.billingOfferIds.oneTime ? await getCourseOffer(saId, plan.billingOfferIds.oneTime) : null,
+      monthly: plan.billingOfferIds.monthly ? await getCourseOffer(saId, plan.billingOfferIds.monthly).then((offer) => offer && ({ id: offer.id, type: offer.type, checkoutSettings: offer.checkoutSettings })) : null,
+      annual: plan.billingOfferIds.annual ? await getCourseOffer(saId, plan.billingOfferIds.annual).then((offer) => offer && ({ id: offer.id, type: offer.type, checkoutSettings: offer.checkoutSettings })) : null,
+      oneTime: plan.billingOfferIds.oneTime ? await getCourseOffer(saId, plan.billingOfferIds.oneTime).then((offer) => offer && ({ id: offer.id, type: offer.type, checkoutSettings: offer.checkoutSettings })) : null,
     },
   })));
   const themeColors = resolveCommunityThemeColors(group.theme);

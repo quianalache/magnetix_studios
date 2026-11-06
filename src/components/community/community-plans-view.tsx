@@ -8,7 +8,7 @@ import { EnrollOfferModal } from "@/app/offer/[saId]/[offerId]/enroll-modal";
 import { communitySignupHref } from "@/lib/community/routes";
 import type { MembershipLevel } from "@/types/community-membership";
 import type { Member } from "@/types/community";
-import type { CourseOffer } from "@/types/course-offers";
+import type { CourseOfferCheckoutSettings, OfferType } from "@/types/course-offers";
 
 const ICONS = { people: Users, crown: Crown, star: Star, gem: Gem, sparkles: Sparkles, rocket: Rocket, lightning: Zap, heart: Heart, play: Rocket, book: BookOpen, trophy: Trophy } as const;
 
@@ -17,7 +17,8 @@ function money(cents: number | null, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
 }
 
-type Plan = MembershipLevel & { offers: { monthly: CourseOffer | null; annual: CourseOffer | null; oneTime: CourseOffer | null } };
+type PublicOffer = { id: string; type: OfferType; checkoutSettings: CourseOfferCheckoutSettings };
+type Plan = MembershipLevel & { offers: { monthly: PublicOffer | null; annual: PublicOffer | null; oneTime: PublicOffer | null } };
 
 export function CommunityPlansView({ saId, group, brand, plans, member, pretty }: { saId: string; group: { id: string; slug: string; name: string; about: string; logoUrl: string | null; coverUrl: string | null; theme: unknown }; brand: string; plans: Plan[]; member: Pick<Member, "email" | "displayName" | "phone"> | null; pretty: boolean }) {
   return <div className="community-plans min-h-screen px-4 py-10 sm:px-6" style={{ "--plans-brand": brand } as CSSProperties}><style>{`.community-plans-title{display:block;font-size:clamp(2.25rem,6vw,3.75rem);line-height:1.05;font-weight:650;letter-spacing:-.04em;color:var(--foreground)}`}</style><div className="mx-auto max-w-7xl"><header className="mx-auto max-w-3xl text-center"><div className="flex items-center justify-center gap-3">{group.logoUrl ? <Image src={group.logoUrl} alt="" width={48} height={48} unoptimized className="h-12 w-12 rounded-xl object-cover" /> : <div className="grid h-12 w-12 place-items-center rounded-xl text-lg font-bold text-white" style={{ backgroundColor: brand }}>{group.name.charAt(0)}</div>}<span className="text-xl font-semibold text-foreground">{group.name}</span></div><p className="mt-8 text-sm font-semibold uppercase tracking-[.18em]" style={{ color: brand }}>Membership</p><h1><span className="community-plans-title mt-3">Choose your membership</span></h1><p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground">{group.about || `Join ${group.name} and get the access, resources, and support you need.`}</p></header><div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{plans.map((plan) => <PlanCard key={plan.id} saId={saId} group={group} plan={plan} brand={brand} member={member} pretty={pretty} />)}</div><p className="mt-8 text-center text-sm text-muted-foreground">Already a member? <Link className="font-semibold underline" style={{ color: brand }} href={communitySignupHref({ saId, pretty }, { join: group.id })}>Sign in</Link></p></div></div>;
