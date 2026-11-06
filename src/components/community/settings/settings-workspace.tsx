@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Clock, Copy, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, Copy, Loader2 } from "lucide-react";
 import { communityHomeHref } from "@/lib/community/routes";
 import { uploadCommunitySettingsImage } from "@/lib/community/upload-image";
 import { AboutRichTextEditor } from "@/components/community/about-rich-text-editor";
@@ -14,7 +13,7 @@ import { SettingsNav } from "@/components/community/settings/settings-nav";
 import { SettingsImageRow } from "@/components/community/settings/settings-image-row";
 import { LivePreviewPanel } from "@/components/community/settings/live-preview-panel";
 import { Switch } from "@/components/ui/switch";
-import type { CommunityGroup, GroupJoinPolicy } from "@/types/community";
+import type { CommunityGroup } from "@/types/community";
 
 const ABOUT_MAX_CHARS = 1000;
 const NAME_MAX_CHARS = 100;
@@ -30,12 +29,10 @@ function plainTextOf(html: string): string {
   div.innerHTML = html;
   return (div.textContent ?? "").replace(/\s+/g, " ").trim();
 }
-
 interface EditState {
   name: string;
   aboutHtml: string;
   slug: string;
-  joinPolicy: GroupJoinPolicy;
   logoUrl: string | null;
   faviconUrl: string | null;
   coverUrl: string | null;
@@ -47,7 +44,6 @@ function stateFromGroup(group: CommunityGroup): EditState {
     name: group.name,
     aboutHtml: group.aboutHtml || group.about || "",
     slug: group.slug,
-    joinPolicy: group.joinPolicy,
     logoUrl: group.logoUrl,
     // `?? null` even though the type says non-optional — older community
     // docs written before this field existed genuinely lack it in
@@ -132,7 +128,6 @@ export function SettingsWorkspace({
           name: trimmedName,
           aboutHtml: form.aboutHtml,
           slug: trimmedSlug,
-          joinPolicy: form.joinPolicy,
           logoUrl: form.logoUrl,
           faviconUrl: form.faviconUrl,
           coverUrl: form.coverUrl,
@@ -295,32 +290,6 @@ export function SettingsWorkspace({
                 </p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Join Policy</Label>
-                <p className="text-muted-foreground text-xs">
-                  Magnetix doesn&apos;t currently support hiding a community
-                  from being found (true &quot;private/invite-only&quot;) — this
-                  controls whether joining is instant or requires your approval.
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <VisibilityOption
-                    active={form.joinPolicy === "open"}
-                    brand={brand}
-                    icon={<Check className="h-4 w-4" />}
-                    title="Open"
-                    description="Anyone can find your community and join instantly."
-                    onClick={() => set("joinPolicy", "open")}
-                  />
-                  <VisibilityOption
-                    active={form.joinPolicy === "approval"}
-                    brand={brand}
-                    icon={<Clock className="h-4 w-4" />}
-                    title="Approval required"
-                    description="Anyone can find your community; you approve each join request."
-                    onClick={() => set("joinPolicy", "approval")}
-                  />
-                </div>
-              </div>
             </div>
           </section>
 
@@ -404,43 +373,5 @@ export function SettingsWorkspace({
         </div>
       </div>
     </div>
-  );
-}
-
-function VisibilityOption({
-  active,
-  brand,
-  icon,
-  title,
-  description,
-  onClick,
-}: {
-  active: boolean;
-  brand: string;
-  icon: ReactNode;
-  title: string;
-  description: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-        active ? "border-2" : "border-[#E4E4E4] hover:border-[#d4d4d4]"
-      )}
-      style={
-        active
-          ? { borderColor: brand, backgroundColor: `${brand}0d` }
-          : undefined
-      }
-    >
-      <span className="flex items-center gap-1.5 text-sm font-semibold text-[#202124]">
-        <span style={active ? { color: brand } : undefined}>{icon}</span>
-        {title}
-      </span>
-      <span className="text-xs text-[#909090]">{description}</span>
-    </button>
   );
 }

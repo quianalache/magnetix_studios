@@ -4,6 +4,7 @@ import {
   listCommunityReviews,
   listCommunityTiers,
 } from "@/lib/server/community-service";
+import { ensureBaseMembershipLevel } from "@/lib/server/community-membership-service";
 import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
@@ -46,6 +47,8 @@ export default async function StaffAboutPage({
     }),
     listCommunityReviews({ subAccountId: saId, groupId: group.id, limit: 24 }),
   ]);
+  const levels = await ensureBaseMembershipLevel(saId, group.id, null);
+  const publicLevels = levels.filter((level) => level.status === "active" && level.publicVisibility === "public");
 
   const viewer: AuthorView = {
     memberId: member.id,
@@ -75,6 +78,8 @@ export default async function StaffAboutPage({
         membership={membership}
         tiers={tiers}
         reviews={reviews}
+        publicPlanCount={publicLevels.length}
+        hasPaidPublicPlan={publicLevels.some((level) => level.pricing.mode === "paid")}
       />
     </CommunityShell>
   );

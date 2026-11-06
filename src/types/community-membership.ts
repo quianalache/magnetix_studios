@@ -28,6 +28,25 @@ export interface LevelAccess {
 }
 
 export type MembershipLevelStatus = "active" | "inactive";
+export type MembershipLevelVisibility = "public" | "hidden";
+export type MembershipLevelPricingMode = "free" | "paid";
+export type MembershipLevelBulletStyle = "checkmark" | "sparkle";
+
+export interface MembershipLevelBillingOption {
+  enabled: boolean;
+  priceCents: number | null;
+  currency: string;
+  label?: string | null;
+  savingsLabel?: string | null;
+  bonuses?: string[];
+}
+
+export interface MembershipLevelPricing {
+  mode: MembershipLevelPricingMode;
+  monthly: MembershipLevelBillingOption;
+  annual: MembershipLevelBillingOption;
+  oneTime: MembershipLevelBillingOption;
+}
 
 export interface MembershipLevel {
   id: string;
@@ -35,12 +54,23 @@ export interface MembershipLevel {
   groupId: string;
   name: string;
   description: string;
+  /** Concise public-facing plan description. */
+  shortDescription: string;
+  /** Stable key from the curated Community plan icon set. */
+  icon: string | null;
+  highlights: string[];
+  bulletStyle: MembershipLevelBulletStyle;
+  featuredLabel: string | null;
+  publicVisibility: MembershipLevelVisibility;
   /** The fallback level: every active member without another active
    *  qualifying grant resolves here. Exactly one per community. */
   isBase: boolean;
   status: MembershipLevelStatus;
   /** Paid levels reference a same-workspace Offer; null = free. */
   offerId: string | null;
+  pricing: MembershipLevelPricing;
+  /** Internal billing objects, one per enabled cadence. */
+  billingOfferIds: { monthly: string | null; annual: string | null; oneTime: string | null };
   order: number;
   access: LevelAccess;
   createdAtMs: number;

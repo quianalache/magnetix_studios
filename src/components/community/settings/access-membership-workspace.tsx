@@ -4,15 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Crown,
+  Gem,
   Hash,
+  Heart,
   Info,
+  Lightbulb,
   Loader2,
   MoreVertical,
   Pencil,
   Plus,
   Search,
   Shield,
+  Sparkles,
   Star,
+  Trophy,
   Trash2,
   Users,
   X,
@@ -31,6 +36,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConfirm } from "@/components/system/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { communityPlansHref } from "@/lib/community/routes";
 import type { AccessRule, LevelAccess, MembershipLevel } from "@/types/community-membership";
 import type { GroupJoinPolicy } from "@/types/community";
 
@@ -60,16 +66,16 @@ const ACCESS_OPTIONS: { value: GroupJoinPolicy; title: string; body: string }[] 
   { value: "invite", title: "Invite Only", body: "Only people you add (or who buy access) can join." },
 ];
 
-function offerPrice(o: OfferOption): string {
-  if (o.priceTextOverride) return o.priceTextOverride;
-  if (o.type === "free") return "Free";
-  const amount = new Intl.NumberFormat(undefined, { style: "currency", currency: o.currency || "USD" }).format((o.priceCents ?? 0) / 100);
-  return o.type === "recurring" ? `${amount}/${o.recurringInterval ?? "month"}` : amount;
-}
-
 function summary(rule: AccessRule, noun: string, total: number): string {
   if (rule.mode === "all") return `All ${noun}`;
   return `${rule.ids.length} of ${total} ${noun}`;
+}
+
+function levelPricing(level: MembershipLevel): string {
+  if (level.pricing.mode === "free") return "Free";
+  const enabled = [level.pricing.monthly, level.pricing.annual, level.pricing.oneTime].filter((o) => o.enabled && o.priceCents != null);
+  if (!enabled.length) return "Paid — configure pricing";
+  return enabled.map((o) => `${new Intl.NumberFormat(undefined, { style: "currency", currency: o.currency }).format((o.priceCents ?? 0) / 100)}${o === level.pricing.monthly ? "/mo" : o === level.pricing.annual ? "/yr" : " one-time"}`).join(" · ");
 }
 
 export function AccessMembershipWorkspace({
@@ -234,7 +240,7 @@ export function AccessMembershipWorkspace({
               <div className="mt-7 flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Membership Levels</p>
-                  <p className="text-xs text-muted-foreground">Create membership levels, connect paid Offers, and set the access each level includes.</p>
+                <p className="text-xs text-muted-foreground">Create membership levels, set public pricing, and choose the access each level includes.</p>
                 </div>
                 <button
                   type="button"
@@ -244,6 +250,7 @@ export function AccessMembershipWorkspace({
                 >
                   <Plus className="h-4 w-4" /> Add Membership Level
                 </button>
+                <a href={communityPlansHref({ saId, pretty, staffGroupId }, groupSlug)} target="_blank" rel="noreferrer" className="rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground hover:bg-muted">Preview Plans page</a>
               </div>
 
               <div className="mt-3 space-y-3">
@@ -270,10 +277,8 @@ export function AccessMembershipWorkspace({
                       </div>
                     </div>
                     <div className="text-sm">
-                      <p className="font-semibold text-foreground">{l.offerId ? "Paid" : "Free"}</p>
-                      {l.offer && <p className="text-xs text-muted-foreground">{l.offer.priceLabel}</p>}
-                      {l.offer && <p className="truncate text-micro text-muted-foreground" title={l.offer.title}>{l.offer.title}</p>}
-                      {l.offer?.warning && <p className="mt-1 text-micro font-medium text-amber-700">{l.offer.visibility === "missing" ? "Offer missing" : l.offer.visibility === "archived" ? "Offer archived" : "Offer is a draft"}</p>}
+                      <p className="font-semibold text-foreground">{levelPricing(l)}</p>
+                      <p className="text-xs text-muted-foreground">{l.publicVisibility === "public" ? "Public plan" : "Hidden plan"}</p>
                     </div>
                     <ul className="space-y-0.5 text-xs text-foreground">
                       <li className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-muted-foreground" /> Channels: {summary(l.access.channels, "channels", data.channels.length)}</li>
@@ -315,7 +320,7 @@ export function AccessMembershipWorkspace({
               </div>
               <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted p-3 text-xs text-foreground">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: brand }} />
-                Every member gets the Base Membership. A paid level is granted when someone buys its connected Offer and ends when that purchase or subscription ends — they then fall back to the Base Membership. Access adds up: if any of a member’s levels includes something, they can open it.
+                Base Membership stays free and internal. Public levels are shown on the native Plans page; paid checkout is backed by the existing Offer/Stripe lifecycle. Access adds up: if any active level includes something, members can open it.
               </p>
             </>
           )}
@@ -412,6 +417,20 @@ function AccessPicker({
   );
 }
 
+function PricingOption({
+  label,
+  option,
+  onChange,
+  brand,
+}: {
+  label: string;
+  option: { enabled: boolean; priceCents: number | null; currency: string; savingsLabel?: string | null; bonuses?: string[] };
+  onChange: (next: typeof option) => void;
+  brand: string;
+}) {
+  return <div className="rounded-lg border border-border p-3"><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={option.enabled} onChange={(e) => onChange({ ...option, enabled: e.target.checked })} style={{ accentColor: brand }} /> {label}</label>{option.enabled && <div className="mt-2 grid gap-2 sm:grid-cols-2"><input aria-label={`${label} price in cents`} type="number" min="1" value={option.priceCents ?? ""} onChange={(e) => onChange({ ...option, priceCents: e.target.value ? Number(e.target.value) : null })} placeholder="Price in cents" className="h-9 rounded-md border border-border px-2 text-sm" /><input aria-label={`${label} savings label`} value={option.savingsLabel ?? ""} onChange={(e) => onChange({ ...option, savingsLabel: e.target.value })} placeholder="Savings label (optional)" className="h-9 rounded-md border border-border px-2 text-sm" />{label === "Annual" && <textarea aria-label="Annual-only bonuses" value={(option.bonuses ?? []).join("\n")} onChange={(e) => onChange({ ...option, bonuses: e.target.value.split("\n") })} placeholder="Annual-only bonus, one per line" rows={2} className="sm:col-span-2 rounded-md border border-border px-2 py-1.5 text-sm" />}</div>}</div>;
+}
+
 function LevelDrawer({
   api,
   brand,
@@ -428,8 +447,13 @@ function LevelDrawer({
   onSaved: () => Promise<void>;
 }) {
   const [name, setName] = useState(level?.name ?? "");
-  const [description, setDescription] = useState(level?.description ?? "");
-  const [offerId, setOfferId] = useState<string>(level?.offerId ?? "");
+  const [shortDescription, setShortDescription] = useState(level?.shortDescription ?? level?.description?.slice(0, 100) ?? "");
+  const [icon, setIcon] = useState(level?.icon ?? "star");
+  const [highlights, setHighlights] = useState((level?.highlights ?? []).join("\n"));
+  const [bulletStyle, setBulletStyle] = useState(level?.bulletStyle ?? "checkmark");
+  const [featuredLabel, setFeaturedLabel] = useState(level?.featuredLabel ?? "");
+  const [publicVisibility, setPublicVisibility] = useState(level?.publicVisibility ?? "public");
+  const [pricing, setPricing] = useState(level?.pricing ?? { mode: "free" as const, monthly: { enabled: false, priceCents: null, currency: "USD", bonuses: [] }, annual: { enabled: false, priceCents: null, currency: "USD", bonuses: [] }, oneTime: { enabled: false, priceCents: null, currency: "USD", bonuses: [] } });
   const [active, setActive] = useState(level ? level.status === "active" : true);
   const [access, setAccess] = useState<LevelAccess>(
     level?.access ?? { channels: { mode: "all", ids: [] }, courses: { mode: "all", ids: [] } }
@@ -437,25 +461,16 @@ function LevelDrawer({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const isBase = level?.isBase === true;
-  const offerItems = [
-    { value: "", label: "Free — no Offer" },
-    ...data.offers.map((o) => ({ value: o.id, label: `${o.title} – ${offerPrice(o)}${o.visibility !== "published" ? ` (${o.visibility})` : ""}` })),
-    ...(level?.offerId && !data.offers.some((o) => o.id === level.offerId) ? [{ value: level.offerId, label: "Missing Offer" }] : []),
-  ];
-  const selectedOffer = data.offers.find((o) => o.id === offerId) ?? null;
-  const offerWarning =
-    offerId && !selectedOffer
-      ? "This Offer no longer exists — choose another so people can buy this level."
-      : selectedOffer?.visibility === "archived"
-        ? "This Offer is archived — nobody new can buy this level. Existing members keep it."
-        : selectedOffer?.visibility === "draft"
-          ? "This Offer is a draft — publish it so people can buy this level."
-          : null;
+  const iconOptions = [{ id: "none", label: "No icon", Icon: X }, { id: "people", label: "People", Icon: Users }, { id: "crown", label: "Crown", Icon: Crown }, { id: "star", label: "Star", Icon: Star }, { id: "gem", label: "Gem", Icon: Gem }, { id: "sparkles", label: "Sparkles", Icon: Sparkles }, { id: "rocket", label: "Rocket", Icon: Lightbulb }, { id: "heart", label: "Heart", Icon: Heart }, { id: "book", label: "Book", Icon: BookOpen }, { id: "trophy", label: "Trophy", Icon: Trophy }];
 
   async function save() {
+    if (pricing.mode === "paid" && !pricing.monthly.enabled && !pricing.annual.enabled && !pricing.oneTime.enabled && !level?.offerId) {
+      setErr("Paid levels need at least one billing option.");
+      return;
+    }
     setSaving(true);
     setErr(null);
-    const body = { name, description, offerId: offerId || null, status: active ? "active" : "inactive", access };
+    const body = { name, description: shortDescription, shortDescription, icon, highlights: highlights.split("\n"), bulletStyle, featuredLabel, publicVisibility, pricing, offerId: level?.offerId ?? null, status: active ? "active" : "inactive", access };
     const res = await fetch(level ? `${api}/membership-levels/${level.id}` : `${api}/membership-levels`, {
       method: level ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -493,33 +508,12 @@ function LevelDrawer({
             <span className="text-sm font-semibold text-foreground">Level name <span className="text-red-600">*</span></span>
             <input id="level-name" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} className="mt-1 h-10 w-full rounded-md border border-border px-3 text-sm" />
           </label>
-          <label className="block">
-            <span className="text-sm font-semibold text-foreground">Description</span>
-            <textarea id="level-description" value={description} maxLength={200} rows={3} onChange={(e) => setDescription(e.target.value)} className="mt-1 w-full rounded-md border border-border px-3 py-2 text-sm" />
-            <span className="block text-right text-micro text-muted-foreground">{description.length} / 200</span>
-          </label>
-          <label className="block">
-            <span className="text-sm font-semibold text-foreground">Pricing / Offer connection</span>
-            <span className="block text-xs text-muted-foreground">{isBase ? "The Base Membership is always free." : "Connect a paid Offer — buying it grants this level. The Offer sets the price and billing."}</span>
-            <Select
-              value={offerId}
-              disabled={isBase}
-              onValueChange={(v) => setOfferId(typeof v === "string" ? v : "")}
-              items={offerItems}
-            >
-              <SelectTrigger id="level-offer" aria-label="Pricing / Offer connection" className="mt-1 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {offerItems.map((i) => (
-                  <SelectItem key={i.value || "free"} value={i.value}>
-                    {i.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {offerWarning && <span className="mt-1 block rounded-md bg-amber-50 p-2 text-xs text-amber-800">{offerWarning}</span>}
-          </label>
+          <label className="block"><span className="text-sm font-semibold text-foreground">Short description <span className="text-red-600">*</span></span><input value={shortDescription} maxLength={100} onChange={(e) => setShortDescription(e.target.value)} className="mt-1 h-10 w-full rounded-md border border-border px-3 text-sm" /><span className="block text-right text-micro text-muted-foreground">{shortDescription.length} / 100</span></label>
+          <div><p className="text-sm font-semibold text-foreground">Plan icon</p><div className="mt-2 flex flex-wrap gap-2">{iconOptions.map(({ id, label, Icon }) => <button key={id} type="button" title={label} aria-label={label} onClick={() => setIcon(id)} className={cn("flex h-9 w-9 items-center justify-center rounded-md border", icon === id ? "border-2" : "border-border")} style={icon === id ? { borderColor: brand, color: brand, backgroundColor: `${brand}10` } : undefined}><Icon className="h-4 w-4" /></button>)}</div></div>
+          <label className="block"><span className="text-sm font-semibold text-foreground">Plan highlights</span><span className="block text-xs text-muted-foreground">One benefit per line. These are marketing copy, not an automatic access list.</span><textarea value={highlights} rows={4} onChange={(e) => setHighlights(e.target.value)} className="mt-1 w-full rounded-md border border-border px-3 py-2 text-sm" /></label>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="block"><span className="text-sm font-semibold text-foreground">Bullet style</span><Select value={bulletStyle} onValueChange={(v) => setBulletStyle(v as "checkmark" | "sparkle")} items={[{ value: "checkmark", label: "Checkmark" }, { value: "sparkle", label: "Sparkle" }]}><SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="checkmark">Checkmark</SelectItem><SelectItem value="sparkle">Sparkle</SelectItem></SelectContent></Select></label><label className="block"><span className="text-sm font-semibold text-foreground">Featured badge</span><input value={featuredLabel} maxLength={32} placeholder="None" onChange={(e) => setFeaturedLabel(e.target.value)} className="mt-1 h-10 w-full rounded-md border border-border px-3 text-sm" /></label></div>
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-4"><div><p className="text-sm font-semibold text-foreground">Show on public Plans page</p><p className="text-xs text-muted-foreground">Hide this active level for complimentary or internal use.</p></div><Switch checked={publicVisibility === "public"} onCheckedChange={(v) => setPublicVisibility(v ? "public" : "hidden")} /></div>
+          <div className="border-t border-border pt-4"><p className="text-sm font-semibold text-foreground">Pricing</p><p className="text-xs text-muted-foreground">Pricing is configured on this Membership Level. Magnetix manages the billing connection behind the scenes.</p><div className="mt-2 flex gap-4"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={pricing.mode === "free"} onChange={() => setPricing((p) => ({ ...p, mode: "free" }))} /> Free</label><label className="flex items-center gap-2 text-sm"><input type="radio" disabled={isBase} checked={pricing.mode === "paid"} onChange={() => setPricing((p) => ({ ...p, mode: "paid" }))} /> Paid</label></div>{pricing.mode === "paid" && <div className="mt-3 space-y-3"><PricingOption label="Monthly" option={pricing.monthly} onChange={(monthly) => setPricing((p) => ({ ...p, monthly }))} brand={brand} /><PricingOption label="Annual" option={pricing.annual} onChange={(annual) => setPricing((p) => ({ ...p, annual }))} brand={brand} /><PricingOption label="One-time" option={pricing.oneTime} onChange={(oneTime) => setPricing((p) => ({ ...p, oneTime }))} brand={brand} /></div>}</div>
           <div className="flex items-start justify-between gap-3 border-t border-border pt-4">
             <div>
               <p className="text-sm font-semibold text-foreground">Status</p>

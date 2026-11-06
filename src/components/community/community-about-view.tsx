@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { JoinButton } from "@/app/c/[saId]/[groupSlug]/join-button";
 import { AboutMediaGallery } from "@/components/community/about-media-gallery";
-import { communityAboutEditHref, communityHomeHref } from "@/lib/community/routes";
+import { communityAboutEditHref, communityHomeHref, communityPlansHref } from "@/lib/community/routes";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type {
@@ -302,6 +302,8 @@ function SummaryAction({
   state,
   priceLabel,
   canShowUpgrade,
+  publicPlanCount,
+  hasPaidPublicPlan,
 }: {
   saId: string;
   pretty: boolean;
@@ -311,6 +313,8 @@ function SummaryAction({
   state: ViewerState;
   priceLabel: string;
   canShowUpgrade: boolean;
+  publicPlanCount: number;
+  hasPaidPublicPlan: boolean;
 }) {
   if (state === "joined" && canShowUpgrade) {
     return (
@@ -346,6 +350,9 @@ function SummaryAction({
       access={group.access}
       priceLabel={priceLabel}
       brandColor={resolveCommunityTheme(group).primaryAction}
+      publicPlanCount={publicPlanCount}
+      hasPaidPublicPlan={hasPaidPublicPlan}
+      plansHref={communityPlansHref({ saId, pretty, staffGroupId }, group.slug)}
     />
   );
 }
@@ -360,6 +367,8 @@ export function CommunityAboutView({
   membership,
   tiers,
   reviews,
+  publicPlanCount,
+  hasPaidPublicPlan,
 }: {
   saId: string;
   pretty: boolean;
@@ -375,6 +384,8 @@ export function CommunityAboutView({
    *  member-only "About this Community" Home card (Part B), so this
    *  component no longer needs the viewer's own `member` identity. */
   reviews: CommunityReviewView[];
+  publicPlanCount: number;
+  hasPaidPublicPlan: boolean;
 }) {
   const gallery = galleryForGroup(group);
   // "What You'll Get Inside" (Part 8/11) — hidden entirely, not a reserved
@@ -567,6 +578,8 @@ export function CommunityAboutView({
                   state={state}
                   priceLabel={priceLabel}
                   canShowUpgrade={upgradeEligible}
+                  publicPlanCount={publicPlanCount}
+                  hasPaidPublicPlan={hasPaidPublicPlan}
                 />
                 {ctaSubtext && (
                   <p className="community-about-cta-subtext">{ctaSubtext}</p>

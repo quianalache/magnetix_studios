@@ -24,6 +24,9 @@ export function JoinButton({
   access,
   priceLabel,
   brandColor,
+  publicPlanCount,
+  hasPaidPublicPlan,
+  plansHref,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
@@ -34,6 +37,9 @@ export function JoinButton({
   access: "free" | "paid";
   priceLabel: string;
   brandColor: string;
+  publicPlanCount: number;
+  hasPaidPublicPlan: boolean;
+  plansHref: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -65,6 +71,9 @@ export function JoinButton({
   }
 
   if (state === "guest") {
+    if (publicPlanCount > 1 || hasPaidPublicPlan) {
+      return <a href={plansHref} className={base} style={style}>Enter community</a>;
+    }
     return (
       <a
         href={communitySignupHref(linkBase, { join: groupId })}
@@ -79,6 +88,7 @@ export function JoinButton({
   // state === "member" (signed in, not yet joined). Paid groups go through the
   // one-time purchase flow; free groups join directly.
   if (access === "paid") {
+    if (publicPlanCount > 0) return <a href={plansHref} className={base} style={style}>Enter community</a>;
     return (
       <PurchaseButton
         endpoint={`/api/community/${saId}/${groupId}/purchase`}

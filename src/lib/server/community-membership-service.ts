@@ -3,7 +3,7 @@ import "server-only";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { syncGroupMemberCount } from "@/lib/server/community-member-count";
 import { resolveEffectiveBaseRoster, type EffectiveMembershipRecord, type MembershipRosterIdentity } from "@/lib/community/membership-roster";
-import { getCourseOffer } from "@/lib/server/course-offer-service";
+import { createCourseOfferServerSide, getCourseOffer, updateCourseOfferServerSide } from "@/lib/server/course-offer-service";
 import {
   allows,
   baseAllows,
@@ -19,6 +19,11 @@ import {
   type LevelGrant,
   type LevelGrantSource,
   type MembershipLevel,
+  type MembershipLevelBillingOption,
+  type MembershipLevelBulletStyle,
+  type MembershipLevelPricing,
+  type MembershipLevelPricingMode,
+  type MembershipLevelVisibility,
   type MembershipLevelStatus,
 } from "@/types/community-membership";
 
@@ -41,15 +46,46 @@ const grantsCol = (sa: string, g: string, memberId: string) => membershipRef(sa,
 
 function toLevel(id: string, d: FirebaseFirestore.DocumentData): MembershipLevel {
   const access = (d.access ?? {}) as Partial<LevelAccess>;
+  const rawPricing = (d.pricing ?? {}) as Partial<MembershipLevelPricing>;
+  const option = (value: unknown, fallbackCurrency = "USD"): MembershipLevelBillingOption => {
+    const raw = (value ?? {}) as Partial<MembershipLevelBillingOption>;
+    return {
+      enabled: raw.enabled === true,
+      priceCents: typeof raw.priceCents === "number" && Number.isFinite(raw.priceCents) ? raw.priceCents : null,
+      currency: typeof raw.currency === "string" && raw.currency ? raw.currency.toUpperCase() : fallbackCurrency,
+      label: typeof raw.label === "string" ? raw.label : null,
+      savingsLabel: typeof raw.savingsLabel === "string" ? raw.savingsLabel : null,
+      bonuses: Array.isArray(raw.bonuses) ? raw.bonuses.filter((x): x is string => typeof x === "string") : [],
+    };
+  };
+  const pricing: MembershipLevelPricing = {
+    mode: rawPricing.mode === "paid" || (rawPricing.mode === undefined && typeof d.offerId === "string" && d.offerId) ? "paid" : "free",
+    monthly: option(rawPricing.monthly),
+    annual: option(rawPricing.annual),
+    oneTime: option(rawPricing.oneTime),
+  };
+  const billingOfferIds = (d.billingOfferIds ?? {}) as Record<string, unknown>;
   return {
     id,
     subAccountId: d.subAccountId,
     groupId: d.groupId,
     name: d.name ?? "",
     description: d.description ?? "",
+    shortDescription: typeof d.shortDescription === "string" ? d.shortDescription : (d.description ?? "").slice(0, 100),
+    icon: typeof d.icon === "string" && d.icon ? d.icon : null,
+    highlights: Array.isArray(d.highlights) ? d.highlights.filter((x: unknown): x is string => typeof x === "string") : [],
+    bulletStyle: d.bulletStyle === "sparkle" ? "sparkle" : "checkmark",
+    featuredLabel: typeof d.featuredLabel === "string" && d.featuredLabel ? d.featuredLabel : null,
+    publicVisibility: d.publicVisibility === "public" || d.showOnPlans === true ? "public" : "hidden",
     isBase: d.isBase === true,
     status: d.status === "inactive" ? "inactive" : "active",
     offerId: typeof d.offerId === "string" && d.offerId ? d.offerId : null,
+    pricing,
+    billingOfferIds: {
+      monthly: typeof billingOfferIds.monthly === "string" ? billingOfferIds.monthly : null,
+      annual: typeof billingOfferIds.annual === "string" ? billingOfferIds.annual : null,
+      oneTime: typeof billingOfferIds.oneTime === "string" ? billingOfferIds.oneTime : null,
+    },
     order: typeof d.order === "number" ? d.order : 0,
     access: {
       channels: normalizeAccessRule(access.channels, null),
@@ -86,9 +122,17 @@ export async function ensureBaseMembershipLevel(sa: string, g: string, uid: stri
       groupId: g,
       name: "Base Membership",
       description: "Everything every member of this community can access.",
+      shortDescription: "Free community access for everyone.",
+      icon: "people",
+      highlights: [],
+      bulletStyle: "checkmark",
+      featuredLabel: null,
+      publicVisibility: "hidden",
       isBase: true,
       status: "active",
       offerId: null,
+      pricing: { mode: "free", monthly: { enabled: false, priceCents: null, currency: "USD", bonuses: [] }, annual: { enabled: false, priceCents: null, currency: "USD", bonuses: [] }, oneTime: { enabled: false, priceCents: null, currency: "USD", bonuses: [] } },
+      billingOfferIds: { monthly: null, annual: null, oneTime: null },
       order: 0,
       access: FULL_ACCESS,
       createdAtMs: now,
@@ -128,6 +172,14 @@ export interface LevelInput {
   status?: unknown;
   offerId?: unknown;
   access?: unknown;
+  shortDescription?: unknown;
+  icon?: unknown;
+  highlights?: unknown;
+  bulletStyle?: unknown;
+  featuredLabel?: unknown;
+  publicVisibility?: unknown;
+  pricing?: unknown;
+  billingOfferIds?: unknown;
 }
 
 function cleanText(v: unknown, max: number): string | undefined {
@@ -143,6 +195,46 @@ async function buildPatch(sa: string, g: string, input: LevelInput): Promise<Par
   }
   const description = cleanText(input.description, 200);
   if (description !== undefined) patch.description = description;
+  if (input.shortDescription !== undefined) {
+    const shortDescription = cleanText(input.shortDescription, 100);
+    if (shortDescription === undefined) throw new MembershipLevelError("Short description must be text.");
+    patch.shortDescription = shortDescription;
+  }
+  if (input.icon !== undefined) {
+    const icon = typeof input.icon === "string" && input.icon.trim() ? input.icon.trim() : null;
+    const allowedIcons = new Set(["none", "crown", "star", "gem", "sparkles", "rocket", "lightning", "heart", "people", "play", "book", "trophy"]);
+    if (icon && !allowedIcons.has(icon)) throw new MembershipLevelError("Choose an icon from the Community plan icon set.");
+    patch.icon = icon;
+  }
+  if (input.highlights !== undefined) {
+    if (!Array.isArray(input.highlights)) throw new MembershipLevelError("Plan highlights must be a list.");
+    patch.highlights = input.highlights.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 12).map((x) => x.slice(0, 120));
+  }
+  if (input.bulletStyle !== undefined) {
+    if (input.bulletStyle !== "checkmark" && input.bulletStyle !== "sparkle") throw new MembershipLevelError("Bullet style must be Checkmark or Sparkle.");
+    patch.bulletStyle = input.bulletStyle as MembershipLevelBulletStyle;
+  }
+  if (input.featuredLabel !== undefined) patch.featuredLabel = cleanText(input.featuredLabel, 32) || null;
+  if (input.publicVisibility !== undefined) {
+    if (input.publicVisibility !== "public" && input.publicVisibility !== "hidden") throw new MembershipLevelError("Public visibility must be Public or Hidden.");
+    patch.publicVisibility = input.publicVisibility as MembershipLevelVisibility;
+  }
+  if (input.pricing !== undefined) {
+    const raw = (input.pricing ?? {}) as Record<string, unknown>;
+    const mode = raw.mode === "paid" ? "paid" : raw.mode === "free" ? "free" : null;
+    if (!mode) throw new MembershipLevelError("Choose Free or Paid pricing.");
+    const parse = (key: string): MembershipLevelBillingOption => {
+      const value = (raw[key] ?? {}) as Record<string, unknown>;
+      const enabled = value.enabled === true;
+      const cents = value.priceCents === null || value.priceCents === undefined || value.priceCents === "" ? null : Number(value.priceCents);
+      if (enabled && (!Number.isInteger(cents) || (cents as number) <= 0)) throw new MembershipLevelError(`${key} pricing needs a positive whole-number price in cents.`);
+      return { enabled, priceCents: enabled ? cents : null, currency: typeof value.currency === "string" && value.currency ? value.currency.toUpperCase() : "USD", label: cleanText(value.label, 40) || null, savingsLabel: cleanText(value.savingsLabel, 40) || null, bonuses: Array.isArray(value.bonuses) ? value.bonuses.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 8).map((x) => x.slice(0, 100)) : [] };
+    };
+    const pricing = { mode: mode as MembershipLevelPricingMode, monthly: parse("monthly"), annual: parse("annual"), oneTime: parse("oneTime") } satisfies MembershipLevelPricing;
+    if (mode === "paid" && !pricing.monthly.enabled && !pricing.annual.enabled && !pricing.oneTime.enabled && !(typeof input.offerId === "string" && input.offerId)) throw new MembershipLevelError("Paid levels need at least one billing option.");
+    if (mode === "free" && (pricing.monthly.enabled || pricing.annual.enabled || pricing.oneTime.enabled)) throw new MembershipLevelError("Free levels cannot have paid billing options.");
+    patch.pricing = pricing;
+  }
   if (input.status !== undefined) {
     if (input.status !== "active" && input.status !== "inactive") throw new MembershipLevelError("Status must be Active or Inactive.");
     patch.status = input.status as MembershipLevelStatus;
@@ -173,9 +265,17 @@ export async function createMembershipLevel(sa: string, g: string, input: LevelI
     groupId: g,
     name: patch.name,
     description: patch.description ?? "",
+    shortDescription: patch.shortDescription ?? "",
+    icon: patch.icon ?? "star",
+    highlights: patch.highlights ?? [],
+    bulletStyle: patch.bulletStyle ?? "checkmark",
+    featuredLabel: patch.featuredLabel ?? null,
+    publicVisibility: patch.publicVisibility ?? "public",
     isBase: false,
     status: patch.status ?? "inactive",
     offerId: patch.offerId ?? null,
+    pricing: patch.pricing ?? { mode: "free", monthly: { enabled: false, priceCents: null, currency: "USD", bonuses: [] }, annual: { enabled: false, priceCents: null, currency: "USD", bonuses: [] }, oneTime: { enabled: false, priceCents: null, currency: "USD", bonuses: [] } },
+    billingOfferIds: { monthly: null, annual: null, oneTime: null },
     order: Math.max(0, ...levels.map((l) => l.order)) + 1,
     access: patch.access ?? FULL_ACCESS,
     createdAtMs: now,
@@ -184,7 +284,8 @@ export async function createMembershipLevel(sa: string, g: string, input: LevelI
     updatedByUid: uid,
   };
   const ref = await levelsCol(sa, g).add(doc);
-  return toLevel(ref.id, doc);
+  const created = toLevel(ref.id, doc);
+  return created.pricing.mode === "paid" ? syncSystemBillingOffers(sa, g, created) : created;
 }
 
 export async function updateMembershipLevel(sa: string, g: string, levelId: string, input: LevelInput, uid: string | null): Promise<MembershipLevel> {
@@ -193,10 +294,42 @@ export async function updateMembershipLevel(sa: string, g: string, levelId: stri
   if (!snap.exists) throw new MembershipLevelError("Membership level not found.", 404);
   const current = toLevel(snap.id, snap.data()!);
   const patch = await buildPatch(sa, g, input);
+  const nextPricing = (patch.pricing ?? current.pricing);
+  if (current.isBase && nextPricing.mode === "paid") throw new MembershipLevelError("The Base Membership is always free.");
   const problem = levelRuleProblem({ isBase: current.isBase, status: patch.status ?? current.status, offerId: patch.offerId !== undefined ? patch.offerId : current.offerId });
   if (problem) throw new MembershipLevelError(problem);
-  await ref.update({ ...patch, updatedAtMs: Date.now(), updatedByUid: uid });
-  return toLevel(snap.id, { ...snap.data(), ...patch });
+  const storedPatch = { ...patch, ...(current.isBase ? { pricing: { ...current.pricing, mode: "free", monthly: { ...current.pricing.monthly, enabled: false }, annual: { ...current.pricing.annual, enabled: false }, oneTime: { ...current.pricing.oneTime, enabled: false } } } : {}), updatedAtMs: Date.now(), updatedByUid: uid };
+  await ref.update(storedPatch);
+  const next = toLevel(snap.id, { ...snap.data(), ...storedPatch });
+  return next.pricing.mode === "paid" ? syncSystemBillingOffers(sa, g, next) : next;
+}
+
+/** Creates/updates the hidden billing objects used by native Community plan checkout. */
+async function syncSystemBillingOffers(sa: string, g: string, level: MembershipLevel): Promise<MembershipLevel> {
+  const sub = await getAdminDb().doc(`subAccounts/${sa}`).get();
+  const agencyId = typeof sub.data()?.agencyId === "string" ? sub.data()!.agencyId : "";
+  if (!agencyId) throw new MembershipLevelError("This workspace is missing its billing owner.");
+  const ids = { ...level.billingOfferIds };
+  const configs = [
+    ["monthly", level.pricing.monthly, "recurring", "month"],
+    ["annual", level.pricing.annual, "recurring", "year"],
+    ["oneTime", level.pricing.oneTime, "oneTime", null],
+  ] as const;
+  for (const [kind, option, type, interval] of configs) {
+    if (!option.enabled || !option.priceCents) continue;
+    const title = `${level.name} — ${kind === "oneTime" ? "one-time" : kind}`;
+    const existingId = ids[kind];
+    if (existingId) {
+      await updateCourseOfferServerSide({ subAccountId: sa, offerId: existingId, patch: { title, type, priceCents: option.priceCents, currency: option.currency, recurringInterval: interval, visibility: "published", paymentMode: "live" } });
+      continue;
+    }
+    const offer = await createCourseOfferServerSide({ subAccountId: sa, agencyId, title, courseIds: [], type, priceCents: option.priceCents, currency: option.currency, recurringInterval: interval, paymentMode: "live" });
+    await getAdminDb().doc(`subAccounts/${sa}/courseOffers/${offer.id}`).update({ visibility: "published", systemManaged: true, communityMembershipLevelId: level.id, communityMembershipGroupId: g, communityBillingKind: kind });
+    ids[kind] = offer.id;
+  }
+  const next = { ...level, billingOfferIds: ids, offerId: ids.monthly ?? ids.annual ?? ids.oneTime ?? level.offerId };
+  await levelsCol(sa, g).doc(level.id).update({ billingOfferIds: ids, offerId: next.offerId, updatedAtMs: Date.now() });
+  return next;
 }
 
 /** Swap the Base Membership in one transaction — there is always exactly one. */
@@ -399,8 +532,8 @@ async function levelsForOffer(sa: string, offerId: string): Promise<MembershipLe
   const groups = await getAdminDb().collection(`subAccounts/${sa}/communityGroups`).get();
   const out: MembershipLevel[] = [];
   for (const gd of groups.docs) {
-    const snap = await levelsCol(sa, gd.id).where("offerId", "==", offerId).get();
-    out.push(...snap.docs.map((d) => toLevel(d.id, d.data())));
+    const snap = await levelsCol(sa, gd.id).get();
+    out.push(...snap.docs.map((d) => toLevel(d.id, d.data())).filter((level) => level.offerId === offerId || Object.values(level.billingOfferIds).includes(offerId)));
   }
   return out;
 }

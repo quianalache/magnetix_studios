@@ -84,6 +84,12 @@ export function communityAboutHref(
     : `/c/${b.saId}/${groupSlug}`;
 }
 
+export function communityPlansHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/plans`;
+  if (b.staffGroupId) return `${staffBase(b)}/plans`;
+  return b.pretty ? `/communities/${groupSlug}/plans` : `/c/${b.saId}/${groupSlug}/plans`;
+}
+
 /**
  * "Edit About" (2026-08-30 mockup pass) — a dedicated single page, not a
  * modal, per the approved mockup's own header/back-link chrome. Same
@@ -314,11 +320,12 @@ export function communityLoginHref(
 
 export function communitySignupHref(
   b: CommunityLinkBase,
-  opts?: { join?: string; ref?: string }
+  opts?: { join?: string; level?: string; ref?: string }
 ): string {
   const base = b.pretty ? "/communities/signup" : `/c/${b.saId}/signup`;
   const qs = new URLSearchParams();
   if (opts?.join) qs.set("join", opts.join);
+  if (opts?.level) qs.set("level", opts.level);
   if (opts?.ref) qs.set("ref", opts.ref);
   const q = qs.toString();
   return q ? `${base}?${q}` : base;
