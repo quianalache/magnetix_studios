@@ -16,5 +16,6 @@ export default async function StaffCommunityHomeSettingsPage({ params }: { param
   if (membership.role !== "moderator") notFound();
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
   const viewer: AuthorView = { memberId: member.id, displayName: member.displayName?.trim() || member.email.split("@")[0] || "Member", avatarUrl: member.avatarUrl, level: membership.level };
-  return <CommunityShell saId={saId} group={group} active="settings" viewer={viewer} viewerIsModerator staffGroupId={groupId} embedded={false}><CommunityHomeWorkspace saId={saId} staffGroupId={groupId} groupId={group.id} group={{ ...group, createdAt: null, updatedAt: null }} brand={brand} /></CommunityShell>;
+  const homeGroup = { slug: group.slug, guidelinesHtml: group.guidelinesHtml ?? "", links: group.links ?? [], sidebarCards: group.sidebarCards ?? [] };
+  return <CommunityShell saId={saId} group={group} active="settings" viewer={viewer} viewerIsModerator staffGroupId={groupId} embedded={false}><CommunityHomeWorkspace saId={saId} staffGroupId={groupId} groupId={group.id} group={homeGroup} brand={brand} /></CommunityShell>;
 }

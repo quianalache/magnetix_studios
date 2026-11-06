@@ -13,6 +13,8 @@ import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { SIDEBAR_CARDS_MAX, SIDEBAR_CARD_BODY_MAX, SIDEBAR_CARD_BUTTON_LABEL_MAX, SIDEBAR_CARD_HEADING_MAX, SIDEBAR_LINKS_MAX, GUIDELINES_MAX_CHARS } from "@/config/community";
 import type { CommunityGroup, CommunitySidebarCard, ResourceLink } from "@/types/community";
 
+type CommunityHomeGroup = Pick<CommunityGroup, "slug" | "guidelinesHtml" | "links" | "sidebarCards">;
+
 function textLength(html: string): number {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().length;
 }
@@ -42,7 +44,7 @@ function Preview({ brand, guidelines, links, cards }: { brand: string; guideline
   );
 }
 
-export function CommunityHomeWorkspace({ saId, staffGroupId, groupId, group: initialGroup, brand }: { saId: string; staffGroupId?: string; groupId: string; group: CommunityGroup; brand: string }) {
+export function CommunityHomeWorkspace({ saId, staffGroupId, groupId, group: initialGroup, brand }: { saId: string; staffGroupId?: string; groupId: string; group: CommunityHomeGroup; brand: string }) {
   const [group, setGroup] = useState(initialGroup);
   const [guidelines, setGuidelines] = useState(initialGroup.guidelinesHtml ?? "");
   const [links, setLinks] = useState<ResourceLink[]>(initialGroup.links ?? []);
@@ -60,7 +62,8 @@ export function CommunityHomeWorkspace({ saId, staffGroupId, groupId, group: ini
       const res = await fetch(`/api/community/${saId}/${groupId}/settings`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guidelinesHtml: guidelines, links, sidebarCards: cards }) });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; group?: CommunityGroup; error?: string };
       if (!res.ok || !data.ok || !data.group) throw new Error(data.error ?? "Couldn’t save Community Home");
-      setGroup(data.group); setGuidelines(data.group.guidelinesHtml ?? ""); setLinks(data.group.links ?? []); setCards(data.group.sidebarCards ?? []); toast.success("Community Home saved.");
+      const nextGroup: CommunityHomeGroup = { slug: data.group.slug, guidelinesHtml: data.group.guidelinesHtml ?? "", links: data.group.links ?? [], sidebarCards: data.group.sidebarCards ?? [] };
+      setGroup(nextGroup); setGuidelines(nextGroup.guidelinesHtml ?? ""); setLinks(nextGroup.links ?? []); setCards(nextGroup.sidebarCards ?? []); toast.success("Community Home saved.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Couldn’t save Community Home"); } finally { setSaving(false); }
   }
 
