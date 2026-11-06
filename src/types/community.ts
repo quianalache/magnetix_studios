@@ -109,6 +109,41 @@ export type GroupAccess = "free" | "paid";
  *  members, purchases/entitlements and automations can add people. */
 export type GroupJoinPolicy = "open" | "approval" | "invite";
 export type GroupStatus = "draft" | "published";
+export type CommunityReportReason =
+  | "spam_or_scam"
+  | "harassment_or_bullying"
+  | "inappropriate_content"
+  | "misinformation"
+  | "privacy_or_safety"
+  | "other";
+export type CommunityReportContentType = "post" | "comment" | "direct_message";
+export type CommunityReportStatus = "new" | "in_review" | "resolved";
+
+export interface CommunityModerationReport {
+  id: string;
+  subAccountId: string;
+  groupId: string;
+  contentType: CommunityReportContentType;
+  contentId: string;
+  parentId: string | null;
+  conversationId: string | null;
+  reporterMemberId: string;
+  reporterDisplayName: string;
+  reporterAvatarUrl: string | null;
+  reportedMemberId: string;
+  reportedDisplayName: string;
+  reportedAvatarUrl: string | null;
+  reason: CommunityReportReason;
+  reporterContext: string;
+  contentPreview: string;
+  status: CommunityReportStatus;
+  reviewerMemberId: string | null;
+  moderatorNotes: string;
+  resolution: "dismissed" | "content_removed" | "dm_removal_not_supported" | null;
+  createdAtMs: number | null;
+  updatedAtMs: number | null;
+  resolvedAtMs: number | null;
+}
 export type CommunityAboutMediaType = "image" | "video";
 export type CommunityBillingInterval = "one_time" | "month" | "year";
 
@@ -453,6 +488,9 @@ export interface CommunityGroup {
   priceCents: number | null;
   currency: string | null;
   joinPolicy: GroupJoinPolicy;
+  /** One community-level switch for member reports across posts, comments,
+   * and direct messages. Absent legacy data is treated as enabled. */
+  memberReportingEnabled?: boolean;
   /** Points & Rewards master switch for the group. */
   pointsEnabled: boolean;
   /** Feed categories (the pill row). Always includes at least "General". */

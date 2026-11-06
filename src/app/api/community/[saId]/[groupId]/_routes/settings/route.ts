@@ -58,6 +58,7 @@ export async function PATCH(
     aboutHtml?: string;
     slug?: string;
     joinPolicy?: GroupJoinPolicy;
+    memberReportingEnabled?: boolean;
     logoUrl?: string | null;
     coverUrl?: string | null;
     faviconUrl?: string | null;
@@ -87,6 +88,7 @@ export async function PATCH(
       aboutHtml: body.aboutHtml,
       slug: body.slug,
       joinPolicy: body.joinPolicy,
+      memberReportingEnabled: body.memberReportingEnabled,
       logoUrl: body.logoUrl,
       coverUrl: body.coverUrl,
       faviconUrl: body.faviconUrl,

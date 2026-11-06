@@ -1,0 +1,41 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Search, Shield, X } from "lucide-react";
+import { toast } from "sonner";
+import type { CommunityModerationReport, CommunityReportStatus } from "@/types/community";
+import { COMMUNITY_REPORT_REASONS, reportReasonLabel } from "@/lib/community/moderation";
+
+type Filter = "all" | CommunityReportStatus;
+const typeLabel = (t: CommunityModerationReport["contentType"]) => t === "direct_message" ? "Message" : t[0].toUpperCase() + t.slice(1);
+
+export function ModerationWorkspace({ saId, groupId, brand, initialEnabled, initialReports }: { saId: string; groupId: string; groupSlug: string; brand: string; initialEnabled: boolean; initialReports: CommunityModerationReport[] }) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [reports, setReports] = useState(initialReports);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<CommunityModerationReport | null>(null);
+  const [notes, setNotes] = useState("");
+  const base = `/api/community/${saId}/${groupId}`;
+  const shown = useMemo(() => reports.filter((r) => (filter === "all" || r.status === filter) && (!search.trim() || `${r.reportedDisplayName} ${r.reporterDisplayName} ${r.contentPreview}`.toLowerCase().includes(search.trim().toLowerCase()))), [reports, filter, search]);
+
+  async function saveEnabled(next: boolean) {
+    setEnabled(next);
+    const res = await fetch(`${base}/settings`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memberReportingEnabled: next }) });
+    if (!res.ok) { setEnabled(!next); toast.error("Couldn't save reporting setting"); } else toast.success(next ? "Member reporting enabled" : "Member reporting disabled");
+  }
+  async function update(action?: "dismiss" | "remove", status?: CommunityReportStatus) {
+    if (!selected) return;
+    const res = await fetch(`${base}/moderation/reports`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reportId: selected.id, action, status, moderatorNotes: notes }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error(data.error ?? "Couldn't update report"); return; }
+    setReports((prev) => prev.map((r) => r.id === selected.id ? data.report : r)); setSelected(data.report); toast.success(action === "remove" ? "Content removed" : action === "dismiss" ? "Report dismissed" : "Report updated");
+  }
+  return <div className="relative min-h-full space-y-5 bg-[#FCF9FB] p-6">
+    <div className="flex items-start justify-between"><div><div role="heading" aria-level={1} className="text-2xl font-semibold text-[#24102f]">Moderation</div><p className="text-sm text-[#6b6070]">Set up member reporting and manage reported content in one place.</p></div><button onClick={() => void saveEnabled(!enabled)} className={`rounded-full px-4 py-2 text-sm font-semibold text-white ${enabled ? "bg-[#e73566]" : "bg-[#909090]"}`} style={enabled ? { backgroundColor: brand } : undefined}>{enabled ? "Reporting enabled" : "Reporting disabled"}</button></div>
+    <section className="rounded-xl border border-[#eadfe8] bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><Shield className="h-6 w-6 text-[#e73566]" /><div><h2 className="font-semibold text-[#24102f]">Member reporting</h2><p className="text-sm text-[#6b6070]">Members can report posts, comments, and direct messages for moderator review. Existing reports are preserved when disabled.</p></div></div></section>
+    <section className="rounded-xl border border-[#eadfe8] bg-white p-5 shadow-sm"><h2 className="font-semibold text-[#24102f]">Standard report reasons</h2><p className="mb-3 text-sm text-[#6b6070]">These fixed Magnetix reasons are shown to members.</p><div className="flex flex-wrap gap-2">{COMMUNITY_REPORT_REASONS.map((r) => <span key={r.value} className="rounded-full bg-[#fde6ee] px-3 py-1 text-sm text-[#6d2341]">{r.label}</span>)}</div></section>
+    <section className="rounded-xl border border-[#eadfe8] bg-white p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold text-[#24102f]">Reports</h2><p className="text-sm text-[#6b6070]">Unified queue, newest first.</p></div><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-[#909090]" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reports…" className="rounded-lg border border-[#ddd3dd] py-2 pl-9 pr-3 text-sm" /></div></div><div className="mb-3 flex flex-wrap gap-1 rounded-lg bg-[#f7f2f6] p-1">{(["all", "new", "in_review", "resolved"] as Filter[]).map((f) => <button key={f} onClick={() => setFilter(f)} className={`rounded-md px-3 py-1.5 text-sm ${filter === f ? "bg-white font-semibold text-[#e73566] shadow-sm" : "text-[#5c5260]"}`}>{f === "all" ? `All (${reports.length})` : f === "in_review" ? "In Review" : f[0].toUpperCase() + f.slice(1)}</button>)}</div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-[#817783]"><tr><th className="p-2">Content</th><th className="p-2">Reason</th><th className="p-2">Reported member</th><th className="p-2">Reporter</th><th className="p-2">Status</th><th /></tr></thead><tbody>{shown.map((r) => <tr key={r.id} className="border-t border-[#f0e8ef]"><td className="p-2 font-medium">{typeLabel(r.contentType)}<div className="max-w-[240px] truncate text-xs text-[#817783]">{r.contentPreview}</div></td><td className="p-2"><span className="rounded-full bg-[#fde6ee] px-2 py-1 text-xs">{reportReasonLabel(r.reason)}</span></td><td className="p-2">{r.reportedDisplayName}</td><td className="p-2">{r.reporterDisplayName}</td><td className="p-2"><span className="rounded-full bg-[#f4eff8] px-2 py-1 text-xs">{r.status === "in_review" ? "In Review" : r.status[0].toUpperCase() + r.status.slice(1)}</span></td><td className="p-2 text-right"><button onClick={() => { setSelected(r); setNotes(r.moderatorNotes); }} className="rounded-md bg-[#e73566] px-3 py-1.5 text-xs font-semibold text-white">Review</button></td></tr>)}</tbody></table>{shown.length === 0 && <p className="py-8 text-center text-sm text-[#817783]">No reports in this view.</p>}</div></section>
+    {selected && <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-[#eadfe8] bg-white p-6 shadow-2xl"><div className="mb-5 flex items-start justify-between"><div><p className="text-xs uppercase tracking-wide text-[#817783]">Review report</p><h2 className="text-xl font-semibold text-[#24102f]">{typeLabel(selected.contentType)} · {reportReasonLabel(selected.reason)}</h2></div><button onClick={() => setSelected(null)} aria-label="Close review"><X /></button></div><div className="space-y-4 text-sm"><div className="rounded-lg bg-[#f8f3f7] p-4"><p><b>Reporter:</b> {selected.reporterDisplayName}</p><p><b>Reported member:</b> {selected.reportedDisplayName}</p><p className="mt-2 text-[#5c5260]">{selected.contentPreview}</p></div><div><label className="font-semibold">Reporter context</label><p className="mt-1 rounded-lg border p-3 text-[#5c5260]">{selected.reporterContext || "No additional context."}</p></div><div><label className="font-semibold">Moderator notes</label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 min-h-28 w-full rounded-lg border p-3" placeholder="Add a note…" /></div><p className="rounded-lg bg-[#fff3e0] p-3 text-xs text-[#6b6070]">Reporter identity is visible only to moderators. Direct-message removal is unavailable until a privacy-safe moderator deletion path exists.</p></div><div className="mt-auto flex flex-wrap justify-end gap-2 pt-6"><button onClick={() => void update(undefined, "in_review")} className="rounded-lg border px-4 py-2 text-sm">Save notes</button><button onClick={() => void update("dismiss")} className="rounded-lg border px-4 py-2 text-sm">Dismiss report</button><button disabled={selected.contentType === "direct_message"} onClick={() => void update("remove")} className="rounded-lg bg-[#e73566] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Remove content</button></div></div>}
+  </div>;
+}

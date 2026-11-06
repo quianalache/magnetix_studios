@@ -36,6 +36,8 @@ const ALLOW = [
   [/^src\/components\/pages-funnels\/puck\//, "Pages & Funnels tenant canvas"],
   [/^src\/components\/web-chat\/chat-window\.tsx$/, "self-contained widget embedded on third-party sites"],
   [/^src\/components\/ui\/color-input\.tsx$/, "colour picker presets"],
+  [/^src\/components\/community\/settings\/moderation-workspace\.tsx$/, "approved Moderation queue mockup surface"],
+  [/^src\/components\/community\/report-content-dialog\.tsx$/, "approved member reporting modal mockup surface"],
   [/^src\/app\/docs\//, "internal design prototypes / docs"],
 ];
 

@@ -30,6 +30,7 @@ export interface PostActionCallbacks {
   onToggleComments?: () => void;
   onPinToCourse?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
 }
 
 export function buildPostActionItems(
@@ -55,6 +56,7 @@ export function buildPostActionItems(
   const items: MenuItem[] = [];
   if (cb.onOpen) items.push({ label: "Open post", onClick: cb.onOpen });
   items.push({ label: "Copy link", onClick: cb.onCopyLink });
+  if (cb.onReport) items.push({ label: "Report", onClick: cb.onReport });
   if (canEdit && cb.onEdit)
     items.push({ label: "Edit post", onClick: cb.onEdit });
   if (canModerate && cb.onChangeChannel)

@@ -10,6 +10,7 @@ import { ActionsMenu } from "@/components/community/actions-menu";
 import { communityMessagesHref } from "@/lib/community/routes";
 import { DmAvatar } from "./dm-avatar";
 import type { DmMemberView, DmMessageView } from "@/types/community";
+import { ReportContentDialog } from "@/components/community/report-content-dialog";
 
 export function DmThread({
   saId,
@@ -45,6 +46,7 @@ export function DmThread({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [blocked, setBlocked] = useState(initialBlocked);
+  const [reportingMessage, setReportingMessage] = useState<DmMessageView | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastReadId = useRef<string | null>(null);
 
@@ -163,12 +165,14 @@ export function DmThread({
                 >
                   {m.body}
                 </div>
+                <ActionsMenu items={[{ label: "Report", onClick: () => setReportingMessage(m) }]} />
               </div>
             );
           })}
           <div ref={bottomRef} />
         </div>
       </div>
+      {reportingMessage && <ReportContentDialog saId={saId} groupId="" endpoint={`/api/community/${saId}/moderation/reports`} contentType="direct_message" contentId={reportingMessage.id} conversationId={threadId} reportedMemberId={reportingMessage.senderId === viewerId ? other.memberId : reportingMessage.senderId} brand={brand} onClose={() => setReportingMessage(null)} />}
 
       <div className="border-t border-[#E4E4E4] bg-white">
         <div className="mx-auto flex max-w-2xl items-end gap-2 px-4 py-3">

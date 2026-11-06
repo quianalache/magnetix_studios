@@ -19,37 +19,38 @@ import * as h12 from "@/app/api/community/[saId]/[groupId]/_routes/membership-le
 import * as h13 from "@/app/api/community/[saId]/[groupId]/_routes/membership-levels/[levelId]/route";
 import * as h14 from "@/app/api/community/[saId]/[groupId]/_routes/membership-levels/route";
 import * as h15 from "@/app/api/community/[saId]/[groupId]/_routes/mention-members/route";
-import * as h16 from "@/app/api/community/[saId]/[groupId]/_routes/notification-settings/route";
-import * as h17 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/config/route";
-import * as h18 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/levels/route";
-import * as h19 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/[rewardId]/archive/route";
-import * as h20 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/[rewardId]/eligible-winners/route";
-import * as h21 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/[rewardId]/route";
-import * as h22 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/route";
-import * as h23 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/winners/[winnerId]/route";
-import * as h24 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/winners/route";
-import * as h25 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/comments/[commentId]/like/route";
-import * as h26 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/comments/[commentId]/route";
-import * as h27 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/comments/route";
-import * as h28 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/course-pins/route";
-import * as h29 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/like/route";
-import * as h30 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/live-watch/route";
-import * as h31 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/poll/vote/route";
-import * as h32 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/replay/route";
-import * as h33 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/route";
-import * as h34 from "@/app/api/community/[saId]/[groupId]/_routes/posts/route";
-import * as h35 from "@/app/api/community/[saId]/[groupId]/_routes/purchase/route";
-import * as h36 from "@/app/api/community/[saId]/[groupId]/_routes/reviews/me/route";
-import * as h37 from "@/app/api/community/[saId]/[groupId]/_routes/sections/[sectionId]/route";
-import * as h38 from "@/app/api/community/[saId]/[groupId]/_routes/sections/route";
-import * as h39 from "@/app/api/community/[saId]/[groupId]/_routes/settings/route";
-import * as h40 from "@/app/api/community/[saId]/[groupId]/_routes/settings/upload/route";
-import * as h41 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/disconnect/route";
-import * as h42 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/cancel/route";
-import * as h43 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/retry/route";
-import * as h44 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/start/route";
-import * as h45 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/status/route";
-import * as h46 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/session/[sessionId]/route";
+import * as h16 from "@/app/api/community/[saId]/[groupId]/_routes/moderation/reports/route";
+import * as h17 from "@/app/api/community/[saId]/[groupId]/_routes/notification-settings/route";
+import * as h18 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/config/route";
+import * as h19 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/levels/route";
+import * as h20 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/[rewardId]/archive/route";
+import * as h21 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/[rewardId]/eligible-winners/route";
+import * as h22 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/[rewardId]/route";
+import * as h23 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/rewards/route";
+import * as h24 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/winners/[winnerId]/route";
+import * as h25 from "@/app/api/community/[saId]/[groupId]/_routes/points-rewards/winners/route";
+import * as h26 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/comments/[commentId]/like/route";
+import * as h27 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/comments/[commentId]/route";
+import * as h28 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/comments/route";
+import * as h29 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/course-pins/route";
+import * as h30 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/like/route";
+import * as h31 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/live-watch/route";
+import * as h32 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/poll/vote/route";
+import * as h33 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/replay/route";
+import * as h34 from "@/app/api/community/[saId]/[groupId]/_routes/posts/[postId]/route";
+import * as h35 from "@/app/api/community/[saId]/[groupId]/_routes/posts/route";
+import * as h36 from "@/app/api/community/[saId]/[groupId]/_routes/purchase/route";
+import * as h37 from "@/app/api/community/[saId]/[groupId]/_routes/reviews/me/route";
+import * as h38 from "@/app/api/community/[saId]/[groupId]/_routes/sections/[sectionId]/route";
+import * as h39 from "@/app/api/community/[saId]/[groupId]/_routes/sections/route";
+import * as h40 from "@/app/api/community/[saId]/[groupId]/_routes/settings/route";
+import * as h41 from "@/app/api/community/[saId]/[groupId]/_routes/settings/upload/route";
+import * as h42 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/disconnect/route";
+import * as h43 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/cancel/route";
+import * as h44 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/retry/route";
+import * as h45 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/start/route";
+import * as h46 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/scan/status/route";
+import * as h47 from "@/app/api/community/[saId]/[groupId]/_routes/skool-import/session/[sessionId]/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,37 +72,38 @@ const d = createApiDispatcher([
   ["membership-levels/[levelId]", h13],
   ["membership-levels", h14],
   ["mention-members", h15],
-  ["notification-settings", h16],
-  ["points-rewards/config", h17],
-  ["points-rewards/levels", h18],
-  ["points-rewards/rewards/[rewardId]/archive", h19],
-  ["points-rewards/rewards/[rewardId]/eligible-winners", h20],
-  ["points-rewards/rewards/[rewardId]", h21],
-  ["points-rewards/rewards", h22],
-  ["points-rewards/winners/[winnerId]", h23],
-  ["points-rewards/winners", h24],
-  ["posts/[postId]/comments/[commentId]/like", h25],
-  ["posts/[postId]/comments/[commentId]", h26],
-  ["posts/[postId]/comments", h27],
-  ["posts/[postId]/course-pins", h28],
-  ["posts/[postId]/like", h29],
-  ["posts/[postId]/live-watch", h30],
-  ["posts/[postId]/poll/vote", h31],
-  ["posts/[postId]/replay", h32],
-  ["posts/[postId]", h33],
-  ["posts", h34],
-  ["purchase", h35],
-  ["reviews/me", h36],
-  ["sections/[sectionId]", h37],
-  ["sections", h38],
-  ["settings", h39],
-  ["settings/upload", h40],
-  ["skool-import/disconnect", h41],
-  ["skool-import/scan/cancel", h42],
-  ["skool-import/scan/retry", h43],
-  ["skool-import/scan/start", h44],
-  ["skool-import/scan/status", h45],
-  ["skool-import/session/[sessionId]", h46],
+  ["moderation/reports", h16],
+  ["notification-settings", h17],
+  ["points-rewards/config", h18],
+  ["points-rewards/levels", h19],
+  ["points-rewards/rewards/[rewardId]/archive", h20],
+  ["points-rewards/rewards/[rewardId]/eligible-winners", h21],
+  ["points-rewards/rewards/[rewardId]", h22],
+  ["points-rewards/rewards", h23],
+  ["points-rewards/winners/[winnerId]", h24],
+  ["points-rewards/winners", h25],
+  ["posts/[postId]/comments/[commentId]/like", h26],
+  ["posts/[postId]/comments/[commentId]", h27],
+  ["posts/[postId]/comments", h28],
+  ["posts/[postId]/course-pins", h29],
+  ["posts/[postId]/like", h30],
+  ["posts/[postId]/live-watch", h31],
+  ["posts/[postId]/poll/vote", h32],
+  ["posts/[postId]/replay", h33],
+  ["posts/[postId]", h34],
+  ["posts", h35],
+  ["purchase", h36],
+  ["reviews/me", h37],
+  ["sections/[sectionId]", h38],
+  ["sections", h39],
+  ["settings", h40],
+  ["settings/upload", h41],
+  ["skool-import/disconnect", h42],
+  ["skool-import/scan/cancel", h43],
+  ["skool-import/scan/retry", h44],
+  ["skool-import/scan/start", h45],
+  ["skool-import/scan/status", h46],
+  ["skool-import/session/[sessionId]", h47],
 ]);
 
 export const GET = d.GET;

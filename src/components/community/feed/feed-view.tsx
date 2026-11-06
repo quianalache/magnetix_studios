@@ -26,6 +26,7 @@ import { CommunityReplayPlayer } from "@/components/community/community-replay-p
 import { buildPostActionItems } from "@/lib/community/post-actions";
 import { ChangeChannelDialog } from "@/components/community/feed/change-channel-dialog";
 import { PinToCoursePageDialog } from "@/components/community/feed/pin-to-course-page-dialog";
+import { ReportContentDialog } from "@/components/community/report-content-dialog";
 
 export interface ClientPost {
   id: string;
@@ -280,6 +281,7 @@ export function FeedView({
   const [pinningToCoursePostId, setPinningToCoursePostId] = useState<
     string | null
   >(null);
+  const [reportingPostId, setReportingPostId] = useState<string | null>(null);
   const [sort, setSort] = useState<"latest" | "top" | "unanswered">("latest");
   // Category filter is driven by the left nav's `?c=` link (Part 7) rather
   // than an in-feed pill row, so there's one control for it, not two.
@@ -835,6 +837,7 @@ export function FeedView({
                   }
                 : {}),
               ...(canDelete ? { onDelete: () => void deletePost(p.id) } : {}),
+              onReport: () => setReportingPostId(p.id),
             })}
           />
         </div>
@@ -1036,6 +1039,7 @@ export function FeedView({
           onCancel={() => setEditingPostId(null)}
         />
       )}
+      {reportingPostId && <ReportContentDialog saId={saId} groupId={groupId} contentType="post" contentId={reportingPostId} brand={brand} onClose={() => setReportingPostId(null)} />}
     </div>
   );
 }

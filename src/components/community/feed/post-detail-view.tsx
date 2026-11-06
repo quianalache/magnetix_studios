@@ -32,6 +32,7 @@ import { CommunityReplayPlayer } from "@/components/community/community-replay-p
 import { buildPostActionItems } from "@/lib/community/post-actions";
 import { ChangeChannelDialog } from "@/components/community/feed/change-channel-dialog";
 import { PinToCoursePageDialog } from "@/components/community/feed/pin-to-course-page-dialog";
+import { ReportContentDialog } from "@/components/community/report-content-dialog";
 
 export interface ClientComment {
   id: string;
@@ -119,6 +120,7 @@ export function PostDetailView({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [changingChannel, setChangingChannel] = useState(false);
   const [pinningToCourse, setPinningToCourse] = useState(false);
+  const [reporting, setReporting] = useState<{ type: "post" | "comment"; id: string; parentId?: string } | null>(null);
   const base = agencyGroupId
     ? `/api/agency/community/${agencyGroupId}`
     : `/api/community/${saId}/${groupId}`;
@@ -348,6 +350,7 @@ export function PostDetailView({
       await navigator.clipboard.writeText(window.location.href);
       toast.success("Link copied");
     },
+    onReport: () => setReporting({ type: "post", id: currentPost.id }),
     ...(canEdit ? { onEdit: () => setEditing(true) } : {}),
     ...(canModerate
       ? {
@@ -603,6 +606,7 @@ export function PostDetailView({
                   onReply={() => startReply(c)}
                   onEdit={() => setEditingCommentId(c.id)}
                   onDelete={deleteComment}
+                  onReport={() => setReporting({ type: "comment", id: c.id, parentId: post.id })}
                 />
               )}
               {repliesOf(c.id).map((r) =>
@@ -646,6 +650,7 @@ export function PostDetailView({
                     onReply={() => startReply(r)}
                     onEdit={() => setEditingCommentId(r.id)}
                     onDelete={deleteComment}
+                    onReport={() => setReporting({ type: "comment", id: r.id, parentId: post.id })}
                   />
                 )
               )}
@@ -688,6 +693,7 @@ export function PostDetailView({
           autoFocus={focusComposer}
         />
       )}
+      {reporting && <ReportContentDialog saId={saId} groupId={groupId} contentType={reporting.type} contentId={reporting.id} parentId={reporting.parentId} brand={brand} onClose={() => setReporting(null)} />}
     </div>
   );
 }
@@ -709,6 +715,7 @@ function CommentBubble({
   onReply,
   onEdit,
   onDelete,
+  onReport,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
@@ -736,6 +743,7 @@ function CommentBubble({
   onReply: () => void;
   onEdit: () => void;
   onDelete: (id: string) => void;
+  onReport: () => void;
 }) {
   const isOwn = comment.author.memberId === viewer.memberId;
   const canModerate = viewer.role === "moderator";
@@ -760,6 +768,7 @@ function CommentBubble({
         ]
       : []),
   ];
+  menuItems.push({ label: "Report", onClick: onReport });
   return (
     <div
       className={cn(

@@ -261,6 +261,10 @@ export function communitySettingsNotificationsHref(b: CommunityLinkBase, groupSl
   return `${communitySettingsHref(b, groupSlug)}/notifications`;
 }
 
+export function communitySettingsModerationHref(b: CommunityLinkBase, groupSlug: string): string {
+  return `${communitySettingsHref(b, groupSlug)}/moderation`;
+}
+
 /** Community Settings → Navigation — same shape as Branding (diverges
  *  before `/settings`, not after it). */
 export function communitySettingsNavigationHref(

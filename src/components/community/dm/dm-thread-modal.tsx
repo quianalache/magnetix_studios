@@ -8,6 +8,7 @@ import { useThreadMessages } from "@/lib/community/dm-hooks";
 import { ActionsMenu } from "@/components/community/actions-menu";
 import { DmAvatar } from "./dm-avatar";
 import type { DmMemberView, DmMessageView } from "@/types/community";
+import { ReportContentDialog } from "@/components/community/report-content-dialog";
 
 /**
  * Skool-style conversation modal. Overlays the community surface instead of
@@ -49,6 +50,7 @@ export function DmThreadModal({
   const [loaded, setLoaded] = useState(false);
   const [initial, setInitial] = useState<DmMessageView[]>([]);
   const [initialBlocked, setInitialBlocked] = useState(false);
+  const [reportingMessage, setReportingMessage] = useState<DmMessageView | null>(null);
 
   // Load history once on open (a brand-new chat 404s → empty thread).
   useEffect(() => {
@@ -144,6 +146,7 @@ export function DmThreadModal({
             primaryAction={primaryAction}
             initialMessages={initial}
             initialBlocked={initialBlocked}
+            onReport={setReportingMessage}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -151,6 +154,7 @@ export function DmThreadModal({
           </div>
         )}
       </div>
+      {reportingMessage && <ReportContentDialog saId={saId} groupId="" endpoint={`/api/community/${saId}/moderation/reports`} contentType="direct_message" contentId={reportingMessage.id} conversationId={threadId} reportedMemberId={reportingMessage.senderId === viewerId ? other.memberId : reportingMessage.senderId} brand={brand} onClose={() => setReportingMessage(null)} />}
     </div>
   );
 }
@@ -214,6 +218,7 @@ function ThreadBody({
   primaryAction,
   initialMessages,
   initialBlocked,
+  onReport,
 }: {
   saId: string;
   agencyScope?: boolean;
@@ -224,6 +229,7 @@ function ThreadBody({
   primaryAction?: string;
   initialMessages: DmMessageView[];
   initialBlocked: boolean;
+  onReport: (message: DmMessageView) => void;
 }) {
   const apiBase = agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
   const { messages, addLocal } = useThreadMessages(saId, threadId, initialMessages, agencyScope);
@@ -298,6 +304,7 @@ function ThreadBody({
                 >
                   {m.body}
                 </div>
+                {!agencyScope && <ActionsMenu items={[{ label: "Report", onClick: () => onReport(m) }]} />}
               </div>
             );
           })}

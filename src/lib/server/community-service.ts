@@ -220,6 +220,7 @@ export async function createGroupServerSide(
     priceCents: access === "paid" ? (input.priceCents ?? null) : null,
     currency: access === "paid" ? (input.currency ?? "USD") : null,
     joinPolicy: input.joinPolicy ?? "open",
+    memberReportingEnabled: true,
     pointsEnabled: true,
     categories: ["General"],
     links: [],
@@ -269,6 +270,7 @@ export interface UpdateGroupPatch {
   priceCents?: number | null;
   currency?: string | null;
   joinPolicy?: GroupJoinPolicy;
+  memberReportingEnabled?: boolean;
   status?: GroupStatus;
   categories?: string[];
   links?: ResourceLink[];
@@ -354,6 +356,8 @@ export async function updateGroupServerSide(opts: {
     }
     updates.joinPolicy = p.joinPolicy;
   }
+  if (p.memberReportingEnabled !== undefined)
+    updates.memberReportingEnabled = Boolean(p.memberReportingEnabled);
   if (p.status) updates.status = p.status;
   if (Array.isArray(p.categories)) {
     // Normalize: trim, drop empties, dedupe, always keep "General" first.

@@ -13,6 +13,7 @@ import {
 import {
   communitySettingsAccessHref,
   communitySettingsNotificationsHref,
+  communitySettingsModerationHref,
   communitySettingsBrandingHref,
   communitySettingsHref,
   communitySettingsNavigationHref,
@@ -23,7 +24,7 @@ import {
 } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "branding" | "navigation" | "home" | "access" | "notifications" | "points-rewards" | "skool-import";
+export type SettingsSection = "general" | "branding" | "navigation" | "home" | "access" | "notifications" | "points-rewards" | "moderation" | "skool-import";
 
 /**
  * Community Settings left nav. General, Branding, Navigation, and (as of
@@ -37,9 +38,7 @@ export type SettingsSection = "general" | "branding" | "navigation" | "home" | "
  * Rewards → Points & Rewards" naming instruction, used consistently
  * throughout Settings.
  */
-const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [
-  { key: "moderation", label: "Moderation", icon: Gauge },
-];
+const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [];
 
 export function SettingsNav({
   brand,
@@ -86,6 +85,9 @@ export function SettingsNav({
       icon: Trophy,
       href: communitySettingsPointsRewardsHref(link, groupSlug),
     },
+    ...(!link.agencyGroupId
+      ? [{ key: "moderation" as const, label: "Moderation", icon: Gauge, href: communitySettingsModerationHref(link, groupSlug) }]
+      : []),
     ...(link.agencyGroupId
       ? []
       : [
