@@ -18,14 +18,13 @@ export type AccessMode = "all" | "selected";
 
 export interface AccessRule {
   mode: AccessMode;
-  /** Channel / course / event ids when `mode === "selected"`. */
+  /** Channel / course ids when `mode === "selected"`. */
   ids: string[];
 }
 
 export interface LevelAccess {
   channels: AccessRule;
   courses: AccessRule;
-  events: AccessRule;
 }
 
 export type MembershipLevelStatus = "active" | "inactive";
@@ -71,7 +70,6 @@ export interface LevelGrant {
 export const FULL_ACCESS: LevelAccess = {
   channels: { mode: "all", ids: [] },
   courses: { mode: "all", ids: [] },
-  events: { mode: "all", ids: [] },
 };
 
 /** Community notification categories (Settings → Notifications & Digest). */

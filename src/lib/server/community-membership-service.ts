@@ -54,7 +54,6 @@ function toLevel(id: string, d: FirebaseFirestore.DocumentData): MembershipLevel
     access: {
       channels: normalizeAccessRule(access.channels, null),
       courses: normalizeAccessRule(access.courses, null),
-      events: normalizeAccessRule(access.events, null),
     },
     createdAtMs: d.createdAtMs ?? 0,
     updatedAtMs: d.updatedAtMs ?? 0,
@@ -102,18 +101,16 @@ export async function ensureBaseMembershipLevel(sa: string, g: string, uid: stri
 }
 
 /** Ids a level may reference, so a level can never point outside its community. */
-export async function listSelectableAccessIds(sa: string, g: string): Promise<{ channels: string[]; courses: string[]; events: string[] }> {
+export async function listSelectableAccessIds(sa: string, g: string): Promise<{ channels: string[]; courses: string[] }> {
   const db = getAdminDb();
-  const [channels, native, linked, events] = await Promise.all([
+  const [channels, native, linked] = await Promise.all([
     db.collection(`${groupPath(sa, g)}/channels`).get(),
     db.collection(`${groupPath(sa, g)}/courses`).get(),
     db.collection(`subAccounts/${sa}/standaloneCourses`).where("linkedCommunityGroupIds", "array-contains", g).get(),
-    db.collection(`${groupPath(sa, g)}/events`).limit(300).get(),
   ]);
   return {
     channels: channels.docs.map((d) => d.id),
     courses: [...native.docs.map((d) => d.id), ...linked.docs.map((d) => d.id)],
-    events: events.docs.map((d) => d.id),
   };
 }
 
@@ -161,7 +158,6 @@ async function buildPatch(sa: string, g: string, input: LevelInput): Promise<Par
     patch.access = {
       channels: normalizeAccessRule(a.channels, allowed.channels),
       courses: normalizeAccessRule(a.courses, allowed.courses),
-      events: normalizeAccessRule(a.events, allowed.events),
     };
   }
   return patch;
@@ -389,7 +385,11 @@ export async function resolveMemberAccessServerSide(opts: {
     const m = await membershipRef(opts.subAccountId, opts.groupId, opts.memberId).get();
     if (m.exists && m.data()!.status === "active" && Array.isArray(m.data()!.levelIds)) granted = m.data()!.levelIds;
   }
-  return resolveMemberAccess(levels, granted);
+  const resolved = resolveMemberAccess(levels, granted);
+  // Events are governed by their own access/channel rules, never by a
+  // Membership Level. Keep the field for existing event readers, but make it
+  // unrestricted regardless of historical stored level data.
+  return { ...resolved, events: "all" };
 }
 
 // ---------------- Offer entitlement → level ----------------

@@ -15,7 +15,6 @@ const level = (id: string, isBase = false, status: "active" | "inactive" = "acti
   access: {
     channels: { mode: "all", ids: [] },
     courses: { mode: "all", ids: [] },
-    events: { mode: "all", ids: [] },
   },
   createdAtMs: 0,
   updatedAtMs: 0,

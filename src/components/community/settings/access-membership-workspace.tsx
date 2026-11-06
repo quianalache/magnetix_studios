@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
-  CalendarDays,
   Crown,
   Hash,
   Info,
@@ -53,7 +52,6 @@ interface Payload {
   offers: OfferOption[];
   channels: { id: string; name: string; private: boolean }[];
   courses: { id: string; title: string; published: boolean }[];
-  events: { id: string; title: string; startAtMs: number; status: string }[];
 }
 
 const ACCESS_OPTIONS: { value: GroupJoinPolicy; title: string; body: string }[] = [
@@ -280,7 +278,6 @@ export function AccessMembershipWorkspace({
                     <ul className="space-y-0.5 text-xs text-foreground">
                       <li className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-muted-foreground" /> Channels: {summary(l.access.channels, "channels", data.channels.length)}</li>
                       <li className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5 text-muted-foreground" /> Courses: {summary(l.access.courses, "courses", data.courses.length)}</li>
-                      <li className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" /> Events: {summary(l.access.events, "events", data.events.length)}</li>
                     </ul>
                     <div className="space-y-1.5">
                       <p className="flex items-center gap-1.5 text-sm text-foreground"><Users className="h-4 w-4 text-muted-foreground" /> {l.memberCount} {l.memberCount === 1 ? "member" : "members"}</p>
@@ -435,7 +432,7 @@ function LevelDrawer({
   const [offerId, setOfferId] = useState<string>(level?.offerId ?? "");
   const [active, setActive] = useState(level ? level.status === "active" : true);
   const [access, setAccess] = useState<LevelAccess>(
-    level?.access ?? { channels: { mode: "all", ids: [] }, courses: { mode: "all", ids: [] }, events: { mode: "all", ids: [] } }
+    level?.access ?? { channels: { mode: "all", ids: [] }, courses: { mode: "all", ids: [] } }
   );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -543,21 +540,12 @@ function LevelDrawer({
           />
           <AccessPicker
             label="Courses access"
-            hint="Choose which courses this level can access. A course’s own price still applies."
-            noun="courses"
+            hint="Choose which courses already added to this Community’s Classroom this level can access. A course’s own price still applies."
+            noun="Classroom courses"
             brand={brand}
             rule={access.courses}
             options={data.courses.map((c) => ({ id: c.id, label: c.title, sub: c.published ? undefined : "Unpublished" }))}
             onChange={(r) => setAccess((a) => ({ ...a, courses: r }))}
-          />
-          <AccessPicker
-            label="Events access"
-            hint="Choose which events this level can access."
-            noun="events"
-            brand={brand}
-            rule={access.events}
-            options={data.events.map((e) => ({ id: e.id, label: e.title, sub: e.startAtMs ? new Date(e.startAtMs).toLocaleDateString() : undefined }))}
-            onChange={(r) => setAccess((a) => ({ ...a, events: r }))}
           />
           <p className="flex items-center gap-2 rounded-lg bg-muted p-3 text-xs text-foreground">
             <Info className="h-3.5 w-3.5 shrink-0" style={{ color: brand }} /> Access changes apply to all members on this level.

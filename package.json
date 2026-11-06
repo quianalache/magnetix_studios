@@ -24,6 +24,7 @@
     "check:community-activation": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-community-activation.ts",
     "check:community-readiness": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-community-readiness.ts",
     "check:community-roster": "tsx scripts/check-community-membership-roster.ts",
+    "check:community-access-correction": "tsx scripts/check-community-membership-access-correction.ts",
     "check:pricing": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-pricing.ts",
     "check:unknown-blocks": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-unknown-blocks.ts",
     "check:booking-destination": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-booking-destination.ts",

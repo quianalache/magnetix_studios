@@ -52,7 +52,7 @@ export function resolveMemberAccess(levels: MembershipLevel[], grantedLevelIds: 
     levelIds: held.map((l) => l.id),
     channels: unionRules(held.map((l) => l.access.channels)),
     courses: unionRules(held.map((l) => l.access.courses)),
-    events: unionRules(held.map((l) => l.access.events)),
+    events: "all",
   };
 }
 
@@ -61,7 +61,7 @@ export function allows(set: "all" | Set<string>, id: string): boolean {
 }
 
 /** Is this id granted to EVERY member (i.e. by the Base Membership)? */
-export function baseAllows(levels: MembershipLevel[], kind: "channels" | "courses" | "events", id: string): boolean {
+export function baseAllows(levels: MembershipLevel[], kind: "channels" | "courses", id: string): boolean {
   if (levels.length === 0) return true;
   const base = levels.find((l) => l.isBase && l.status === "active");
   if (!base) return true;
