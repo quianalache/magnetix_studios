@@ -627,6 +627,7 @@ export async function grantAccessForContact(opts: {
     memberId: member.id,
     offerTitle: offer.title,
     booking: offer.booking,
+    communityAccess: offer.communityAccess ?? [],
     offerId: offer.id,
     projectTemplates: offer.projectTemplates ?? [],
   });

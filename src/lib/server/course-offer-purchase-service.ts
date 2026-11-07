@@ -25,6 +25,7 @@ import { renderOfferBookingBundleEmail } from "@/lib/course-offers/booking-bundl
 import type {
   CourseOfferAccess,
   CourseOfferBookingBundle,
+  CourseOfferCommunityAccess,
   CourseOfferProjectTemplateBundle,
   CourseOfferPurchase,
 } from "@/types/course-offers";
@@ -275,6 +276,7 @@ export async function requestCourseOfferPaypalServerSide(opts: {
     offerId: opts.offerId,
     courseIds: offer.courseIds,
     booking: offer.booking,
+    communityAccess: offer.communityAccess ?? [],
     projectTemplates: offer.projectTemplates,
     memberId: opts.memberId,
     amountCents,
@@ -464,6 +466,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     offerId: opts.offerId,
     courseIds: offer.courseIds,
     booking: offer.booking,
+    communityAccess: offer.communityAccess ?? [],
     projectTemplates: offer.projectTemplates,
     memberId: opts.memberId,
     amountCents,
@@ -705,6 +708,7 @@ export async function grantCourseOfferAccessServerSide(opts: {
       purchaseId: purchase.id,
       memberId: purchase.memberId,
       agencyId: purchase.agencyId,
+      communityAccess: purchase.communityAccess ?? [],
     }).catch((err) => console.warn("[course-offer] membership level grant retry failed", err));
     const retryProjectGrant = await instantiateProjectEntitlements({
       subAccountId: opts.subAccountId,
@@ -880,6 +884,7 @@ export async function grantCourseOfferAccessServerSide(opts: {
     purchaseId: purchase.id,
     memberId: purchase.memberId,
     agencyId: purchase.agencyId,
+    communityAccess: purchase.communityAccess ?? [],
   }).catch((err) => console.warn("[course-offer] membership level grant failed", err));
 
   void emitWebhookEvent({
@@ -1065,6 +1070,7 @@ export async function fulfillInvoiceOfferLinesServerSide(opts: {
           offerId,
           courseIds: offer.courseIds,
           booking: offer.booking,
+          communityAccess: offer.communityAccess ?? [],
           projectTemplates: offer.projectTemplates,
           memberId,
           amountCents: Math.round(
@@ -1278,6 +1284,7 @@ export async function handleCourseOfferSubscriptionDeleted(
     purchaseId: snap.docs[0].id,
     memberId: purchase.memberId,
     reason: "subscription_ended",
+    communityAccess: purchase.communityAccess ?? [],
   }).catch((err) => console.warn("[course-offer] membership level end failed", err));
   const expiresAt = new Date();
   for (const courseId of purchase.courseIds) {
@@ -1350,6 +1357,7 @@ export async function enrollAllCoursesForFreeOfferServerSide(opts: {
    *  the caller passes it straight through from the live offer. */
   offerTitle?: string;
   booking?: CourseOfferBookingBundle | null;
+  communityAccess?: CourseOfferCommunityAccess[];
   offerId?: string;
   projectTemplates?: CourseOfferProjectTemplateBundle[];
 }): Promise<void> {
@@ -1377,6 +1385,16 @@ export async function enrollAllCoursesForFreeOfferServerSide(opts: {
     memberId: opts.memberId,
     projectTemplates: opts.projectTemplates ?? [],
   });
+  if (opts.offerId && opts.communityAccess?.length) {
+    await grantLevelsForOfferPurchase({
+      subAccountId: opts.subAccountId,
+      offerId: opts.offerId,
+      purchaseId: `free_${opts.offerId}_${opts.memberId}`,
+      memberId: opts.memberId,
+      agencyId: opts.agencyId,
+      communityAccess: opts.communityAccess,
+    });
+  }
 }
 
 /** Has this member paid for this offer? */
@@ -1508,6 +1526,7 @@ export async function chargeOneClickUpsellServerSide(opts: {
       offerId: opts.targetOfferId,
       courseIds: targetOffer.courseIds,
       booking: targetOffer.booking,
+      communityAccess: targetOffer.communityAccess ?? [],
       projectTemplates: targetOffer.projectTemplates,
       memberId: opts.memberId,
       amountCents: targetOffer.priceCents,

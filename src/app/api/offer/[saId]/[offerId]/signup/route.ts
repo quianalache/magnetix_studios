@@ -115,7 +115,7 @@ export async function POST(
     ? await getStandaloneEnrollment(saId, firstCourseId, member.id)
     : null;
   const alreadyPaid = await hasPaidCourseOffer(saId, offerId, member.id);
-  if (existingEnrollment || alreadyPaid) {
+  if ((existingEnrollment || alreadyPaid) && (offer.communityAccess ?? []).length === 0) {
     return NextResponse.json({
       ok: true,
       mode: "free",
@@ -132,6 +132,7 @@ export async function POST(
       offerId,
       offerTitle: offer.title,
       booking: offer.booking,
+      communityAccess: offer.communityAccess ?? [],
       projectTemplates: offer.projectTemplates,
     });
     // Free offers have no purchase doc — the visit rollup + Contact are the

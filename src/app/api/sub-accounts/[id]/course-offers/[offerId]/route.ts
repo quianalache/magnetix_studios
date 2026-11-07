@@ -10,6 +10,7 @@ import {
   updateCourseOfferServerSide,
   type CourseOfferPatch,
 } from "@/lib/server/course-offer-service";
+import { validateOfferCommunityAccessServerSide } from "@/lib/server/offer-community-access-service";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function PATCH(
   const access = await requireCourseOffersStaff(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  let patch: CourseOfferPatch & { projectTemplateIds?: string[]; action?: unknown };
+  let patch: CourseOfferPatch & { projectTemplateIds?: string[]; action?: unknown; communityAccess?: unknown };
   try {
     patch = await request.json();
   } catch {
@@ -68,6 +69,22 @@ export async function PATCH(
     }
     delete patch.projectTemplateIds;
   }
+  if (patch.communityAccess !== undefined) {
+    const existing = await getCourseOffer(subAccountId, offerId);
+    if (!existing) return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+    if (existing.systemManaged) {
+      return NextResponse.json({ error: "System-managed Community pricing Offers cannot be edited as manual bundles." }, { status: 409 });
+    }
+    try {
+      patch.communityAccess = await validateOfferCommunityAccessServerSide({
+        subAccountId,
+        entries: patch.communityAccess,
+        existing: existing.communityAccess ?? [],
+      });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Invalid Community Access" }, { status: 400 });
+    }
+  }
 
   if (patch.visibility === "published") {
     const existing = await getCourseOffer(subAccountId, offerId);
@@ -79,7 +96,8 @@ export async function PATCH(
       patch.projectTemplates ?? existing.projectTemplates;
     const booking =
       patch.booking !== undefined ? patch.booking : existing.booking;
-    if (courseIds.length === 0 && projectTemplates.length === 0 && !booking) {
+    const communityAccess = patch.communityAccess !== undefined ? patch.communityAccess : (existing.communityAccess ?? []);
+    if (courseIds.length === 0 && projectTemplates.length === 0 && !booking && communityAccess.length === 0) {
       return NextResponse.json(
         { error: "Attach at least one entitlement before publishing" },
         { status: 400 }
@@ -88,7 +106,8 @@ export async function PATCH(
   } else if (
     patch.courseIds?.length === 0 &&
     patch.projectTemplates?.length === 0 &&
-    patch.booking === null
+    patch.booking === null &&
+    (!Array.isArray(patch.communityAccess) || patch.communityAccess.length === 0)
   ) {
     return NextResponse.json(
       { error: "Attach at least one entitlement to the offer" },

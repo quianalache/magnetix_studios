@@ -52,6 +52,9 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     projectTemplates: Array.isArray(data.projectTemplates)
       ? (data.projectTemplates as CourseOffer["projectTemplates"])
       : [],
+    communityAccess: Array.isArray(data.communityAccess)
+      ? (data.communityAccess as CourseOffer["communityAccess"])
+      : [],
   };
 }
 

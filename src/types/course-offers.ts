@@ -97,6 +97,12 @@ export interface CourseOfferProjectTemplateBundle {
   snapshotVersion?: 1 | 2;
 }
 
+/** A Community Membership Level granted when this Offer is fulfilled. */
+export interface CourseOfferCommunityAccess {
+  communityGroupId: string;
+  membershipLevelId: string;
+}
+
 export interface CourseOffer {
   id: string;
   subAccountId: string;
@@ -160,6 +166,10 @@ export interface CourseOffer {
   booking: CourseOfferBookingBundle | null;
   /** Snapshotted client project templates included in this offer. */
   projectTemplates: CourseOfferProjectTemplateBundle[];
+  /** Community Membership Levels granted by this Offer. */
+  communityAccess: CourseOfferCommunityAccess[];
+  /** Native Community pricing Offers are billing infrastructure, not manual bundles. */
+  systemManaged?: boolean;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -219,6 +229,8 @@ export interface CourseOfferPurchase {
   booking: CourseOfferBookingBundle | null;
   /** Snapshotted from the offer at purchase time so project fulfillment survives template edits/deletes. */
   projectTemplates: CourseOfferProjectTemplateBundle[];
+  /** Snapshotted Community access so later Offer edits do not change a past purchase. */
+  communityAccess: CourseOfferCommunityAccess[];
   memberId: string;
   amountCents: number;
   currency: string;

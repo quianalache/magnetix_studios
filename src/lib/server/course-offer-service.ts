@@ -21,6 +21,7 @@ import type {
   CourseOfferAccess,
   CourseOfferAdvanced,
   CourseOfferBookingBundle,
+  CourseOfferCommunityAccess,
   CourseOfferCheckoutSettings,
   CourseOfferProjectTemplateBundle,
   OfferType,
@@ -117,6 +118,7 @@ export async function createCourseOfferServerSide(opts: {
   trialDays?: number | null;
   priceTextOverride?: string | null;
   booking?: CourseOfferBookingBundle | null;
+  communityAccess?: CourseOfferCommunityAccess[];
   projectTemplates?: CourseOfferProjectTemplateBundle[];
   paymentMode?: "test" | "live";
 }): Promise<CourseOffer> {
@@ -151,6 +153,7 @@ export async function createCourseOfferServerSide(opts: {
     theme: DEFAULT_OFFER_THEME,
     checkoutSettings: DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
     booking: opts.booking ?? null,
+    communityAccess: opts.communityAccess ?? [],
     projectTemplates: opts.projectTemplates ?? [],
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -185,6 +188,7 @@ export interface CourseOfferPatch {
    *  like `access`/`advanced`, since the editor always sends the full
    *  bundle or nothing. */
   booking?: CourseOfferBookingBundle | null;
+  communityAccess?: CourseOfferCommunityAccess[];
   projectTemplates?: CourseOfferProjectTemplateBundle[];
   paymentMode?: "test" | "live";
 }
@@ -274,6 +278,7 @@ export async function updateCourseOfferServerSide(opts: {
     }
   }
   if (p.booking !== undefined) updates.booking = p.booking;
+  if (Array.isArray(p.communityAccess)) updates.communityAccess = p.communityAccess;
   if (Array.isArray(p.projectTemplates))
     updates.projectTemplates = p.projectTemplates;
   await offerDoc(opts.subAccountId, opts.offerId).update(updates);
@@ -341,6 +346,9 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     booking: (data.booking as CourseOfferBookingBundle | null) ?? null,
     projectTemplates: Array.isArray(data.projectTemplates)
       ? (data.projectTemplates as CourseOfferProjectTemplateBundle[])
+      : [],
+    communityAccess: Array.isArray(data.communityAccess)
+      ? (data.communityAccess as CourseOfferCommunityAccess[])
       : [],
   };
 }

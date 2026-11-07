@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/community/image-upload";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { MultiSelect, MultiSelectChips } from "@/components/ui/multi-select";
+import { OptionSelect } from "@/components/system/option-select";
 import { uploadCourseOfferImage } from "@/lib/community/upload-image";
 import { formatCurrency } from "@/lib/format";
 import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
@@ -22,6 +23,7 @@ import type {
   CourseOffer,
   OfferType,
   RecurringInterval,
+  CourseOfferCommunityAccess,
 } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 import type { BookingPage } from "@/types/booking";
@@ -102,6 +104,10 @@ export function OfferDetailsTab({
   const [projectTemplateIds, setProjectTemplateIds] = useState(
     offer.projectTemplates.map((t) => t.templateId)
   );
+  const [communityAccess, setCommunityAccess] = useState<CourseOfferCommunityAccess[]>(offer.communityAccess ?? []);
+  const [communityOptions, setCommunityOptions] = useState<Array<{ id: string; name: string; status: string; levels: Array<{ id: string; name: string; status: string; publicVisibility: string; isBase: boolean }> }>>([]);
+  const [communityIdToAdd, setCommunityIdToAdd] = useState("");
+  const [levelIdToAdd, setLevelIdToAdd] = useState("");
   const [sessionCount, setSessionCount] = useState(
     offer.booking?.sessionCount?.toString() ?? "1"
   );
@@ -113,6 +119,16 @@ export function OfferDetailsTab({
     () => subscribeToBookingPages(subAccountId, setBookingPages),
     [subAccountId]
   );
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/course-offers/community-access`)
+      .then((res) => (res.ok ? res.json() : { communities: [] }))
+      .then((data: { communities?: typeof communityOptions }) => {
+        if (!cancelled) setCommunityOptions(data.communities ?? []);
+      })
+      .catch(() => { if (!cancelled) setCommunityOptions([]); });
+    return () => { cancelled = true; };
+  }, [subAccountId]);
 
   // Re-sync local state whenever a fresh offer snapshot arrives (e.g. after
   // a save bumps `version`), so the form never fights the live subscription.
@@ -141,6 +157,7 @@ export function OfferDetailsTab({
     setFooterTracking(offer.advanced.footerTracking);
     setBookingPageId(offer.booking?.bookingPageId ?? "");
     setProjectTemplateIds(offer.projectTemplates.map((t) => t.templateId));
+    setCommunityAccess(offer.communityAccess ?? []);
     setSessionCount(offer.booking?.sessionCount?.toString() ?? "1");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offer.id, offer.version]);
@@ -153,7 +170,7 @@ export function OfferDetailsTab({
     if (
       courseIds.length === 0 &&
       projectTemplateIds.length === 0 &&
-      !bookingPageId
+      !bookingPageId && communityAccess.length === 0
     ) {
       toast.error("Attach at least one entitlement to the offer");
       return;
@@ -198,6 +215,7 @@ export function OfferDetailsTab({
         },
         advanced: { customJs, customCss, headerTracking, footerTracking },
         booking,
+        communityAccess,
         projectTemplateIds,
         ...(publish !== undefined
           ? { visibility: publish ? "published" : "draft" }
@@ -234,6 +252,17 @@ export function OfferDetailsTab({
     type !== "free" && price.trim()
       ? Math.round(parseFloat(price) * 100)
       : null;
+  const selectedCommunity = communityOptions.find((community) => community.id === communityIdToAdd);
+  const selectableLevels = selectedCommunity?.levels.filter((level) => level.isBase !== true && (level.status === "active" || communityAccess.some((entry) => entry.communityGroupId === selectedCommunity.id && entry.membershipLevelId === level.id))) ?? [];
+  const addCommunityAccess = () => {
+    if (!communityIdToAdd || !levelIdToAdd) return;
+    if (communityAccess.some((entry) => entry.communityGroupId === communityIdToAdd && entry.membershipLevelId === levelIdToAdd)) {
+      toast.error("That Community Membership Level is already attached.");
+      return;
+    }
+    setCommunityAccess((entries) => [...entries, { communityGroupId: communityIdToAdd, membershipLevelId: levelIdToAdd }]);
+    setLevelIdToAdd("");
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
@@ -335,6 +364,36 @@ export function OfferDetailsTab({
             </div>
           )}
         </div>
+
+        {!offer.systemManaged && (
+          <div className="rounded-lg border p-3">
+            <p className="mb-1 text-sm font-medium">Community Access</p>
+            <p className="text-muted-foreground mb-3 text-xs">Grant membership access to a Community when this Offer is purchased.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <OptionSelect
+                aria-label="Community"
+                value={communityIdToAdd || null}
+                onChange={(value) => { setCommunityIdToAdd(value ?? ""); setLevelIdToAdd(""); }}
+                noneLabel="Choose Community"
+                options={communityOptions.map((community) => ({ value: community.id, label: `${community.name}${community.status === "draft" ? " (Draft)" : ""}` }))}
+              />
+              <OptionSelect
+                aria-label="Membership Level"
+                value={levelIdToAdd || null}
+                onChange={(value) => setLevelIdToAdd(value ?? "")}
+                noneLabel="Choose Membership Level"
+                disabled={!communityIdToAdd}
+                options={selectableLevels.map((level) => ({ value: level.id, label: `${level.name}${level.status === "inactive" ? " (Inactive)" : ""}` }))}
+              />
+            </div>
+            <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addCommunityAccess} disabled={!communityIdToAdd || !levelIdToAdd}>+ Add Community Access</Button>
+            {communityAccess.length > 0 && <div className="mt-3 space-y-2">{communityAccess.map((entry) => {
+              const community = communityOptions.find((option) => option.id === entry.communityGroupId);
+              const level = community?.levels.find((option) => option.id === entry.membershipLevelId);
+              return <div key={`${entry.communityGroupId}:${entry.membershipLevelId}`} className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2 text-[12px]"><span><span className="font-medium">{community?.name ?? "Community unavailable"}</span><span className="text-muted-foreground"> — {level?.name ?? "Membership Level unavailable"}{level?.status === "inactive" ? " (Inactive)" : ""}</span></span><button type="button" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${level?.name ?? "Community Access"}`} onClick={() => setCommunityAccess((entries) => entries.filter((item) => item !== entry))}><Trash2 className="h-3.5 w-3.5" /></button></div>;
+            })}</div>}
+          </div>
+        )}
 
         <div className="rounded-lg border p-3">
           <p className="mb-2 text-[13px] font-medium">Client Projects</p>

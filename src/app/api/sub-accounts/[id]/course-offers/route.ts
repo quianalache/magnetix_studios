@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/course-offer-service";
 import type {
   CourseOfferBookingBundle,
+  CourseOfferCommunityAccess,
   OfferType,
 } from "@/types/course-offers";
 
@@ -32,6 +33,7 @@ export async function POST(
     booking?: CourseOfferBookingBundle | null;
     projectTemplateIds?: string[];
     paymentMode?: "test" | "live";
+    communityAccess?: CourseOfferCommunityAccess[];
   };
   try {
     body = await request.json();
@@ -68,13 +70,21 @@ export async function POST(
     );
   }
   const hasBooking = !!body.booking;
-  if (courseIds.length === 0 && projectTemplates.length === 0 && !hasBooking) {
+  const communityAccess = Array.isArray(body.communityAccess) ? body.communityAccess : [];
+  if (courseIds.length === 0 && projectTemplates.length === 0 && !hasBooking && communityAccess.length === 0) {
     return NextResponse.json(
       { error: "Attach at least one entitlement to the offer" },
       { status: 400 }
     );
   }
 
+  let validatedCommunityAccess;
+  try {
+    const { validateOfferCommunityAccessServerSide } = await import("@/lib/server/offer-community-access-service");
+    validatedCommunityAccess = await validateOfferCommunityAccessServerSide({ subAccountId, entries: communityAccess });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Invalid Community Access" }, { status: 400 });
+  }
   const offer = await createCourseOfferServerSide({
     subAccountId,
     agencyId: access.resolvedAgencyId,
@@ -87,6 +97,7 @@ export async function POST(
     booking: body.booking ?? null,
     projectTemplates,
     paymentMode: body.paymentMode,
+    communityAccess: validatedCommunityAccess,
   });
   return NextResponse.json({ ok: true, offer });
 }

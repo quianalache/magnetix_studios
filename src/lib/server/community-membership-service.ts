@@ -26,6 +26,7 @@ import {
   type MembershipLevelVisibility,
   type MembershipLevelStatus,
 } from "@/types/community-membership";
+import type { CourseOfferCommunityAccess } from "@/types/course-offers";
 
 /**
  * Community Membership Levels — storage, rules, grants and access
@@ -528,14 +529,26 @@ export async function resolveMemberAccessServerSide(opts: {
 // ---------------- Offer entitlement → level ----------------
 
 /** Every level (in any community of this workspace) connected to an Offer. */
-async function levelsForOffer(sa: string, offerId: string): Promise<MembershipLevel[]> {
+async function levelsForOffer(sa: string, offerId: string, communityAccess: CourseOfferCommunityAccess[] = []): Promise<MembershipLevel[]> {
   const groups = await getAdminDb().collection(`subAccounts/${sa}/communityGroups`).get();
-  const out: MembershipLevel[] = [];
+  const out = new Map<string, MembershipLevel>();
+  for (const entry of communityAccess) {
+    const snap = await levelsCol(sa, entry.communityGroupId).doc(entry.membershipLevelId).get();
+    if (snap.exists) {
+      const level = toLevel(snap.id, snap.data()!);
+      if (!level.isBase) out.set(`${level.groupId}:${level.id}`, level);
+    }
+  }
   for (const gd of groups.docs) {
     const snap = await levelsCol(sa, gd.id).get();
-    out.push(...snap.docs.map((d) => toLevel(d.id, d.data())).filter((level) => level.offerId === offerId || Object.values(level.billingOfferIds).includes(offerId)));
+    for (const d of snap.docs) {
+      const level = toLevel(d.id, d.data());
+      if (level.offerId === offerId || Object.values(level.billingOfferIds).includes(offerId)) {
+        out.set(`${level.groupId}:${level.id}`, level);
+      }
+    }
   }
-  return out;
+  return [...out.values()];
 }
 
 /**
@@ -544,8 +557,8 @@ async function levelsForOffer(sa: string, offerId: string): Promise<MembershipLe
  * community yet is added as an active member first (origin "offer"); a
  * banned member is never re-admitted by a purchase.
  */
-export async function grantLevelsForOfferPurchase(opts: { subAccountId: string; offerId: string; purchaseId: string; memberId: string; agencyId: string }): Promise<number> {
-  const levels = await levelsForOffer(opts.subAccountId, opts.offerId);
+export async function grantLevelsForOfferPurchase(opts: { subAccountId: string; offerId: string; purchaseId: string; memberId: string; agencyId: string; communityAccess?: CourseOfferCommunityAccess[] }): Promise<number> {
+  const levels = await levelsForOffer(opts.subAccountId, opts.offerId, opts.communityAccess);
   let granted = 0;
   for (const level of levels) {
     if (level.isBase) continue;
@@ -583,8 +596,8 @@ export async function grantLevelsForOfferPurchase(opts: { subAccountId: string; 
  * that came from THAT purchase — the member stays in the community and
  * falls back to the Base Membership unless another grant applies.
  */
-export async function endLevelsForOfferPurchase(opts: { subAccountId: string; offerId: string; purchaseId: string; memberId: string; reason: string }): Promise<number> {
-  const levels = await levelsForOffer(opts.subAccountId, opts.offerId);
+export async function endLevelsForOfferPurchase(opts: { subAccountId: string; offerId: string; purchaseId: string; memberId: string; reason: string; communityAccess?: CourseOfferCommunityAccess[] }): Promise<number> {
+  const levels = await levelsForOffer(opts.subAccountId, opts.offerId, opts.communityAccess);
   let ended = 0;
   for (const level of levels) {
     const id = grantId("offer", level.id, opts.purchaseId);
