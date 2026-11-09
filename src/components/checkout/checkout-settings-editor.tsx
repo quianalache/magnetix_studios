@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -131,7 +131,9 @@ export function CheckoutSettingsEditor({
   const [draft, setDraft] = useState<Draft>(() => draftFrom(initial));
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  // Phone view first: it renders at real size in the preview column and is
+  // readable; the desktop view is the full layout scaled down to fit.
+  const [device, setDevice] = useState<"desktop" | "mobile">("mobile");
   const [openBump, setOpenBump] = useState<string | null>(null);
   const [addBumpOffer, setAddBumpOffer] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
@@ -286,7 +288,10 @@ export function CheckoutSettingsEditor({
         </Alert>
       )}
 
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,400px)]">
+      {/* Settings (one column on tablet, two on desktop) with the live preview
+          beside them from 1024px up, so changes are visible as you make them. */}
+      <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-2">
         {/* ------------------------------ Column 1 ----------------------------- */}
         <div className="flex min-w-0 flex-col gap-5">
           {kind === "hosted_offer" && (
@@ -490,7 +495,7 @@ export function CheckoutSettingsEditor({
           <Panel icon={FileText} title="Order display" description="What buyers see around the order.">
             <TextField id="cs-headline" label="Headline" value={draft.display.headline} onChange={(v) => setDisplay({ headline: v })} max={120} wide />
             <TextField id="cs-sub" label="Subheadline" value={draft.display.subheadline} onChange={(v) => setDisplay({ subheadline: v })} max={300} wide />
-            <TextField id="cs-submit" label="Button text (optional)" placeholder="Pay $97.00" value={draft.display.submitLabel} onChange={(v) => setDisplay({ submitLabel: v })} max={40} wide />
+            <TextField id="cs-submit" label="Button text (optional)" placeholder={primary ? (primary.type === "free" ? "Complete my order" : `Pay ${primary.priceLabel}`) : "Pay now"} value={draft.display.submitLabel} onChange={(v) => setDisplay({ submitLabel: v })} max={40} wide />
             <ToggleRow id="cs-terms" label="Show recurring terms" checked={draft.display.showRecurringTerms} onChange={(v) => setDisplay({ showRecurringTerms: v })} />
             <ToggleRow id="cs-trial" label="Show trial timing" checked={draft.display.showTrialTiming} onChange={(v) => setDisplay({ showTrialTiming: v })} />
             <ToggleRow id="cs-due" label="Show amount due today" checked={draft.display.showDueToday} onChange={(v) => setDisplay({ showDueToday: v })} />
@@ -509,9 +514,10 @@ export function CheckoutSettingsEditor({
             <p className="text-muted-foreground text-caption">Testimonials belong on the page around the checkout — add them with the Page Builder&apos;s Testimonial block.</p>
           </Panel>
         </div>
+      </div>
 
         {/* ---------------------------- Live preview --------------------------- */}
-        <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+        <div className="min-w-0 lg:sticky lg:top-4">
           <Card className="flex flex-col gap-3 p-4">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -523,15 +529,18 @@ export function CheckoutSettingsEditor({
                 <Button size="sm" variant={device === "mobile" ? "secondary" : "ghost"} aria-pressed={device === "mobile"} onClick={() => setDevice("mobile")} aria-label="Mobile"><Smartphone className="size-4" /></Button>
               </div>
             </div>
-            <div className="tenant-surface tenant-wash max-h-[80vh] overflow-y-auto rounded-xl border p-3" data-public-shell="checkout-preview">
-              <div className={cn("mx-auto", device === "mobile" ? "max-w-sm" : "w-full")}>
-                {previewView ? (
-                  <CheckoutRenderer key={JSON.stringify(previewView.bumps.map((b) => b.bumpId)) + draft.format} view={previewView} previewQuote={previewQuote} device={device === "mobile" ? "mobile" : "tablet"} />
-                ) : (
-                  <p className="text-muted-foreground p-6 text-center text-body-sm">Choose a primary Offer to see the preview.</p>
-                )}
-              </div>
+            <div className="max-h-[80vh] overflow-y-auto rounded-xl border" data-public-shell="checkout-preview">
+              {previewView ? (
+                <ScaledFrame width={device === "mobile" ? 390 : 960}>
+                  <div className="tenant-surface tenant-wash min-h-full px-4 py-6">
+                    <CheckoutRenderer key={JSON.stringify(previewView.bumps.map((b) => b.bumpId)) + draft.format} view={previewView} previewQuote={previewQuote} device={device === "mobile" ? "mobile" : "desktop"} />
+                  </div>
+                </ScaledFrame>
+              ) : (
+                <p className="text-muted-foreground p-6 text-center text-body-sm">Choose a primary Offer to see the preview.</p>
+              )}
             </div>
+            <p className="text-muted-foreground text-caption">{device === "mobile" ? "Phone view at actual size." : "Full desktop layout, scaled down to fit."}</p>
           </Card>
         </div>
       </div>
@@ -568,6 +577,32 @@ export function CheckoutSettingsEditor({
 }
 
 /* --------------------------------- pieces --------------------------------- */
+
+/** Renders children at a real device width and scales them down to fit. */
+function ScaledFrame({ width, children }: { width: number; children: React.ReactNode }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ scale: 1, height: 0 });
+  useEffect(() => {
+    const measure = () => {
+      const available = outer.current?.clientWidth ?? width;
+      const scale = Math.min(1, available / width);
+      setBox({ scale, height: (inner.current?.scrollHeight ?? 0) * scale });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (outer.current) ro.observe(outer.current);
+    if (inner.current) ro.observe(inner.current);
+    return () => ro.disconnect();
+  }, [width]);
+  return (
+    <div ref={outer} className="relative w-full overflow-hidden" style={{ height: box.height || undefined }}>
+      <div ref={inner} style={{ width, transform: `scale(${box.scale})`, transformOrigin: "top left", position: box.height ? "absolute" : "relative", left: box.scale < 1 ? 0 : `calc(50% - ${width / 2}px)`, top: 0 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function Panel({ id, icon: Icon, title, description, badge, children }: { id?: string; icon: React.ComponentType<{ className?: string }>; title: string; description?: string; badge?: string; children: React.ReactNode }) {
   return (

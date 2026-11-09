@@ -54,7 +54,7 @@ export interface OfferOption {
 
 export function entitlementSummary(offer: CourseOffer, courseTitles: Map<string, string>): string[] {
   const out: string[] = [];
-  for (const id of offer.courseIds) out.push(`Course: ${courseTitles.get(id) ?? "Course"}`);
+  for (const id of offer.courseIds) out.push(`Course: ${courseTitles.get(id)?.trim() || "Untitled course"}`);
   if (offer.booking) out.push(`${offer.booking.sessionCount} ${offer.booking.sessionCount === 1 ? "session" : "sessions"}: ${offer.booking.bookingPageName}`);
   for (const p of offer.projectTemplates ?? []) out.push(`Project: ${p.templateTitle}`);
   const communities = (offer.communityAccess ?? []).length;
@@ -64,7 +64,7 @@ export function entitlementSummary(offer: CourseOffer, courseTitles: Map<string,
 
 export async function courseTitlesFor(subAccountId: string): Promise<Map<string, string>> {
   const snap = await getAdminDb().collection(`subAccounts/${subAccountId}/standaloneCourses`).select("title").get();
-  return new Map(snap.docs.map((d) => [d.id, (d.data().title as string) ?? "Course"]));
+  return new Map(snap.docs.map((d) => [d.id, ((d.data().title as string) ?? "").trim() || "Untitled course"]));
 }
 
 export function toOfferOption(offer: CourseOffer, titles: Map<string, string>): OfferOption {
