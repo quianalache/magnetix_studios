@@ -596,7 +596,7 @@ function PayForm({
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <PaymentElement options={{ layout: "tabs" }} />
+      <PaymentElement options={{ layout: "tabs", ...(view.brand.name ? { business: { name: view.brand.name } } : {}) }} />
       {view.billingAddress === "full" ? (
         <AddressElement options={{ mode: "billing" }} />
       ) : (
