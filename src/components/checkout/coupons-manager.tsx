@@ -289,7 +289,7 @@ export function CouponsManager({ subAccountId, isAdmin }: { subAccountId: string
       )}
 
       <Sheet open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+        <SheetContent className="w-full overflow-y-auto data-[side=right]:w-full sm:max-w-md data-[side=right]:sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{editing === "new" ? "Create coupon" : `Edit ${editing ? editing.code : ""}`}</SheetTitle>
             <SheetDescription>Set up a discount code, where it applies, and its limits.</SheetDescription>
