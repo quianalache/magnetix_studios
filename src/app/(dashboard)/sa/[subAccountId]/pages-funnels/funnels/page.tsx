@@ -14,6 +14,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useSubAccount } from "@/context/sub-account-context";
 import { commerceFetch } from "@/lib/client/commerce-api";
+
+const FUNNEL_STATUS_LABEL = { draft: "Draft", published: "Published", archived: "Archived" } as const;
 import type { Funnel } from "@/types/checkout";
 
 type Row = Funnel & { stepCount: number };
@@ -67,7 +69,7 @@ export default function FunnelsPage() {
               <Card variant="interactive" className="h-full p-4">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-semibold text-body">{f.name}</p>
-                  <StatusPill status={f.status} />
+                  <StatusPill status={f.status}>{FUNNEL_STATUS_LABEL[f.status]}</StatusPill>
                 </div>
                 <p className="text-muted-foreground mt-1 text-caption">{f.stepCount} {f.stepCount === 1 ? "step" : "steps"} · Edited {new Date(f.updatedAt).toLocaleDateString()}</p>
               </Card>

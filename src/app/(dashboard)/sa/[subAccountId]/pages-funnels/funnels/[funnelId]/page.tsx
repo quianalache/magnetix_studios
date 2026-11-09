@@ -16,6 +16,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useSubAccount } from "@/context/sub-account-context";
 import { commerceFetch } from "@/lib/client/commerce-api";
+
+const FUNNEL_STATUS_LABEL = { draft: "Draft", published: "Published", archived: "Archived" } as const;
 import type { Funnel, FunnelStep, FunnelStepType } from "@/types/checkout";
 
 const TYPE_LABEL: Record<FunnelStepType, string> = { page: "Page", checkout: "Checkout", upsell: "Upsell", downsell: "Downsell", thank_you: "Thank you" };
@@ -86,7 +88,7 @@ export default function FunnelDetailPage() {
         actions={
           isAdmin ? (
             <div className="flex flex-wrap items-center gap-2">
-              <StatusPill status={funnel.status} />
+              <StatusPill status={funnel.status}>{FUNNEL_STATUS_LABEL[funnel.status]}</StatusPill>
               <Button variant={published ? "outline" : "default"} disabled={busy} onClick={() => run(() => commerceFetch(subAccountId, `funnels/${funnelId}`, { method: "PATCH", body: { status: published ? "draft" : "published" } }), published ? "Funnel unpublished." : "Funnel published.")}>
                 {published ? "Unpublish" : "Publish funnel"}
               </Button>
@@ -103,14 +105,14 @@ export default function FunnelDetailPage() {
               </Button>
             </div>
           ) : (
-            <StatusPill status={funnel.status} />
+            <StatusPill status={funnel.status}>{FUNNEL_STATUS_LABEL[funnel.status]}</StatusPill>
           )
         }
       />
       {isAdmin && (
         <div className="flex flex-wrap items-end gap-2">
-          <div className="w-44"><OptionSelect aria-label="Step type" value={newType} onChange={setNewType} options={(Object.keys(TYPE_LABEL) as FunnelStepType[]).map((t) => ({ value: t, label: TYPE_LABEL[t] }))} /></div>
-          <Input aria-label="Step name" placeholder="Step name (optional)" value={newName} maxLength={80} onChange={(e) => setNewName(e.target.value)} className="min-w-0 flex-1 sm:max-w-xs" />
+          <div className="w-full sm:w-44"><OptionSelect aria-label="Step type" value={newType} onChange={setNewType} options={(Object.keys(TYPE_LABEL) as FunnelStepType[]).map((t) => ({ value: t, label: TYPE_LABEL[t] }))} /></div>
+          <Input aria-label="Step name" placeholder="Step name (optional)" value={newName} maxLength={80} onChange={(e) => setNewName(e.target.value)} className="min-w-48 flex-1 sm:max-w-xs" />
           <Button variant="outline" disabled={busy || !newType} onClick={() => run(() => commerceFetch(subAccountId, `funnels/${funnelId}/steps`, { method: "POST", body: { type: newType, name: newName } }).then(() => setNewName("")), "Step added.")}>
             <Plus className="size-4" aria-hidden /> Add step
           </Button>
@@ -121,7 +123,7 @@ export default function FunnelDetailPage() {
           <li key={s.id}>
             <Card className="flex-row flex-wrap items-center gap-3 p-4">
               <span className="bg-accent text-accent-foreground flex size-8 shrink-0 items-center justify-center rounded-full font-semibold text-body-sm tabular-nums">{i + 1}</span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
                 <p className="font-semibold text-body">{s.name}</p>
                 <p className="text-muted-foreground text-caption">{TYPE_LABEL[s.type]}{s.type === "checkout" ? " · sells one Offer with optional Order Bumps" : s.pageId ? ` · ${pages.find((p) => p.id === s.pageId)?.name ?? "Page"}` : " · no page chosen"}</p>
               </div>
@@ -138,7 +140,7 @@ export default function FunnelDetailPage() {
                 </div>
               ) : (
                 isAdmin && (
-                  <div className="w-56">
+                  <div className="w-full sm:w-56">
                     <OptionSelect
                       aria-label={`Page for ${s.name}`}
                       size="sm"
