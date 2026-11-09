@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/checkout/pricing";
-import { chargeSchedule, lineBillingLabel, linePriceLabel, whatHappensNext } from "@/lib/checkout/display";
+import { chargeSchedule, lineBillingLabel, linePriceLabel, summaryRows, whatHappensNext } from "@/lib/checkout/display";
 import type { CheckoutView, CheckoutViewBump } from "@/lib/checkout/view-types";
 import type { OrderTotals } from "@/types/checkout";
 
@@ -304,6 +304,7 @@ export function OrderSummary({
 }) {
   const cur = totals.currency;
   const schedule = chargeSchedule(totals);
+  const rows = summaryRows(totals);
   return (
     <section className="tenant-card flex flex-col gap-4 rounded-2xl p-5" aria-labelledby="co-summary-title">
       <h2 id="co-summary-title" className="font-semibold text-title-md">{title}</h2>
@@ -328,15 +329,16 @@ export function OrderSummary({
       {children}
       <dl className={cn("flex flex-col gap-1.5 border-t pt-4 text-body-sm tabular-nums", quoting && "opacity-60")} aria-live="polite" aria-busy={quoting}>
         <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Subtotal</dt>
-          <dd>{formatMoney(totals.subtotalCents, cur)}</dd>
+          <dt className="text-muted-foreground">{rows.todayOnly ? "Subtotal today" : "Subtotal"}</dt>
+          <dd>{formatMoney(rows.subtotalCents, cur)}</dd>
         </div>
-        {totals.discountCents > 0 && (
+        {rows.discountCents > 0 && (
           <div className="tenant-text flex justify-between gap-3">
             <dt>
-              Discount{coupon.status === "applied" ? ` (${coupon.code})` : ""}
+              {rows.todayOnly ? "Discount today" : "Discount"}
+              {coupon.status === "applied" ? ` (${coupon.code})` : ""}
             </dt>
-            <dd>−{formatMoney(totals.discountCents, cur)}</dd>
+            <dd>−{formatMoney(rows.discountCents, cur)}</dd>
           </div>
         )}
         {view.display.showDueToday && (

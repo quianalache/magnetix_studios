@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { computeOrderTotals, lineFromOffer, type PricingCoupon } from "../src/lib/checkout/pricing";
-import { chargeSchedule, ctaLabel, friendlyPaymentError, lineBillingLabel, needsPayment, subscriptionStartDate, whatHappensNext } from "../src/lib/checkout/display";
+import { chargeSchedule, ctaLabel, friendlyPaymentError, lineBillingLabel, needsPayment, subscriptionStartDate, summaryRows, whatHappensNext } from "../src/lib/checkout/display";
 import { describeCouponEffect } from "../src/lib/checkout/coupons";
 import { CheckoutRenderer } from "../src/components/checkout/checkout-renderer";
 import { DEFAULT_CHECKOUT_DISPLAY } from "../src/lib/checkout/config";
@@ -61,6 +61,15 @@ check("29. trial + one bump: bump due today, plan after the trial", () => {
   const s = chargeSchedule(t, NOW);
   assert.ok(s.includes("$27.00 today for Workbook"));
   assert.ok(s.includes("From Feb 3, 2027: $97.00/month"));
+});
+check("trial + bump + coupon: summary rows add up to Due today (plan discount shown in the schedule)", () => {
+  const t = computeOrderTotals([lineFromOffer(trial, "primary"), lineFromOffer(workbook, "bump", "b1")], pct(20));
+  const r = summaryRows(t);
+  assert.equal(r.todayOnly, true);
+  assert.equal(r.subtotalCents - r.discountCents, t.dueTodayCents);
+  assert.equal(r.subtotalCents, 2700);
+  const noTrial = summaryRows(computeOrderTotals([lineFromOffer(monthly, "primary"), lineFromOffer(workbook, "bump", "b1")], pct(20)));
+  assert.equal(noTrial.todayOnly, false);
 });
 check("30. trial + multiple bumps", () => {
   const t = computeOrderTotals([lineFromOffer(trial, "primary"), lineFromOffer(workbook, "bump", "b1"), lineFromOffer(kit, "bump", "b2")]);

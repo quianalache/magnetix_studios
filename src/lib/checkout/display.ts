@@ -48,6 +48,22 @@ export function subscriptionStartDate(trialDays: number, now: Date = new Date())
  * "What you pay and when" — one row per obligation, so today's charge is
  * never mixed up with a future subscription price.
  */
+/**
+ * The summary's money rows. When something isn't charged today (a trial), the
+ * subtotal and discount cover ONLY today's lines so they add up to "Due today";
+ * the later (discounted) plan payment is stated in the charge schedule instead.
+ */
+export function summaryRows(totals: OrderTotals): { subtotalCents: number; discountCents: number; todayOnly: boolean } {
+  const deferred = totals.lines.some((l) => l.trialDays > 0 && l.unitAmountCents > 0);
+  if (!deferred) return { subtotalCents: totals.subtotalCents, discountCents: totals.discountCents, todayOnly: false };
+  const today = totals.lines.filter((l) => !(l.trialDays > 0));
+  return {
+    subtotalCents: today.reduce((n, l) => n + l.unitAmountCents, 0),
+    discountCents: today.reduce((n, l) => n + l.discountCents, 0),
+    todayOnly: true,
+  };
+}
+
 export function chargeSchedule(totals: OrderTotals, now: Date = new Date()): string[] {
   const rows: string[] = [];
   const cur = totals.currency;
