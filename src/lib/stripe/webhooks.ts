@@ -46,6 +46,10 @@ import {
   handleInvoiceStripeCheckoutCompleted,
 } from "@/lib/server/invoice-payment-service";
 import type { SubscriptionStatus } from "@/types";
+import {
+  CHECKOUT_ORDER_KIND,
+  handleCheckoutOrderSubscriptionUpdated,
+} from "@/lib/server/checkout/order-service";
 
 export async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
@@ -505,6 +509,15 @@ export async function handleSubscriptionUpdated(
     return;
   }
 
+  // Checkout Foundation: the primary Offer's subscription from a checkout
+  // order. Same ledger sync as a classic Offer subscription, plus completing
+  // a trial order whose card was saved with nothing due today.
+  if (subscription.metadata?.kind === CHECKOUT_ORDER_KIND) {
+    await syncCourseOfferSubscriptionStatusServerSide(subscription);
+    await handleCheckoutOrderSubscriptionUpdated(subscription);
+    return;
+  }
+
   const customerId = subscription.customer as string;
 
   const usersSnapshot = await getAdminDb()
@@ -533,7 +546,13 @@ export async function handleSubscriptionDeleted(
     return;
   }
 
-  if (subscription.metadata?.kind === OFFER_CHARGE_KIND) {
+  // A checkout order's subscription carries the primary Offer's id, so the
+  // same handler revokes ONLY that recurring purchase; one-time Order Bump
+  // purchases in the same order are untouched.
+  if (
+    subscription.metadata?.kind === OFFER_CHARGE_KIND ||
+    subscription.metadata?.kind === CHECKOUT_ORDER_KIND
+  ) {
     await handleCourseOfferSubscriptionDeleted(subscription);
     return;
   }

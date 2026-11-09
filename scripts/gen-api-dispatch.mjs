@@ -38,6 +38,10 @@ export const GROUPS = [
   "src/app/api/sub-accounts/[id]/projects",
   "src/app/api/sub-accounts/[id]/media-library",
   "src/app/api/sub-accounts/[id]/routines",
+  // Checkout Foundation (2026-11): funnels, checkout settings, coupons (admin)
+  // and the public checkout engine API.
+  "src/app/api/sub-accounts/[id]/commerce",
+  "src/app/api/order-checkout",
 ];
 
 const DISPATCH_DIR = "[[...path]]";

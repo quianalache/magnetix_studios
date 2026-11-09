@@ -31,10 +31,6 @@ import { HeroPanel } from "@/components/standalone-courses/theme-editor/hero-pan
 import { OfferBlockPanel } from "@/components/course-offers/theme-editor/offer-block-panel";
 import { OfferThemeLivePreview } from "@/components/course-offers/theme-editor/offer-live-preview";
 import {
-  ExtraContactInfoPanel,
-  ServiceAgreementPanel,
-} from "@/components/course-offers/theme-editor/checkout-settings-panels";
-import {
   DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
   type CourseOffer,
   type CourseOfferCheckoutSettings,
@@ -137,19 +133,14 @@ export default function OfferThemeEditorPage({
   async function save() {
     setSaving(true);
     try {
-      const [themeRes, settingsRes] = await Promise.all([
-        fetch(`${apiBase}/course-offers/${offerId}/theme`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ theme }),
-        }),
-        fetch(`${apiBase}/course-offers/${offerId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ checkoutSettings }),
-        }),
-      ]);
-      if (!themeRes.ok || !settingsRes.ok) throw new Error();
+      // Checkout Foundation (2026-11): buyer fields + agreement are edited in
+      // Checkout Settings now (one write path); this editor saves the design.
+      const themeRes = await fetch(`${apiBase}/course-offers/${offerId}/theme`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme }),
+      });
+      if (!themeRes.ok) throw new Error();
       toast.success("Checkout page saved.");
     } catch {
       toast.error("Couldn't save");
@@ -352,17 +343,23 @@ export default function OfferThemeEditorPage({
                   region="sidebar"
                 />
               )}
-              {tab === "Extra Info" && (
-                <ExtraContactInfoPanel
-                  value={checkoutSettings}
-                  onChange={setCheckoutSettings}
-                />
-              )}
-              {tab === "Agreement" && (
-                <ServiceAgreementPanel
-                  value={checkoutSettings}
-                  onChange={setCheckoutSettings}
-                />
+              {(tab === "Extra Info" || tab === "Agreement") && (
+                <div className="space-y-3 text-sm">
+                  <p className="font-medium">
+                    {tab === "Extra Info" ? "Buyer details" : "Service agreement"} moved to Checkout Settings
+                  </p>
+                  <p className="text-muted-foreground">
+                    Phone, the classic form&apos;s address field and the agreement checkbox are now edited
+                    with the rest of this Offer&apos;s checkout: Order Bumps, discount codes and where
+                    buyers go after paying. Your existing settings were kept.
+                  </p>
+                  <Link
+                    href={`/sa/${subAccountId}/courses/offers/${offerId}/checkout`}
+                    className="inline-flex underline"
+                  >
+                    Open Checkout Settings
+                  </Link>
+                </div>
               )}
             </div>
           </div>

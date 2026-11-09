@@ -58,6 +58,11 @@ export interface CourseOfferCheckoutSettings {
    *  `serviceAgreement` — this predates it and used to always be collected;
    *  now it's opt-in like GHL's own checkout. */
   collectPhoneNumber: boolean;
+  /** Checkout Foundation (2026-11): the new checkout can ask for phone as
+   *  optional. Absent = the original behaviour (required whenever
+   *  `collectPhoneNumber` is on). The classic enroll form treats both as
+   *  required. Written only by the Hosted Checkout Settings screen. */
+  phoneRequirement?: "optional" | "required";
   serviceAgreement: CourseOfferServiceAgreement;
 }
 
@@ -215,7 +220,10 @@ export type CourseOfferPurchaseStatus =
   | "paid"
   | "canceled"
   | "void";
-export type CourseOfferPurchaseMethod = "paypal" | "stripe";
+/** "free" (Checkout Foundation, 2026-11): an item that cost nothing in a
+ *  checkout order — a free primary Offer next to paid bumps, or a line a
+ *  100% coupon covered. Granted through the same fulfillment path. */
+export type CourseOfferPurchaseMethod = "paypal" | "stripe" | "free";
 
 export interface CourseOfferPurchase {
   id: string;
@@ -266,7 +274,12 @@ export interface CourseOfferPurchase {
    *  that offer's own checkout page), so this is deliberately null there —
    *  used to exclude upsells from conversion counts. */
   attribution?: ContactAttribution | null;
-  purchaseSource?: "invoice";
+  purchaseSource?: "invoice" | "checkout";
+  /** Checkout Foundation (2026-11): the checkout order this purchase belongs
+   *  to. A primary Offer and each Order Bump get their own purchase, all
+   *  sharing one orderId. */
+  orderId?: string;
+  orderRole?: "primary" | "bump";
   invoiceId?: string;
   invoiceNumber?: string;
   invoiceLineItemId?: string;

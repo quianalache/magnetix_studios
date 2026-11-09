@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   FileText,
+  Filter,
   Plus,
   Sparkles,
   LayoutTemplate,
@@ -200,9 +202,14 @@ export default function PagesFunnelsPage() {
             visual editor.
           </p>
         </div>
-        <Button onClick={() => setMode("create")}>
-          <Plus className="h-4 w-4" /> New Page
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" render={<Link href={`/sa/${subAccountId}/pages-funnels/funnels`} />}>
+            <Filter className="h-4 w-4" /> Funnels
+          </Button>
+          <Button onClick={() => setMode("create")}>
+            <Plus className="h-4 w-4" /> New Page
+          </Button>
+        </div>
       </div>
 
       {loading ? (

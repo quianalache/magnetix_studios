@@ -65,6 +65,7 @@ export function OfferSalesPageView({
   crossSellTargets,
   interactive,
   businessName,
+  checkoutHref,
 }: {
   saId: string;
   offerId: string;
@@ -82,6 +83,10 @@ export function OfferSalesPageView({
   interactive: boolean;
   /** The selling business (sub-account or agency name). Falls back to the offer title (theme-editor preview). */
   businessName?: string | null;
+  /** Checkout Foundation (2026-11): when the Offer's hosted checkout is
+   *  turned on, the buy button opens that checkout instead of the classic
+   *  enroll form. Null/absent = classic form (unchanged behaviour). */
+  checkoutHref?: string | null;
 }) {
   // No Category Block for an Offer (no curriculum — see DEFAULT_OFFER_THEME);
   // filtered defensively same as sidebar below, in case a template that had
@@ -111,6 +116,13 @@ export function OfferSalesPageView({
       className="tenant-button inline-flex w-full items-center justify-center gap-2 border px-4 py-3 text-sm font-semibold"
     >
       {firstCourseId ? "Continue learning" : "Open portal"}
+    </a>
+  ) : interactive && checkoutHref ? (
+    <a
+      href={checkoutHref}
+      className="tenant-button inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold"
+    >
+      {offer.type === "free" ? "Enroll Now" : `Enroll Now — ${priceLabel}`}
     </a>
   ) : interactive ? (
     <EnrollOfferModal

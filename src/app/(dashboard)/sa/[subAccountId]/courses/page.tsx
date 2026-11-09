@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -12,9 +12,10 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { OffersList } from "@/components/course-offers/offers-list";
+import { CouponsManager } from "@/components/checkout/coupons-manager";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
-type CoursesTab = "products" | "offers";
+type CoursesTab = "products" | "offers" | "coupons";
 
 /**
  * Standalone Courses — staff list + create. Gated by
@@ -29,12 +30,18 @@ type CoursesTab = "products" | "offers";
  * Community page's identical fix.
  */
 export default function StandaloneCoursesPage() {
-  const { subAccountId } = useSubAccount();
+  const { subAccountId, isAdmin: isWorkspaceAdmin } = useSubAccount();
   const gate = useResilientFeatureGate({
     field: "standaloneCoursesEnabledByAgency",
     fallbackKey: "standaloneCoursesEnabled",
   });
+  // Checkout Foundation: Coupons live beside Products and Offers; `?tab=`
+  // deep-links into Offers or Coupons (e.g. from Checkout Settings).
   const [tab, setTab] = useState<CoursesTab>("products");
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "offers" || t === "coupons") setTab(t);
+  }, []);
 
   const gateOn = gate.known && gate.enabled;
 
@@ -87,12 +94,14 @@ export default function StandaloneCoursesPage() {
     <div className="mx-auto w-full max-w-6xl space-y-4 p-6">
       <div>
         <h1 className="text-lg font-semibold">
-          {tab === "products" ? "Products" : "Offers"}
+          {tab === "products" ? "Products" : tab === "offers" ? "Offers" : "Coupons"}
         </h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
           {tab === "products"
             ? "Manage or create new courses"
-            : "Create and manage offers for your courses"}
+            : tab === "offers"
+              ? "Create and manage offers for your courses"
+              : "Create and manage discount codes for your checkouts and Order Bumps"}
         </p>
       </div>
 
@@ -103,6 +112,7 @@ export default function StandaloneCoursesPage() {
           options={[
             { value: "products", label: "Products" },
             { value: "offers", label: "Offers" },
+            { value: "coupons", label: "Coupons" },
           ]}
         />
         {tab === "products" && isAdmin && (
@@ -120,7 +130,9 @@ export default function StandaloneCoursesPage() {
         </p>
       )}
 
-      {tab === "offers" ? (
+      {tab === "coupons" ? (
+        <CouponsManager subAccountId={subAccountId} isAdmin={isWorkspaceAdmin} />
+      ) : tab === "offers" ? (
         <OffersList subAccountId={subAccountId} />
       ) : !list.resolved ? (
         <div className="flex justify-center py-16">

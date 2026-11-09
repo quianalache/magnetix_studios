@@ -16,7 +16,8 @@ import {
 import type { ExternalPayment } from "@/types/external-billing";
 
 const PLATFORM_PROVIDER_ACCOUNT_ID = "platform";
-const NATIVE_PAYMENT_KINDS = new Set(["courseCharge", "offerCharge"]);
+// "checkoutOrder" = the shared checkout engine (primary Offer + Order Bumps in one payment).
+const NATIVE_PAYMENT_KINDS = new Set(["courseCharge", "offerCharge", "checkoutOrder"]);
 
 type PaymentOutcome = "succeeded" | "failed" | "refunded";
 

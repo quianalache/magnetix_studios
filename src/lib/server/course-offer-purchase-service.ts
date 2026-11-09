@@ -1287,7 +1287,24 @@ export async function handleCourseOfferSubscriptionDeleted(
     communityAccess: purchase.communityAccess ?? [],
   }).catch((err) => console.warn("[course-offer] membership level end failed", err));
   const expiresAt = new Date();
+  // Checkout Foundation (2026-11): a course the member ALSO owns through
+  // another still-paid purchase (e.g. a one-time Order Bump bought in the
+  // same order) keeps its access — ending the subscription only removes
+  // what that subscription alone granted.
+  const otherPaid = await getAdminDb()
+    .collectionGroup("purchases")
+    .where("subAccountId", "==", subAccountId)
+    .where("memberId", "==", purchase.memberId)
+    .where("status", "==", "paid")
+    .get()
+    .catch(() => null);
+  const keptCourses = new Set(
+    (otherPaid?.docs ?? [])
+      .filter((d) => d.id !== snap.docs[0].id)
+      .flatMap((d) => (d.data().courseIds as string[] | undefined) ?? [])
+  );
   for (const courseId of purchase.courseIds) {
+    if (keptCourses.has(courseId)) continue;
     await stampAccessWindow({
       subAccountId,
       courseId,

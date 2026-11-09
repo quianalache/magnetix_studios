@@ -9,6 +9,7 @@ import {
   Link2,
   Loader2,
   Palette,
+  ShoppingCart,
   Archive,
   ArchiveRestore,
 } from "lucide-react";
@@ -164,12 +165,19 @@ export default function CourseOfferDetailPage({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href={`/sa/${subAccountId}/courses/offers/${offer.id}/theme`}>
             <Button variant="outline" size="sm">
               <Palette className="h-3.5 w-3.5" /> Edit Checkout
             </Button>
           </Link>
+          {!offer.systemManaged && (
+            <Link href={`/sa/${subAccountId}/courses/offers/${offer.id}/checkout`}>
+              <Button variant="outline" size="sm">
+                <ShoppingCart className="h-3.5 w-3.5" /> Checkout Settings
+              </Button>
+            </Link>
+          )}
           <Button variant="outline" size="sm" onClick={copyLink}>
             <Link2 className="h-3.5 w-3.5" /> Get Link
           </Button>

@@ -15,6 +15,11 @@ import {
   syncExternalStripeChargeRefund,
 } from "@/lib/server/external-payment-sync-service";
 import { handleChargeDispute } from "@/lib/stripe/dispute";
+import {
+  CHECKOUT_ORDER_KIND,
+  handleCheckoutOrderInvoicePaid,
+  handleCheckoutOrderPaymentIntent,
+} from "@/lib/server/checkout/order-service";
 import { handleStripeConnectAccountUpdated } from "@/lib/stripe/connect";
 import type Stripe from "stripe";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -177,6 +182,12 @@ export async function POST(request: Request) {
       // specific sources, so this is safe to route unconditionally rather
       // than needing its own metadata.kind branch here.
       case "invoice.paid":
+        // Checkout Foundation: a checkout order's subscription invoice
+        // fulfils the order (idempotent; verified against Stripe).
+        await handleCheckoutOrderInvoicePaid(
+          event.data.object as Stripe.Invoice,
+          event.account ?? null
+        );
         await syncExternalStripeInvoicePayment({
           invoice: event.data.object as Stripe.Invoice,
           eventAccountId: event.account ?? null,
@@ -193,6 +204,15 @@ export async function POST(request: Request) {
         });
         break;
       case "payment_intent.succeeded":
+        if (
+          (event.data.object as Stripe.PaymentIntent).metadata?.kind ===
+          CHECKOUT_ORDER_KIND
+        ) {
+          await handleCheckoutOrderPaymentIntent(
+            event.data.object as Stripe.PaymentIntent,
+            event.account ?? null
+          );
+        }
         await syncExternalStripePaymentIntent({
           paymentIntent: event.data.object as Stripe.PaymentIntent,
           eventAccountId: event.account ?? null,

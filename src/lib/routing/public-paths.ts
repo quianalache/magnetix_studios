@@ -278,6 +278,12 @@ export const PUBLIC_PATHS = [
   // route against billing.checkoutTokenHash, quote-link model); a valid
   // link 303s into Stripe Checkout.
   "/pay",
+  // Checkout Foundation (2026-11) — the shared checkout engine. The public
+  // page for a Funnel Checkout Step, and its JSON API (quote / start /
+  // order status). Prices, bumps, coupons and identity are all decided
+  // server-side; the checkout config id is not a credential.
+  "/checkout",
+  "/api/order-checkout",
   // Public REST API (v1+). Auth happens INSIDE each route via Bearer-token
   // verification (lib/api/auth.ts), not via session cookie. Sub-account-
   // scoped keys; tenancy enforced in code (Admin SDK writes bypass

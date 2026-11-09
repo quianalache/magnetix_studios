@@ -9,6 +9,7 @@ import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 import type { Metadata } from "next";
 import { getSubAccountPublicName, publicTitle } from "@/lib/server/public-identity";
+import { getCheckoutConfigDoc, hostedConfigId } from "@/lib/server/checkout/config-service";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,13 @@ export default async function OfferPage({
   const alreadyPurchased = member
     ? await hasPaidCourseOffer(saId, offerId, member.id)
     : false;
+  // Checkout Foundation: the hosted checkout replaces the classic enroll
+  // form only once the creator has turned it on for this Offer.
+  const hosted = await getCheckoutConfigDoc(hostedConfigId(offerId)).catch(() => null);
+  const checkoutHref =
+    hosted?.enabled && hosted.subAccountId === saId && !offer.systemManaged
+      ? `/offer/${saId}/${offerId}/checkout`
+      : null;
 
   return (
     <>
@@ -142,6 +150,7 @@ export default async function OfferPage({
         firstCourseId={offer.courseIds[0] ?? null}
         crossSellTargets={crossSellTargets}
         interactive
+        checkoutHref={checkoutHref}
       />
     </>
   );
