@@ -13,6 +13,8 @@ import type {
   PricedOfferLine,
 } from "@/types/checkout";
 import type { PricingCoupon } from "./pricing";
+import { formatMoney } from "./pricing";
+import type { OrderTotals } from "@/types/checkout";
 
 export const COUPON_CODE_RE = /^[A-Z0-9][A-Z0-9-]{2,31}$/;
 
@@ -226,4 +228,43 @@ export function couponSummary(c: Pick<Coupon, "discountType" | "percentOff" | "a
   const d = c.recurringDuration;
   const tail = d.kind === "forever" ? "every payment" : d.kind === "repeating" ? `first ${d.months} monthly payments` : "first payment";
   return `${off} · subscriptions: ${tail}`;
+}
+
+/**
+ * What an applied coupon does to THIS order, in buyer words. Built only from
+ * the server's pricing, so the page never claims a discount Stripe won't give.
+ */
+export interface CouponEffect {
+  /** "25% off" / "$10.00 off". */
+  label: string;
+  /** Where it applies: whole order, main offer only, etc. Empty when obvious. */
+  scope: string;
+  /** For a discounted subscription: how many payments are discounted. */
+  recurringNote: string | null;
+}
+
+export function describeCouponEffect(pricing: PricingCoupon, totals: OrderTotals): CouponEffect {
+  const label =
+    pricing.discountType === "percent"
+      ? `${pricing.percentOff}% off`
+      : `${formatMoney(pricing.amountOffCents ?? 0, totals.currency)} off`;
+  const paidBumps = totals.lines.filter((l) => l.role === "bump" && l.unitAmountCents > 0);
+  const scope =
+    paidBumps.length === 0
+      ? ""
+      : pricing.includeOrderBumps
+        ? "your whole order, including add-ons"
+        : "the main offer only — add-ons stay full price";
+  let recurringNote: string | null = null;
+  const primary = totals.lines[0];
+  if (primary?.billing === "recurring" && primary.discountCents > 0) {
+    const d = pricing.recurringDuration;
+    recurringNote =
+      d.kind === "forever"
+        ? "Applies to every subscription payment."
+        : d.kind === "repeating"
+          ? `Applies to your first ${d.months} subscription payments.`
+          : "Applies to your first subscription payment.";
+  }
+  return { label, scope, recurringNote };
 }

@@ -13,7 +13,7 @@ import { signMemberSessionToken } from "@/lib/community/member-auth";
 import { getCurrentMember, setMemberSessionCookie } from "@/lib/community/member-session";
 import { getStripeEnvironment, getStripeServer, normalizePaymentMode, resolveStripeForSubAccount } from "@/lib/stripe/server";
 import { normalizeAttribution } from "@/lib/attribution";
-import { checkCouponForOrder, couponRejectionMessage } from "@/lib/checkout/coupons";
+import { checkCouponForOrder, couponRejectionMessage, describeCouponEffect, type CouponEffect } from "@/lib/checkout/coupons";
 import { liveBumps } from "@/lib/checkout/config";
 import { computeOrderTotals, lineFromOffer, type PricingCoupon } from "@/lib/checkout/pricing";
 import type {
@@ -94,8 +94,8 @@ export async function resolveCheckout(configId: string, opts: { preview?: boolea
   if (!config.primaryOfferId) throw new CheckoutError("Choose a primary Offer for this checkout first.", 404);
   const primary = await getCourseOffer(config.subAccountId, config.primaryOfferId);
   if (!primary || primary.subAccountId !== config.subAccountId || primary.systemManaged || primary.visibility === "archived")
-    throw new CheckoutError("This checkout isn't available.", 404);
-  if (!opts.preview && primary.visibility !== "published") throw new CheckoutError("This checkout isn't available.", 404);
+    throw new CheckoutError("This offer is no longer available.", 404, null, "unavailable");
+  if (!opts.preview && primary.visibility !== "published") throw new CheckoutError("This offer is no longer available.", 404, null, "unavailable");
   const bumpOffers = await Promise.all(config.bumps.map((b) => getCourseOffer(config.subAccountId, b.offerId)));
   const byId = new Map(bumpOffers.filter((o): o is CourseOffer => !!o).map((o) => [o.id, o]));
   const visible = liveBumps(config.bumps, byId, primary, config.subAccountId);
@@ -109,17 +109,26 @@ function linesFor(resolved: ResolvedCheckout, bumpIds: string[]): PricedOfferLin
   return lines;
 }
 
-function selectedBumpIds(raw: unknown, resolved: ResolvedCheckout): string[] {
+function selectedBumpIds(raw: unknown, resolved: ResolvedCheckout, opts: { strict?: boolean } = {}): string[] {
   const allowed = new Set(resolved.bumps.map((b) => b.bump.id));
-  const ids = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
-  return [...new Set(ids)].filter((id) => allowed.has(id));
+  const ids = [...new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [])];
+  const live = ids.filter((id) => allowed.has(id));
+  // At payment time an add-on that disappeared (archived, unpublished, price
+  // currency changed…) must stop the payment rather than silently charging a
+  // different order than the one the buyer saw.
+  if (opts.strict && live.length !== ids.length) {
+    throw new CheckoutError("One of the add-ons you chose is no longer available. We've updated your order — please review it and try again.", 409, null, "stale_bump");
+  }
+  return live;
 }
 
 /* -------------------------------- Pricing -------------------------------- */
 
 export interface QuoteResult {
   totals: OrderTotals;
-  coupon: { code: string; applied: true } | { code: string; applied: false; message: string } | null;
+  coupon: ({ code: string; applied: true } & CouponEffect) | { code: string; applied: false; message: string } | null;
+  /** Add-on ids the buyer had selected that are no longer available. */
+  removedBumpIds: string[];
 }
 
 async function priceWithCoupon(
@@ -141,12 +150,19 @@ async function priceWithCoupon(
 
 export async function quoteCheckout(configId: string, body: Record<string, unknown>, opts: { preview?: boolean } = {}): Promise<QuoteResult> {
   const resolved = await resolveCheckout(configId, opts);
-  const lines = linesFor(resolved, selectedBumpIds(body.bumpIds, resolved));
+  const requested = Array.isArray(body.bumpIds) ? body.bumpIds.filter((x): x is string => typeof x === "string") : [];
+  const bumpIds = selectedBumpIds(requested, resolved);
+  const lines = linesFor(resolved, bumpIds);
   // Per-customer limits are enforced at payment time, once the buyer is known.
   const priced = await priceWithCoupon(resolved, lines, body.couponCode, null);
   return {
     totals: priced.totals,
-    coupon: priced.code ? (priced.rejection ? { code: priced.code, applied: false, message: priced.rejection } : { code: priced.code, applied: true }) : null,
+    coupon: priced.code
+      ? priced.rejection || !priced.pricing
+        ? { code: priced.code, applied: false, message: priced.rejection ?? "That code isn't valid." }
+        : { code: priced.code, applied: true, ...describeCouponEffect(priced.pricing, priced.totals) }
+      : null,
+    removedBumpIds: requested.filter((id) => !bumpIds.includes(id)),
   };
 }
 
@@ -379,7 +395,7 @@ export async function startCheckout(configId: string, body: Record<string, unkno
   const { config, primary } = resolved;
   const { errors, buyer, agreementAccepted } = cleanBuyer(body, config);
   if (Object.keys(errors).length) throw new CheckoutError("Check your details.", 400, errors);
-  const bumpIds = selectedBumpIds(body.bumpIds, resolved);
+  const bumpIds = selectedBumpIds(body.bumpIds, resolved, { strict: true });
   const lines = linesFor(resolved, bumpIds);
   const attribution = normalizeAttribution(body.attribution as never);
   const { member, matchedExisting } = await resolveCheckoutMember({
@@ -389,6 +405,10 @@ export async function startCheckout(configId: string, body: Record<string, unkno
     phone: buyer.phone || null,
     attribution,
   });
+  // A retry (e.g. after a declined card) supersedes the buyer's previous
+  // unpaid attempt on this same checkout, so it never lingers as a second
+  // open payment. Only an unpaid order for the same checkout and email.
+  if (typeof body.replacesOrderId === "string") await cancelSupersededOrder(body.replacesOrderId, config.id, buyer.email);
   const priced = await priceWithCoupon(resolved, lines, body.couponCode, member.id);
   if (priced.rejection) throw new CheckoutError(priced.rejection, 400, { couponCode: priced.rejection }, "coupon");
   const totals = priced.totals;
@@ -511,7 +531,7 @@ export async function startCheckout(configId: string, body: Record<string, unkno
           payment_behavior: "default_incomplete",
           payment_settings: { save_default_payment_method: "on_subscription" },
           metadata,
-          expand: ["latest_invoice.confirmation_secret", "pending_setup_intent"],
+          expand: ["latest_invoice.confirmation_secret"],
         },
         { ...target.requestOptions, idempotencyKey: `order_${order.id}_sub` },
       );
@@ -520,12 +540,21 @@ export async function startCheckout(configId: string, body: Record<string, unkno
         await target.stripe.subscriptions.cancel(sub.id, {}, target.requestOptions).catch(() => undefined);
         throw new CheckoutError("We couldn't prepare your payment. Try again.", 502);
       }
-      const setup = sub.pending_setup_intent as Stripe.SetupIntent | null;
+      // $0 due today (trial, nothing else charged): the subscription's own
+      // pending SetupIntent carries fixed payment_method_types, which Stripe
+      // refuses to confirm with a card collected by deferred Elements
+      // (automatic payment methods). Use our own SetupIntent instead and make
+      // its card the subscription default once it succeeds (verifyPaid).
+      let setup: Stripe.SetupIntent | null = null;
       if (invoice.amount_due > 0) {
         clientSecret = invoice.confirmation_secret?.client_secret ?? "";
         intentType = "payment";
       } else {
-        clientSecret = setup?.client_secret ?? "";
+        setup = await target.stripe.setupIntents.create(
+          { customer: order.stripeCustomerId!, usage: "off_session", automatic_payment_methods: { enabled: true }, metadata },
+          { ...target.requestOptions, idempotencyKey: `order_${order.id}_setup` },
+        );
+        clientSecret = setup.client_secret ?? "";
         intentType = "setup";
       }
       if (!clientSecret) throw new CheckoutError("We couldn't prepare your payment. Try again.", 502);
@@ -563,6 +592,31 @@ async function writePurchases(order: CheckoutOrder, offers: Map<string, CourseOf
   await ordersCol().doc(order.id).update({ items, updatedAt: Date.now() });
 }
 
+async function cancelSupersededOrder(orderId: string, configId: string, email: string): Promise<void> {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(orderId)) return;
+  const ref = ordersCol().doc(orderId);
+  const snap = await ref.get();
+  const order = snap.data() as Omit<CheckoutOrder, "id"> | undefined;
+  if (!order || order.status !== "pending" || order.configId !== configId || order.buyer.email !== email) return;
+  try {
+    // Never cancel something Stripe already collected money for.
+    const verified = await verifyPaid({ id: orderId, ...order });
+    if (verified.ok) return;
+    if (order.paymentMode) {
+      const stripe = getStripeServer(order.paymentMode);
+      const opts = order.stripeAccountId ? { stripeAccount: order.stripeAccountId } : undefined;
+      if (order.stripePaymentIntentId) await stripe.paymentIntents.cancel(order.stripePaymentIntentId, {}, opts).catch(() => undefined);
+      if (order.stripeSubscriptionId) await stripe.subscriptions.cancel(order.stripeSubscriptionId, {}, opts).catch(() => undefined);
+    }
+    await ref.update({ status: "canceled", failureReason: "Replaced by a new attempt", updatedAt: Date.now() });
+    for (const item of order.items) {
+      if (item.purchaseId) await purchasesCol(order.subAccountId, item.offerId).doc(item.purchaseId).update({ status: "void" }).catch(() => undefined);
+    }
+  } catch (err) {
+    console.warn("[checkout] could not cancel superseded order", orderId, err);
+  }
+}
+
 /* ------------------------------- Completing ------------------------------ */
 
 async function verifyPaid(order: CheckoutOrder): Promise<{ ok: boolean; reason?: string; paymentIntentId?: string | null; billing?: { city: string | null; state: string | null; country: string | null } }> {
@@ -588,6 +642,11 @@ async function verifyPaid(order: CheckoutOrder): Promise<{ ok: boolean; reason?:
       if (!order.stripeSetupIntentId) return { ok: false, reason: "no_setup" };
       const si = await stripe.setupIntents.retrieve(order.stripeSetupIntentId, {}, opts);
       if (si.status !== "succeeded") return { ok: false, reason: si.status };
+      if (si.metadata?.orderId !== order.id) return { ok: false, reason: "mismatch" };
+      const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;
+      if (!pm) return { ok: false, reason: "no_payment_method" };
+      const current = typeof sub.default_payment_method === "string" ? sub.default_payment_method : sub.default_payment_method?.id;
+      if (current !== pm) await stripe.subscriptions.update(sub.id, { default_payment_method: pm }, opts);
     } else if (invoice.amount_paid < order.totals.dueTodayCents) return { ok: false, reason: "underpaid" };
     return { ok: true, paymentIntentId: null };
   }

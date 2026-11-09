@@ -235,7 +235,7 @@ export function CheckoutSettingsEditor({
       const o = b && offersById.get(b.offerId);
       if (o) lines.push(lineFromOffer(o, "bump", id));
     }
-    return { totals: computeOrderTotals(lines), coupon: code ? { code: code.toUpperCase(), applied: false, message: "Codes are checked on the live checkout, not in preview." } : null };
+    return { totals: computeOrderTotals(lines), coupon: code ? { code: code.toUpperCase(), applied: false as const, message: "Codes are checked on the live checkout, not in preview." } : null };
   };
 
   const scrollTo = (key: string) => document.getElementById(`cs-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });

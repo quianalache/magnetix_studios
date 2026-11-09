@@ -114,7 +114,7 @@ async function main() {
       const pm = await stripe.paymentMethods.attach("pm_card_visa", { customer: o.stripeCustomerId });
       await stripe.invoices.pay(sub.latest_invoice as string, { payment_method: pm.id });
     } else {
-      await stripe.setupIntents.confirm(o.stripeSetupIntentId, { payment_method: "pm_card_visa" });
+      await stripe.setupIntents.confirm(o.stripeSetupIntentId, { payment_method: "pm_card_visa", return_url: "https://example.com/return" });
     }
   }
   const purchasesOf = async (orderId: string) => {
@@ -370,10 +370,20 @@ async function main() {
     await useStep("primaryTrial", []);
     const r = await orders.startCheckout(stepConfigId, buyer("trial-only+checkout@example.com"));
     assert.equal(r.intentType, "setup");
+    const o = (await db.doc(`checkoutOrders/${r.orderId}`).get()).data()!;
+    const si = await stripe.setupIntents.retrieve(o.stripeSetupIntentId);
+    // Deferred Elements collects with automatic payment methods; Stripe refuses
+    // to confirm that against an intent with fixed payment_method_types (the
+    // subscription's own pending_setup_intent), so ours must be automatic.
+    assert.equal(si.automatic_payment_methods?.enabled, true, "setup intent uses automatic payment methods");
+    assert.equal(si.metadata?.orderId, r.orderId);
+    assert.equal(si.usage, "off_session");
     assert.equal((await orders.completeOrder(r.orderId, { source: "client" })).status, "processing", "not complete before the card is saved");
     await pay(r.orderId);
     assert.equal((await orders.completeOrder(r.orderId, { source: "client" })).status, "paid");
-    await stripe.subscriptions.cancel((await db.doc(`checkoutOrders/${r.orderId}`).get()).data()!.stripeSubscriptionId);
+    const sub = await stripe.subscriptions.retrieve(o.stripeSubscriptionId);
+    assert.ok(sub.default_payment_method, "saved card becomes the subscription default so the trial converts");
+    await stripe.subscriptions.cancel(o.stripeSubscriptionId);
   });
   await check("48. a free Offer still works with no Stripe at all", async () => {
     jar.clear();
@@ -393,6 +403,95 @@ async function main() {
     assert.equal(r.next, "redirect");
     const ps = await purchasesOf(r.orderId);
     assert.ok(ps.every((p) => p.purchase?.status === "paid" && p.purchase?.method === "free"));
+  });
+  console.log("\nPhase 2 — public checkout behaviour");
+  await check("12/13. quote describes the coupon effect (whole order vs main offer only)", async () => {
+    await coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-MAIN-ONLY", percentOff: 50, includeOrderBumps: false } });
+    const bumpIds = await useStep("primaryOne", ["bumpA"]);
+    const all = await orders.quoteCheckout(stepConfigId, { bumpIds, couponCode: "TEST-COUPON-25" });
+    assert.ok(all.coupon && all.coupon.applied && /whole order/.test(all.coupon.scope));
+    assert.equal(all.totals.lines[1].discountCents, Math.round(2700 * 0.25));
+    const main = await orders.quoteCheckout(stepConfigId, { bumpIds, couponCode: "TEST-MAIN-ONLY" });
+    assert.ok(main.coupon && main.coupon.applied && /add-ons stay full price/.test(main.coupon.scope));
+    assert.equal(main.totals.lines[1].discountCents, 0, "bump stays full price");
+  });
+  await check("11. invalid coupon is rejected in the quote with a buyer message", async () => {
+    const q = await orders.quoteCheckout(stepConfigId, { couponCode: "NOPE-NOPE" });
+    assert.ok(q.coupon && !q.coupon.applied && /isn't valid/.test(q.coupon.message));
+  });
+  await check("41. a bump that went stale is dropped from the quote and refused at payment", async () => {
+    const bumpIds = await useStep("primaryOne", ["bumpA", "bumpB"]);
+    await db.doc(`subAccounts/${SA}/courseOffers/bumpB`).update({ visibility: "archived" });
+    const q = await orders.quoteCheckout(stepConfigId, { bumpIds });
+    assert.deepEqual(q.removedBumpIds, [bumpIds[1]]);
+    assert.equal(q.totals.lines.length, 2);
+    jar.clear();
+    await assert.rejects(orders.startCheckout(stepConfigId, { ...buyer("stale+checkout@example.com"), bumpIds }), (e: unknown) => e instanceof CheckoutError && e.code === "stale_bump");
+    await db.doc(`subAccounts/${SA}/courseOffers/bumpB`).update({ visibility: "published" });
+  });
+  await check("40. a primary Offer that went stale reads as unavailable", async () => {
+    await db.doc(`subAccounts/${SA}/courseOffers/primaryOne`).update({ visibility: "draft" });
+    await assert.rejects(orders.quoteCheckout(stepConfigId, {}), (e: unknown) => e instanceof CheckoutError && e.code === "unavailable");
+    await db.doc(`subAccounts/${SA}/courseOffers/primaryOne`).update({ visibility: "published" });
+  });
+  await check("42. a coupon that expires between quote and payment is refused at submit", async () => {
+    const c = await coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-EXPIRING", percentOff: 10 } });
+    await useStep("primaryOne", []);
+    const q = await orders.quoteCheckout(stepConfigId, { couponCode: "TEST-EXPIRING" });
+    assert.ok(q.coupon?.applied);
+    await db.doc(`coupons/${c.id}`).update({ expiresAt: Date.now() - 1000 });
+    jar.clear();
+    await assert.rejects(orders.startCheckout(stepConfigId, { ...buyer("expiring+checkout@example.com"), couponCode: "TEST-EXPIRING" }), (e: unknown) => e instanceof CheckoutError && e.code === "coupon");
+  });
+  await check("43/44. declined card leaves the order unpaid; a retry cancels it and succeeds", async () => {
+    jar.clear();
+    await useStep("primaryOne", []);
+    const first = await orders.startCheckout(stepConfigId, buyer("declined+checkout@example.com"));
+    const o1 = (await db.doc(`checkoutOrders/${first.orderId}`).get()).data()!;
+    createdCustomers.add(o1.stripeCustomerId);
+    await assert.rejects(stripe.paymentIntents.confirm(o1.stripePaymentIntentId, { payment_method: "pm_card_chargeDeclined", return_url: "https://example.com/r" }));
+    assert.equal((await orders.completeOrder(first.orderId, { source: "client" })).status, "processing");
+    const retry = await orders.startCheckout(stepConfigId, { ...buyer("declined+checkout@example.com"), replacesOrderId: first.orderId });
+    const old = (await db.doc(`checkoutOrders/${first.orderId}`).get()).data()!;
+    assert.equal(old.status, "canceled", "the declined attempt is cancelled");
+    const oldPi = await stripe.paymentIntents.retrieve(o1.stripePaymentIntentId);
+    assert.equal(oldPi.status, "canceled");
+    await pay(retry.orderId);
+    assert.equal((await orders.completeOrder(retry.orderId, { source: "client" })).status, "paid");
+  });
+  await check("a retry can't cancel someone else's order", async () => {
+    jar.clear();
+    const victim = await orders.startCheckout(stepConfigId, buyer("victim+checkout@example.com"));
+    createdCustomers.add((await db.doc(`checkoutOrders/${victim.orderId}`).get()).data()!.stripeCustomerId);
+    jar.clear();
+    const other = await orders.startCheckout(stepConfigId, { ...buyer("attacker+checkout@example.com"), replacesOrderId: victim.orderId });
+    createdCustomers.add((await db.doc(`checkoutOrders/${other.orderId}`).get()).data()!.stripeCustomerId);
+    assert.equal((await db.doc(`checkoutOrders/${victim.orderId}`).get()).data()!.status, "pending");
+  });
+  await check("38. free Offer + paid bump takes payment for the bump only", async () => {
+    jar.clear();
+    const bumpIds = await useStep("freeOne", ["bumpA"]);
+    const r = await orders.startCheckout(stepConfigId, { ...buyer("freebump+checkout@example.com"), bumpIds });
+    assert.equal(r.next, "pay");
+    assert.equal(r.totals.dueTodayCents, 2700);
+    await pay(r.orderId);
+    assert.equal((await orders.completeOrder(r.orderId, { source: "client" })).status, "paid");
+    const ps = await purchasesOf(r.orderId);
+    assert.ok(ps.every((p) => p.purchase?.status === "paid"));
+    assert.equal(ps.find((p) => p.offerId === "freeOne")!.purchase!.method, "free");
+  });
+  await check("27/35. recurring without trial + multi-payment coupon: Stripe charges exactly the quote", async () => {
+    jar.clear();
+    const bumpIds = await useStep("primaryRec", ["bumpA"]);
+    const r = await orders.startCheckout(stepConfigId, { ...buyer("recrep+checkout@example.com"), bumpIds, couponCode: "TEST-REP-MO" });
+    assert.equal(r.totals.dueTodayCents, 9700 - 970 + 2700 - 270);
+    assert.equal(r.totals.recurring?.discountedPayments, 3);
+    await pay(r.orderId);
+    assert.equal((await orders.completeOrder(r.orderId, { source: "client" })).status, "paid");
+    const sub = await stripe.subscriptions.retrieve((await db.doc(`checkoutOrders/${r.orderId}`).get()).data()!.stripeSubscriptionId);
+    const next = await stripe.invoices.createPreview({ subscription: sub.id });
+    assert.equal(next.amount_due, 9700 - 970, "second payment still discounted");
+    await stripe.subscriptions.cancel(sub.id);
   });
   await check("unpublished funnel checkout is not available to buyers", async () => {
     await db.doc(`funnels/${funnelId}`).update({ status: "draft" });
