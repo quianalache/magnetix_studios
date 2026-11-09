@@ -150,7 +150,7 @@ export async function createStandaloneCourseServerSide(opts: {
       : billingType === "recurring"
         ? "recurring"
         : "oneTime";
-  await createCourseOfferServerSide({
+  const autoOffer = await createCourseOfferServerSide({
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
     title: course.title,
@@ -161,6 +161,11 @@ export async function createStandaloneCourseServerSide(opts: {
     recurringInterval: course.recurringInterval,
     trialDays: course.trialDays,
   });
+  // New Offers start on the new hosted checkout (owner decision 2026-11-09).
+  const { initializeHostedCheckoutForNewOffer } = await import("@/lib/server/checkout/config-service");
+  await initializeHostedCheckoutForNewOffer({ subAccountId: opts.subAccountId, agencyId: opts.agencyId, offerId: autoOffer.id }).catch((err) =>
+    console.warn("[standalone-courses] hosted checkout init failed", err)
+  );
 
   return course;
 }

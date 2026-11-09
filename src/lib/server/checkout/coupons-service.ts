@@ -86,17 +86,23 @@ export async function listCoupons(subAccountId: string): Promise<{ coupons: Coup
   return { coupons, stats };
 }
 
-async function assertOffersInWorkspace(subAccountId: string, offerIds: string[]) {
+async function assertOffersInWorkspace(subAccountId: string, offerIds: string[], repeating = false) {
   const refs = offerIds.map((id) => getAdminDb().doc(`subAccounts/${subAccountId}/courseOffers/${id}`));
   if (!refs.length) return;
   const snaps = await getAdminDb().getAll(...refs);
   if (snaps.some((s) => !s.exists)) throw new CheckoutError("Choose Offers from this workspace.", 400, { appliesTo: "One of the selected Offers isn't in this workspace." });
+  // "First N payments" is month-based in Stripe: refuse it when no selected
+  // Offer is a monthly plan (it could never apply).
+  if (repeating && !snaps.some((s) => s.data()?.type === "recurring" && (s.data()?.recurringInterval ?? "month") === "month")) {
+    const msg = "None of the selected Offers is a monthly plan. Choose \"The first payment\" or \"Every payment\".";
+    throw new CheckoutError(msg, 400, { recurringDuration: msg });
+  }
 }
 
 export async function createCoupon(input: { subAccountId: string; uid: string; body: Record<string, unknown> }): Promise<Coupon> {
   const v = validateCouponInput(input.body);
   if (!v.ok) throw new CheckoutError("Fix the highlighted fields.", 400, v.errors);
-  if (v.value.appliesTo.kind === "offers") await assertOffersInWorkspace(input.subAccountId, v.value.appliesTo.offerIds);
+  if (v.value.appliesTo.kind === "offers") await assertOffersInWorkspace(input.subAccountId, v.value.appliesTo.offerIds, v.value.recurringDuration.kind === "repeating");
   const agencyId = await agencyIdFor(input.subAccountId);
   const db = getAdminDb();
   const ref = couponsCol().doc();
@@ -146,7 +152,7 @@ export async function updateCoupon(input: { subAccountId: string; couponId: stri
   }
   if (next.maxRedemptions !== null && next.maxRedemptions < current.redemptionCount)
     throw new CheckoutError("The usage limit can't be lower than the times it's already been used.", 400, { maxRedemptions: `Already used ${current.redemptionCount} times.` });
-  if (next.appliesTo.kind === "offers") await assertOffersInWorkspace(input.subAccountId, next.appliesTo.offerIds);
+  if (next.appliesTo.kind === "offers") await assertOffersInWorkspace(input.subAccountId, next.appliesTo.offerIds, next.recurringDuration.kind === "repeating");
   const db = getAdminDb();
   const patch = { ...next, updatedAt: Date.now() };
   await db.runTransaction(async (tx) => {

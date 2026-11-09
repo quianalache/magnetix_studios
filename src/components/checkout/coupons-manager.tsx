@@ -32,7 +32,7 @@ import type { Coupon, CouponDisplayStatus } from "@/types/checkout";
 
 type Row = Coupon & { displayStatus: CouponDisplayStatus };
 type Stats = { activeCount: number; redemptionsThisMonth: number; discountThisMonthCents: Record<string, number>; revenueThisMonthCents: Record<string, number>; expiringSoonCount: number };
-type OfferOpt = { id: string; title: string; priceLabel: string; systemManaged: boolean };
+type OfferOpt = { id: string; title: string; priceLabel: string; systemManaged: boolean; type: string; recurringInterval: string | null };
 
 const STATUS_LABEL: Record<CouponDisplayStatus, string> = { active: "Active", scheduled: "Scheduled", expired: "Expired", used_up: "Used up", inactive: "Inactive", archived: "Archived" };
 const STATUS_TONE: Record<CouponDisplayStatus, "success" | "scheduled" | "neutral" | "warning"> = { active: "success", scheduled: "scheduled", expired: "neutral", used_up: "warning", inactive: "neutral", archived: "neutral" };
@@ -149,6 +149,12 @@ export function CouponsManager({ subAccountId, isAdmin }: { subAccountId: string
     setErrors({});
   }
   const used = editing !== "new" && editing !== null && editing.redemptionCount > 0;
+  // "First N payments" maps to Stripe's month-based coupons, so it's only
+  // offered when the coupon can reach a monthly plan.
+  const monthlyPossible =
+    form.appliesKind === "all"
+      ? offers.some((o) => o.type === "recurring" && o.recurringInterval === "month") || offers.length === 0
+      : form.offerIds.some((id) => offers.find((o) => o.id === id && o.type === "recurring" && o.recurringInterval === "month"));
 
   async function save() {
     setSaving(true);
@@ -342,12 +348,28 @@ export function CouponsManager({ subAccountId, isAdmin }: { subAccountId: string
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cp-dur">On subscriptions, discount</Label>
-              <OptionSelect id="cp-dur" disabled={used} value={f.duration} onChange={(v) => v && setF({ duration: v })} options={[{ value: "once", label: "The first payment" }, { value: "repeating", label: "The first few monthly payments" }, { value: "forever", label: "Every payment" }]} />
+              <OptionSelect
+                id="cp-dur"
+                disabled={used}
+                value={f.duration}
+                onChange={(v) => v && setF({ duration: v })}
+                options={[
+                  { value: "once", label: "The first payment" },
+                  ...(monthlyPossible || f.duration === "repeating" ? [{ value: "repeating" as const, label: "The first few payments (monthly plans)" }] : []),
+                  { value: "forever", label: "Every payment" },
+                ]}
+              />
               {f.duration === "repeating" && (
-                <div className="flex items-center gap-2">
-                  <Input aria-label="Number of monthly payments" className="w-24" inputMode="numeric" disabled={used} value={f.months} onChange={(e) => setF({ months: e.target.value })} />
-                  <span className="text-muted-foreground text-caption">monthly payments (monthly plans only)</span>
-                </div>
+                <>
+                  <div className="flex items-center gap-2">
+                    <Input aria-label="Number of monthly payments" className="w-24" inputMode="numeric" disabled={used} value={f.months} onChange={(e) => setF({ months: e.target.value })} />
+                    <span className="text-muted-foreground text-caption">monthly payments</span>
+                  </div>
+                  <p className="text-muted-foreground text-caption">
+                    Only works on monthly plans: buyers on weekly or yearly plans are told the code can&apos;t be used. With a free trial of 4 weeks or more, Stripe counts from signup, so buyers see &quot;about&quot; that many discounted payments.
+                  </p>
+                  {!monthlyPossible && <p className="text-destructive text-caption">None of the selected Offers is a monthly plan, so this code would never apply. Choose &quot;The first payment&quot; or &quot;Every payment&quot;.</p>}
+                </>
               )}
               {err("recurringDuration")}
             </div>

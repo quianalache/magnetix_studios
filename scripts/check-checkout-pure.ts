@@ -111,6 +111,14 @@ check("trial + coupon: discount shows on the recurring terms, bump discounted to
   assert.equal(t.recurring?.discountedPayments, 3);
 });
 
+check("long trial: multi-payment coupon wording says 'about'", () => {
+  const long = offer("longTrial", { type: "recurring", priceCents: 9700, recurringInterval: "month", trialDays: 30 });
+  const t = computeOrderTotals([lineFromOffer(long, "primary")], pct(50, { recurringDuration: { kind: "repeating", months: 3 } }));
+  assert.match(recurringTermsText(t) ?? "", /for about your first 3 payments/);
+  const short = computeOrderTotals([lineFromOffer(trial, "primary")], pct(50, { recurringDuration: { kind: "repeating", months: 3 } }));
+  assert.match(recurringTermsText(short) ?? "", /for your first 3 payments/);
+});
+
 console.log("\nCoupon input");
 check("17. percentage coupon saves", () => {
   const r = validateCouponInput({ code: " save25 ", discountType: "percent", percentOff: 25 });

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { initializeHostedCheckoutForNewOffer } from "@/lib/server/checkout/config-service";
 import { requireCourseOffersStaff } from "@/lib/course-offers/staff-guard";
 import {
   buildClientProjectTemplateBundlesServerSide,
@@ -99,5 +100,9 @@ export async function POST(
     paymentMode: body.paymentMode,
     communityAccess: validatedCommunityAccess,
   });
+  // New Offers start on the new hosted checkout (owner decision 2026-11-09).
+  await initializeHostedCheckoutForNewOffer({ subAccountId, agencyId: access.resolvedAgencyId, offerId: offer.id }).catch((err) =>
+    console.warn("[course-offers] hosted checkout init failed", err)
+  );
   return NextResponse.json({ ok: true, offer });
 }

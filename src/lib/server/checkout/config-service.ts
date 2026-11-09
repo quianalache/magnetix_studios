@@ -178,6 +178,34 @@ export async function deleteCheckoutConfig(configId: string): Promise<void> {
   await configsCol().doc(configId).delete();
 }
 
+/**
+ * Owner decision (2026-11-09): Offers created from now on start with the new
+ * hosted checkout switched ON (sensible defaults, no bumps, discount codes
+ * off) — creators can change it in Checkout Settings. Existing Offers are
+ * never touched (no doc is written for them). Never for system-managed
+ * Community pricing Offers. Idempotent: `create()` refuses an existing doc.
+ */
+export async function initializeHostedCheckoutForNewOffer(input: { subAccountId: string; agencyId: string; offerId: string }): Promise<void> {
+  const now = Date.now();
+  const config: Omit<CheckoutConfig, "id"> = {
+    ...defaultCheckoutFields(input.offerId, "hosted_offer"),
+    enabled: true,
+    agencyId: input.agencyId,
+    subAccountId: input.subAccountId,
+    context: { type: "hosted_offer", offerId: input.offerId },
+    version: 1,
+    createdAt: now,
+    updatedAt: now,
+    updatedByUid: null,
+  };
+  await configsCol()
+    .doc(hostedConfigId(input.offerId))
+    .create(config)
+    .catch((err: { code?: number }) => {
+      if (err?.code !== 6) throw err; // 6 = ALREADY_EXISTS
+    });
+}
+
 /** A funnel step's config, tenancy-checked against the step itself. */
 export async function getStepCheckoutConfig(subAccountId: string, funnelId: string, stepId: string): Promise<CheckoutConfig> {
   const config = await getCheckoutConfigDoc(`step_${assertId(stepId, "step")}`);

@@ -225,6 +225,24 @@ async function main() {
     await assert.rejects(coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-COUPON-25", percentOff: 5 } }), (e: unknown) => e instanceof CheckoutError && e.status === 409);
     await coupons.createCoupon({ subAccountId: SA2, uid: UID, body: { code: "TEST-COUPON-25", percentOff: 5 } });
   });
+  await check("multi-payment coupon refused when no selected Offer is a monthly plan", async () => {
+    await assert.rejects(
+      coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-REP-ONE", percentOff: 10, recurringDuration: { kind: "repeating", months: 3 }, appliesTo: { kind: "offers", offerIds: ["primaryOne"] } } }),
+      (e: unknown) => e instanceof CheckoutError && !!e.fields?.recurringDuration,
+    );
+    await coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-REP-MO", percentOff: 10, recurringDuration: { kind: "repeating", months: 3 }, appliesTo: { kind: "offers", offerIds: ["primaryRec"] } } });
+  });
+  await check("new Offers start on the new hosted checkout; existing Offers stay classic", async () => {
+    await configs.initializeHostedCheckoutForNewOffer({ subAccountId: SA, agencyId: AG, offerId: "bumpB" });
+    const fresh = await configs.getHostedCheckoutConfig(SA, "bumpB");
+    assert.equal(fresh.saved, true);
+    assert.equal(fresh.config.enabled, true);
+    assert.deepEqual(fresh.config.bumps, []);
+    await configs.initializeHostedCheckoutForNewOffer({ subAccountId: SA, agencyId: AG, offerId: "bumpB" }); // idempotent
+    const untouched = await configs.getHostedCheckoutConfig(SA, "bumpA");
+    assert.equal(untouched.saved, false);
+    assert.equal(untouched.config.enabled, false);
+  });
   await coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-FREE-100", percentOff: 100 } });
   await coupons.createCoupon({ subAccountId: SA, uid: UID, body: { code: "TEST-ONCE-PP", percentOff: 10, maxPerCustomer: 1 } });
 

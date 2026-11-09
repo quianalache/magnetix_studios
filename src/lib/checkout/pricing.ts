@@ -136,6 +136,9 @@ export function formatMoney(cents: number, currency: string): string {
   }
 }
 
+/** Trials this long make "first N payments" coupons approximate (see stripeDurationFor). */
+export const LONG_TRIAL_DAYS = 28;
+
 const INTERVAL_WORD: Record<string, string> = { day: "day", week: "week", month: "month", year: "year" };
 
 /** "then $97.00/month after your 7-day trial" style terms for the buyer. */
@@ -149,5 +152,8 @@ export function recurringTermsText(totals: OrderTotals): string | null {
   const disc = `${formatMoney(r.discountedAmountCents, totals.currency)}/${word}`;
   if (r.discountedPayments === -1) return `${lead}${disc} with your discount`;
   if (r.discountedPayments === 1) return `${lead}${disc} for your first payment, then ${full}`;
+  // Stripe counts a multi-payment discount from signup, so a trial of four
+  // weeks or more makes the number of discounted payments approximate.
+  if (r.trialDays >= LONG_TRIAL_DAYS) return `${lead}${disc} for about your first ${r.discountedPayments} payments, then ${full}`;
   return `${lead}${disc} for your first ${r.discountedPayments} payments, then ${full}`;
 }
