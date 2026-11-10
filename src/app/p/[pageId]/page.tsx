@@ -10,6 +10,8 @@ import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { resolveFormsForSubAccount } from "@/lib/server/page-form-resolver";
 import { resolveBookingsForSubAccount } from "@/lib/server/page-booking-resolver";
 import { collectBookingSlugs } from "@/lib/pages-funnels/booking-block";
+import { collectCheckoutKeys } from "@/lib/pages-funnels/checkout-block";
+import { resolveCheckoutBlocks } from "@/lib/server/page-checkout-resolver";
 import { normalizePopupMap } from "@/types/pages-funnels-popup";
 import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 import { collectPuckEmbedIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
@@ -134,10 +136,13 @@ export default async function PublicPagePreview({
   const resolvedOffers = page.subAccountId ? await resolveFeaturedOffers(page.subAccountId, collectPuckOfferSummaryIds(collectable)) : {};
   // Booking blocks: published Booking Pages in this page's own workspace only.
   const resolvedBookings = await resolveBookingsForSubAccount(page.subAccountId, collectBookingSlugs(publishedData));
+  // Checkout / Order Form blocks (Checkout Phase 3): this page's own workspace's
+  // Funnel Checkout Steps only, the PUBLIC view (unpublished → not shown).
+  const resolvedCheckouts = await resolveCheckoutBlocks({ id: page.id, subAccountId: page.subAccountId }, collectCheckoutKeys(publishedData), "published");
   const qaPopupId = typeof query.qa_popup === "string" && page.name.startsWith("QA ·") ? query.qa_popup : null;
   // Media Library videos (Wave 3): fresh short-lived playback per visit, own workspace only.
   const resolvedVideos = await resolveMediaVideosForPage(page, collectable);
-  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, resolvedBookings, resolvedVideos, brandColors, brandKit, pageId: page.id, publishedPopups };
+  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, resolvedBookings, resolvedCheckouts, resolvedVideos, brandColors, brandKit, pageId: page.id, publishedPopups };
   // The host holds ONLY this page's PUBLISHED Popups: an Open Popup action can
   // never reach a draft-only Popup or another page's Popup (Slice 5).
   // The tenant's own tracking, from the PUBLISHED settings only.

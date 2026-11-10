@@ -150,6 +150,11 @@ export interface PuckPageMetadata {
    *  workspace by slug — by the published route (published Booking Pages
    *  only) or Preview (via resolve-booking). Undefined in the builder. */
   resolvedBookings?: Record<string, import("@/lib/booking/public-payload").BookingBlockPayload | null>;
+  /**
+   * Checkout / Order Form blocks (Checkout Phase 3), keyed by connected
+   * config id or "auto". Resolved server-side from the page's OWN workspace.
+   */
+  resolvedCheckouts?: Record<string, import("@/lib/pages-funnels/checkout-block").CheckoutBlockPayload | null>;
   /** Media Library videos on this page → short-lived playback URL (Wave 3). */
   resolvedVideos?: Record<string, string | null>;
   /** Offer Summary bindings resolved from this page's active sub-account. */

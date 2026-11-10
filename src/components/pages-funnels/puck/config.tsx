@@ -129,6 +129,8 @@ import {
   BookingLayoutFieldEditor,
   BookingSourceFieldEditor,
 } from "@/components/pages-funnels/puck/booking-fields";
+import { CheckoutConnectionFieldEditor, CheckoutPresentationFieldEditor } from "@/components/pages-funnels/puck/checkout-fields";
+import { DEFAULT_CHECKOUT_PRESENTATION, type CheckoutPresentation } from "@/lib/checkout/presentation";
 import {
   DEFAULT_BOOKING_BUTTON,
   DEFAULT_BOOKING_DISPLAY,
@@ -179,6 +181,16 @@ export interface BookingComponentProps {
   displayMode: BookingDisplayMode;
   display: BookingDisplay;
   button: BookingButton;
+  style?: StyleConfig;
+  metadata?: PuckPageMetadata;
+}
+
+/** Checkout / Order Form block (Checkout Phase 3) — presentation over a connected Checkout Step. */
+export interface CheckoutComponentProps {
+  id: string;
+  checkoutConfigId: string;
+  presentation: CheckoutPresentation;
+  background?: BackgroundConfig;
   style?: StyleConfig;
   metadata?: PuckPageMetadata;
 }
@@ -681,6 +693,33 @@ const bookingButtonField: CustomField<BookingButton> = {
 const bookingStyleField = makeStyleField({ spacing: true, responsive: true, visibility: true });
 
 /**
+ * Checkout / Order Form (Checkout Phase 3) — connects to a Funnel Checkout
+ * Step and controls PRESENTATION only (checkout-fields.tsx). Commerce
+ * (Offer, price, Order Bumps, coupons, fulfilment) stays in Checkout Settings.
+ */
+const checkoutConnectionField: CustomField<string> = {
+  type: "custom",
+  label: "Checkout connection",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Checkout connection">
+      <CheckoutConnectionFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+const checkoutPresentationField: CustomField<CheckoutPresentation> = {
+  type: "custom",
+  label: "Presentation",
+  render: ({ value, onChange }) => (
+    <NavigationFieldGroup title="Presentation">
+      <CheckoutPresentationFieldEditor value={value} onChange={onChange} />
+    </NavigationFieldGroup>
+  ),
+};
+// Shared style primitives: spacing, border, radius, shadow, body typography,
+// per-device overrides and visibility — no parallel style system.
+const checkoutStyleField = makeStyleField({ typography: true, spacing: true, border: true, radius: true, boxShadow: true, responsive: true, visibility: true });
+
+/**
  * Pricing / Comparison (Wave 2C). Native Puck array fields (add, reorder,
  * duplicate, delete come built in); every visible text is a `contentEditable`
  * field, so it can be typed on the canvas and the settings rail edits the SAME
@@ -846,7 +885,8 @@ export function createPuckConfig(
   FormComponent: React.ComponentType<FormComponentProps>,
   ReadingToolComponent: React.ComponentType<ReadingToolComponentProps>,
   CustomHtmlComponent: React.ComponentType<CustomHtmlComponentProps>,
-  BookingComponent: React.ComponentType<BookingComponentProps>
+  BookingComponent: React.ComponentType<BookingComponentProps>,
+  CheckoutComponent: React.ComponentType<CheckoutComponentProps>
 ): Config {
   return {
     // Puck's default `title` root field was never read by anything (page
@@ -903,6 +943,7 @@ export function createPuckConfig(
         components: [
           "Form",
           "Booking",
+          "CheckoutBlock",
           "PricingComparison",
           "ReadingTool",
           "Testimonial",
@@ -1194,6 +1235,7 @@ export function createPuckConfig(
               "Accordion",
               "Form",
               "Booking",
+              "CheckoutBlock",
               "PricingComparison",
               "ReadingTool",
               "CustomHtml",
@@ -2358,6 +2400,33 @@ export function createPuckConfig(
             displayMode={displayMode}
             display={display}
             button={button}
+            style={style}
+            metadata={puck.metadata as PuckPageMetadata}
+          />
+        ),
+      },
+
+      // Checkout / Order Form (Checkout Foundation Phase 3).
+      CheckoutBlock: {
+        label: "Checkout / Order Form",
+        fields: {
+          checkoutConfigId: checkoutConnectionField,
+          presentation: checkoutPresentationField,
+          background: backgroundField,
+          style: checkoutStyleField,
+        },
+        defaultProps: {
+          checkoutConfigId: "",
+          presentation: DEFAULT_CHECKOUT_PRESENTATION,
+          background: DEFAULT_BACKGROUND,
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, checkoutConfigId, presentation, background, style, puck }) => (
+          <CheckoutComponent
+            id={id}
+            checkoutConfigId={checkoutConfigId}
+            presentation={presentation}
+            background={background}
             style={style}
             metadata={puck.metadata as PuckPageMetadata}
           />

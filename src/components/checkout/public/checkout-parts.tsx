@@ -46,8 +46,8 @@ export function CheckoutHeader({ brand }: { brand: CheckoutView["brand"] }) {
 
 /* ------------------------------ Progress steps ---------------------------- */
 
-export function ProgressSteps({ step }: { step: 1 | 2 }) {
-  const steps = ["Your information", "Payment & review"];
+export function ProgressSteps({ step, labels }: { step: 1 | 2; labels?: [string, string] }) {
+  const steps = labels ?? ["Your information", "Payment & review"];
   return (
     <ol className="flex items-center gap-3" aria-label="Checkout progress">
       {steps.map((label, i) => {
@@ -73,24 +73,42 @@ export function ProgressSteps({ step }: { step: 1 | 2 }) {
 
 /* ------------------------------ Offer intro ------------------------------- */
 
-export function OfferIntro({ view, totals, compact }: { view: CheckoutView; totals: OrderTotals; compact?: boolean }) {
+/**
+ * The Offer being bought. Title and price/trial line always show (they're
+ * the buyer's disclosure); image, description and benefits are optional.
+ */
+export function OfferIntro({
+  view,
+  totals,
+  compact,
+  showImage = true,
+  showDescription = true,
+  showBenefits = true,
+}: {
+  view: CheckoutView;
+  totals: OrderTotals;
+  compact?: boolean;
+  showImage?: boolean;
+  showDescription?: boolean;
+  showBenefits?: boolean;
+}) {
   const p = view.primary;
   return (
     <section className="tenant-card flex flex-col gap-4 rounded-2xl p-5 sm:flex-row" aria-label="What you're getting">
-      {p.thumbnailUrl && (
+      {showImage && p.thumbnailUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={p.thumbnailUrl} alt="" className={cn("shrink-0 rounded-xl object-cover", compact ? "size-20" : "h-32 w-full sm:h-28 sm:w-40")} />
       )}
       <div className="min-w-0 flex-1">
         <h2 className={cn("tenant-display", compact ? "text-title-md" : "text-title-lg")}>{p.title}</h2>
-        {p.description && <p className="text-muted-foreground mt-1 text-body-sm">{p.description}</p>}
+        {showDescription && p.description && <p className="text-muted-foreground mt-1 text-body-sm">{p.description}</p>}
         <p className="mt-2 font-semibold text-body-sm">
           {p.priceLabel}
           {totals.recurring && totals.recurring.trialDays > 0 && view.display.showTrialTiming ? (
             <span className="tenant-text ms-2 font-medium">· {totals.recurring.trialDays}-day free trial</span>
           ) : null}
         </p>
-        {view.display.showEntitlements && p.entitlements.length > 0 && (
+        {showBenefits && view.display.showEntitlements && p.entitlements.length > 0 && (
           <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-body-sm">
             {p.entitlements.map((e) => (
               <li key={e} className="flex items-center gap-1.5">
@@ -124,13 +142,27 @@ function Field({ id, label, required, error, wide, children }: { id: string; lab
   );
 }
 
-export function BuyerFields({ view, buyer, setBuyer, errors }: { view: CheckoutView; buyer: Buyer; setBuyer: (b: Buyer) => void; errors: Record<string, string> }) {
+export function BuyerFields({
+  view,
+  buyer,
+  setBuyer,
+  errors,
+  onEmailBlur,
+}: {
+  view: CheckoutView;
+  buyer: Buyer;
+  setBuyer: (b: Buyer) => void;
+  errors: Record<string, string>;
+  /** One-step checkout start: fired when the buyer leaves the email field. */
+  onEmailBlur?: () => void;
+}) {
   const input = (id: string, key: keyof Buyer, auto: string, type = "text") => (
     <Input
       id={id}
       type={type}
       autoComplete={auto}
       value={buyer[key]}
+      onBlur={key === "email" ? onEmailBlur : undefined}
       onChange={(e) => setBuyer({ ...buyer, [key]: e.target.value })}
       aria-invalid={!!errors[key]}
       aria-describedby={errors[key] ? `${id}-error` : undefined}
@@ -169,6 +201,9 @@ export function OrderBumpCard({
   couponExcludesBumps,
   currency,
   disabled,
+  variant = "card",
+  showImage = true,
+  showDescription = true,
 }: {
   bump: CheckoutViewBump;
   selected: boolean;
@@ -178,19 +213,24 @@ export function OrderBumpCard({
   couponExcludesBumps: boolean;
   currency: string;
   disabled?: boolean;
+  /** Page Builder appearance: dashed card (default), solid outline, or highlighted. */
+  variant?: "card" | "outlined" | "highlight";
+  showImage?: boolean;
+  showDescription?: boolean;
 }) {
   const id = `bump-${bump.bumpId}`;
   return (
     <div
       className={cn(
         "tenant-choice flex gap-3 rounded-2xl border-2 p-4 transition-colors",
-        selected ? "tenant-choice-picked" : "border-dashed",
+        selected ? "tenant-choice-picked" : variant === "card" ? "border-dashed" : variant === "highlight" ? "tenant-soft" : "",
         disabled && "opacity-60",
       )}
       data-bump-state={selected ? "selected" : "available"}
+      data-bump-style={variant}
     >
       <Checkbox id={id} checked={selected} onCheckedChange={onToggle} disabled={disabled} className="mt-1 size-5" aria-describedby={`${id}-desc`} />
-      {bump.imageUrl && (
+      {showImage && bump.imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={bump.imageUrl} alt="" className="size-16 shrink-0 rounded-lg object-cover" />
       )}
@@ -204,7 +244,7 @@ export function OrderBumpCard({
         <label htmlFor={id} className="mt-1 block cursor-pointer font-semibold text-body">
           {bump.checkboxLabel}: {bump.headline}
         </label>
-        {bump.description && (
+        {showDescription && bump.description && (
           <p id={`${id}-desc`} className="mt-0.5 text-body-sm opacity-80">
             {bump.description}
           </p>
@@ -293,6 +333,9 @@ export function OrderSummary({
   children,
   showSchedule = true,
   title = "Order summary",
+  concise = false,
+  showSecure = true,
+  thumbnails = { primary: true, bumps: true },
 }: {
   view: CheckoutView;
   totals: OrderTotals;
@@ -301,18 +344,35 @@ export function OrderSummary({
   children?: React.ReactNode;
   showSchedule?: boolean;
   title?: string;
+  /**
+   * Minimal presentation: no thumbnails, tighter spacing — but EVERY line
+   * with its price, any discount, the amount due today and the recurring /
+   * trial schedule stay. Those are required disclosures.
+   */
+  concise?: boolean;
+  showSecure?: boolean;
+  /** Follows the block's Offer-image / bump-image settings. */
+  thumbnails?: { primary: boolean; bumps: boolean };
 }) {
   const cur = totals.currency;
   const schedule = chargeSchedule(totals);
   const rows = summaryRows(totals);
   return (
-    <section className="tenant-card flex flex-col gap-4 rounded-2xl p-5" aria-labelledby="co-summary-title">
-      <h2 id="co-summary-title" className="font-semibold text-title-md">{title}</h2>
+    <section className={cn("tenant-card flex flex-col rounded-2xl", concise ? "gap-3 p-4" : "gap-4 p-5")} aria-labelledby="co-summary-title" data-summary-style={concise ? "concise" : "full"}>
+      <h2 id="co-summary-title" className={cn("font-semibold", concise ? "text-body" : "text-title-md")}>{concise && title === "Order summary" ? "Your order" : title}</h2>
       <ul className="flex flex-col divide-y">
         {totals.lines.map((l) => {
-          const thumb = l.role === "primary" ? view.primary.thumbnailUrl : view.bumps.find((b) => b.bumpId === l.bumpId)?.imageUrl ?? null;
+          const thumb = concise
+            ? null
+            : l.role === "primary"
+              ? thumbnails.primary
+                ? view.primary.thumbnailUrl
+                : null
+              : thumbnails.bumps
+                ? (view.bumps.find((b) => b.bumpId === l.bumpId)?.imageUrl ?? null)
+                : null;
           return (
-            <li key={`${l.offerId}-${l.bumpId ?? "p"}`} className="flex gap-3 py-3 first:pt-0">
+            <li key={`${l.offerId}-${l.bumpId ?? "p"}`} className={cn("flex gap-3 first:pt-0", concise ? "py-2" : "py-3")}>
               {thumb && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={thumb} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
@@ -366,7 +426,7 @@ export function OrderSummary({
           </ul>
         </div>
       )}
-      {view.display.showSecureBadge && (
+      {showSecure && view.display.showSecureBadge && (
         <p className="text-muted-foreground flex items-center gap-2 border-t pt-3 text-caption">
           <Lock className="size-4 shrink-0" aria-hidden /> Secure, encrypted payment processed by Stripe.
         </p>
@@ -431,6 +491,24 @@ export function AgreementCheckbox({ view, checked, onChange, error }: { view: Ch
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+/* ---------------------------- Marketing opt-in ---------------------------- */
+
+/**
+ * Optional marketing consent (Phase 3). Always starts UNCHECKED, sits apart
+ * from the purchase agreement, and only a tick is recorded as consent —
+ * buying alone never is. The label is the seller's exact disclosure text.
+ */
+export function MarketingOptIn({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-start gap-2 text-body-sm" data-checkout-optin="">
+      <Checkbox id="co-marketing" checked={checked} onCheckedChange={(v) => onChange(v === true)} className="mt-0.5" />
+      <label htmlFor="co-marketing" className="text-muted-foreground">
+        {label}
+      </label>
     </div>
   );
 }

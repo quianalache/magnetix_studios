@@ -43,6 +43,11 @@ export interface MergeTagSubject {
   bookingLink: string;
   /** Pre-built fully-qualified unsubscribe URL. Empty string for SMS templates. */
   unsubscribeLink: string;
+  /**
+   * Checkout events only (Phase 3) — the secure link back to the buyer's
+   * checkout and the Offer name. Empty everywhere else.
+   */
+  checkout?: { resumeLink: string; offerName: string };
 }
 
 const TAG_RE = /\{\{\s*([a-zA-Z0-9_.:-]+)\s*\}\}/g;
@@ -85,6 +90,10 @@ export function resolveMergeTags(
         return subject.bookingLink ?? "";
       case "unsubscribeLink":
         return subject.unsubscribeLink ?? "";
+      case "checkout.resumeLink":
+        return subject.checkout?.resumeLink ?? "";
+      case "checkout.offerName":
+        return subject.checkout?.offerName ?? "";
       default:
         // Unknown / deferred tags (e.g. per-type slugged booking links like
         // bookingLink:30min). Surface as empty rather than leak the raw
@@ -108,6 +117,8 @@ export const SUPPORTED_TAGS_EMAIL: ReadonlyArray<{ tag: string; description: str
   { tag: "workspace.name", description: "Sub-account name" },
   { tag: "bookingLink", description: "Booking page URL (set under Booking → Default booking link)" },
   { tag: "unsubscribeLink", description: "Per-contact unsubscribe URL (required in email)" },
+  { tag: "checkout.resumeLink", description: "Checkout workflows only: secure link back to the buyer's checkout" },
+  { tag: "checkout.offerName", description: "Checkout workflows only: the Offer being bought" },
 ];
 
 export const SUPPORTED_TAGS_SMS: ReadonlyArray<{ tag: string; description: string }> = [
@@ -116,6 +127,7 @@ export const SUPPORTED_TAGS_SMS: ReadonlyArray<{ tag: string; description: strin
   { tag: "owner.firstName", description: "Agency owner's first name" },
   { tag: "workspace.name", description: "Sub-account name" },
   { tag: "bookingLink", description: "Booking page URL (set under Booking → Default booking link)" },
+  { tag: "checkout.resumeLink", description: "Checkout workflows only: secure link back to the buyer's checkout" },
 ];
 
 /**

@@ -6,7 +6,10 @@ import { createApiDispatcher } from "@/lib/server/api-dispatch";
 import * as h0 from "@/app/api/order-checkout/_routes/[configId]/buyer/route";
 import * as h1 from "@/app/api/order-checkout/_routes/[configId]/orders/[orderId]/route";
 import * as h2 from "@/app/api/order-checkout/_routes/[configId]/quote/route";
-import * as h3 from "@/app/api/order-checkout/_routes/[configId]/start/route";
+import * as h3 from "@/app/api/order-checkout/_routes/[configId]/resume/route";
+import * as h4 from "@/app/api/order-checkout/_routes/[configId]/session/route";
+import * as h5 from "@/app/api/order-checkout/_routes/[configId]/start/route";
+import * as h6 from "@/app/api/order-checkout/_routes/abandonment/step/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +18,10 @@ const d = createApiDispatcher([
   ["[configId]/buyer", h0],
   ["[configId]/orders/[orderId]", h1],
   ["[configId]/quote", h2],
-  ["[configId]/start", h3],
+  ["[configId]/resume", h3],
+  ["[configId]/session", h4],
+  ["[configId]/start", h5],
+  ["abandonment/step", h6],
 ]);
 
 export const GET = d.GET;

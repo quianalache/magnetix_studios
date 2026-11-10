@@ -1,4 +1,5 @@
 import { BookingElementServerRender } from "@/components/pages-funnels/puck/booking-server";
+import { CheckoutElementServerRender } from "@/components/pages-funnels/puck/checkout-server";
 import { createPuckConfig } from "@/components/pages-funnels/puck/config";
 import { FormElementServerRender } from "@/components/pages-funnels/puck/form-server";
 import { ReadingToolElementServerRender } from "@/components/pages-funnels/puck/reading-tool-server";
@@ -15,4 +16,4 @@ import { CustomHtmlElementServerRender } from "@/components/pages-funnels/puck/c
  * proved a hook-free config can serve both a client editor and a server
  * `<Render>` pass.
  */
-export const serverPuckConfig = createPuckConfig(FormElementServerRender, ReadingToolElementServerRender, CustomHtmlElementServerRender, BookingElementServerRender);
+export const serverPuckConfig = createPuckConfig(FormElementServerRender, ReadingToolElementServerRender, CustomHtmlElementServerRender, BookingElementServerRender, CheckoutElementServerRender);

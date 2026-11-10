@@ -30,6 +30,7 @@ import type { Member } from "@/types/community";
 import { CheckoutError, assertId } from "./common";
 import { getCheckoutConfigDoc, getHostedCheckoutConfig } from "./config-service";
 import { customerRedemptionCount, findCouponByCode, recordCouponRedemption } from "./coupons-service";
+import { completeCheckoutCrm, linkOrderToSession, upsertCheckoutSession, type SessionResult } from "./crm-service";
 
 /**
  * The shared checkout engine (Checkout Foundation Phase 1). Serves the
@@ -383,11 +384,71 @@ function cleanBuyer(body: Record<string, unknown>, config: CheckoutConfig) {
   return { errors, buyer: { name, email, phone }, agreementAccepted };
 }
 
-/** Step 1 of a two-step checkout: validate buyer details without writing anything. */
-export async function validateBuyerStep(configId: string, body: Record<string, unknown>): Promise<void> {
+/** What the browser may tell us about an in-progress checkout (never prices). */
+function sessionHints(body: Record<string, unknown>, resolved: ResolvedCheckout) {
+  const attribution = normalizeAttribution(body.attribution as never);
+  const allowed = new Set(resolved.bumps.map((b) => b.bump.id));
+  const bumpIds = Array.isArray(body.bumpIds) ? body.bumpIds.filter((x): x is string => typeof x === "string" && allowed.has(x)) : [];
+  const couponCode = typeof body.couponCode === "string" && body.couponCode.trim() ? body.couponCode.trim().slice(0, 40) : null;
+  return {
+    attribution,
+    bumpIds,
+    couponCode,
+    marketingOptIn: body.marketingOptIn === true && resolved.config.crm.marketingOptIn.enabled,
+    sourceUrl: attribution?.landingPage ?? null,
+  };
+}
+
+/** Best-effort CRM start — a CRM hiccup never blocks the buyer. */
+async function startSession(resolved: ResolvedCheckout, buyer: { name: string; email: string; phone: string }, body: Record<string, unknown>): Promise<SessionResult> {
+  const hints = sessionHints(body, resolved);
+  try {
+    return await upsertCheckoutSession({
+      config: resolved.config,
+      offerId: resolved.primary.id,
+      email: buyer.email,
+      name: buyer.name,
+      phone: buyer.phone,
+      sessionId: body.sessionId,
+      marketingOptIn: hints.marketingOptIn,
+      bumpIds: hints.bumpIds,
+      couponCode: hints.couponCode,
+      sourceUrl: hints.sourceUrl,
+      attribution: hints.attribution,
+    });
+  } catch (err) {
+    console.error("[checkout] session start failed", err);
+    return { sessionId: null, contactId: null };
+  }
+}
+
+/**
+ * Step 1 of a two-step checkout: validate buyer details, then — the
+ * deliberate checkout start — create/reuse the checkout session + Contact
+ * (when the checkout's CRM settings capture contacts).
+ */
+export async function startBuyerStep(configId: string, body: Record<string, unknown>): Promise<{ sessionId: string | null }> {
   const resolved = await resolveCheckout(configId);
-  const { errors } = cleanBuyer({ ...body, agreementAccepted: true }, resolved.config);
+  const { errors, buyer } = cleanBuyer({ ...body, agreementAccepted: true }, resolved.config);
   if (Object.keys(errors).length) throw new CheckoutError("Check your details.", 400, errors);
+  const { sessionId } = await startSession(resolved, buyer, body);
+  return { sessionId };
+}
+
+/**
+ * One-step checkout start: called once the buyer has entered a VALID email
+ * (on leaving the field, debounced) — not per keystroke. Only the email is
+ * required here; name and phone are recorded when present.
+ */
+export async function startOneStepSession(configId: string, body: Record<string, unknown>): Promise<{ sessionId: string | null }> {
+  const resolved = await resolveCheckout(configId);
+  const s = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+  const email = s(body.email, 254).toLowerCase();
+  if (!EMAIL_RE.test(email)) throw new CheckoutError("Enter a valid email address.", 400, { email: "Enter a valid email address." });
+  const name = resolved.config.nameFormat === "first_last" ? `${s(body.firstName, 60)} ${s(body.lastName, 60)}`.trim() : s(body.name, 120);
+  const phone = resolved.config.phone === "hidden" ? "" : s(body.phone, 40);
+  const { sessionId } = await startSession(resolved, { name, email, phone: /^[+()\d\s.-]{6,40}$/.test(phone) ? phone : "" }, body);
+  return { sessionId };
 }
 
 export async function startCheckout(configId: string, body: Record<string, unknown>): Promise<StartResult> {
@@ -412,6 +473,8 @@ export async function startCheckout(configId: string, body: Record<string, unkno
   const priced = await priceWithCoupon(resolved, lines, body.couponCode, member.id);
   if (priced.rejection) throw new CheckoutError(priced.rejection, 400, { couponCode: priced.rejection }, "coupon");
   const totals = priced.totals;
+  // Paying is always a deliberate start too (covers buyers who never left the email field).
+  const session = await startSession(resolved, buyer, body);
 
   const orderRef = ordersCol().doc();
   const now = Date.now();
@@ -441,6 +504,9 @@ export async function startCheckout(configId: string, body: Record<string, unkno
     context: config.context,
     memberId: member.id,
     matchedExistingMember: matchedExisting,
+    sessionId: session.sessionId,
+    marketingOptIn: body.marketingOptIn === true && config.crm.marketingOptIn.enabled,
+    crmCompletedAt: null,
     buyer,
     agreementAccepted,
     currency: totals.currency,
@@ -464,6 +530,7 @@ export async function startCheckout(configId: string, body: Record<string, unkno
   // Nothing to pay at all (free primary, or a 100% coupon on a one-time order).
   if (!target) {
     await orderRef.set(order);
+    await linkOrderToSession(session.sessionId, order.id);
     const offers = new Map([[primary.id, primary], ...resolved.bumps.map((b) => [b.offer.id, b.offer] as const)]);
     await writePurchases(order, offers, attribution);
     const done = await completeOrder(order.id, { source: "free" });
@@ -472,6 +539,7 @@ export async function startCheckout(configId: string, body: Record<string, unkno
 
   order.stripeCustomerId = await stripeCustomerFor(target, member, buyer);
   await orderRef.set(order);
+  await linkOrderToSession(session.sessionId, order.id);
   const offers = new Map([[primary.id, primary], ...resolved.bumps.map((b) => [b.offer.id, b.offer] as const)]);
   const metadata = { kind: CHECKOUT_ORDER_KIND, orderId: order.id, subAccountId: config.subAccountId, memberId: member.id, offerId: primary.id };
 
@@ -749,6 +817,9 @@ export async function completeOrder(orderId: string, opts: { source: "client" | 
     }).catch((err) => console.error("[checkout] coupon redemption record failed", err));
   }
   await ref.update({ items, fulfillmentLockUntil: 0, updatedAt: Date.now() });
+  // CRM follow-up (tags, session completed, abandoned follow-up stopped,
+  // checkout.completed) — once per order, never blocking the buyer.
+  await completeCheckoutCrm({ ...order, items }).catch((err) => console.error("[checkout] CRM completion failed", err));
   return { status: "paid", redirectTo: await destinationFor({ ...order, items }) };
 }
 
@@ -776,7 +847,9 @@ async function destinationFor(order: CheckoutOrder): Promise<string> {
       .sort((a, b) => a.order - b.order);
     const here = steps.findIndex((s) => s.id === (order.context as { stepId: string }).stepId);
     const target = d.type === "funnel_step" ? steps.find((s) => s.id === d.stepId) : steps[here + 1];
-    if (target?.type === "checkout" && target.checkoutConfigId) return `/checkout/${target.checkoutConfigId}`;
+    // A checkout step with its own Page (Page Builder Checkout block) opens that Page.
+  if (target?.type === "checkout" && target.pageId) return `/p/${target.pageId}`;
+  if (target?.type === "checkout" && target.checkoutConfigId) return `/checkout/${target.checkoutConfigId}`;
     if (target?.pageId) return `/p/${target.pageId}`;
   }
   return space();

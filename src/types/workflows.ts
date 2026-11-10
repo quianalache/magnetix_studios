@@ -44,6 +44,10 @@ export type WorkflowTriggerType =
   | "offer.purchase.paid"
   | "offer.access.granted"
   | "offer.access.revoked"
+  /** Checkout Foundation Phase 3 — buyer started / abandoned / completed a checkout. */
+  | "checkout.started"
+  | "checkout.abandoned"
+  | "checkout.completed"
   | "community.member.joined"
   | "community.member.approved"
   | "contact.field.changed"

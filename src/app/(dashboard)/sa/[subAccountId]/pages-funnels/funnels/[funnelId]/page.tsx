@@ -125,12 +125,26 @@ export default function FunnelDetailPage() {
               <span className="bg-accent text-accent-foreground flex size-8 shrink-0 items-center justify-center rounded-full font-semibold text-body-sm tabular-nums">{i + 1}</span>
               <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
                 <p className="font-semibold text-body">{s.name}</p>
-                <p className="text-muted-foreground text-caption">{TYPE_LABEL[s.type]}{s.type === "checkout" ? " · sells one Offer with optional Order Bumps" : s.pageId ? ` · ${pages.find((p) => p.id === s.pageId)?.name ?? "Page"}` : " · no page chosen"}</p>
+                <p className="text-muted-foreground text-caption">{TYPE_LABEL[s.type]}{s.type === "checkout" ? (s.pageId ? ` · on page ${pages.find((p) => p.id === s.pageId)?.name ?? "Page"}` : " · sells one Offer with optional Order Bumps") : s.pageId ? ` · ${pages.find((p) => p.id === s.pageId)?.name ?? "Page"}` : " · no page chosen"}</p>
               </div>
               {s.type === "checkout" ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {isAdmin && (
+                    // Optional (Checkout Phase 3): a Page Builder page holding this step's
+                    // Checkout / Order Form block. Without one, the hosted checkout page is used.
+                    <div className="w-full sm:w-56">
+                      <OptionSelect
+                        aria-label={`Checkout page for ${s.name}`}
+                        size="sm"
+                        value={s.pageId}
+                        noneLabel="Hosted checkout page"
+                        onChange={(v) => run(() => commerceFetch(subAccountId, `funnels/${funnelId}/steps/${s.id}`, { method: "PATCH", body: { pageId: v } }))}
+                        options={pages.map((p) => ({ value: p.id, label: `${p.name}${p.status !== "published" ? " (draft)" : ""}` }))}
+                      />
+                    </div>
+                  )}
                   {published && s.checkoutConfigId && (
-                    <Button variant="ghost" size="sm" render={<a href={`/checkout/${s.checkoutConfigId}`} target="_blank" rel="noopener noreferrer" />}>
+                    <Button variant="ghost" size="sm" render={<a href={s.pageId ? `/p/${s.pageId}` : `/checkout/${s.checkoutConfigId}`} target="_blank" rel="noopener noreferrer" />}>
                       <ExternalLink className="size-4" aria-hidden /> Open
                     </Button>
                   )}

@@ -37,6 +37,8 @@ import { OptionSelect } from "@/components/system/option-select";
 import { StatusPill } from "@/components/system/status-pill";
 import { useConfirm } from "@/components/system/confirm-dialog";
 import { CheckoutRenderer } from "@/components/checkout/checkout-renderer";
+import { CheckoutCrmSection, type WorkflowOptionDTO } from "@/components/checkout/checkout-crm-section";
+import { normalizeCrm } from "@/lib/checkout/crm";
 import { computeOrderTotals, lineFromOffer } from "@/lib/checkout/pricing";
 import { MAX_ORDER_BUMPS } from "@/lib/checkout/config";
 import { cn } from "@/lib/utils";
@@ -75,6 +77,7 @@ export interface EditorPayload {
   steps?: FunnelStep[];
   pages?: Array<{ id: string; name: string; status: string }>;
   saved?: boolean;
+  workflows?: WorkflowOptionDTO[];
   offer?: { id: string; title: string; slug: string | null; visibility: string; systemManaged: boolean; classicCollectAddress: boolean };
 }
 
@@ -87,6 +90,7 @@ const TABS = [
   { key: "checkout", label: "Checkout", icon: ShoppingCart },
   { key: "bumps", label: "Order Bumps", icon: Layers },
   { key: "coupons", label: "Coupons", icon: TagIcon },
+  { key: "crm", label: "CRM & Follow-Up", icon: UsersRound },
   { key: "advanced", label: "Advanced", icon: ListChecks },
 ] as const;
 
@@ -105,6 +109,7 @@ function draftFrom(p: EditorPayload): Draft {
     display: c.display,
     postPurchase: c.postPurchase,
     internalNotes: c.internalNotes,
+    crm: normalizeCrm(c.crm),
     classicCollectAddress: p.offer?.classicCollectAddress ?? false,
   };
 }
@@ -545,6 +550,13 @@ export function CheckoutSettingsEditor({
         </div>
       </div>
 
+      {/* --------------------------- CRM & Follow-Up --------------------------- */}
+      <Panel id="crm" icon={UsersRound} title="CRM & Follow-Up" description="What happens in your CRM when someone starts, abandons or completes this checkout. Pricing and access aren't affected.">
+        <div className="max-w-3xl">
+          <CheckoutCrmSection value={draft.crm} onChange={(crm) => set("crm", crm)} workflows={payload.workflows ?? []} subAccountId={subAccountId} errors={fieldErrors} />
+        </div>
+      </Panel>
+
       {/* ------------------------------ Advanced ------------------------------ */}
       <Panel id="advanced" icon={ListChecks} title="Advanced" description="Notes and behaviour for your team.">
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -553,8 +565,8 @@ export function CheckoutSettingsEditor({
             <p className="text-muted-foreground text-caption">Order Bumps are charged today. A trial Offer&apos;s first charge happens when its trial ends. Buyers see both amounts before paying.</p>
           </div>
           <div className="flex flex-col gap-2">
-            <p className="flex items-center gap-2 font-semibold text-body-sm">Abandoned checkout <StatusPill tone="neutral">Not available yet</StatusPill></p>
-            <p className="text-muted-foreground text-caption">No reminder emails are sent. Unpaid orders are kept so this can be added later.</p>
+            <p className="flex items-center gap-2 font-semibold text-body-sm">Abandoned checkout <StatusPill tone={draft.crm.abandoned.enabled ? "success" : "neutral"}>{draft.crm.abandoned.enabled ? "On" : "Off"}</StatusPill></p>
+            <p className="text-muted-foreground text-caption">Set up in CRM &amp; Follow-Up. Follow-up emails come from the Workflow you choose — Magnetix sends nothing on its own.</p>
           </div>
           <div className="flex flex-col gap-2">
             <p className="font-semibold text-body-sm">Confirmation email</p>

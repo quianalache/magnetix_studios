@@ -59,4 +59,10 @@ export interface CheckoutView {
     stripeAccount: string | null;
   };
   preview: boolean;
+  /**
+   * CRM (Phase 3) — only what the buyer's page needs: whether to show the
+   * opt-in box (and its exact text) and whether checkout-start capture is on.
+   * Tags, Workflows and timings never reach the browser.
+   */
+  crm?: { marketingOptIn: { label: string } | null; captureOnStart: boolean };
 }

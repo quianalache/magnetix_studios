@@ -105,6 +105,9 @@ const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "offer.purchase.paid",
   "offer.access.granted",
   "offer.access.revoked",
+  "checkout.started",
+  "checkout.abandoned",
+  "checkout.completed",
   "community.member.joined",
   "community.member.approved",
   "contact.field.changed",
@@ -153,6 +156,7 @@ function triggerCategory(type: WorkflowTriggerType): string {
     type === "refund.issued"
   )
     return "Payments & Subscriptions";
+  if (type.startsWith("checkout.")) return "Checkout";
   if (type.startsWith("course.") || type.startsWith("offer."))
     return "Courses & Offers";
   if (type.startsWith("community.")) return "Community";
@@ -731,6 +735,9 @@ export function WorkflowBuilder({
                   "offer.purchase.paid",
                   "offer.access.granted",
                   "offer.access.revoked",
+                  "checkout.started",
+                  "checkout.abandoned",
+                  "checkout.completed",
                   "community.member.joined",
                   "community.member.approved",
                   "community.member.left",
@@ -747,7 +754,7 @@ export function WorkflowBuilder({
                   placeholder={
                     trigger?.type.startsWith("course.")
                       ? "Optional course ID"
-                      : trigger?.type.startsWith("offer.")
+                      : trigger?.type.startsWith("offer.") || trigger?.type.startsWith("checkout.")
                         ? "Optional offer ID"
                         : trigger?.type.startsWith("community.")
                           ? "Optional Community/group ID"
@@ -763,7 +770,7 @@ export function WorkflowBuilder({
                     const value = e.target.value || null;
                     if (trigger?.type.startsWith("course."))
                       setTrigger({ ...trigger, courseId: value });
-                    else if (trigger?.type.startsWith("offer."))
+                    else if (trigger?.type.startsWith("offer.") || trigger?.type.startsWith("checkout."))
                       setTrigger({ ...trigger, offerId: value });
                     else if (trigger?.type.startsWith("community."))
                       setTrigger({ ...trigger, groupId: value });

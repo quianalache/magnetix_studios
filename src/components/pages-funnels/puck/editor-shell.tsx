@@ -400,7 +400,8 @@ export function MagnetixPuckEditorShell({
       .sort(comparePopupCreationOrder)
       .map((p) => ({ id: p.id, name: p.name })),
     openPopupsPanel: () => getPuckRef.current?.()?.dispatch({ type: "setUi", ui: { plugin: { current: "popups" }, leftSideBarVisible: true } }),
-  }), [isPopupSurface, popups]);
+    pageId,
+  }), [isPopupSurface, popups, pageId]);
 
   const popupEditorValue = useMemo(() => ({ pageData: data, onBackToPage: exitPopupEditor }), [data, exitPopupEditor]);
   const popupHeaderValue = useMemo(() => ({ name: editingPopup?.name ?? null, onBackToPage: exitPopupEditor }), [editingPopup?.name, exitPopupEditor]);

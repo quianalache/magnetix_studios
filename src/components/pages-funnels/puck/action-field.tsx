@@ -35,6 +35,8 @@ export interface ActionFieldContextValue {
   popups: { id: string; name: string }[];
   /** Opens the builder's Popups panel (the "Create a Popup" shortcut). */
   openPopupsPanel?: () => void;
+  /** The page being edited (page-anchored resolvers, e.g. the Checkout block). */
+  pageId?: string;
 }
 export const ActionFieldContext = createContext<ActionFieldContextValue | null>(null);
 

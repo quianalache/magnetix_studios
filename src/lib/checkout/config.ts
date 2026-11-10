@@ -11,6 +11,7 @@ import type {
 } from "@/types/checkout";
 import type { CourseOffer } from "@/types/course-offers";
 import { DEFAULT_SERVICE_AGREEMENT_TEXT } from "@/types/course-offers";
+import { DEFAULT_CHECKOUT_CRM, normalizeCrm } from "@/lib/checkout/crm";
 
 export const MAX_ORDER_BUMPS = 5;
 
@@ -42,6 +43,7 @@ export type EditableCheckoutFields = Pick<
   | "display"
   | "postPurchase"
   | "internalNotes"
+  | "crm"
 >;
 
 export function defaultCheckoutFields(primaryOfferId: string | null, contextType: CheckoutConfig["context"]["type"]): EditableCheckoutFields {
@@ -58,6 +60,7 @@ export function defaultCheckoutFields(primaryOfferId: string | null, contextType
     display: { ...DEFAULT_CHECKOUT_DISPLAY },
     postPurchase: contextType === "funnel_step" ? { type: "funnel_next_step" } : { type: "space" },
     internalNotes: "",
+    crm: normalizeCrm(DEFAULT_CHECKOUT_CRM),
   };
 }
 
@@ -171,6 +174,8 @@ export function sanitizeCheckoutInput(
       },
       postPurchase: sanitizeDestination(b.postPurchase ?? previous.postPurchase, contextType, errors),
       internalNotes: typeof b.internalNotes === "string" ? str(b.internalNotes, 500) : previous.internalNotes,
+      // Older editors don't send `crm` — keep what's stored.
+      crm: b.crm && typeof b.crm === "object" ? normalizeCrm(b.crm) : normalizeCrm(previous.crm),
     },
   };
 }

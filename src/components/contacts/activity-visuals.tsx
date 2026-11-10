@@ -156,6 +156,12 @@ export function activityVisuals(
       return { icon: i(Users, "text-link"), label: "Booking reassigned" };
     case "purchase_completed":
       return { icon: i(ShoppingBag, "text-status-success-fg"), label: "Purchase" };
+    case "checkout_started":
+      return { icon: i(ShoppingBag, "text-link"), label: "Checkout started" };
+    case "checkout_abandoned":
+      return { icon: i(ShoppingBag, "text-status-warning-fg"), label: "Checkout abandoned" };
+    case "checkout_completed":
+      return { icon: i(ShoppingBag, "text-status-success-fg"), label: "Checkout completed" };
     case "reading_created":
       return { icon: i(FileText, "text-link"), label: "Reading created" };
     case "course_enrolled":

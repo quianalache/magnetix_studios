@@ -355,7 +355,12 @@ export type ActivityType =
   | "course_access_revoked"
   // Public Reading Tool (2026-10-19) — a Reading was created through an
   // Embed. Written by energetic-decoder-service.ts (live submissions only).
-  | "reading_created";
+  | "reading_created"
+  // Checkout Foundation Phase 3 — checkout follow-up lifecycle. Written by
+  // src/lib/server/checkout/crm-service.ts with deterministic ids.
+  | "checkout_started"
+  | "checkout_abandoned"
+  | "checkout_completed";
 
 export interface Note {
   id: string;

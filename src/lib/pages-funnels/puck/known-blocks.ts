@@ -19,7 +19,7 @@ import { normalizePopupMap } from "@/types/pages-funnels-popup";
  */
 export const KNOWN_PUCK_BLOCK_TYPES = [
   "Accordion", "AnimatedCounter", "Audio", "AstrologyAspects", "AstrologyChart", "AstrologyHouses", "AstrologyKeyFacts",
-  "AstrologyPlacements", "AtAGlance", "Booking", "Button", "Centers", "Channels", "Chart", "Column", "Countdown",
+  "AstrologyPlacements", "AtAGlance", "Booking", "Button", "Centers", "Channels", "Chart", "CheckoutBlock", "Column", "Countdown",
   "CustomHtml", "Divider", "Embed", "FeaturedOffer", "Form", "Gates", "GeneKeys", "Heading", "Hero", "HumanDesignChart",
   "Icon", "Image", "ImageGallery", "ImageSlider", "LogoStrip", "Mandala", "MandalaActivations", "MyMagnetixButton",
   "Navigation", "OfferSummary", "PdfButton", "PricingComparison", "ProgressBar", "ProgressRing", "ReadingReportButton", "ReadingTool",

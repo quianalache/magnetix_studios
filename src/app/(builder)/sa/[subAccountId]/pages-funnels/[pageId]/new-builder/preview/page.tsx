@@ -13,6 +13,7 @@ import { collectPuckFeaturedOfferIds, collectPuckFormIds, collectPuckOfferSummar
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
 import { collectActionTargets } from "@/lib/pages-funnels/puck/action";
 import { collectBookingSlugs } from "@/lib/pages-funnels/booking-block";
+import { collectCheckoutKeys } from "@/lib/pages-funnels/checkout-block";
 import type { ResolvedActionTargets } from "@/types/pages-funnels-puck";
 import { getPage } from "@/lib/firestore/pages-funnels";
 import { resolvePageSettings } from "@/lib/pages-funnels/page-settings";
@@ -205,6 +206,14 @@ export default function NewBuilderPreviewPage({
         resolvedBookings = res?.ok ? (((await res.json()) as { bookings?: typeof resolvedBookings }).bookings ?? {}) : {};
       }
 
+      // Checkout blocks (Checkout Phase 3): editor-safe view, never payable.
+      const checkoutKeys = collectCheckoutKeys(data);
+      let resolvedCheckouts: NonNullable<PuckPageMetadata["resolvedCheckouts"]> = {};
+      if (checkoutKeys.length) {
+        const res = await fetch(`/api/pages-funnels/puck/resolve-checkout?pageId=${encodeURIComponent(pageId)}&keys=${encodeURIComponent(checkoutKeys.join(","))}`).catch(() => null);
+        resolvedCheckouts = res?.ok ? (((await res.json()) as { resolved?: typeof resolvedCheckouts }).resolved ?? {}) : {};
+      }
+
       // Media Library videos (Wave 3): playback URLs minted for this preview.
       const videoIds = collectMediaVideoIds(data, previewPopups);
       let resolvedVideos: NonNullable<PuckPageMetadata["resolvedVideos"]> = {};
@@ -224,6 +233,7 @@ export default function NewBuilderPreviewPage({
           resolvedOffers,
           resolvedActions,
           resolvedBookings,
+          resolvedCheckouts,
           resolvedVideos,
           pageId,
           ...(readingContext !== undefined

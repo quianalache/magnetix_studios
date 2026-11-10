@@ -12,6 +12,7 @@ import {
   validateBumps,
   type EditableCheckoutFields,
 } from "@/lib/checkout/config";
+import { normalizeCrm } from "@/lib/checkout/crm";
 import type { CheckoutConfig, PhoneRequirement } from "@/types/checkout";
 import type { CourseOffer, CourseOfferCheckoutSettings } from "@/types/course-offers";
 import { DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS } from "@/types/course-offers";
@@ -113,6 +114,7 @@ function fromDoc(id: string, data: FirebaseFirestore.DocumentData): CheckoutConf
     display: { ...defaults.display, ...(data.display ?? {}) },
     agreement: { ...defaults.agreement, ...(data.agreement ?? {}) },
     bumps: Array.isArray(data.bumps) ? data.bumps : [],
+    crm: normalizeCrm(data.crm),
     id,
   } as CheckoutConfig;
 }
@@ -234,7 +236,45 @@ async function validateAgainstOffers(subAccountId: string, value: EditableChecko
     if (problem && (previous.context.type === "funnel_step" || !primary || primary.subAccountId !== subAccountId)) errors.primaryOfferId = problem;
   }
   Object.assign(errors, validateBumps(value.bumps, previous.bumps, offers, primary, subAccountId));
+  Object.assign(errors, await validateCrmWorkflows(subAccountId, value, previous));
   return errors;
+}
+
+/**
+ * Workflow picks must be this workspace's Workflows. A NEW pick must be
+ * active; an already-saved pick that has since been paused/drafted is kept
+ * (shown in the editor as inactive) rather than silently dropped.
+ */
+async function validateCrmWorkflows(subAccountId: string, value: EditableCheckoutFields, previous: CheckoutConfig): Promise<Record<string, string>> {
+  const errors: Record<string, string> = {};
+  const picks: Array<[string, string | null, string | null]> = [
+    ["crm.abandoned.workflowId", value.crm.abandoned.workflowId, previous.crm?.abandoned?.workflowId ?? null],
+    ["crm.completed.workflowId", value.crm.completed.workflowId, previous.crm?.completed?.workflowId ?? null],
+  ];
+  for (const [key, id, prev] of picks) {
+    if (!id) continue;
+    const snap = await getAdminDb().doc(`workflows/${id}`).get();
+    if (!snap.exists || snap.data()?.subAccountId !== subAccountId) {
+      errors[key] = "Choose a Workflow from this workspace.";
+      continue;
+    }
+    if (snap.data()?.status !== "active" && id !== prev) errors[key] = "Choose an active Workflow (this one is paused or a draft).";
+  }
+  return errors;
+}
+
+/** Workflows a checkout may start (workspace-scoped; inactive ones flagged). */
+export async function listWorkflowOptions(subAccountId: string): Promise<Array<{ id: string; name: string; status: string; triggerType: string | null }>> {
+  const snap = await getAdminDb().collection("workflows").where("subAccountId", "==", subAccountId).select("name", "status", "trigger").get();
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      name: ((d.data().name as string) || "Untitled workflow").slice(0, 120),
+      status: (d.data().status as string) ?? "draft",
+      triggerType: (d.data().trigger?.type as string) ?? null,
+    }))
+    .filter((w) => w.status !== "archived")
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function persist(config: CheckoutConfig, value: EditableCheckoutFields, uid: string): Promise<CheckoutConfig> {
@@ -287,7 +327,7 @@ export async function saveHostedCheckoutConfig(input: { subAccountId: string; of
 
 /** Admin view: the config plus everything the editor needs to render it. */
 export async function checkoutEditorPayload(subAccountId: string, config: CheckoutConfig) {
-  const options = await listOfferOptions(subAccountId);
+  const [options, workflows] = await Promise.all([listOfferOptions(subAccountId), listWorkflowOptions(subAccountId)]);
   const byId = new Map(options.map((o) => [o.id, o]));
   const primary = config.primaryOfferId ? byId.get(config.primaryOfferId) ?? null : null;
   const bumpStatus = Object.fromEntries(
@@ -303,5 +343,5 @@ export async function checkoutEditorPayload(subAccountId: string, config: Checko
       return [b.id, problem];
     }),
   );
-  return { config, offers: options, bumpStatus };
+  return { config, offers: options, bumpStatus, workflows };
 }

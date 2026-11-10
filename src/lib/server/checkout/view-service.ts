@@ -57,5 +57,9 @@ export async function buildCheckoutView(configId: string, opts: { preview?: bool
     initialTotals: computeOrderTotals([lineFromOffer(primary, "primary")]),
     payment,
     preview: opts.preview === true,
+    crm: {
+      marketingOptIn: config.crm.marketingOptIn.enabled ? { label: config.crm.marketingOptIn.label } : null,
+      captureOnStart: config.crm.captureContactOnStart,
+    },
   };
 }

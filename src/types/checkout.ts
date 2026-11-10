@@ -20,6 +20,8 @@ import type { RecurringInterval } from "./course-offers";
  *   coupons/{couponId}                       Coupon
  *   couponCodes/{subAccountId}__{CODE}       uniqueness guard
  *   couponRedemptions/{orderId}              one redemption per paid order
+ *   checkoutSessions/{sessionId}             CheckoutSession (Phase 3: start →
+ *                                            abandoned / completed, CRM follow-up)
  */
 
 /* --------------------------------- Funnels -------------------------------- */
@@ -126,6 +128,44 @@ export type PostPurchaseDestination =
   | { type: "funnel_next_step" }
   | { type: "funnel_step"; stepId: string };
 
+/**
+ * CRM & Follow-Up (Checkout Foundation Phase 3). Business behaviour owned
+ * by the checkout configuration — never by a Page Builder block. Tags are
+ * the existing free-form Contact tags; Workflows are the existing
+ * Workflows (picked directly, and every checkout event is also a Workflow
+ * trigger). Marketing consent uses the Contact's existing `emailConsent`.
+ */
+export interface CheckoutCrmSettings {
+  /** Create/update the Contact once the buyer deliberately starts checkout. */
+  captureContactOnStart: boolean;
+  startedTags: string[];
+  marketingOptIn: {
+    /** Show an UNCHECKED opt-in box. Purchase alone is never consent. */
+    enabled: boolean;
+    label: string;
+    /** Tags applied only when the buyer ticks the box. */
+    tags: string[];
+  };
+  abandoned: {
+    enabled: boolean;
+    /** Minutes after the buyer's last checkout activity. */
+    delayMinutes: 30 | 60 | 240 | 1440;
+    /** An existing Workflow to start for the Contact (optional). */
+    workflowId: string | null;
+    tags: string[];
+  };
+  completed: {
+    tags: string[];
+    /** Take the abandoned tags back off when the buyer completes. */
+    removeAbandonedTags: boolean;
+    workflowId: string | null;
+  };
+  /** Applied on a paid order that included at least one Order Bump. */
+  bumpPurchasedTags: string[];
+  /** Applied on a paid order that used a discount code. */
+  couponUsedTags: string[];
+}
+
 export interface CheckoutConfig {
   id: string;
   agencyId: string;
@@ -145,6 +185,8 @@ export interface CheckoutConfig {
   display: CheckoutDisplay;
   postPurchase: PostPurchaseDestination;
   internalNotes: string;
+  /** Phase 3. Absent on older configs — read through normalizeCrm(). */
+  crm: CheckoutCrmSettings;
   version: number;
   createdAt: number;
   updatedAt: number;
@@ -286,6 +328,12 @@ export interface CheckoutOrder {
   memberId: string;
   /** True when the email matched an existing Member who wasn't signed in. */
   matchedExistingMember: boolean;
+  /** Phase 3: the checkout session this order belongs to (null on older orders). */
+  sessionId?: string | null;
+  /** Phase 3: the buyer ticked the marketing opt-in box for this order. */
+  marketingOptIn?: boolean;
+  /** Phase 3: CRM completion actions ran (tags, event) — at most once. */
+  crmCompletedAt?: number | null;
   buyer: { name: string; email: string; phone: string };
   agreementAccepted: boolean;
   currency: string;
@@ -303,6 +351,49 @@ export interface CheckoutOrder {
   status: CheckoutOrderStatus;
   failureReason: string | null;
   paidAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/* --------------------------- Checkout sessions ---------------------------- */
+
+export type CheckoutSessionStatus = "started" | "completed" | "abandoned" | "superseded";
+
+/**
+ * One deliberate checkout start by one buyer (Phase 3). Created when the
+ * buyer continues from Step 1 (two-step) or once a valid email is captured
+ * (one-step) — never on page load or per keystroke. Server-only.
+ * Holds no prices: a resumed checkout is always re-quoted.
+ */
+export interface CheckoutSession {
+  id: string;
+  agencyId: string;
+  subAccountId: string;
+  configId: string;
+  context: CheckoutContext;
+  offerId: string;
+  format: CheckoutFormat;
+  email: string;
+  name: string;
+  phone: string;
+  contactId: string | null;
+  status: CheckoutSessionStatus;
+  marketingOptIn: boolean;
+  /** Last add-on selection / code typed (revalidated on resume). */
+  bumpIds: string[];
+  couponCode: string | null;
+  sourceUrl: string | null;
+  orderId: string | null;
+  startedAt: number;
+  lastActivityAt: number;
+  completedAt: number | null;
+  abandonedAt: number | null;
+  /** Single-field range-queried by the hourly sweep; null once settled. */
+  abandonDueAt: number | null;
+  abandonment: { scheduledFor: number | null; messageId: string | null; firedAt: number | null };
+  /** SHA-256 of the active resume token (raw token never stored). */
+  resumeTokenHash: string | null;
+  supersededBy: string | null;
   createdAt: number;
   updatedAt: number;
 }

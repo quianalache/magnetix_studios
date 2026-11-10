@@ -51,6 +51,7 @@ import {
   CircleGauge,
   TrendingUp,
   Timer,
+  ShoppingCart,
 } from "lucide-react";
 
 /**
@@ -120,4 +121,5 @@ export const BLOCK_ICONS: Record<string, typeof HeadingIcon> = {
   Chart: ChartPie,
   Countdown: Timer,
   OfferSummary: BadgeDollarSign,
+  CheckoutBlock: ShoppingCart,
 };

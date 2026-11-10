@@ -163,6 +163,11 @@ function mergeSubject(
     workspace: { name: ctx.subAccount?.name ?? "" },
     bookingLink: ctx.subAccount?.bookingLink ?? "",
     unsubscribeLink,
+    // Checkout events (Phase 3) carry the resume link + Offer name.
+    checkout: {
+      resumeLink: typeof ctx.triggerContext?.checkoutResumeUrl === "string" ? ctx.triggerContext.checkoutResumeUrl : "",
+      offerName: typeof ctx.triggerContext?.offerTitle === "string" ? ctx.triggerContext.offerTitle : "",
+    },
   };
 }
 
@@ -1040,6 +1045,79 @@ const REGISTRY: Partial<Record<WorkflowNodeType, NodeExecutor>> = {
   reopen_conversation: execConversationAction,
   stop_workflow: execStopWorkflow,
 };
+
+/* ------------------------ Checkout entry points ------------------------ */
+
+/**
+ * Checkout CRM (Phase 3): start ONE Workflow the creator picked in Checkout
+ * Settings for a Contact. Same guards as every other enrollment: the
+ * Workflow must belong to the SAME workspace and be active with steps;
+ * automations pause, re-entry policy and the event's deduplication key are
+ * honoured, so a Workflow that also listens to the checkout trigger is
+ * never enrolled twice for one event. Never throws.
+ */
+export async function startWorkflowForCheckoutEvent(input: {
+  workflowId: string;
+  subAccountId: string;
+  contactId: string;
+  context: Record<string, unknown> & { deduplicationKey: string };
+}): Promise<"started" | "skipped" | "failed"> {
+  const db = getAdminDb();
+  try {
+    const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
+    if (subSnap.data()?.automationsPaused === true) return "skipped";
+    const snap = await db.doc(`workflows/${input.workflowId}`).get();
+    if (!snap.exists) return "skipped";
+    const wf = { id: snap.id, ...(snap.data() as Omit<WorkflowDoc, "id">) };
+    if (wf.subAccountId !== input.subAccountId || wf.status !== "active" || !wf.startNodeId) return "skipped";
+    const prior = await db
+      .collection("workflowRuns")
+      .where("workflowId", "==", wf.id)
+      .where("contactId", "==", input.contactId)
+      .get();
+    if (prior.docs.some((d) => (d.data() as WorkflowRunDoc).context?.deduplicationKey === input.context.deduplicationKey)) return "skipped";
+    if (!(await reentryAllows(wf, input.contactId))) return "skipped";
+    await enroll(wf, input.contactId, { ...input.context, source: "checkout" });
+    return "started";
+  } catch (err) {
+    console.error("[workflows] checkout workflow start failed", err);
+    return "failed";
+  }
+}
+
+/**
+ * A completed purchase ends any still-running Workflow that was started by
+ * that checkout session's ABANDONMENT event, so a buyer who comes back and
+ * pays doesn't keep getting "you left something behind" emails.
+ */
+export async function exitAbandonedCheckoutRuns(input: { subAccountId: string; contactId: string; checkoutSessionId: string }): Promise<number> {
+  const snap = await getAdminDb()
+    .collection("workflowRuns")
+    .where("subAccountId", "==", input.subAccountId)
+    .where("contactId", "==", input.contactId)
+    .get();
+  const live = snap.docs.filter((d) => {
+    const run = d.data() as WorkflowRunDoc;
+    return (
+      (run.status === "running" || run.status === "waiting") &&
+      run.context?.eventType === "checkout.abandoned" &&
+      run.context?.checkoutSessionId === input.checkoutSessionId
+    );
+  });
+  await Promise.all(
+    live.map((d) =>
+      d.ref.update({
+        status: "exited",
+        waiting: null,
+        currentNodeId: null,
+        exitReason: "checkout_completed",
+        stoppedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    )
+  );
+  return live.length;
+}
 
 /* ----------------------------- Dispatch -------------------------------- */
 
