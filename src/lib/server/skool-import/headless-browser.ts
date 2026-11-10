@@ -1,11 +1,7 @@
 import "server-only";
 
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type Cookie,
-} from "playwright-core";
+import type { Browser, BrowserContext, Cookie } from "playwright-core";
+import { launchHeadlessChromium } from "@/lib/server/headless-chromium";
 import type { SkoolTransport } from "./cdp-browser-transport";
 
 /**
@@ -37,40 +33,14 @@ import type { SkoolTransport } from "./cdp-browser-transport";
  *    install instead, since the Lambda-built binary doesn't run on macOS.
  */
 
-const CHROMIUM_PACK_URL =
-  "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.x64.tar";
-
-/** Best-effort local-dev fallback — never relied on in production. */
-const LOCAL_DEV_CHROME_PATHS = [
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "/usr/bin/google-chrome",
-  "/usr/bin/chromium-browser",
-];
-
-async function resolveExecutablePath(): Promise<string | undefined> {
-  if (process.env.VERCEL) {
-    const chromiumMin = await import("@sparticuz/chromium-min");
-    return chromiumMin.default.executablePath(CHROMIUM_PACK_URL);
-  }
-  const fs = await import("node:fs");
-  for (const p of LOCAL_DEV_CHROME_PATHS) {
-    if (fs.existsSync(p)) return p;
-  }
-  return undefined; // let Playwright try its own default — local dev only
-}
-
-async function launchHeadless(): Promise<Browser> {
-  const executablePath = await resolveExecutablePath();
-  if (process.env.VERCEL) {
-    const chromiumMin = (await import("@sparticuz/chromium-min")).default;
-    return chromium.launch({
-      args: chromiumMin.args,
-      executablePath,
-      headless: true,
-    });
-  }
-  return chromium.launch({ executablePath, headless: true });
-}
+/**
+ * Chromium executable resolution + launch (pinned pack URL, Vercel args,
+ * local desktop-Chrome fallback) live in the shared server launcher, also
+ * used by Pages & Funnels thumbnails. Same behaviour as the copy that used to
+ * live here; one place to bump the Chromium version. Every caller below still
+ * launches its own short-lived browser and closes it in `finally`.
+ */
+const launchHeadless: () => Promise<Browser> = launchHeadlessChromium;
 
 export interface ConnectToSkoolResult {
   ok: boolean;

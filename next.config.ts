@@ -89,6 +89,12 @@ const nextConfig: NextConfig = {
       "./node_modules/.pnpm/playwright-core@1.62.1/node_modules/playwright-core/browsers.json",
       "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
     ],
+    // Pages & Funnels thumbnail capture (2026-11) — same headless runtime and
+    // the same bracket-free key rule as the Skool entry above.
+    "/api/pages-funnels/thumbnail/**": [
+      "./node_modules/.pnpm/playwright-core@1.62.1/node_modules/playwright-core/browsers.json",
+      "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
+    ],
   },
   async headers() {
     return [

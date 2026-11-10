@@ -335,6 +335,36 @@ export interface PageDoc {
   readingResult?: ReadingResultPageSettings;
   /** Redacted generation telemetry for AI-created drafts; raw prompts are never stored. */
   aiGeneration?: AiGenerationMetadata;
+  /** Automatic page screenshot for the Pages & Funnels library (2026-11).
+   *  Written only by the server thumbnail service. Absent = show the fallback. */
+  thumbnail?: PageThumbnail | null;
+  /** Last time a capture was queued (server bookkeeping, throttles retries). */
+  thumbnailRequest?: PageThumbnailRequest | null;
+}
+
+/** Which saved version of the page a thumbnail shows. */
+export type PageThumbnailVariant = "published" | "draft";
+
+/**
+ * Top-of-page screenshot (desktop 1280×800 viewport, stored at 640×400).
+ * `sourceVersion` is the millisecond timestamp of the captured content
+ * (`puckPublishedAt` for published, `puckDraftUpdatedAt` for draft), so a
+ * stale thumbnail is detected by comparing it with the page's own timestamps.
+ */
+export interface PageThumbnail {
+  url: string;
+  storageKey: string;
+  variant: PageThumbnailVariant;
+  sourceVersion: number;
+  capturedAt: number;
+  width: number;
+  height: number;
+}
+
+export interface PageThumbnailRequest {
+  at: number;
+  variant: PageThumbnailVariant;
+  sourceVersion: number;
 }
 
 export type CreatePageInput = {

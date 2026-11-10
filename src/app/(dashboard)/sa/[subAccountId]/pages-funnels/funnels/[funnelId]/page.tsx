@@ -82,7 +82,7 @@ export default function FunnelDetailPage() {
     <PageShell width="data">
       {dialog}
       <PageHeader
-        breadcrumbs={<Link href={`/sa/${subAccountId}/pages-funnels/funnels`} className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-caption"><ArrowLeft className="size-3.5" aria-hidden /> Funnels</Link>}
+        breadcrumbs={<Link href={`/sa/${subAccountId}/pages-funnels?view=funnels`} className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-caption"><ArrowLeft className="size-3.5" aria-hidden /> Funnels</Link>}
         title={funnel.name}
         description="Buyers move through these steps in order. Use the arrows to reorder them."
         actions={
@@ -97,7 +97,7 @@ export default function FunnelDetailPage() {
                 disabled={busy}
                 onClick={async () => {
                   if (await confirm({ title: "Archive this funnel?", description: "Its checkout stops accepting orders. Past orders are kept.", confirmLabel: "Archive", tone: "danger" })) {
-                    await commerceFetch(subAccountId, `funnels/${funnelId}`, { method: "DELETE" }).then(() => router.push(`/sa/${subAccountId}/pages-funnels/funnels`), (e: Error) => toast.error(e.message));
+                    await commerceFetch(subAccountId, `funnels/${funnelId}`, { method: "DELETE" }).then(() => router.push(`/sa/${subAccountId}/pages-funnels?view=funnels`), (e: Error) => toast.error(e.message));
                   }
                 }}
               >

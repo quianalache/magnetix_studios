@@ -47,7 +47,7 @@ export default function CheckoutStepSettingsPage() {
         breadcrumbs={
           <nav aria-label="Breadcrumb" className="text-muted-foreground flex flex-wrap items-center gap-1 text-caption">
             <Link href={`/sa/${subAccountId}/pages-funnels`} className="hover:text-foreground">Pages &amp; Funnels</Link> /
-            <Link href={`/sa/${subAccountId}/pages-funnels/funnels`} className="hover:text-foreground">Funnels</Link> /
+            <Link href={`/sa/${subAccountId}/pages-funnels?view=funnels`} className="hover:text-foreground">Funnels</Link> /
             <Link href={`/sa/${subAccountId}/pages-funnels/funnels/${funnelId}`} className="hover:text-foreground inline-flex items-center gap-1"><ArrowLeft className="size-3" aria-hidden />{funnel.name}</Link> /
             <span className="text-foreground">{step.name}</span>
           </nav>

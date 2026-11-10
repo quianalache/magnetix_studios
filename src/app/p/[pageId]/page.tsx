@@ -25,6 +25,7 @@ import { resolveFeaturedOffers } from "@/lib/server/featured-offer-service";
 import { publicPageMetadata, resolvePageSettings, safeTrackingIds } from "@/lib/pages-funnels/page-settings";
 import { TenantPageTracking } from "@/components/pages-funnels/tenant-page-tracking";
 import { resolveMediaVideosForPage } from "@/lib/server/page-media-resolver";
+import { verifyThumbnailToken } from "@/lib/server/pages-funnels/thumbnail-token";
 
 export const dynamic = "force-dynamic";
 
@@ -104,17 +105,23 @@ export default async function PublicPagePreview({
     return <ReadingResultPageView page={page} wantsDraft={query.draft === "1"} />;
   }
 
-  if (page.status !== "published" || !page.puckPublishedData) notFound();
-  // Stored content is decoded here (puck-storage.ts) — visitors only ever get the PUBLISHED tree.
-  const decoded = decodeStoredPuckData(page.puckPublishedData);
+  // Library thumbnail capture (2026-11): a valid, short-lived capture pass
+  // (thumbnail-token.ts) for THIS page. It turns off tracking and automatic
+  // popups, and a `draft` pass renders the saved draft. Without a valid pass
+  // nothing below changes: visitors only ever get the published tree.
+  const capture = verifyThumbnailToken(query.mx_thumb, pageId);
+  const useDraft = capture === "draft";
+  if (useDraft ? !page.puckDraftData : page.status !== "published" || !page.puckPublishedData) notFound();
+  // Stored content is decoded here (puck-storage.ts).
+  const decoded = decodeStoredPuckData(useDraft ? page.puckDraftData : page.puckPublishedData);
   if (!decoded.ok) {
-    console.error(`[p/${pageId}] published content is unreadable (${decoded.reason})`);
+    console.error(`[p/${pageId}] ${useDraft ? "draft" : "published"} content is unreadable (${decoded.reason})`);
     notFound();
   }
   const publishedData = decoded.data;
 
   // Forms, actions, embeds and offers inside Popups resolve like the page's own.
-  const publishedPopups = normalizePopupMap(page.puckPublishedPopups);
+  const publishedPopups = normalizePopupMap(useDraft ? page.puckDraftPopups : page.puckPublishedPopups);
   const collectable = withPopupContent(publishedData, publishedPopups);
   // Only this page's own workspace's Forms render (a foreign id renders nothing).
   const resolvedForms = await resolveFormsForSubAccount(page.subAccountId, collectPuckFormIds(collectable));
@@ -148,9 +155,9 @@ export default async function PublicPagePreview({
   // The tenant's own tracking, from the PUBLISHED settings only.
   const tracking = safeTrackingIds(resolvePageSettings(publishedData, page.seo).tracking);
   return (
-    <PopupHost popups={publishedPopups} initialPopupId={qaPopupId} metadata={metadata} automaticTriggers>
+    <PopupHost popups={publishedPopups} initialPopupId={capture ? null : qaPopupId} metadata={metadata} automaticTriggers={!capture}>
       <Render config={serverPuckConfig} data={publishedData} metadata={metadata} />
-      <TenantPageTracking {...tracking} />
+      {capture ? null : <TenantPageTracking {...tracking} />}
     </PopupHost>
   );
 }

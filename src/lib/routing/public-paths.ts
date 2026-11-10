@@ -58,6 +58,9 @@ export const PUBLIC_PATHS = [
   // Hourly Inbox Follow-up Watchdog sweep (Labs). QStash-scheduled;
   // signature-verified inside the route.
   "/api/agents/watchdog/step",
+  // Pages & Funnels thumbnail capture (2026-11) — QStash callback,
+  // signature-verified inside the route.
+  "/api/pages-funnels/thumbnail/step",
   // Google Calendar pull-in sync — QStash-scheduled (every 15 min) plus a
   // one-off immediate trigger right after a new connection. Missing from
   // this list meant every call was silently 307-redirected by the auth

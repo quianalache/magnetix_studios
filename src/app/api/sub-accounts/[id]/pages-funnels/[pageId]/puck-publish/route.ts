@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { publishPuckPage } from "@/lib/server/pages-funnels-puck-service";
+import { requestThumbnailAfterPublish } from "@/lib/server/pages-funnels/page-thumbnail-service";
 import type { Data as PuckData } from "@puckeditor/core";
 
 /**
@@ -42,5 +43,7 @@ export async function POST(
       { status: result.status }
     );
   }
+  // Library thumbnail of the new published version (queued; never fails the publish).
+  await requestThumbnailAfterPublish(pageId);
   return NextResponse.json({ ok: true });
 }
