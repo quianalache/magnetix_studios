@@ -13,7 +13,8 @@ import {
   type EditableCheckoutFields,
 } from "@/lib/checkout/config";
 import { normalizeCrm } from "@/lib/checkout/crm";
-import type { CheckoutConfig, PhoneRequirement } from "@/types/checkout";
+import type { CheckoutConfig, FunnelStep, PhoneRequirement, PostPurchaseDestination } from "@/types/checkout";
+import { stepsInLoops } from "@/lib/checkout/funnel-routing";
 import type { CourseOffer, CourseOfferCheckoutSettings } from "@/types/course-offers";
 import { DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS } from "@/types/course-offers";
 import { CheckoutError, agencyIdFor, assertId, newId } from "./common";
@@ -283,12 +284,29 @@ async function persist(config: CheckoutConfig, value: EditableCheckoutFields, ui
   return next;
 }
 
+async function postPurchaseLoops(funnelId: string, stepId: string, destination: PostPurchaseDestination): Promise<boolean> {
+  const snap = await getAdminDb().collection(`funnels/${funnelId}/steps`).get();
+  const steps = snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<FunnelStep, "id">) }))
+    .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+  const dest: Record<string, PostPurchaseDestination | null> = {};
+  for (const s of steps) {
+    if (s.type !== "checkout") continue;
+    dest[s.id] = s.id === stepId ? destination : s.checkoutConfigId ? ((await getCheckoutConfigDoc(s.checkoutConfigId))?.postPurchase ?? null) : null;
+  }
+  return stepsInLoops(steps, dest).has(stepId);
+}
+
 export async function saveStepCheckoutConfig(input: { subAccountId: string; funnelId: string; stepId: string; uid: string; body: Record<string, unknown> }): Promise<CheckoutConfig> {
   const current = await getStepCheckoutConfig(input.subAccountId, input.funnelId, input.stepId);
   const { value, errors } = sanitizeCheckoutInput(input.body, current, "funnel_step", newId);
   if (value.postPurchase.type === "funnel_step") {
     const step = await getAdminDb().doc(`funnels/${input.funnelId}/steps/${value.postPurchase.stepId}`).get();
     if (!step.exists || step.id === input.stepId) errors.postPurchase = "Choose another step in this funnel.";
+  }
+  // Funnel Phase 2: a post-purchase route that leads back to this checkout loops buyers.
+  if (!errors.postPurchase && (value.postPurchase.type === "funnel_step" || value.postPurchase.type === "funnel_next_step")) {
+    if (await postPurchaseLoops(input.funnelId, input.stepId, value.postPurchase)) errors.postPurchase = "That destination would send buyers in a loop back to this checkout. Choose another step.";
   }
   Object.assign(errors, await validateAgainstOffers(input.subAccountId, value, current));
   if (Object.keys(errors).length) throw new CheckoutError("Fix the highlighted settings.", 400, errors);

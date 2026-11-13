@@ -292,6 +292,13 @@ export interface CourseOfferPurchase {
    *  collectPhoneNumber`/`collectAddress`) stores them here, on the
    *  purchase record itself. `buyerDisplayName` also feeds the recent-
    *  purchases popup's first-name line (see that route's own comment). */
+  /**
+   * Funnel Upsell / Downsell: `trial` = a free-trial subscription the buyer
+   * accepted (nothing charged yet; the subscription bills after `trialDays`).
+   * Absent = a normal paid purchase.
+   */
+  acceptedAs?: "payment" | "trial";
+  trialDays?: number | null;
   buyerDisplayName?: string | null;
   buyerPhone?: string | null;
   buyerAddress?: string | null;

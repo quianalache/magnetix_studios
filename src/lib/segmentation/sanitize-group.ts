@@ -1,4 +1,5 @@
 import type { Condition, ConditionGroup, ConditionOp } from "@/types/workflows";
+import { conditionInvalidation } from "@/lib/contacts/tag-rule-validity";
 
 /**
  * Validate + normalize a client-supplied ConditionGroup before it's stored
@@ -85,7 +86,10 @@ export function sanitizeConditionGroup(input: unknown): SanitizeResult {
     if (!NO_VALUE_OPS.has(op) && !value) {
       return { ok: false, error: "Every condition needs a value." };
     }
-    all.push(NO_VALUE_OPS.has(op) ? { field, op } : { field, op, value });
+    // Contacts & Tags (2026-11): keep a deleted-tag marker while the
+    // condition still names that tag, so a round-trip can't re-enable it.
+    const marker = conditionInvalidation(item);
+    all.push(NO_VALUE_OPS.has(op) ? { field, op } : { field, op, value, ...(marker ? { invalid: marker } : {}) });
   }
   return { ok: true, group: { match, all } };
 }

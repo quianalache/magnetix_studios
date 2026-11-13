@@ -4,6 +4,7 @@ import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { emitContactDeleted } from "@/lib/server/contacts-service";
 import type { Contact } from "@/types/contacts";
 import { contactMergeFields } from "@/lib/server/contact-merge-fields";
+import { diffTagLists, emitTagChanges } from "@/lib/server/contact-tags/tag-writer";
 import { invalidateContactsCache } from "@/lib/server/contacts-query-service";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -283,12 +284,29 @@ export async function performContactMerge(params: {
   await mergeConversation(db, loserId, survivorId, conversationContact);
 
   // 4. Apply the computed field patch to the survivor.
+  const mergeFields = contactMergeFields(currentSurvivor, currentLoser);
   await survivorRef.update({
     ...survivorPatch,
-    ...contactMergeFields(currentSurvivor, currentLoser),
+    ...mergeFields,
     // Explicit primary choices from the general merge still win.
     ...Object.fromEntries(["name", "email", "phone"].filter((key) => survivorPatch[key] !== undefined).map((key) => [key, survivorPatch[key]])),
     updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  // Contacts & Tags (2026-11): tags the survivor gained from the merged
+  // record count as added (events + Contact Activity, source "Contact merge").
+  const gained = diffTagLists(
+    Array.isArray(currentSurvivor.tags) ? currentSurvivor.tags : [],
+    Array.isArray(mergeFields.tags) ? (mergeFields.tags as string[]) : [],
+  ).added;
+  await emitTagChanges({
+    subAccountId: sub,
+    agencyId: currentSurvivor.agencyId,
+    contactId: survivorId,
+    added: gained,
+    removed: [],
+    mode: (currentSurvivor as { mode?: "live" | "test" }).mode ?? "live",
+    ctx: { source: "merge", sourceId: loserId },
   });
 
   // 5. Remove the loser + its (now-copied) subcollections, and fire

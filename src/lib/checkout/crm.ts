@@ -6,6 +6,7 @@
  * defaults, input sanitising, tag maths and the abandonment clock. The
  * server service (lib/server/checkout/crm-service.ts) does the writes.
  */
+import { tagKey } from "@/lib/contacts/tag-names";
 import type { CheckoutCrmSettings, CheckoutSession } from "@/types/checkout";
 
 /** Allowed abandonment delays, in minutes (scheduler-compatible). */
@@ -43,8 +44,8 @@ export function cleanTags(raw: unknown): string[] {
   for (const t of raw) {
     if (typeof t !== "string") continue;
     const tag = t.replace(/\s+/g, " ").trim().slice(0, MAX_TAG_LENGTH);
-    if (!tag || seen.has(tag.toLowerCase())) continue;
-    seen.add(tag.toLowerCase());
+    if (!tag || seen.has(tagKey(tag))) continue;
+    seen.add(tagKey(tag));
     out.push(tag);
     if (out.length >= MAX_CHECKOUT_TAGS) break;
   }
@@ -87,15 +88,15 @@ export function normalizeCrm(raw: unknown): CheckoutCrmSettings {
 
 /** Merge tags onto an existing list (case-insensitive no-dup). Returns null when unchanged. */
 export function addTags(existing: string[], add: string[]): string[] | null {
-  const have = new Set(existing.map((t) => t.toLowerCase()));
-  const extra = add.filter((t) => !have.has(t.toLowerCase()));
+  const have = new Set(existing.map(tagKey));
+  const extra = add.filter((t) => !have.has(tagKey(t)));
   return extra.length ? [...existing, ...extra] : null;
 }
 
 /** Remove tags (case-insensitive). Returns null when unchanged. */
 export function removeTags(existing: string[], remove: string[]): string[] | null {
-  const drop = new Set(remove.map((t) => t.toLowerCase()));
-  const next = existing.filter((t) => !drop.has(t.toLowerCase()));
+  const drop = new Set(remove.map(tagKey));
+  const next = existing.filter((t) => !drop.has(tagKey(t)));
   return next.length === existing.length ? null : next;
 }
 

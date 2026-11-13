@@ -10,7 +10,9 @@ import type {
   VideoSizeConfig,
   VideoPlaybackConfig,
 } from "@/types/pages-funnels-puck";
-import { resolveActionLink } from "@/lib/pages-funnels/puck/action";
+import { funnelOfferDecision, resolveActionLink } from "@/lib/pages-funnels/puck/action";
+import { FunnelOfferButton } from "@/components/funnels/runtime/funnel-offer-button";
+import type { FunnelOfferRuntimeView } from "@/lib/checkout/funnel-runtime-view";
 import { popupActionKind } from "@/lib/pages-funnels/action/execute";
 import { PopupActionTrigger } from "@/components/pages-funnels/puck/popup-action-trigger";
 import {
@@ -221,6 +223,7 @@ export function ButtonRender({
   background,
   styleConfig,
   resolved,
+  funnelOffer,
   editing = false,
 }: {
   id: string;
@@ -229,6 +232,8 @@ export function ButtonRender({
   action: PageAction;
   /** Page/Offer/section targets resolved for this page (metadata.resolvedActions). */
   resolved?: ResolvedActionTargets;
+  /** Post-purchase funnel runtime for this visitor (published page only). */
+  funnelOffer?: FunnelOfferRuntimeView | null;
   /** In the New Builder: render no link, so a click never navigates the editor away. */
   editing?: boolean;
   style: PuckButtonStyle;
@@ -239,6 +244,20 @@ export function ButtonRender({
   const link = resolveActionLink(action, { resolved, editing });
   const responsiveCss = resolveResponsiveCss(id, styleConfig);
   const buttonClass = `relative overflow-hidden rounded-full px-6 py-2.5 text-sm font-semibold shadow-sm transition-colors ${BUTTON_STYLE_CLASS[buttonStyle]}`;
+  // Upsell / Downsell pages: Accept / Decline run the funnel step's own
+  // payment / decline flow (the creator's button design is kept). Never in the builder.
+  const offerDecision = funnelOfferDecision(action);
+  if (!editing && offerDecision) {
+    return (
+      <div className={`flex flex-col items-center ${JUSTIFY_CLASS[alignment]}`}>
+        {responsiveCss && <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />}
+        <FunnelOfferButton id={id} decision={offerDecision} view={funnelOffer} className={`${buttonClass} cursor-pointer aria-disabled:cursor-default aria-disabled:opacity-70`} style={resolveBaseStyleProps(styleConfig)}>
+          <BackgroundLayer background={background} />
+          <span className="relative z-10">{text}</span>
+        </FunnelOfferButton>
+      </div>
+    );
+  }
   // Slice 5: Open / Close Popup run through the shared action executor (a
   // real <button>); navigation actions stay links. Never in the builder.
   if (!editing && popupActionKind(action)) {

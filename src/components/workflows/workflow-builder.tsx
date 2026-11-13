@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { groupInvalidations, groupNeedsAttention, nodeInvalidations } from "@/lib/contacts/tag-rule-validity";
+import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -582,6 +583,18 @@ export function WorkflowBuilder({
             placeholder="Search triggers…"
             aria-label="Search workflow triggers"
           />
+          {groupNeedsAttention(trigger?.filters) ? (
+            <p
+              className="mt-2 rounded-md border border-red-500/40 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+              role="alert"
+            >
+              This trigger won&apos;t enroll anyone until its condition is fixed:{" "}
+              {groupInvalidations(trigger?.filters)
+                .map((i) => `the tag “${i.tag}” was deleted`)
+                .join("; ")}
+              . Choose another tag or remove that condition below.
+            </p>
+          ) : null}
 
           {triggerQuery.trim() && (
             <div
@@ -815,6 +828,7 @@ export function WorkflowBuilder({
 
         {/* Step chain */}
         <Chain steps={steps} onChange={setSteps} onEdit={setEditing} />
+        <StepFocus />
 
         <NodeConfigDialog
           saId={saId}
@@ -1035,6 +1049,8 @@ function StepCard({
           ? !readiness.whatsappReady
           : false;
   const warning = unmet ? REQUIREMENT_WARNING[requirement!] : null;
+  // Contacts & Tags (2026-11): a deleted tag stops runs at this step.
+  const tagIssue = nodeInvalidations({ type: step.type, config: step.config })[0] ?? null;
   const emailConfig = step.config;
   const emailBody =
     step.type === "send_email"
@@ -1053,9 +1069,10 @@ function StepCard({
   const Icon = ICONS[step.type];
   return (
     <div
+      data-step-id={step.id}
       className={cn(
-        "bg-card flex items-center gap-3 rounded-lg border p-3 shadow-sm",
-        unmet && "border-red-500/60"
+        "bg-card flex items-center gap-3 rounded-lg border p-3 shadow-sm scroll-mt-24",
+        (unmet || tagIssue) && "border-red-500/60"
       )}
     >
       <div
@@ -1080,13 +1097,15 @@ function StepCard({
         </div>
         <div
           className={cn(
-            "truncate text-xs",
-            unmet
+            tagIssue ? "text-xs" : "truncate text-xs",
+            unmet || tagIssue
               ? "text-red-600/80 dark:text-red-400/80"
               : "text-muted-foreground"
           )}
         >
-          {unmet
+          {tagIssue
+            ? `Needs attention — the tag “${tagIssue.tag}” was deleted. Runs stop here until you choose another tag.`
+            : unmet
             ? "Won't run — integration not configured"
             : incompleteEmail
               ? "Incomplete — finish before activation"
@@ -1181,4 +1200,24 @@ function AddMenu({ onAdd }: { onAdd: (t: WorkflowNodeType) => void }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/**
+ * Batch B: `?step=<nodeId>` (from a run's "Open the failed step") scrolls
+ * to that step and highlights it for a few seconds.
+ */
+function StepFocus() {
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("step");
+    if (!id) return;
+    const t = setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-step-id="${CSS.escape(id)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-2", "ring-primary");
+      setTimeout(() => el.classList.remove("ring-2", "ring-primary"), 4000);
+    }, 400);
+    return () => clearTimeout(t);
+  }, []);
+  return null;
 }

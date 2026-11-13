@@ -14,6 +14,7 @@ import {
   getStripeServer,
 } from "@/lib/stripe/server";
 import type { ExternalPayment } from "@/types/external-billing";
+import type { PaymentMode } from "@/types/tenancy";
 
 const PLATFORM_PROVIDER_ACCOUNT_ID = "platform";
 // "checkoutOrder" = the shared checkout engine (primary Offer + Order Bumps in one payment).
@@ -57,6 +58,10 @@ function requestOptions(
   return eventAccountId?.trim()
     ? { stripeAccount: eventAccountId.trim() }
     : undefined;
+}
+
+function stripeEnvironment(mode?: PaymentMode): PaymentMode {
+  return mode ?? getStripeEnvironment();
 }
 
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
@@ -121,6 +126,7 @@ async function resolveImportedSubscriptionRelationship(input: {
 async function resolveNativeMetadataRelationship(input: {
   metadata: Stripe.Metadata | null;
   eventAccountId: string | null;
+  mode?: PaymentMode;
 }): Promise<ExternalPaymentRelationship | null> {
   const metadata = input.metadata;
   if (!metadata || !NATIVE_PAYMENT_KINDS.has(metadata.kind ?? "")) return null;
@@ -139,7 +145,7 @@ async function resolveNativeMetadataRelationship(input: {
   const contactId = member?.contactId;
   const connectedAccountId = getStripeConnectionForEnvironment(
     subAccount?.stripeConnect,
-    getStripeEnvironment()
+    stripeEnvironment(input.mode)
   )?.accountId;
   if (
     !subAccountSnap.exists ||
@@ -185,6 +191,7 @@ async function resolveRelationship(input: {
   eventAccountId: string | null;
   externalSubscriptionId: string | null;
   metadata: Stripe.Metadata | null;
+  mode?: PaymentMode;
 }): Promise<ExternalPaymentRelationship | null> {
   const imported = await resolveImportedSubscriptionRelationship({
     eventAccountId: input.eventAccountId,
@@ -194,14 +201,16 @@ async function resolveRelationship(input: {
   return resolveNativeMetadataRelationship({
     metadata: input.metadata,
     eventAccountId: input.eventAccountId,
+    mode: input.mode,
   });
 }
 
 async function invoicePaymentReferences(input: {
   invoice: Stripe.Invoice;
   eventAccountId: string | null;
+  mode?: PaymentMode;
 }): Promise<{ paymentIntentId: string | null; chargeId: string | null }> {
-  const stripe = getStripeServer();
+  const stripe = getStripeServer(stripeEnvironment(input.mode));
   const payments = await stripe.invoicePayments.list(
     { invoice: input.invoice.id, limit: 10 },
     requestOptions(input.eventAccountId)
@@ -218,8 +227,9 @@ async function invoicePaymentReferences(input: {
 async function invoiceForPaymentIntent(input: {
   paymentIntentId: string;
   eventAccountId: string | null;
+  mode?: PaymentMode;
 }): Promise<Stripe.Invoice | null> {
-  const stripe = getStripeServer();
+  const stripe = getStripeServer(stripeEnvironment(input.mode));
   const payments = await stripe.invoicePayments.list(
     {
       payment: {
@@ -301,6 +311,7 @@ export async function syncExternalStripeInvoicePayment(input: {
   charge?: Stripe.Charge | null;
   relationship?: ExternalPaymentRelationship;
   source?: "synced" | "historical_backfill";
+  mode?: PaymentMode;
 }): Promise<ExternalPaymentSyncResult> {
   const externalSubscriptionId = invoiceSubscriptionId(input.invoice);
   const relationship =
@@ -309,6 +320,7 @@ export async function syncExternalStripeInvoicePayment(input: {
       eventAccountId: input.eventAccountId,
       externalSubscriptionId,
       metadata: invoiceMetadata(input.invoice),
+      mode: input.mode,
     }));
   if (!relationship) {
     return { outcome: "no_match", externalPaymentId: input.invoice.id };
@@ -317,6 +329,7 @@ export async function syncExternalStripeInvoicePayment(input: {
   const references = await invoicePaymentReferences({
     invoice: input.invoice,
     eventAccountId: input.eventAccountId,
+    mode: input.mode,
   }).catch((error) => {
     console.warn(
       `[external-payment-sync] invoice payment references unavailable invoice=${input.invoice.id} reason=${error instanceof Error ? error.message : "Unknown error"}`
@@ -326,7 +339,7 @@ export async function syncExternalStripeInvoicePayment(input: {
   const paymentIntent =
     input.paymentIntent ??
     (input.outcome === "failed" && references.paymentIntentId
-      ? await getStripeServer().paymentIntents.retrieve(
+      ? await getStripeServer(stripeEnvironment(input.mode)).paymentIntents.retrieve(
           references.paymentIntentId,
           requestOptions(input.eventAccountId)
         )
@@ -399,10 +412,12 @@ export async function syncExternalStripePaymentIntent(input: {
   eventAccountId: string | null;
   eventCreated: number;
   outcome: Exclude<PaymentOutcome, "refunded">;
+  mode?: PaymentMode;
 }): Promise<ExternalPaymentSyncResult> {
   const invoice = await invoiceForPaymentIntent({
     paymentIntentId: input.paymentIntent.id,
     eventAccountId: input.eventAccountId,
+    mode: input.mode,
   });
   if (invoice) {
     return syncExternalStripeInvoicePayment({
@@ -411,6 +426,7 @@ export async function syncExternalStripePaymentIntent(input: {
       eventCreated: input.eventCreated,
       outcome: input.outcome,
       paymentIntent: input.paymentIntent,
+      mode: input.mode,
     });
   }
 
@@ -418,6 +434,7 @@ export async function syncExternalStripePaymentIntent(input: {
     eventAccountId: input.eventAccountId,
     externalSubscriptionId: null,
     metadata: input.paymentIntent.metadata,
+    mode: input.mode,
   });
   if (!relationship) {
     return { outcome: "no_match", externalPaymentId: input.paymentIntent.id };
@@ -467,12 +484,14 @@ export async function syncExternalStripeChargeRefund(input: {
   charge: Stripe.Charge;
   eventAccountId: string | null;
   eventCreated: number;
+  mode?: PaymentMode;
 }): Promise<ExternalPaymentSyncResult> {
   const paymentIntentId = objectId(input.charge.payment_intent);
   if (paymentIntentId) {
     const invoice = await invoiceForPaymentIntent({
       paymentIntentId,
       eventAccountId: input.eventAccountId,
+      mode: input.mode,
     });
     if (invoice) {
       return syncExternalStripeInvoicePayment({
@@ -481,6 +500,7 @@ export async function syncExternalStripeChargeRefund(input: {
         eventCreated: input.eventCreated,
         outcome: "refunded",
         charge: input.charge,
+        mode: input.mode,
       });
     }
   }
@@ -504,6 +524,7 @@ export async function syncExternalStripeChargeRefund(input: {
         eventAccountId: input.eventAccountId,
         externalSubscriptionId: null,
         metadata: input.charge.metadata,
+        mode: input.mode,
       });
   if (!relationship) {
     return { outcome: "no_match", externalPaymentId: input.charge.id };

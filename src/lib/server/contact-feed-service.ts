@@ -217,6 +217,7 @@ export function parseActivityFilter(v: string | null): "all" | ActivityCategory 
     "pipeline",
     "forms",
     "automation",
+    "tags",
     "access",
     "notes",
     "other",

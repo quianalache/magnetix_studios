@@ -155,6 +155,13 @@ export interface PuckPageMetadata {
    * config id or "auto". Resolved server-side from the page's OWN workspace.
    */
   resolvedCheckouts?: Record<string, import("@/lib/pages-funnels/checkout-block").CheckoutBlockPayload | null>;
+  /**
+   * Post-purchase funnel runtime: what this page's Accept / Decline buttons
+   * can do for THIS visitor (from their funnel-session cookie, server-side).
+   * Undefined in the builder / Preview and for visitors without a session —
+   * the buttons then stay inactive.
+   */
+  funnelOffer?: import("@/lib/checkout/funnel-runtime-view").FunnelOfferRuntimeView | null;
   /** Media Library videos on this page → short-lived playback URL (Wave 3). */
   resolvedVideos?: Record<string, string | null>;
   /** Offer Summary bindings resolved from this page's active sub-account. */

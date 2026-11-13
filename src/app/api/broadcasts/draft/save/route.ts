@@ -1,5 +1,6 @@
 import "server-only";
 
+import { reconcileAudienceFilter } from "@/lib/contacts/tag-rule-validity";
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
@@ -124,7 +125,9 @@ export async function POST(request: Request) {
         preheader,
         content,
         emailDocument: emailDocumentFromBroadcast(content, subject, preheader),
-        audienceFilter,
+        // Contacts & Tags (2026-11): keep deleted-tag markers the composer
+        // may have dropped; drop them once the rule names another tag.
+        audienceFilter: reconcileAudienceFilter(existing.audienceFilter, audienceFilter),
         sourceTemplateId,
         testMode,
         testRecipientContactIds: testMode ? testRecipientIds : null,

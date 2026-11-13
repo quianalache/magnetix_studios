@@ -1434,6 +1434,7 @@ export function createPuckConfig(
             resolved={
               (puck.metadata as PuckPageMetadata | undefined)?.resolvedActions
             }
+            funnelOffer={(puck.metadata as PuckPageMetadata | undefined)?.funnelOffer}
             editing={puck.isEditing}
             style={style}
             alignment={alignment}

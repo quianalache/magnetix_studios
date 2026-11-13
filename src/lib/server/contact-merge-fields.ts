@@ -1,4 +1,5 @@
 import type { Contact } from "@/types/contacts";
+import { tagKey } from "@/lib/contacts/tag-names";
 
 /** Shared by manual linking and general merges. Consent restrictions always
  * survive, even when the caller selected a different primary identity. */
@@ -20,7 +21,14 @@ export function contactMergeFields(survivor: Omit<Contact, "id">, loser: Omit<Co
     if (loser.firstName != null) patch.firstName = loser.firstName;
     if (loser.lastName != null) patch.lastName = loser.lastName;
   }
-  patch.tags = Array.from(new Set([...(survivor.tags ?? []), ...(loser.tags ?? [])]));
+  // One entry per tag key ("VIP" + "vip" → the survivor's spelling).
+  const seenTagKeys = new Set<string>();
+  patch.tags = [...(survivor.tags ?? []), ...(loser.tags ?? [])].filter((t) => {
+    const k = tagKey(t);
+    if (!k || seenTagKeys.has(k)) return false;
+    seenTagKeys.add(k);
+    return true;
+  });
   const customFields = { ...(loser.customFields ?? {}) };
   for (const [key, value] of Object.entries(survivor.customFields ?? {})) {
     if (value !== "" && value != null) customFields[key] = value;

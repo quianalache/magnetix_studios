@@ -198,6 +198,17 @@ function ActivityRow({
   const noteId = typeof item.meta?.noteId === "string" ? item.meta.noteId : null;
   const dealId = typeof item.meta?.dealId === "string" ? item.meta.dealId : null;
   const quoteId = typeof item.meta?.quoteId === "string" ? item.meta.quoteId : null;
+  // Anything a workflow run did (run lifecycle, tag changes, workflow
+  // emails) links to that exact run; older rows without a run id link to
+  // the workflow.
+  const runWorkflowId = typeof item.meta?.workflowId === "string" ? item.meta.workflowId : null;
+  const runId = typeof item.meta?.runId === "string" ? item.meta.runId : null;
+  const runHref = runWorkflowId
+    ? runId
+      ? saPath(`/workflows/${runWorkflowId}/runs?run=${encodeURIComponent(runId)}`)
+      : saPath(`/workflows/${runWorkflowId}`)
+    : null;
+  const testRelated = item.meta?.test === true || typeof item.meta?.testOriginRunId === "string";
 
   return (
     <li className="flex gap-3 px-3 py-3 sm:px-4">
@@ -208,6 +219,11 @@ function ActivityRow({
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
           <p className="text-sm font-medium">
             {visuals.label}
+            {testRelated && (
+              <span className="ml-1.5 inline-flex rounded-full bg-tag-violet-bg px-1.5 py-px align-middle text-micro font-semibold text-tag-violet-fg">
+                {item.meta?.test === true ? "Test" : "Started by a test"}
+              </span>
+            )}
             {item.actorName && (
               <span className="font-normal text-muted-foreground"> · {item.actorName}</span>
             )}
@@ -240,6 +256,11 @@ function ActivityRow({
         {dealId && (
           <Link href={saPath("/pipeline")} className="mt-1 inline-block text-xs text-primary hover:underline">
             View in pipeline →
+          </Link>
+        )}
+        {runHref && (
+          <Link href={runHref} className="mt-1 inline-block text-xs text-primary hover:underline">
+            {runId ? "View workflow run →" : "View workflow →"}
           </Link>
         )}
         {quoteId && (

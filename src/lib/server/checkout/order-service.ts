@@ -11,7 +11,7 @@ import {
 import { ensureMember, ExistingMemberRequiresSignInError, findMemberByEmail } from "@/lib/community/member-account";
 import { signMemberSessionToken } from "@/lib/community/member-auth";
 import { getCurrentMember, setMemberSessionCookie } from "@/lib/community/member-session";
-import { getStripeEnvironment, getStripeServer, normalizePaymentMode, resolveStripeForSubAccount } from "@/lib/stripe/server";
+import { getStripeEnvironment, getStripeServer, normalizePaymentMode, publishableKeyForMode, resolveStripeForSubAccount } from "@/lib/stripe/server";
 import { normalizeAttribution } from "@/lib/attribution";
 import { checkCouponForOrder, couponRejectionMessage, describeCouponEffect, type CouponEffect } from "@/lib/checkout/coupons";
 import { liveBumps } from "@/lib/checkout/config";
@@ -241,17 +241,9 @@ async function resolveStripeTarget(subAccountId: string, primary: CourseOffer): 
   };
 }
 
-/** The browser key for a payment mode (an explicit per-mode key wins). */
+/** The browser key for a payment mode (an explicit per-mode key wins) — shared with the embedded Offer / course checkouts. */
 export function publishableKeyFor(mode: "test" | "live"): string | null {
-  const candidates = [
-    mode === "test" ? process.env.STRIPE_PUBLISHABLE_KEY_TEST : process.env.STRIPE_PUBLISHABLE_KEY_LIVE,
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-  ];
-  for (const key of candidates) {
-    const k = key?.trim();
-    if (k && k.startsWith(mode === "test" ? "pk_test_" : "pk_live_")) return k;
-  }
-  return null;
+  return publishableKeyForMode(mode);
 }
 
 /** Is card payment possible for this checkout? Never throws. */
@@ -741,7 +733,14 @@ export async function completeOrder(orderId: string, opts: { source: "client" | 
   if (opts.source === "webhook" && (opts.eventAccountId ?? null) !== order.stripeAccountId) {
     throw new CheckoutError("Stripe account mismatch for this order.", 400);
   }
-  if (order.status === "paid" && order.items.every((i) => i.fulfillment === "granted")) return { status: "paid", redirectTo: await destinationFor(order) };
+  if (order.status === "paid" && order.items.every((i) => i.fulfillment === "granted")) {
+    // Funnel Upsell / Downsell: the runtime owns outcome effects + routing (idempotent; retries anything still pending).
+    if (order.context.type === "funnel_offer") {
+      await finalizeFunnelOffer(order);
+      return { status: "paid", redirectTo: "" };
+    }
+    return { status: "paid", redirectTo: await destinationFor(order) };
+  }
   if (order.status === "failed" || order.status === "canceled") return { status: order.status, redirectTo: "" };
 
   const verified = await verifyPaid(order);
@@ -817,6 +816,12 @@ export async function completeOrder(orderId: string, opts: { source: "client" | 
     }).catch((err) => console.error("[checkout] coupon redemption record failed", err));
   }
   await ref.update({ items, fulfillmentLockUntil: 0, updatedAt: Date.now() });
+  if (order.context.type === "funnel_offer") {
+    // Funnel Upsell / Downsell: no checkout CRM (that's the Checkout step's);
+    // the step's own Accept actions + routing run once, after this verified payment.
+    await finalizeFunnelOffer({ ...order, items });
+    return { status: "paid", redirectTo: "" };
+  }
   // CRM follow-up (tags, session completed, abandoned follow-up stopped,
   // checkout.completed) — once per order, never blocking the buyer.
   await completeCheckoutCrm({ ...order, items }).catch((err) => console.error("[checkout] CRM completion failed", err));
@@ -906,4 +911,356 @@ export async function orderForAdmin(subAccountId: string, orderId: string): Prom
   const snap = await ordersCol().doc(assertId(orderId, "order")).get();
   if (!snap.exists || snap.data()?.subAccountId !== subAccountId) return null;
   return { id: snap.id, ...(snap.data() as Omit<CheckoutOrder, "id">) };
+}
+
+/* ---------------------- Funnel Upsell / Downsell orders ---------------------- */
+
+/**
+ * Post-purchase funnel runtime (Pages & Funnels). An accepted Upsell /
+ * Downsell is ONE ordinary checkout order (context `funnel_offer`, one
+ * primary item, id `fo_{session}_{step}`), so it reuses everything above:
+ * the same purchase record, Stripe product cache, Stripe-verified
+ * completion, fulfilment lock, entitlement grant and the trusted Stripe
+ * payment events (Batch C resolves the buyer through this order). Price,
+ * currency and interval come from the Offer, never from the browser.
+ */
+
+async function finalizeFunnelOffer(order: CheckoutOrder): Promise<void> {
+  try {
+    const { finalizeFunnelOfferFromOrder } = await import("./funnel-runtime-service");
+    await finalizeFunnelOfferFromOrder(order);
+  } catch (err) {
+    // Left "pending" on the session: retried on the buyer's next request.
+    console.error("[funnel-offer] finalize failed", order.id, err);
+  }
+}
+
+/** The saved payment method a paid funnel Checkout order used (Stripe id only), or null. */
+export async function savedPaymentMethodForOrder(order: CheckoutOrder): Promise<string | null> {
+  if (!order.paymentMode) return null;
+  const stripe = getStripeServer(order.paymentMode);
+  const opts = order.stripeAccountId ? { stripeAccount: order.stripeAccountId } : undefined;
+  const idOf = (v: unknown) => (typeof v === "string" ? v : v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" ? (v as { id: string }).id : null);
+  try {
+    if (order.stripePaymentIntentId) return idOf((await stripe.paymentIntents.retrieve(order.stripePaymentIntentId, {}, opts)).payment_method);
+    if (order.stripeSubscriptionId) {
+      const sub = await stripe.subscriptions.retrieve(order.stripeSubscriptionId, {}, opts);
+      const pm = idOf(sub.default_payment_method);
+      if (pm) return pm;
+    }
+    if (order.stripeSetupIntentId) return idOf((await stripe.setupIntents.retrieve(order.stripeSetupIntentId, {}, opts)).payment_method);
+  } catch (err) {
+    console.warn("[funnel-offer] saved payment method lookup failed", order.id, err instanceof Error ? err.message : err);
+  }
+  return null;
+}
+
+/** Same payment target rules as the checkout: the Offer's mode on this workspace's own Stripe account. */
+export async function funnelOfferPaymentTarget(subAccountId: string, offer: CourseOffer): Promise<{ accountId: string | null; paymentMode: "test" | "live"; publishableKey: string | null }> {
+  const t = await resolveStripeTarget(subAccountId, offer);
+  return { accountId: t.accountId, paymentMode: t.paymentMode, publishableKey: publishableKeyFor(t.paymentMode) };
+}
+
+/**
+ * Create (once) the purchase attempt for one funnel step. Deterministic id +
+ * `create()` — concurrent clicks, refreshes and retries share one order.
+ */
+export async function createFunnelOfferOrder(input: {
+  orderId: string;
+  session: { id: string; agencyId: string; subAccountId: string; funnelId: string; memberId: string; paymentMode: "test" | "live" | null; stripeAccountId: string | null; stripeCustomerId: string | null };
+  stepId: string;
+  offer: CourseOffer;
+  consentAt: number | null;
+}): Promise<CheckoutOrder> {
+  const ref = ordersCol().doc(input.orderId);
+  const existing = await ref.get();
+  if (existing.exists) return { id: existing.id, ...(existing.data() as Omit<CheckoutOrder, "id">) };
+  const member = (await getAdminDb().doc(`subAccounts/${input.session.subAccountId}/members/${input.session.memberId}`).get()).data() ?? {};
+  const totals = computeOrderTotals([lineFromOffer(input.offer, "primary")], null);
+  const line = totals.lines[0];
+  const now = Date.now();
+  // A genuine free trial is the ONLY $0-today acceptance: a recurring Offer
+  // with trial days (upsells carry no coupons or credits, and unpriced / free
+  // Offers can't be chosen for a step).
+  const trial = totals.recurring !== null && totals.recurring.trialDays > 0 && totals.dueTodayCents === 0;
+  const order: CheckoutOrder = {
+    id: input.orderId,
+    agencyId: input.session.agencyId,
+    subAccountId: input.session.subAccountId,
+    configId: "funnel_offer",
+    context: { type: "funnel_offer", funnelId: input.session.funnelId, stepId: input.stepId, sessionId: input.session.id },
+    memberId: input.session.memberId,
+    matchedExistingMember: false,
+    sessionId: null,
+    buyer: { name: String(member.displayName ?? ""), email: String(member.email ?? ""), phone: String(member.phone ?? "") },
+    agreementAccepted: input.consentAt !== null,
+    currency: totals.currency,
+    items: [{ offerId: input.offer.id, role: "primary", bumpId: null, title: line.title, billing: line.billing, unitAmountCents: line.unitAmountCents, discountCents: 0, dueTodayCents: line.dueTodayCents, purchaseId: null, fulfillment: "pending", fulfillmentError: null }],
+    coupon: null,
+    totals,
+    paymentMode: input.session.paymentMode,
+    stripeAccountId: input.session.stripeAccountId,
+    stripeCustomerId: input.session.stripeCustomerId,
+    stripePaymentIntentId: null,
+    stripeSetupIntentId: null,
+    stripeSubscriptionId: null,
+    stripeCouponIds: [],
+    status: "pending",
+    failureReason: null,
+    paidAt: null,
+    acceptance: trial ? "trial_activation" : "payment",
+    createdAt: now,
+    updatedAt: now,
+  };
+  try {
+    await ref.create(order);
+  } catch {
+    // Lost a race: the other request created it.
+    const raced = await ref.get();
+    return { id: raced.id, ...(raced.data() as Omit<CheckoutOrder, "id">) };
+  }
+  await writePurchases(order, new Map([[input.offer.id, input.offer]]), null);
+  const fresh = await ref.get();
+  if (trial) {
+    // Mark the purchase as an accepted free trial (not a paid purchase).
+    const item = (fresh.data()?.items as CheckoutOrderItem[] | undefined)?.[0];
+    if (item?.purchaseId) await purchasesCol(order.subAccountId, item.offerId).doc(item.purchaseId).update({ acceptedAs: "trial", trialDays: totals.recurring!.trialDays });
+  }
+  return { id: fresh.id, ...(fresh.data() as Omit<CheckoutOrder, "id">) };
+}
+
+export interface FunnelOfferPaymentResult {
+  state: "succeeded" | "processing" | "requires_action" | "payment_failed";
+  /** For Stripe.js only (authentication / inline payment) — never stored client-side. */
+  clientSecret: string | null;
+  /** What `clientSecret` belongs to: a PaymentIntent (a charge) or a SetupIntent (free trial: card authorization only). */
+  intentType?: "payment" | "setup";
+  failure: string | null;
+}
+
+function piIdFromSecret(secret: string | null | undefined): string | null {
+  const m = secret ? /^(pi_[A-Za-z0-9]+)_secret_/.exec(secret) : null;
+  return m ? m[1] : null;
+}
+
+function friendlyDecline(err: { code?: string | null; decline_code?: string | null } | null | undefined): string {
+  const code = err?.decline_code || err?.code || "";
+  if (code === "insufficient_funds") return "Your card was declined for insufficient funds.";
+  if (code === "expired_card") return "Your saved card has expired.";
+  if (code === "authentication_required") return "Your bank needs you to confirm this payment.";
+  return "We couldn't complete the charge on your saved card.";
+}
+
+/**
+ * Charge (or resume) one funnel step's order with the buyer present. Re-running
+ * it never creates a second charge: the PaymentIntent / Subscription id is
+ * stored on the order and Stripe idempotency keys are per order.
+ * Success is decided ONLY by `completeOrder` (Stripe-verified).
+ */
+export async function chargeFunnelOfferOrder(orderId: string, paymentMethodId: string | null): Promise<FunnelOfferPaymentResult> {
+  const ref = ordersCol().doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new CheckoutError("Order not found.", 404);
+  const order = { id: snap.id, ...(snap.data() as Omit<CheckoutOrder, "id">) };
+  if (order.context.type !== "funnel_offer") throw new CheckoutError("Order not found.", 404);
+  if (order.status === "paid") return { state: "succeeded", clientSecret: null, failure: null };
+  if (order.status === "canceled" || order.status === "failed") throw new CheckoutError("This offer is no longer available.", 409, null, "attempt_closed");
+  if (!order.paymentMode) throw new CheckoutError("Card payments aren't available for this offer.", 409, null, "payments_not_ready");
+  const stripe = getStripeServer(order.paymentMode);
+  const opts = order.stripeAccountId ? { stripeAccount: order.stripeAccountId } : undefined;
+  const offer = await getCourseOffer(order.subAccountId, order.items[0].offerId);
+  if (!offer) throw new CheckoutError("This offer is no longer available.", 409, null, "unavailable");
+  const metadata = { kind: CHECKOUT_ORDER_KIND, orderId: order.id, subAccountId: order.subAccountId, memberId: order.memberId, offerId: offer.id, funnelId: order.context.funnelId, funnelStepId: order.context.stepId };
+  const settle = async (): Promise<FunnelOfferPaymentResult> => {
+    const done = await completeOrder(order.id, { source: "client" });
+    return done.status === "paid" ? { state: "succeeded", clientSecret: null, failure: null } : { state: "processing", clientSecret: null, failure: null };
+  };
+
+  if (order.totals.recurring === null) {
+    let pi: Stripe.PaymentIntent;
+    if (order.stripePaymentIntentId) {
+      pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId, {}, opts);
+    } else {
+      try {
+        pi = await stripe.paymentIntents.create(
+          {
+            amount: order.totals.dueTodayCents,
+            currency: order.currency.toLowerCase(),
+            customer: order.stripeCustomerId ?? undefined,
+            ...(paymentMethodId ? { payment_method: paymentMethodId, confirm: true } : {}),
+            automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+            setup_future_usage: "off_session",
+            description: offer.title.slice(0, 200),
+            ...(order.buyer.email ? { receipt_email: order.buyer.email } : {}),
+            metadata,
+          },
+          { ...opts, idempotencyKey: `order_${order.id}_pi` },
+        );
+      } catch (err) {
+        const raw = (err as { raw?: { payment_intent?: Stripe.PaymentIntent; code?: string; decline_code?: string } }).raw;
+        if (!raw?.payment_intent?.id) throw err;
+        pi = raw.payment_intent;
+      }
+      await ref.update({ stripePaymentIntentId: pi.id, updatedAt: Date.now() });
+    }
+    if (pi.status === "succeeded") return settle();
+    if (pi.status === "processing") return { state: "processing", clientSecret: null, failure: null };
+    if (pi.status === "requires_action") return { state: "requires_action", clientSecret: pi.client_secret, intentType: "payment", failure: null };
+    return { state: "payment_failed", clientSecret: pi.client_secret, intentType: "payment", failure: paymentMethodId ? friendlyDecline(pi.last_payment_error) : "Add a payment method to complete this purchase." };
+  }
+
+  if (order.totals.dueTodayCents === 0 && order.totals.recurring.trialDays > 0) return chargeFunnelTrial(order, offer, paymentMethodId, metadata);
+
+  // Recurring Offer → a Stripe Subscription with the Offer's own price + interval.
+  let sub: Stripe.Subscription;
+  if (order.stripeSubscriptionId) {
+    sub = await stripe.subscriptions.retrieve(order.stripeSubscriptionId, { expand: ["latest_invoice.confirmation_secret"] }, opts);
+  } else {
+    const target = { stripe, accountId: order.stripeAccountId, paymentMode: order.paymentMode, requestOptions: opts } as StripeTarget;
+    const product = await stripeProductFor(target, offer);
+    const recurring = order.totals.recurring;
+    sub = await stripe.subscriptions.create(
+      {
+        customer: order.stripeCustomerId!,
+        items: [{ price_data: { currency: order.currency.toLowerCase(), product, unit_amount: recurring.amountCents, recurring: { interval: recurring.interval } } }],
+        ...(paymentMethodId ? { default_payment_method: paymentMethodId, payment_behavior: "allow_incomplete" as const } : { payment_behavior: "default_incomplete" as const }),
+        payment_settings: { save_default_payment_method: "on_subscription" },
+        metadata,
+        expand: ["latest_invoice.confirmation_secret"],
+      },
+      { ...opts, idempotencyKey: `order_${order.id}_sub` },
+    );
+    await ref.update({ stripeSubscriptionId: sub.id, updatedAt: Date.now() });
+  }
+  if (sub.status === "active") return settle();
+  const invoice = sub.latest_invoice as Stripe.Invoice | null;
+  const secret = invoice?.confirmation_secret?.client_secret ?? null;
+  const piId = piIdFromSecret(secret);
+  const pi = piId ? await stripe.paymentIntents.retrieve(piId, {}, opts).catch(() => null) : null;
+  if (pi?.status === "succeeded") return settle();
+  if (pi?.status === "processing") return { state: "processing", clientSecret: null, failure: null };
+  if (pi?.status === "requires_action") return { state: "requires_action", clientSecret: secret, intentType: "payment", failure: null };
+  return { state: "payment_failed", clientSecret: secret, intentType: "payment", failure: paymentMethodId ? friendlyDecline(pi?.last_payment_error) : "Add a payment method to complete this purchase." };
+}
+
+/**
+ * Free-trial subscription Offer (owner decision 2026-11-13). Order matters:
+ *   1. AUTHORIZE the card for future off-session billing with a SetupIntent
+ *      (the saved card, buyer present; 3-D Secure → requires_action; a
+ *      rejected card → the inline form confirms the SAME SetupIntent);
+ *   2. only once that SetupIntent SUCCEEDED, create the Subscription with the
+ *      Offer's own price, interval and trial days and that card as default —
+ *      so an abandoned or failed authorization never leaves a subscription
+ *      that would bill later;
+ *   3. `completeOrder` → `verifyPaid` then checks with Stripe that the
+ *      subscription is trialing, its $0 invoice is settled and the SetupIntent
+ *      succeeded for THIS order. Nothing is charged; no payment is recorded.
+ */
+async function chargeFunnelTrial(order: CheckoutOrder, offer: CourseOffer, paymentMethodId: string | null, metadata: Record<string, string>): Promise<FunnelOfferPaymentResult> {
+  const ref = ordersCol().doc(order.id);
+  const stripe = getStripeServer(order.paymentMode!);
+  const opts = order.stripeAccountId ? { stripeAccount: order.stripeAccountId } : undefined;
+  const settle = async (): Promise<FunnelOfferPaymentResult> => {
+    const done = await completeOrder(order.id, { source: "client" });
+    return done.status === "paid" ? { state: "succeeded", clientSecret: null, intentType: "setup", failure: null } : { state: "processing", clientSecret: null, intentType: "setup", failure: null };
+  };
+  if (order.stripeSubscriptionId) return settle();
+
+  let si: Stripe.SetupIntent;
+  if (order.stripeSetupIntentId) {
+    si = await stripe.setupIntents.retrieve(order.stripeSetupIntentId, {}, opts);
+  } else {
+    try {
+      si = await stripe.setupIntents.create(
+        {
+          customer: order.stripeCustomerId ?? undefined,
+          usage: "off_session",
+          ...(paymentMethodId ? { payment_method: paymentMethodId, confirm: true } : {}),
+          automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+          metadata: { ...metadata, funnelTrial: "1" },
+        },
+        { ...opts, idempotencyKey: `order_${order.id}_setup` },
+      );
+    } catch (err) {
+      const raw = (err as { raw?: { setup_intent?: Stripe.SetupIntent } }).raw;
+      if (!raw?.setup_intent?.id) throw err;
+      si = raw.setup_intent;
+    }
+    await ref.update({ stripeSetupIntentId: si.id, updatedAt: Date.now() });
+  }
+  if (si.status === "requires_action") return { state: "requires_action", clientSecret: si.client_secret, intentType: "setup", failure: null };
+  if (si.status === "processing") return { state: "processing", clientSecret: null, intentType: "setup", failure: null };
+  if (si.status !== "succeeded") {
+    return {
+      state: "payment_failed",
+      clientSecret: si.client_secret,
+      intentType: "setup",
+      failure: paymentMethodId ? "We couldn't set up your saved card for this subscription." : "Add a payment method to start your free trial.",
+    };
+  }
+  const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;
+  if (!pm) return { state: "payment_failed", clientSecret: si.client_secret, intentType: "setup", failure: "Add a payment method to start your free trial." };
+
+  // The buyer declined meanwhile (attempt closed): never start a subscription.
+  if ((await ref.get()).data()?.status !== "pending") throw new CheckoutError("This offer is no longer available.", 409, null, "attempt_closed");
+  const target = { stripe, accountId: order.stripeAccountId, paymentMode: order.paymentMode, requestOptions: opts } as StripeTarget;
+  const product = await stripeProductFor(target, offer);
+  const recurring = order.totals.recurring!;
+  const sub = await stripe.subscriptions.create(
+    {
+      customer: order.stripeCustomerId!,
+      items: [{ price_data: { currency: order.currency.toLowerCase(), product, unit_amount: recurring.amountCents, recurring: { interval: recurring.interval } } }],
+      trial_period_days: recurring.trialDays,
+      default_payment_method: pm,
+      payment_settings: { save_default_payment_method: "on_subscription" },
+      metadata: { ...metadata, funnelTrial: "1" },
+    },
+    { ...opts, idempotencyKey: `order_${order.id}_sub` },
+  );
+  await ref.update({ stripeSubscriptionId: sub.id, updatedAt: Date.now() });
+  return settle();
+}
+
+/**
+ * The buyer declined after a failed / unfinished attempt: close it so it can
+ * never be completed later. Never cancels something Stripe already collected.
+ */
+export async function closeFunnelOfferAttempt(orderId: string): Promise<"paid" | "closed" | "none"> {
+  const ref = ordersCol().doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) return "none";
+  const order = { id: snap.id, ...(snap.data() as Omit<CheckoutOrder, "id">) };
+  if (order.status === "paid") return "paid";
+  if (order.status !== "pending") return "closed";
+  if (order.paymentMode && (order.stripePaymentIntentId || order.stripeSubscriptionId)) {
+    const verified = await verifyPaid(order).catch(() => ({ ok: false }));
+    if (verified.ok) {
+      await completeOrder(order.id, { source: "client" });
+      return "paid";
+    }
+    const stripe = getStripeServer(order.paymentMode);
+    const opts = order.stripeAccountId ? { stripeAccount: order.stripeAccountId } : undefined;
+    if (order.stripePaymentIntentId) await stripe.paymentIntents.cancel(order.stripePaymentIntentId, {}, opts).catch(() => undefined);
+    if (order.stripeSubscriptionId) await stripe.subscriptions.cancel(order.stripeSubscriptionId, {}, opts).catch(() => undefined);
+  }
+  // A free trial's card authorization that never completed: void it too.
+  if (order.paymentMode && order.stripeSetupIntentId && !order.stripeSubscriptionId) {
+    const stripe = getStripeServer(order.paymentMode);
+    const opts = order.stripeAccountId ? { stripeAccount: order.stripeAccountId } : undefined;
+    await stripe.setupIntents.cancel(order.stripeSetupIntentId, {}, opts).catch(() => undefined);
+  }
+  await ref.update({ status: "canceled", failureReason: "Declined by the buyer", updatedAt: Date.now() });
+  for (const item of order.items) {
+    if (item.purchaseId) await purchasesCol(order.subAccountId, item.offerId).doc(item.purchaseId).update({ status: "void" }).catch(() => undefined);
+  }
+  return "closed";
+}
+
+/** Where a buyer goes when a funnel ends: their Space, like a checkout's default destination. */
+export async function funnelEndDestination(subAccountId: string, memberId: string): Promise<string> {
+  const sa = (await getAdminDb().doc(`subAccounts/${subAccountId}`).get()).data();
+  const slug = (sa?.slug as string) || subAccountId;
+  const next = encodeURIComponent(`/portal/${slug}`);
+  const member = (await getAdminDb().doc(`subAccounts/${subAccountId}/members/${memberId}`).get()).data();
+  return member?.emailVerified === false ? `/my/login?next=${next}` : `/api/my/bridge-from-member?next=${next}`;
 }

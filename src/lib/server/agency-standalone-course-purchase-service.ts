@@ -3,7 +3,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getStripeServer } from "@/lib/stripe/server";
+import { getStripeEnvironment, getStripeServer, publishableKeyForMode } from "@/lib/stripe/server";
 import {
   getAgencyStandaloneCourse,
   grantLinkedAgencyCommunityGroupsServerSide,
@@ -49,7 +49,7 @@ export async function startAgencyStandaloneCourseStripeCheckoutServerSide(opts: 
   personId: string;
   personEmail: string;
   returnUrl: string;
-}): Promise<{ clientSecret: string }> {
+}): Promise<{ clientSecret: string; paymentMode: "test" | "live"; publishableKey: string; stripeAccount: null }> {
   const course = await getAgencyStandaloneCourse(opts.agencyId, opts.courseId);
   if (!course || course.access !== "purchase" || !course.priceCents) {
     throw new Error("This course isn't for sale.");
@@ -58,7 +58,10 @@ export async function startAgencyStandaloneCourseStripeCheckoutServerSide(opts: 
   const currency = course.currency ?? "USD";
   const isRecurring = course.billingType === "recurring";
 
-  const stripe = getStripeServer();
+  const paymentMode = getStripeEnvironment();
+  const publishableKey = publishableKeyForMode(paymentMode);
+  if (!publishableKey) throw new Error(`${paymentMode === "live" ? "Live" : "Test"} card payments aren't configured on this site yet.`);
+  const stripe = getStripeServer(paymentMode);
   const metadata = {
     kind: AGENCY_COURSE_CHARGE_KIND,
     agencyId: opts.agencyId,
@@ -112,12 +115,13 @@ export async function startAgencyStandaloneCourseStripeCheckoutServerSide(opts: 
     stripeCustomerId: null,
     stripeSubscriptionId: null,
     status: "pending",
+    paymentMode,
     grantedByUid: null,
     requestedAt: FieldValue.serverTimestamp(),
     paidAt: null,
   });
 
-  return { clientSecret: session.client_secret };
+  return { clientSecret: session.client_secret, paymentMode, publishableKey, stripeAccount: null };
 }
 
 export async function hasPaidAgencyStandaloneCourse(agencyId: string, courseId: string, personId: string): Promise<boolean> {

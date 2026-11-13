@@ -42,6 +42,9 @@ export const GROUPS = [
   // and the public checkout engine API.
   "src/app/api/sub-accounts/[id]/commerce",
   "src/app/api/order-checkout",
+  // Contacts & Tags (2026-11): central tag library (list, detail, create,
+  // rename, merge, delete, duplicates, operations).
+  "src/app/api/sub-accounts/[id]/contact-tags",
 ];
 
 const DISPATCH_DIR = "[[...path]]";

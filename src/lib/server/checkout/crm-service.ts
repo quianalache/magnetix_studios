@@ -1,13 +1,15 @@
 import "server-only";
 
+import { hasTag } from "@/lib/contacts/tag-names";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { publishCallback } from "@/lib/automations/qstash";
 import { createContactServerSide, findExistingContactId, updateContactServerSide } from "@/lib/server/contacts-service";
+import { applyContactTags } from "@/lib/server/contact-tags/tag-writer";
 import { recordContactActivity } from "@/lib/server/contact-activity";
 import { exitAbandonedCheckoutRuns, fireWorkflowTrigger, startWorkflowForCheckoutEvent } from "@/lib/workflows/engine";
-import { abandonmentDecision, abandonDueAt, addTags, EMAIL_RE, normalizeCrm, removeTags } from "@/lib/checkout/crm";
+import { abandonmentDecision, abandonDueAt, EMAIL_RE, normalizeCrm } from "@/lib/checkout/crm";
 import type { ContactAttribution } from "@/types/contacts";
 import type { CheckoutConfig, CheckoutCrmSettings, CheckoutOrder, CheckoutSession } from "@/types/checkout";
 import type { WorkflowTriggerType } from "@/types/workflows";
@@ -137,17 +139,26 @@ export async function reconcileCheckoutContact(input: {
   return { contactId: created.id, created: true };
 }
 
-/** Add / remove tags on a Contact through the shared update path (fires tag triggers). */
+/**
+ * Add / remove tags on a Contact through the shared tag service (Contacts
+ * & Tags, 2026-11): registry spelling, Tag Added / Removed events and
+ * Contact Activity only for real changes. A tag in both lists is removed
+ * (checkout's existing rule — e.g. completed tags never re-add abandoned).
+ */
 async function changeTags(contactId: string, add: string[], remove: string[] = []): Promise<void> {
   if (!add.length && !remove.length) return;
   const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
   if (!snap.exists) return;
-  const current: string[] = Array.isArray(snap.data()?.tags) ? snap.data()!.tags : [];
-  const keepAdded = add.filter((t) => !remove.some((r) => r.toLowerCase() === t.toLowerCase()));
-  const afterRemove = removeTags(current, remove) ?? current;
-  const next = addTags(afterRemove, keepAdded) ?? afterRemove;
-  if (next.length === current.length && next.every((t, i) => t === current[i])) return;
-  await updateContactServerSide({ contactId, patch: { tags: next } });
+  const subAccountId = String(snap.get("subAccountId") ?? "");
+  if (!subAccountId) return;
+  const keepAdded = add.filter((t) => !hasTag(remove, t));
+  await applyContactTags({
+    subAccountId,
+    contactId,
+    add: keepAdded,
+    remove,
+    ctx: { source: "checkout" },
+  });
 }
 
 /**

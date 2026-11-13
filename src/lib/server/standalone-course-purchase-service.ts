@@ -9,6 +9,7 @@ import {
   getStripeEnvironment,
   getStripeServer,
   normalizePaymentMode,
+  publishableKeyForMode,
   resolveStripeForSubAccount,
 } from "@/lib/stripe/server";
 import {
@@ -17,6 +18,10 @@ import {
   revokeLinkedCommunityAccessServerSide,
 } from "@/lib/server/standalone-course-service";
 import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
+import {
+  syncNativeOneTimePurchaseServerSide,
+  syncNativeSubscriptionPurchaseServerSide,
+} from "@/lib/server/native-purchase-billing-sync";
 import {
   formatActivityAmount,
   recordContactActivity,
@@ -128,7 +133,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   memberEmail: string;
   returnUrl: string;
   paymentMode?: "test" | "live";
-}): Promise<{ clientSecret: string }> {
+}): Promise<{ clientSecret: string; paymentMode: "test" | "live"; publishableKey: string; stripeAccount: string | null }> {
   const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
   if (!course || course.access !== "purchase" || !course.priceCents) {
     throw new Error("This course isn't for sale.");
@@ -150,6 +155,10 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     throw error;
   });
   const connectAccountId = resolved?.accountId ?? null;
+  const publishableKey = publishableKeyForMode(paymentMode);
+  if (!publishableKey) {
+    throw new Error(`${paymentMode === "live" ? "Live" : "Test"} card payments aren't configured on this site yet.`);
+  }
   const useSharedAccount =
     subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {
@@ -243,7 +252,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     paidAt: null,
   });
 
-  return { clientSecret: session.client_secret };
+  return { clientSecret: session.client_secret, paymentMode, publishableKey, stripeAccount: connectAccountId };
 }
 
 /** Has this member paid for this course? (Drives the classroom unlock check.) */
@@ -321,6 +330,37 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   );
   if (!existingEnroll.exists) {
     await courseRef.update({ enrollmentCount: FieldValue.increment(1) });
+  }
+
+  // Best-effort customer-facing billing ledger sync. The course entitlement
+  // above is authoritative and must not fail if reconciliation is delayed.
+  const memberSnap = await getAdminDb()
+    .doc(`subAccounts/${opts.subAccountId}/members/${purchase.memberId}`)
+    .get();
+  const member = memberSnap.data();
+  const contactId = member?.contactId as string | undefined;
+  const memberEmail = member?.email as string | undefined;
+  if (memberSnap.exists && contactId && memberEmail) {
+    if (purchase.stripeSubscriptionId) {
+      void syncNativeSubscriptionPurchaseServerSide({
+        agencyId: purchase.agencyId,
+        subAccountId: opts.subAccountId,
+        memberId: purchase.memberId,
+        contactId,
+        personId: (member?.personId as string | undefined) ?? null,
+        memberEmail,
+        stripeSubscriptionId: purchase.stripeSubscriptionId,
+        stripeConnectAccountId: purchase.stripeConnectAccountId ?? null,
+        paymentMode: purchase.paymentMode,
+        fallbackProductName: null,
+      }).catch((err) => console.warn("[standalone-course] ledger sync failed", err));
+    } else if (purchase.stripePaymentIntentId) {
+      void syncNativeOneTimePurchaseServerSide({
+        stripePaymentIntentId: purchase.stripePaymentIntentId,
+        stripeConnectAccountId: purchase.stripeConnectAccountId ?? null,
+        paymentMode: purchase.paymentMode,
+      }).catch((err) => console.warn("[standalone-course] ledger sync failed", err));
+    }
   }
 
   // Contacts redesign (2026-09-25) — contact timeline rows (deterministic

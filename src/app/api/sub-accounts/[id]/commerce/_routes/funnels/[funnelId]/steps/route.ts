@@ -8,13 +8,13 @@ import { addStep, reorderSteps } from "@/lib/server/checkout/funnels-service";
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string; funnelId: string }> };
 
-/** Add a step at the end. `{ type, name }` */
+/** Add a step at the end. `{ type, name, pageId?, copyPage? }` */
 export async function POST(request: Request, ctx: Ctx) {
   const { id, funnelId } = await ctx.params;
   const access = await requireSubAccountAdmin(request, id);
   if (access instanceof NextResponse) return access;
   try {
-    return NextResponse.json({ step: await addStep({ subAccountId: id, funnelId, body: await readBody(request) }) }, { status: 201 });
+    return NextResponse.json({ step: await addStep({ subAccountId: id, funnelId, uid: access.uid, body: await readBody(request) }) }, { status: 201 });
   } catch (err) {
     return checkoutErrorResponse(err);
   }

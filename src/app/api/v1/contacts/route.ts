@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue, type Query } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { canonicalizeTagList, emitTagChanges } from "@/lib/server/contact-tags/tag-writer";
 import { withApiAuth } from "@/lib/api/auth";
 import { apiError, apiOk } from "@/lib/api/responses";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
@@ -107,6 +108,14 @@ export const POST = withApiAuth(async ({ body, ctx }) => {
   const db = getAdminDb();
   const ref = db.collection("contacts").doc();
   const now = new Date();
+  // Contacts & Tags (2026-11): registry spelling + registry sync.
+  const tagCtx = { source: "api" as const, actorUid: `apikey:${ctx.keyPrefix}` };
+  const tags = await canonicalizeTagList({
+    subAccountId: ctx.subAccountId,
+    agencyId: ctx.agencyId,
+    names: input.tags,
+    ctx: tagCtx,
+  });
   await ref.set({
     name: input.name,
     email: input.email,
@@ -114,7 +123,7 @@ export const POST = withApiAuth(async ({ body, ctx }) => {
     company: input.company,
     address: input.address,
     source: input.source,
-    tags: input.tags,
+    tags,
     pipelineStage: input.pipelineStage,
     territoryId: input.territoryId ?? GLOBAL_TERRITORY_ID,
     customFields: cf.value,
@@ -155,6 +164,15 @@ export const POST = withApiAuth(async ({ body, ctx }) => {
     mode: ctx.mode,
     type: "contact.created",
     payload: { contact: wire },
+  });
+  await emitTagChanges({
+    subAccountId: ctx.subAccountId,
+    agencyId: ctx.agencyId,
+    contactId: ref.id,
+    added: tags,
+    removed: [],
+    mode: ctx.mode,
+    ctx: tagCtx,
   });
 
   return apiOk(ctx, { contact: wire }, { status: 201 });

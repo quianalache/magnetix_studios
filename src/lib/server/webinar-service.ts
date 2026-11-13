@@ -202,6 +202,7 @@ export async function registerForWebinarServerSide(input: {
         address: "",
         source: "community",
         tags: ["webinar"],
+        tagContext: { source: "webinar", sourceId: input.webinarId },
       })
     ).id;
   const ref = registrants(input.subAccountId, input.webinarId).doc();

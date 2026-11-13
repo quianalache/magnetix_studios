@@ -181,6 +181,7 @@ export async function PATCH(
     contactId: id,
     patch,
     mode: (data as { mode?: "live" | "test" }).mode ?? "live",
+    tagContext: { source: "manual", actorUid: access.uid },
   });
   if (!result) {
     return NextResponse.json({ error: "Contact not found" }, { status: 404 });

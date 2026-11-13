@@ -74,7 +74,7 @@ export type BroadcastStatus =
  */
 export type BroadcastAudienceFilter =
   | { kind: "all" }
-  | { kind: "tag"; tag: string }
+  | { kind: "tag"; tag: string; invalid?: import("@/types/workflows").TagRuleInvalidation }
   | { kind: "pipeline_stage"; stage: string }
   | { kind: "conditions"; group: ConditionGroup }
   /**

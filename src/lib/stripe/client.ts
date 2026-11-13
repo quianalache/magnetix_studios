@@ -1,12 +1,18 @@
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 
-let stripePromise: Promise<Stripe | null> | null = null;
+const stripePromises = new Map<string, Promise<Stripe | null>>();
 
-export function getStripe(): Promise<Stripe | null> {
-  if (!stripePromise) {
-    stripePromise = loadStripe(
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
-    );
-  }
-  return stripePromise;
+export function getStripe(
+  publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+  stripeAccount?: string | null,
+): Promise<Stripe | null> {
+  const cacheKey = `${publishableKey}:${stripeAccount ?? ""}`;
+  const existing = stripePromises.get(cacheKey);
+  if (existing) return existing;
+  const promise = loadStripe(
+    publishableKey,
+    stripeAccount ? { stripeAccount } : undefined,
+  );
+  stripePromises.set(cacheKey, promise);
+  return promise;
 }

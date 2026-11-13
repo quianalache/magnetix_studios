@@ -330,3 +330,77 @@ export async function ensureMember({
   const personId = await ensurePersonLinkForMember(subAccountId, created);
   return { ...created, personId };
 }
+
+/**
+ * CRM Foundations Batch C — repair a purchaser Member whose CRM Contact link
+ * was never written (ensureMember tolerates a reconcile blip at sign-up so the
+ * buyer is never blocked; the link is "recoverable"). This is that recovery,
+ * used when a verified payment for the Member arrives. Same rules as
+ * ensureMember: the Member's own email (submitted at checkout), matched
+ * case-insensitively WITHIN this workspace, else a new Contact through the
+ * shared createContactServerSide path. Never matches on name, never crosses
+ * workspaces, never overwrites an existing link. A short lock on the Member
+ * keeps two concurrent payment events from creating two Contacts.
+ */
+export async function linkMemberContactServerSide(
+  subAccountId: string,
+  memberId: string
+): Promise<string | null> {
+  const db = getAdminDb();
+  const memberRef = db.doc(`subAccounts/${subAccountId}/members/${memberId}`);
+  const claim = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(memberRef);
+    if (!snap.exists) return { state: "missing" as const };
+    const data = snap.data() ?? {};
+    if (typeof data.contactId === "string" && data.contactId) return { state: "linked" as const, contactId: data.contactId as string };
+    const lockUntil = typeof data.contactLinkLockUntil === "number" ? data.contactLinkLockUntil : 0;
+    if (lockUntil > Date.now()) return { state: "busy" as const };
+    tx.update(memberRef, { contactLinkLockUntil: Date.now() + 60_000 });
+    return { state: "claimed" as const, data };
+  });
+  if (claim.state === "linked") return claim.contactId;
+  if (claim.state !== "claimed") return null;
+
+  const data = claim.data;
+  const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+  try {
+    if (!email) return null;
+    const saSnap = await db.doc(`subAccounts/${subAccountId}`).get();
+    if (!saSnap.exists) return null;
+    const sa = saSnap.data() ?? {};
+    let contactId = await findExistingContactId(db, subAccountId, { email });
+    const preexisting = !!contactId;
+    if (!contactId) {
+      const created = await createContactServerSide({
+        subAccountId,
+        agencyId: (sa.agencyId as string) ?? "",
+        createdByUid: (sa.createdByUid as string) ?? "",
+        mode: "live",
+        name: typeof data.displayName === "string" ? data.displayName.trim() : "",
+        email,
+        phone: typeof data.phone === "string" ? data.phone.trim() : "",
+        company: "",
+        address: typeof data.address === "string" ? data.address.trim() : "",
+        source: "course",
+        tags: [],
+        attribution: null,
+      });
+      contactId = created.id;
+    }
+    const linked = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(memberRef);
+      const current = fresh.data()?.contactId;
+      if (typeof current === "string" && current) return current as string;
+      tx.update(memberRef, {
+        contactId,
+        ...(preexisting && data.emailVerified === false ? { contactLinkUnverified: true } : {}),
+        contactLinkLockUntil: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return contactId as string;
+    });
+    return linked;
+  } finally {
+    await memberRef.update({ contactLinkLockUntil: FieldValue.delete() }).catch(() => {});
+  }
+}

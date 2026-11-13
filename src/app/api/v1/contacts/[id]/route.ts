@@ -2,6 +2,11 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import {
+  canonicalizeTagList,
+  diffTagLists,
+  emitTagChanges,
+} from "@/lib/server/contact-tags/tag-writer";
 import { withApiAuth } from "@/lib/api/auth";
 import { apiError, apiOk } from "@/lib/api/responses";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
@@ -71,6 +76,19 @@ export const PATCH = withApiAuth<{ id: string }>(async ({ body, params, ctx }) =
     updatedAt: FieldValue.serverTimestamp(),
   };
 
+  // Contacts & Tags (2026-11): a tags patch replaces the list — registry
+  // spelling, then events + activity for the real difference.
+  const tagCtx = { source: "api" as const, actorUid: `apikey:${ctx.keyPrefix}` };
+  const oldTags: string[] = Array.isArray(existing.tags) ? existing.tags : [];
+  if (Array.isArray(patch.tags)) {
+    writePatch.tags = await canonicalizeTagList({
+      subAccountId: ctx.subAccountId,
+      agencyId: ctx.agencyId,
+      names: patch.tags,
+      ctx: tagCtx,
+    });
+  }
+
   // custom_fields is a full replacement of the value map when provided.
   if ((body as Record<string, unknown>).custom_fields !== undefined) {
     const cfDefs = await loadCustomFieldDefs(ctx.subAccountId, "contact");
@@ -85,6 +103,18 @@ export const PATCH = withApiAuth<{ id: string }>(async ({ body, params, ctx }) =
   }
 
   await ref.set(writePatch, { merge: true });
+  if (Array.isArray(writePatch.tags)) {
+    const { added, removed } = diffTagLists(oldTags, writePatch.tags);
+    await emitTagChanges({
+      subAccountId: ctx.subAccountId,
+      agencyId: ctx.agencyId,
+      contactId: params.id,
+      added,
+      removed,
+      mode: ctx.mode,
+      ctx: tagCtx,
+    });
+  }
 
   const fresh = await ref.get();
   const wire = serializeContactForApi(fresh.id, fresh.data()!, ctx.mode);

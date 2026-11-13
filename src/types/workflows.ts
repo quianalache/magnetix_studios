@@ -128,6 +128,19 @@ export interface Condition {
   field: string;
   op: ConditionOp;
   value?: string;
+  /** Contacts & Tags (2026-11): set when the tag this condition tests was
+   *  deleted. The condition is kept for repair and evaluates fail-closed
+   *  (see lib/contacts/tag-rule-validity.ts) until another tag is chosen. */
+  invalid?: TagRuleInvalidation;
+}
+
+/** A tag rule that needs attention because its tag was deleted. */
+export interface TagRuleInvalidation {
+  reason: "tag_deleted";
+  /** The deleted tag's name, exactly as the rule stored it. */
+  tag: string;
+  /** When the tag was deleted (ms). */
+  at: number;
 }
 
 /**

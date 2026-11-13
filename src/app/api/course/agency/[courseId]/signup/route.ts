@@ -102,14 +102,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cou
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const returnUrl = `${appUrl}/course/agency/${courseId}/purchase-complete?session_id={CHECKOUT_SESSION_ID}`;
-    const { clientSecret } = await startAgencyStandaloneCourseStripeCheckoutServerSide({
+    const { clientSecret, paymentMode, publishableKey, stripeAccount } = await startAgencyStandaloneCourseStripeCheckoutServerSide({
       agencyId,
       courseId,
       personId,
       personEmail: email,
       returnUrl,
     });
-    return NextResponse.json({ ok: true, mode: "paid", clientSecret });
+    return NextResponse.json({ ok: true, mode: "paid", clientSecret, paymentMode, publishableKey, stripeAccount });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't start checkout" }, { status: 400 });
   }

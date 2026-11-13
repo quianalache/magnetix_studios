@@ -1,5 +1,6 @@
 "use client";
 
+import { conditionInvalidation, invalidationMessage } from "@/lib/contacts/tag-rule-validity";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,15 @@ export function ConditionsEditor({
 
   const set = (next: Condition[]) => onChange({ ...value, all: next });
   const update = (i: number, patch: Partial<Condition>) =>
-    set(all.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+    set(
+      all.map((c, j) => {
+        if (j !== i) return c;
+        const next = { ...c, ...patch };
+        // Choosing another tag repairs a rule whose tag was deleted.
+        if (next.invalid && !conditionInvalidation(next)) delete next.invalid;
+        return next;
+      }),
+    );
 
   return (
     <div className="space-y-2">
@@ -56,7 +65,8 @@ export function ConditionsEditor({
         </div>
       )}
       {all.map((c, i) => (
-        <div key={i} className="flex items-center gap-1.5">
+        <div key={i} className="flex flex-col gap-1">
+        <div className="flex items-center gap-1.5">
           <Input
             list="wf-fields"
             value={c.field}
@@ -92,6 +102,12 @@ export function ConditionsEditor({
           >
             <X className="h-4 w-4" />
           </Button>
+        </div>
+        {conditionInvalidation(c) ? (
+          <p className="text-xs text-destructive" role="alert">
+            {invalidationMessage(c.invalid!)}
+          </p>
+        ) : null}
         </div>
       ))}
       <datalist id="wf-fields">

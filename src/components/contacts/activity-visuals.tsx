@@ -24,11 +24,13 @@ import {
   MessageSquareOff,
   MessagesSquare,
   Pencil,
+  PlayCircle,
   PhoneMissed,
   PhoneOutgoing,
   Send,
   ShoppingBag,
   Star,
+  Tag,
   UserCheck,
   UserMinus,
   UserX,
@@ -162,6 +164,25 @@ export function activityVisuals(
       return { icon: i(ShoppingBag, "text-status-warning-fg"), label: "Checkout abandoned" };
     case "checkout_completed":
       return { icon: i(ShoppingBag, "text-status-success-fg"), label: "Checkout completed" };
+    case "workflow_started":
+      return {
+        icon: i(PlayCircle, "text-link"),
+        label: meta?.test === true ? "Workflow test started" : "Workflow started",
+      };
+    case "workflow_completed":
+      return {
+        icon: i(CheckCircle2, "text-status-success-fg"),
+        label: meta?.test === true ? "Workflow test completed" : "Workflow completed",
+      };
+    case "workflow_failed":
+      return {
+        icon: i(AlertTriangle, "text-status-danger-fg"),
+        label: meta?.test === true ? "Workflow test failed" : "Workflow failed",
+      };
+    case "tag_added":
+      return { icon: i(Tag, "text-link"), label: "Tag added" };
+    case "tag_removed":
+      return { icon: i(Tag, "text-muted-foreground"), label: "Tag removed" };
     case "reading_created":
       return { icon: i(FileText, "text-link"), label: "Reading created" };
     case "course_enrolled":

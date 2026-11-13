@@ -1,5 +1,6 @@
 "use client";
 
+import { invalidationMessage, nodeInvalidations } from "@/lib/contacts/tag-rule-validity";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Dialog,
@@ -337,6 +338,11 @@ export function NodeConfigDialog({
                 value={str("tag")}
                 onChange={(e) => set({ tag: e.target.value })}
               />
+              {nodeInvalidations({ type: step.type, config: cfg })[0] ? (
+                <p className="mt-1 text-xs text-destructive" role="alert">
+                  {invalidationMessage(nodeInvalidations({ type: step.type, config: cfg })[0])}
+                </p>
+              ) : null}
             </Field>
           )}
 

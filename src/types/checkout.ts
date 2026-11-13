@@ -59,15 +59,91 @@ export interface FunnelStep {
   pageId: string | null;
   /** Checkout steps only: the step's checkout configuration. */
   checkoutConfigId: string | null;
+  /**
+   * Upsell / Downsell steps only (Funnel Phase 2): where the buyer goes after
+   * accepting or declining. Absent = both "next step". Same destination
+   * vocabulary as a Checkout step's post-purchase funnel routes. Always read
+   * through `normalizeRouting` (lib/checkout/funnel-routing.ts).
+   */
+  routing?: StepRouting | null;
+  /**
+   * Upsell / Downsell steps only: the Offer this step sells, how it will be
+   * paid, and the CRM actions for each outcome. Absent on older steps (read
+   * through `normalizeStepOffer`, lib/checkout/funnel-offer.ts). Settings
+   * only — saving never charges, grants access or runs CRM actions.
+   */
+  offer?: StepOfferSettings | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A route inside the same funnel: the next step in order, or a chosen step. */
+export type StepRoute = { type: "funnel_next_step" } | { type: "funnel_step"; stepId: string };
+
+export interface StepRouting {
+  accept: StepRoute;
+  decline: StepRoute;
+}
+
+/**
+ * CRM actions for one outcome of an Upsell / Downsell step. Tags come from the
+ * workspace Tags library (identity = tagKey: case / extra spaces don't
+ * matter); the Workflow is an existing workspace Workflow, by id.
+ * `invalidTags`: tags removed from this action because they were deleted from
+ * the library — kept for repair ("needs attention"), never executed and never
+ * recreated.
+ */
+export interface StepCrmAction {
+  addTags: string[];
+  removeTags: string[];
+  workflowId: string | null;
+  invalidTags?: Array<{ reason: "tag_deleted"; tag: string; list: "addTags" | "removeTags"; at: number }>;
+}
+
+/**
+ * How an Upsell / Downsell Offer is meant to be paid inside a funnel session
+ * (owner-approved contract; the post-purchase charging runtime ships later):
+ * - `one_click`: charged to the payment method saved by this funnel's earlier
+ *   Checkout step, without re-entering card details (recurring Offers become
+ *   a subscription with the Offer's own price and interval).
+ * - `stay_on_step_inline_payment`: if that charge fails or needs
+ *   authentication, the buyer stays on this step and an inline payment form
+ *   is shown. A failed payment is NEVER a Decline.
+ * Price, currency and billing interval are never stored here — they're read
+ * from the Offer at run time.
+ */
+export interface StepPaymentSettings {
+  method: "one_click";
+  onFailure: "stay_on_step_inline_payment";
+  /**
+   * Recurring Offers: the creator confirmed that buyers must be shown the
+   * recurring amount, billing frequency and applicable terms, and must agree,
+   * before being charged. Not consent itself — the buyer's agreement is
+   * captured at run time.
+   */
+  recurringDisclosureAcknowledged: boolean;
+}
+
+export interface StepOfferSettings {
+  /** An Offer in this workspace (funnel-session-only: no public purchase link is created). */
+  offerId: string | null;
+  payment: StepPaymentSettings;
+  /** Runs only after a CONFIRMED SUCCESSFUL payment for this step's Offer (never on the Accept click alone). */
+  onAccept: StepCrmAction;
+  /** Runs only after the buyer intentionally declines (never on a failed or pending payment). */
+  onDecline: StepCrmAction;
 }
 
 /* ----------------------------- Checkout config ---------------------------- */
 
 export type CheckoutContext =
   | { type: "hosted_offer"; offerId: string }
-  | { type: "funnel_step"; funnelId: string; stepId: string };
+  | { type: "funnel_step"; funnelId: string; stepId: string }
+  /**
+   * An Upsell / Downsell purchase inside a funnel session (post-purchase
+   * runtime). Only ever on a CheckoutOrder — never on a CheckoutConfig.
+   */
+  | { type: "funnel_offer"; funnelId: string; stepId: string; sessionId: string };
 
 export type CheckoutFormat = "one_step" | "two_step";
 export type BuyerNameFormat = "full" | "first_last";
@@ -351,8 +427,79 @@ export interface CheckoutOrder {
   status: CheckoutOrderStatus;
   failureReason: string | null;
   paidAt: number | null;
+  /**
+   * Funnel Upsell / Downsell orders only: how the Offer was accepted.
+   * `payment` = a verified successful payment; `trial_activation` = a
+   * free-trial subscription verified as trialing with an authorized card for
+   * future billing — nothing was charged (status "paid" here means fulfilled).
+   */
+  acceptance?: "payment" | "trial_activation";
   createdAt: number;
   updatedAt: number;
+}
+
+/* ----------------------- Funnel sessions (post-purchase) ----------------------- */
+
+/**
+ * Where one Upsell / Downsell step stands in a funnel session. Payment states
+ * never count as an outcome: only `succeeded` (verified with Stripe) runs the
+ * Accept actions, only `declined` (the buyer's own choice) runs Decline.
+ */
+export type FunnelOfferStepState =
+  | "processing"
+  | "requires_action"
+  | "payment_failed"
+  | "succeeded"
+  | "declined";
+
+export interface FunnelSessionStepRecord {
+  state: FunnelOfferStepState;
+  /** The step's purchase attempt: one CheckoutOrder per session + step (`fo_{session}_{step}`). */
+  orderId: string | null;
+  /** Recurring Offers: when the buyer agreed to the recurring charge (ms). */
+  consentAt: number | null;
+  /** How a `succeeded` step was accepted (verified payment vs verified free-trial activation). */
+  acceptance?: "payment" | "trial_activation" | null;
+  /** Buyer-safe message for the last failure (never card data). */
+  failure: string | null;
+  /** CRM outcome actions: `pending` until durably done (retried), then `done`. */
+  effects: "pending" | "done" | null;
+  effectsKey: string | null;
+  /** Where the buyer goes next (set once the outcome is recorded). */
+  nextStepId: string | null;
+  nextHref: string | null;
+  updatedAt: number;
+}
+
+/**
+ * One buyer's post-purchase path through a funnel, opened by a PAID funnel
+ * Checkout order (`funnelSessions/fs_{orderId}`, server-only). The browser
+ * holds only a signed, httpOnly cookie naming it; every action re-reads it.
+ * Holds ids only — never card data.
+ */
+export interface FunnelSession {
+  id: string;
+  agencyId: string;
+  subAccountId: string;
+  funnelId: string;
+  checkoutOrderId: string;
+  checkoutStepId: string;
+  memberId: string;
+  paymentMode: "test" | "live" | null;
+  stripeAccountId: string | null;
+  stripeCustomerId: string | null;
+  /** The saved payment method used at checkout (Stripe id), when one exists. */
+  paymentMethodId: string | null;
+  /** The only step the buyer may act on right now. */
+  currentStepId: string | null;
+  path: string[];
+  steps: Record<string, FunnelSessionStepRecord>;
+  status: "active" | "completed" | "expired";
+  /** True while any step's outcome actions still need to run (hourly backstop). */
+  effectsPending?: boolean;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
 }
 
 /* --------------------------- Checkout sessions ---------------------------- */

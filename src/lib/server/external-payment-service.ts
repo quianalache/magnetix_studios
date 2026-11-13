@@ -228,6 +228,26 @@ function preserveRelationship(
   return current ?? incoming;
 }
 
+/**
+ * The charge is an ATTEMPT on the payment, not a relationship: one Stripe
+ * PaymentIntent can carry several charges (a declined card, then another
+ * card that succeeds on the same intent — inline payment recovery, or a
+ * retry in the Payment Element). Real Stripe test-mode QA (2026-11-13)
+ * showed the strict guard rejecting the successful charge, failing the
+ * webhook (500) and leaving a collected payment recorded as failed.
+ * A newer attempt may replace a failed / pending one; a charge that already
+ * succeeded (or was refunded) is never replaced. Whether a stale event
+ * writes at all is still decided by the ordering checks in the transaction.
+ */
+function chargeForAttempt(
+  existing: FirebaseFirestore.DocumentData | undefined,
+  incoming: string | null
+): string | null {
+  const current = (existing?.externalChargeId as string | null | undefined) ?? null;
+  if (current === null || incoming === null || current === incoming) return current ?? incoming;
+  return paymentStatusRank(existing?.status) >= paymentStatusRank("succeeded") ? current : incoming;
+}
+
 async function assertExternalRelationships(input: {
   agencyId: string;
   subAccountId: string;
@@ -554,9 +574,8 @@ export async function upsertExternalPayment(
       "externalInvoiceId",
       cleanNullableText(input.externalInvoiceId, "externalInvoiceId", 500)
     ),
-    externalChargeId: preserveRelationship(
+    externalChargeId: chargeForAttempt(
       existing,
-      "externalChargeId",
       cleanNullableText(input.externalChargeId, "externalChargeId", 500)
     ),
     externalPaymentIntentId: preserveRelationship(

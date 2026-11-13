@@ -4,7 +4,7 @@ import { getPublishedAgencyOneClickUpsell } from "@/lib/server/agency-course-off
 import type Stripe from "stripe";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getStripeServer } from "@/lib/stripe/server";
+import { getStripeEnvironment, getStripeServer, publishableKeyForMode } from "@/lib/stripe/server";
 import { getAgencyCourseOffer } from "@/lib/server/agency-course-offer-service";
 import {
   enrollInAgencyStandaloneCourseServerSide,
@@ -94,7 +94,7 @@ export async function startAgencyCourseOfferStripeCheckoutServerSide(opts: {
   personPhone: string | null;
   personAddress: string | null;
   returnUrl: string;
-}): Promise<{ clientSecret: string }> {
+}): Promise<{ clientSecret: string; paymentMode: "test" | "live"; publishableKey: string; stripeAccount: null }> {
   const offer = await getAgencyCourseOffer(opts.agencyId, opts.offerId);
   // Pre-Funnel safety: new purchases need a published (never archived) offer.
   if (!offer || offer.visibility !== "published" || offer.type === "free" || !offer.priceCents) {
@@ -104,7 +104,10 @@ export async function startAgencyCourseOfferStripeCheckoutServerSide(opts: {
   const currency = offer.currency ?? "USD";
   const isRecurring = offer.type === "recurring";
 
-  const stripe = getStripeServer();
+  const paymentMode = getStripeEnvironment();
+  const publishableKey = publishableKeyForMode(paymentMode);
+  if (!publishableKey) throw new Error(`${paymentMode === "live" ? "Live" : "Test"} card payments aren't configured on this site yet.`);
+  const stripe = getStripeServer(paymentMode);
   const metadata = { kind: AGENCY_OFFER_CHARGE_KIND, agencyId: opts.agencyId, offerId: opts.offerId, personId: opts.personId };
 
   // Reuse/create a real Stripe Customer with the name/phone MyMagnetix's
@@ -164,6 +167,7 @@ export async function startAgencyCourseOfferStripeCheckoutServerSide(opts: {
     stripeCustomerId: customerId,
     stripeSubscriptionId: null,
     status: "pending",
+    paymentMode,
     grantedByUid: null,
     requestedAt: FieldValue.serverTimestamp(),
     paidAt: null,
@@ -172,7 +176,7 @@ export async function startAgencyCourseOfferStripeCheckoutServerSide(opts: {
     buyerAddress: offer.checkoutSettings.collectAddress ? opts.personAddress : null,
   });
 
-  return { clientSecret: session.client_secret };
+  return { clientSecret: session.client_secret, paymentMode, publishableKey, stripeAccount: null };
 }
 
 /** Free offers skip Stripe entirely — enroll in every bundled course. */

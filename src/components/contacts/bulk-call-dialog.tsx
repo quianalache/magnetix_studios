@@ -1,5 +1,6 @@
 "use client";
 
+import { dedupeTags, hasTag } from "@/lib/contacts/tag-names";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, PhoneOutgoing } from "lucide-react";
@@ -120,20 +121,17 @@ export function BulkCallDialog({
   }, [open, subAccountId]);
 
   const allTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of contacts) {
-      for (const t of c.tags ?? []) {
-        if (t.trim()) set.add(t.trim());
-      }
-    }
-    return Array.from(set).sort();
+    // One choice per logical tag ("VIP" and "vip" are the same tag).
+    return dedupeTags(contacts.flatMap((c) => c.tags ?? []).map((t) => t.trim())).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" }),
+    );
   }, [contacts]);
 
   const preview = useMemo(() => {
     let matching: Contact[];
     if (filterKind === "tag") {
       if (!filterTag) return { recipients: 0, skipped: 0, matching: 0 };
-      matching = contacts.filter((c) => (c.tags ?? []).includes(filterTag));
+      matching = contacts.filter((c) => hasTag(c.tags, filterTag));
     } else if (filterKind === "pipeline_stage") {
       matching = contacts.filter((c) => c.pipelineStage === filterStage);
     } else {
@@ -158,7 +156,7 @@ export function BulkCallDialog({
       }
       // Suppression we can evaluate client-side (tag + recently-called).
       // Prior-campaign exclusion is applied server-side at launch.
-      if (excludeTag && (c.tags ?? []).includes(excludeTag)) {
+      if (excludeTag && hasTag(c.tags, excludeTag)) {
         suppressed += 1;
         continue;
       }

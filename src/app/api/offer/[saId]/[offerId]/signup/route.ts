@@ -159,7 +159,7 @@ export async function POST(
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const returnUrl = `${appUrl}/offer/${saId}/${offerId}/purchase-complete?session_id={CHECKOUT_SESSION_ID}`;
-    const { clientSecret } = await startCourseOfferStripeCheckoutServerSide({
+    const { clientSecret, paymentMode, publishableKey, stripeAccount } = await startCourseOfferStripeCheckoutServerSide({
       subAccountId: saId,
       offerId,
       memberId: member.id,
@@ -169,7 +169,7 @@ export async function POST(
       returnUrl,
       attribution,
     });
-    return NextResponse.json({ ok: true, mode: "paid", clientSecret });
+    return NextResponse.json({ ok: true, mode: "paid", clientSecret, paymentMode, publishableKey, stripeAccount });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Couldn't start checkout" },

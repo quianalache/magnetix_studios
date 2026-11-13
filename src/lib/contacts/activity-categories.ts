@@ -16,6 +16,7 @@ export type ActivityCategory =
   | "automation"
   | "access"
   | "notes"
+  | "tags"
   | "other";
 
 export const ACTIVITY_FILTERS: { value: "all" | ActivityCategory; label: string }[] = [
@@ -27,6 +28,7 @@ export const ACTIVITY_FILTERS: { value: "all" | ActivityCategory; label: string 
   { value: "forms", label: "Forms" },
   { value: "access", label: "Courses & community" },
   { value: "automation", label: "Automations & AI" },
+  { value: "tags", label: "Tags" },
   { value: "notes", label: "Notes" },
 ];
 
@@ -76,6 +78,11 @@ const CATEGORY: Partial<Record<ActivityType, ActivityCategory>> = {
   course_access_granted: "access",
   course_access_revoked: "access",
   note_added: "notes",
+  tag_added: "tags",
+  workflow_started: "automation",
+  workflow_completed: "automation",
+  workflow_failed: "automation",
+  tag_removed: "tags",
 };
 
 export function activityCategory(

@@ -1,5 +1,6 @@
 "use client";
 
+import { dedupeTags, sameTag } from "@/lib/contacts/tag-names";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Check, ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -126,10 +127,10 @@ export function ContactsFilterBar({
   function toggleTag(tag: string) {
     const t = tag.trim();
     if (!t) return;
-    const has = tagRows.some((r) => r.value === t);
+    const has = tagRows.some((r) => sameTag(r.value, t));
     onRowsChange(
       has
-        ? without(rows, (r) => isTagRow(r) && r.value === t)
+        ? without(rows, (r) => isTagRow(r) && sameTag(r.value, t))
         : { ...rows, conditions: [...rows.conditions, { id: newRowId(), field: "tags", op: "has_tag", value: t }] },
     );
   }
@@ -137,7 +138,7 @@ export function ContactsFilterBar({
   function addTag(e: FormEvent) {
     e.preventDefault();
     if (!tagDraft.trim()) return;
-    if (!tagRows.some((r) => r.value === tagDraft.trim())) toggleTag(tagDraft);
+    if (!tagRows.some((r) => sameTag(r.value, tagDraft))) toggleTag(tagDraft);
     setTagDraft("");
   }
 
@@ -226,8 +227,10 @@ export function ContactsFilterBar({
             <Button type="submit" size="sm" className="h-8">Add</Button>
           </form>
           <div className="max-h-56 overflow-y-auto">
-            {[...new Set([...tagRows.map((r) => r.value), ...tagSuggestions])].map((t) => {
-              const on = tagRows.some((r) => r.value === t);
+            {dedupeTags([...tagRows.map((r) => r.value), ...tagSuggestions])
+              .filter((t) => !tagDraft.trim() || t.toLowerCase().includes(tagDraft.trim().toLowerCase()))
+              .map((t) => {
+              const on = tagRows.some((r) => sameTag(r.value, t));
               return (
                 <button
                   key={t}

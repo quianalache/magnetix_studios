@@ -10,6 +10,12 @@ import {
   type ContactApiObject,
 } from "@/lib/api/serializers/contacts";
 import type { Contact, ContactAttribution } from "@/types/contacts";
+import {
+  canonicalizeTagList,
+  diffTagLists,
+  emitTagChanges,
+  type TagChangeContext,
+} from "@/lib/server/contact-tags/tag-writer";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 
 /**
@@ -60,6 +66,10 @@ export interface CreateContactInput {
   pipelineStage?: string | null;
   territoryId?: string | null;
   attribution?: ContactAttribution | null;
+  /** Contacts & Tags (2026-11): where the initial tags came from (Contact
+   *  Activity + workflow events). Defaults to "contact_create" ("api" for
+   *  test-mode API writes). */
+  tagContext?: TagChangeContext;
   /** Optional resolved location (form submit supplies this; UI doesn't). */
   location?: {
     countryCode: string | null;
@@ -86,6 +96,14 @@ export async function createContactServerSide(
   const db = getAdminDb();
   const ref = db.collection("contacts").doc();
   const loc = input.location ?? null;
+  const tagCtx: TagChangeContext = input.tagContext ?? { source: "contact_create" };
+  // One spelling per tag + registry sync (Contacts & Tags, 2026-11).
+  const tags = await canonicalizeTagList({
+    subAccountId: input.subAccountId,
+    agencyId: input.agencyId,
+    names: input.tags,
+    ctx: tagCtx,
+  });
 
   const doc = {
     name: input.name,
@@ -96,7 +114,7 @@ export async function createContactServerSide(
     company: input.company,
     address: input.address,
     source: input.source,
-    tags: input.tags,
+    tags,
     ...(input.firstName?.trim() ? { firstName: input.firstName.trim() } : {}),
     ...(input.lastName?.trim() ? { lastName: input.lastName.trim() } : {}),
     ...(input.state?.trim() ? { state: input.state.trim() } : {}),
@@ -148,6 +166,16 @@ export async function createContactServerSide(
       contactId: ref.id,
     });
   }
+  // A contact born with tags gets them "added" like any other change.
+  await emitTagChanges({
+    subAccountId: input.subAccountId,
+    agencyId: input.agencyId,
+    contactId: ref.id,
+    added: tags,
+    removed: [],
+    mode: input.mode,
+    ctx: tagCtx,
+  });
 
   return { id: ref.id, contact };
 }
@@ -194,6 +222,8 @@ export async function updateContactServerSide(opts: {
   patch: UpdateContactPatch;
   /** The contact's mode (from the existing doc); defaults to live. */
   mode?: Mode;
+  /** Contacts & Tags (2026-11): source of a `tags` change. Default "manual". */
+  tagContext?: TagChangeContext;
 }): Promise<ContactWriteResult | null> {
   const db = getAdminDb();
   const ref = db.doc(`contacts/${opts.contactId}`);
@@ -206,6 +236,22 @@ export async function updateContactServerSide(opts: {
   // Contacts redesign (2026-09-25): `customFields` is a full replacement
   // (a merge would resurrect values the user just cleared), so it's
   // written with update(); every other field keeps the existing merge.
+  const oldTags: string[] = Array.isArray(existing.tags) ? existing.tags : [];
+  const tagCtx: TagChangeContext = opts.tagContext ?? { source: "manual" };
+  if (opts.patch.tags) {
+    opts = {
+      ...opts,
+      patch: {
+        ...opts.patch,
+        tags: await canonicalizeTagList({
+          subAccountId: existing.subAccountId,
+          agencyId: existing.agencyId,
+          names: opts.patch.tags,
+          ctx: tagCtx,
+        }),
+      },
+    };
+  }
   const { customFields, ...mergePatch } = opts.patch;
   await ref.set(
     {
@@ -229,34 +275,19 @@ export async function updateContactServerSide(opts: {
     type: "contact.updated",
     payload: { contact },
   });
-  // contact.tag.added fires once per update when the patch introduces a new
-  // tag (replace-semantics patch → diff against the pre-update tags).
-  if (mode === "live" && opts.patch.tags) {
-    const oldTags: string[] = Array.isArray(existing.tags) ? existing.tags : [];
-    const added = opts.patch.tags.filter((t) => !oldTags.includes(t));
-    if (added.length > 0) {
-      void fireWorkflowTrigger({
-        subAccountId: existing.subAccountId,
-        agencyId: existing.agencyId,
-        type: "contact.tag.added",
-        contactId: opts.contactId,
-        context: { addedTags: added },
-      });
-    }
-    const removed = oldTags.filter((t) => !opts.patch.tags!.includes(t));
-    if (removed.length > 0) {
-      for (const tag of removed) {
-        emitWorkflowEvent({
-          eventType: "contact.tag.removed",
-          eventId: `${opts.contactId}:tag:${tag}:${Date.now()}`,
-          agencyId: existing.agencyId,
-          subAccountId: existing.subAccountId,
-          contactId: opts.contactId,
-          source: "contacts",
-          payload: { tag },
-        });
-      }
-    }
+  // Tag Added / Tag Removed: replace-semantics patch → diff (by tag key)
+  // against the pre-update tags. Only real changes fire events + activity.
+  if (opts.patch.tags) {
+    const { added, removed } = diffTagLists(oldTags, opts.patch.tags);
+    await emitTagChanges({
+      subAccountId: existing.subAccountId,
+      agencyId: existing.agencyId,
+      contactId: opts.contactId,
+      added,
+      removed,
+      mode,
+      ctx: tagCtx,
+    });
   }
   if (mode === "live") {
     const freshData = fresh.data() ?? {};

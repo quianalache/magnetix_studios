@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   ChevronDown,
   GitBranch,
+  History,
   Loader2,
   Plus,
   Reply,
@@ -128,14 +129,18 @@ export function WorkflowsList({ saId }: { saId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      {/* Wraps on phones so the actions never clip (Batch B). */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold">Workflows</h1>
           <p className="text-sm text-muted-foreground">
             Automate follow-up across email, SMS, tasks and more.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" render={<Link href={`/sa/${saId}/workflows?view=runs`} />}>
+            <History className="mr-1 h-4 w-4" /> Runs
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button variant="outline" type="button" disabled={creating} />}

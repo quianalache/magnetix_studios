@@ -28,7 +28,13 @@ export type CanonicalPageAction =
   | { type: "open_popup"; popupId: string }
   | { type: "close_popup" }
   | { type: "submit_form"; formId: string }
-  | { type: "show_hide"; targetElementId: string; mode: "show" | "hide" | "toggle" };
+  | { type: "show_hide"; targetElementId: string; mode: "show" | "hide" | "toggle" }
+  /**
+   * Upsell / Downsell page buttons (post-purchase funnel runtime): run the
+   * CURRENT funnel step's Accept (payment) or Decline flow. No destination is
+   * stored on the button — routing belongs to the step.
+   */
+  | { type: "funnel_offer"; decision: "accept" | "decline" };
 
 export type FormSuccessAction =
   | { type: "show_message"; message: string }

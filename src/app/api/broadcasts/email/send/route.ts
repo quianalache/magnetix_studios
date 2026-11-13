@@ -1,5 +1,6 @@
 import "server-only";
 
+import { reconcileAudienceFilter } from "@/lib/contacts/tag-rule-validity";
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
   const content = payload.content;
   const subject = payload.subject?.trim();
   const preheader = payload.preheader?.trim() || null;
-  const audienceFilter = payload.audienceFilter;
+  let audienceFilter = payload.audienceFilter;
   const sourceTemplateId = payload.sourceTemplateId?.trim() || null;
   const testMode = payload.testMode === true;
   const requestedTestRecipientIds = Array.isArray(payload.testRecipientIds)
@@ -230,6 +231,14 @@ export async function POST(request: Request) {
   // outside the allowlist can ever be queued, regardless of how broad
   // audienceFilter resolves.
   const scope = await loadEffectiveTerritoryScope(access);
+  // Contacts & Tags (2026-11): a draft's stored deleted-tag markers can't
+  // be dropped by the client on send — the resolver then refuses it.
+  if (draftId && audienceFilter) {
+    const draftSnap = await getAdminDb().doc(`broadcasts/${draftId}`).get();
+    if (draftSnap.exists && draftSnap.get("subAccountId") === subAccountId) {
+      audienceFilter = reconcileAudienceFilter(draftSnap.get("audienceFilter"), audienceFilter);
+    }
+  }
   let audience: Awaited<ReturnType<typeof resolveAudience>>;
   try {
     audience = await resolveAudience(

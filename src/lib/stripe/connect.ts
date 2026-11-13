@@ -178,9 +178,9 @@ export async function exchangeStripeConnectCode(
  * connected account re-syncs here.
  */
 export async function handleStripeConnectAccountUpdated(
-  account: Stripe.Account
+  account: Stripe.Account,
+  environment = getStripeEnvironment()
 ): Promise<void> {
-  const environment = getStripeEnvironment();
   const snap = await getAdminDb().collection("subAccounts").get();
   const match = snap.docs.find((doc) => {
     const connection = doc.data().stripeConnect;

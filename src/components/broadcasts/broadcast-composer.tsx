@@ -1,5 +1,7 @@
 "use client";
 
+import { audienceFilterInvalidations } from "@/lib/contacts/tag-rule-validity";
+import { sameTag } from "@/lib/contacts/tag-names";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
@@ -106,6 +108,7 @@ export function BroadcastComposer({
   const [hasPersistedDraft, setHasPersistedDraft] = useState(!!existingBroadcastId);
 
   const [subject, setSubject] = useState("");
+  const [deletedAudienceTags, setDeletedAudienceTags] = useState<string[]>([]);
   const [preheader, setPreheader] = useState("");
   const [content, setContent] = useState<BroadcastContent>({ version: 1, blocks: [] });
   const [audience, setAudience] = useState<AudienceFilterState>(defaultAudienceFilterState());
@@ -171,6 +174,7 @@ export function BroadcastComposer({
         setContent(data.content ?? { version: 1, blocks: [] });
         setAudience(audienceFilterFromApiShape(data.audienceFilter));
         if (data.audienceFilter) lastValidAudienceFilterRef.current = data.audienceFilter;
+        setDeletedAudienceTags(audienceFilterInvalidations(data.audienceFilter).map((i) => i.tag));
         setSourceTemplateId(data.sourceTemplateId ?? null);
         setTestMode(data.testMode === true);
         setTestRecipientIds(data.testRecipientContactIds ?? []);
@@ -247,6 +251,9 @@ export function BroadcastComposer({
 
   const missingAddress = !subAccount?.mailingAddress;
   const audienceFilter = audienceFilterToApiShape(audience);
+  // Contacts & Tags (2026-11): tags this draft's audience still tests that
+  // were deleted. The server refuses to send until they're replaced.
+  const audienceTagsNeedingAttention = deletedAudienceTags.filter((tag) => audienceMentionsTag(audienceFilter, tag));
   if (audienceFilter) lastValidAudienceFilterRef.current = audienceFilter;
   const canSend =
     !!subject.trim() &&
@@ -588,6 +595,12 @@ export function BroadcastComposer({
             operator already knows to find them. */}
         <div className="rounded-xl border bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold">Recipients</h2>
+          {audienceTagsNeedingAttention.length > 0 ? (
+            <p className="mb-3 flex items-start gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 text-xs text-destructive" role="alert">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              This audience needs attention: the tag {audienceTagsNeedingAttention.map((t) => `“${t}”`).join(", ")} was deleted. Choose another tag before sending — it won&apos;t send until then.
+            </p>
+          ) : null}
           <AudienceConditionBuilder
             contacts={contacts}
             value={audience}
@@ -863,4 +876,14 @@ function SaveStateIndicator({ state }: { state: SaveState }) {
       <Check className="h-3 w-3" /> Saved
     </span>
   );
+}
+
+/** Does this audience still test `tag` (has / doesn't have tag, or a tag audience)? */
+function audienceMentionsTag(filter: BroadcastAudienceFilter | null, tag: string): boolean {
+  if (!filter) return false;
+  if (filter.kind === "tag") return sameTag(filter.tag, tag);
+  if (filter.kind === "conditions") {
+    return (filter.group?.all ?? []).some((c) => (c.op === "has_tag" || c.op === "not_has_tag") && sameTag(c.value, tag));
+  }
+  return false;
 }

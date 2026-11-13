@@ -7,7 +7,7 @@ export default async function WorkflowRunsPage({
 }) {
   const { subAccountId, workflowId } = await params;
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-6xl">
       <WorkflowRuns saId={subAccountId} workflowId={workflowId} />
     </div>
   );

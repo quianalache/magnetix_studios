@@ -2506,6 +2506,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         address: "",
         source: "ai-suite",
         tags: (args.tags as string[]) ?? [],
+        tagContext: { source: "ai_assistant", actorUid: ctx.uid },
       });
       return {
         resultText: `Added contact “${args.name}”. Open Contacts to see the full profile.`,

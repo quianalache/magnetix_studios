@@ -1,7 +1,7 @@
 import "server-only";
 
 import type Stripe from "stripe";
-import { getStripeServer } from "@/lib/stripe/server";
+import { getStripeEnvironment, getStripeServer } from "@/lib/stripe/server";
 import {
   findExternalBillingCustomerByProviderCustomer,
   upsertExternalBillingCustomer,
@@ -12,6 +12,7 @@ import {
   syncExternalStripePaymentIntent,
 } from "@/lib/server/external-payment-sync-service";
 import type { ExternalSubscriptionStatus } from "@/types/external-billing";
+import type { PaymentMode } from "@/types/tenancy";
 
 /**
  * Native-checkout -> MyMagnetix billing-ledger sync (2026-09-16 fix).
@@ -98,6 +99,7 @@ interface SubscriptionUpsertShared {
   personId: string | null;
   stripeConnectAccountId: string | null;
   fallbackProductName: string | null;
+  paymentMode?: PaymentMode;
 }
 
 async function upsertSubscriptionDoc(
@@ -187,7 +189,7 @@ export async function syncNativeSubscriptionPurchaseServerSide(
   }
 ): Promise<void> {
   try {
-    const stripe = getStripeServer();
+    const stripe = getStripeServer(input.paymentMode ?? getStripeEnvironment());
     const opts = requestOptions(input.stripeConnectAccountId);
     const subscription = await stripe.subscriptions.retrieve(
       input.stripeSubscriptionId,
@@ -234,6 +236,7 @@ export async function syncNativeSubscriptionPurchaseServerSide(
         eventCreated: invoice.status_transitions?.paid_at ?? invoice.created,
         outcome: "succeeded",
         source: "synced",
+        mode: input.paymentMode,
       });
     }
   } catch (err) {
@@ -259,9 +262,10 @@ export async function syncNativeSubscriptionPurchaseServerSide(
 export async function syncNativeOneTimePurchaseServerSide(input: {
   stripePaymentIntentId: string;
   stripeConnectAccountId: string | null;
+  paymentMode?: PaymentMode;
 }): Promise<void> {
   try {
-    const stripe = getStripeServer();
+    const stripe = getStripeServer(input.paymentMode ?? getStripeEnvironment());
     const paymentIntent = await stripe.paymentIntents.retrieve(
       input.stripePaymentIntentId,
       requestOptions(input.stripeConnectAccountId)
@@ -271,6 +275,7 @@ export async function syncNativeOneTimePurchaseServerSide(input: {
       eventAccountId: input.stripeConnectAccountId,
       eventCreated: paymentIntent.created,
       outcome: "succeeded",
+      mode: input.paymentMode,
     });
   } catch (err) {
     console.warn(

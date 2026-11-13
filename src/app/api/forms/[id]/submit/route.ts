@@ -6,6 +6,11 @@ import { fireWorkflowTrigger } from "@/lib/workflows/engine";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { serializeContactForApi } from "@/lib/api/serializers/contacts";
 import { emitContactCreatedById } from "@/lib/server/contacts-service";
+import {
+  applyContactTags,
+  canonicalizeTagList,
+  emitTagChanges,
+} from "@/lib/server/contact-tags/tag-writer";
 import { emitDealCreatedById } from "@/lib/server/deals-service";
 import {
   EMPTY_LOCATION,
@@ -284,6 +289,7 @@ async function handleSubmit(
   const existingContact = await findExistingContact();
   let contactRef: FirebaseFirestore.DocumentReference;
   let contactCreated: boolean;
+  let createdTags: string[] = [];
 
   if (existingContact) {
     // Reuse + enrich: fill only BLANK identity fields and merge new tags
@@ -315,12 +321,9 @@ async function handleSubmit(
     if (mapped.phone && !data.phone) patch.phone = mapped.phone;
     if (matchEmail && !data.email) patch.email = matchEmail;
     if (mapped.company && !data.company) patch.company = mapped.company;
-    const newTags = form.settings.autoTags ?? [];
-    if (newTags.length > 0) {
-      const existingTags = Array.isArray(data.tags) ? data.tags : [];
-      const mergedTags = Array.from(new Set([...existingTags, ...newTags]));
-      if (mergedTags.length !== existingTags.length) patch.tags = mergedTags;
-    }
+    // Auto-tags are applied after the enrich write through the shared tag
+    // service (Contacts & Tags, 2026-11): registry spelling, Tag Added
+    // events + Contact Activity only for tags the contact didn't have.
     if (attribution && !data.attribution) patch.attribution = attribution;
     if (emailConsentWrite) {
       patch.emailOptedOut = emailConsentWrite.emailOptedOut;
@@ -334,7 +337,21 @@ async function handleSubmit(
         // Non-fatal — surface the submission even if the enrich blips.
       }
     }
+    if ((form.settings.autoTags ?? []).length > 0) {
+      await applyContactTags({
+        subAccountId,
+        contactId: contactRef.id,
+        add: form.settings.autoTags ?? [],
+        ctx: { source: "form", sourceId: id },
+      }).catch((err) => console.warn("[forms/submit] auto-tags failed", err));
+    }
   } else {
+    createdTags = await canonicalizeTagList({
+      subAccountId,
+      agencyId,
+      names: form.settings.autoTags ?? [],
+      ctx: { source: "form", sourceId: id },
+    }).catch(() => form.settings.autoTags ?? []);
     // Create the contact. `source` falls back to utm_source when the visitor
     // arrived via a tagged ad — otherwise the legacy "website" default.
     contactRef = await db.collection("contacts").add({
@@ -352,7 +369,7 @@ async function handleSubmit(
       // manually-created website contacts. UTM source still wins when
       // present so paid-traffic attribution flows through unchanged.
       source: attribution?.utmSource || "website-form",
-      tags: form.settings.autoTags ?? [],
+      tags: createdTags,
       pipelineStage: form.settings.pipelineStageId ?? null,
       attribution,
       agencyId,
@@ -520,6 +537,15 @@ async function handleSubmit(
       subAccountId,
       agencyId,
       contactId: contactRef.id,
+    });
+    await emitTagChanges({
+      subAccountId,
+      agencyId,
+      contactId: contactRef.id,
+      added: createdTags,
+      removed: [],
+      mode: "live",
+      ctx: { source: "form", sourceId: id },
     });
   }
   if (dealId) {

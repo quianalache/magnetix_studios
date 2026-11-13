@@ -84,6 +84,20 @@ import type {
   StopWorkflowConfig,
 } from "@/types/workflows";
 import type { PipelineStageId, DealPriority } from "@/types/deals";
+import {
+  applyContactTags,
+  type TagChangeContext,
+} from "@/lib/server/contact-tags/tag-writer";
+import { invalidationMessage, nodeInvalidations } from "@/lib/contacts/tag-rule-validity";
+import {
+  isTestRelated,
+  recordRunActivity,
+  testOriginContext,
+  testOriginOf,
+  type TestOrigin,
+} from "./run-lifecycle";
+import { describeRunError } from "./run-errors";
+import { recordContactActivity } from "@/lib/server/contact-activity";
 
 /** Deal events carry `pipelineId`; these triggers match one pipeline. */
 const DEAL_PIPELINE_TRIGGERS = new Set<string>([
@@ -356,6 +370,17 @@ const execSendEmail: NodeExecutor = async (ctx) => {
       bcc: bcc ? splitEmailAddresses(bcc) : undefined,
       idempotencyKey: `wf_${ctx.runId}_${ctx.node.id}`,
     });
+    // Batch B: the contact's history shows workflow emails like other
+    // sends — only after the provider accepted it, once per run + step.
+    await recordContactActivity({
+      subAccountId: ctx.subAccountId,
+      contactId: contact.id,
+      type: "email_sent",
+      content: `Workflow email: ${(subject || "(no subject)").slice(0, 160)}`,
+      meta: { workflowId: ctx.workflowId, runId: ctx.runId, nodeId: ctx.node.id, source: "workflow", emailType },
+      createdBy: "workflow",
+      dedupeKey: `wfemail_${ctx.runId}_${ctx.node.id}`,
+    });
     return { result: { kind: "next" }, log: "ok" };
   } catch (err) {
     if (isLegacy) return { result: { kind: "next" }, log: "error:send_failed" };
@@ -492,28 +517,45 @@ const execGoal: NodeExecutor = async () => ({
   log: "goal",
 });
 
+/** Contacts & Tags (2026-11): tag steps go through the shared tag writer —
+ *  registry spelling, Tag Added / Removed events only on a real change,
+ *  Contact Activity, and the chain context that stops tag loops. */
+function workflowTagContext(ctx: NodeContext): TagChangeContext {
+  const depth = Number(ctx.triggerContext.chainDepth ?? 0);
+  return {
+    source: "workflow",
+    sourceId: ctx.workflowId,
+    workflow: {
+      workflowId: ctx.workflowId,
+      runId: ctx.runId,
+      chainDepth: Number.isFinite(depth) ? depth : 0,
+      testOrigin: testOriginOf({ id: ctx.runId, workflowId: ctx.workflowId, context: ctx.triggerContext }),
+    },
+  };
+}
+
 const execAddTag: NodeExecutor = async (ctx) => {
   const tag = ((ctx.node.config as unknown as TagConfig).tag ?? "").trim();
   if (!tag) return { result: { kind: "next" }, log: "skipped:no_tag" };
-  await getAdminDb()
-    .doc(`contacts/${ctx.contact.id}`)
-    .update({
-      tags: FieldValue.arrayUnion(tag),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  return { result: { kind: "next" }, log: `tag+:${tag}` };
+  const res = await applyContactTags({
+    subAccountId: ctx.subAccountId,
+    contactId: ctx.contact.id,
+    add: [tag],
+    ctx: workflowTagContext(ctx),
+  });
+  return { result: { kind: "next" }, log: res && res.added.length === 0 ? `tag=:${tag}` : `tag+:${tag}` };
 };
 
 const execRemoveTag: NodeExecutor = async (ctx) => {
   const tag = ((ctx.node.config as unknown as TagConfig).tag ?? "").trim();
   if (!tag) return { result: { kind: "next" }, log: "skipped:no_tag" };
-  await getAdminDb()
-    .doc(`contacts/${ctx.contact.id}`)
-    .update({
-      tags: FieldValue.arrayRemove(tag),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  return { result: { kind: "next" }, log: `tag-:${tag}` };
+  const res = await applyContactTags({
+    subAccountId: ctx.subAccountId,
+    contactId: ctx.contact.id,
+    remove: [tag],
+    ctx: workflowTagContext(ctx),
+  });
+  return { result: { kind: "next" }, log: res && res.removed.length === 0 ? `tag=:${tag}` : `tag-:${tag}` };
 };
 
 const execMoveStage: NodeExecutor = async (ctx) => {
@@ -709,6 +751,7 @@ const execCreateContact: NodeExecutor = async (ctx) => {
     address: (cfg.address ?? "").trim(),
     source: (cfg.source ?? "workflow").trim(),
     tags: Array.isArray(cfg.tags) ? cfg.tags : [],
+    tagContext: workflowTagContext(ctx),
   });
   return {
     result: { kind: "next" },
@@ -870,6 +913,8 @@ async function startWorkflowForContact(opts: {
   sourceWorkflowId: string;
   sourceRunId: string;
   chainDepth: number;
+  /** Batch B: set when the parent run is (or was started by) a Test. */
+  testOrigin?: TestOrigin | null;
 }): Promise<string> {
   if (opts.workflowId === opts.sourceWorkflowId)
     throw new Error("workflow_self_invocation");
@@ -887,6 +932,7 @@ async function startWorkflowForContact(opts: {
     sourceWorkflowId: opts.sourceWorkflowId,
     sourceRunId: opts.sourceRunId,
     chainDepth: opts.chainDepth + 1,
+    ...(opts.testOrigin ? { testOrigin: opts.testOrigin } : {}),
   });
   return "started";
 }
@@ -902,6 +948,7 @@ const execStartWorkflow: NodeExecutor = async (ctx) => {
     sourceWorkflowId: ctx.workflowId,
     sourceRunId: ctx.runId,
     chainDepth: Number.isFinite(depth) ? depth : 0,
+    testOrigin: testOriginOf({ id: ctx.runId, workflowId: ctx.workflowId, context: ctx.triggerContext }),
   });
   return {
     result: { kind: "next" },
@@ -1135,10 +1182,29 @@ interface FireInput {
  * action that triggered it.
  */
 export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
-  const db = getAdminDb();
   try {
+    await deliverWorkflowTrigger(input);
+  } catch (err) {
+    console.error("[workflows] fireWorkflowTrigger failed", err);
+  }
+}
+
+/**
+ * Batch C (payment triggers): the same matching + enrollment as
+ * fireWorkflowTrigger, but it THROWS on failure and reports how many
+ * workflows enrolled the contact — so a caller that persists its own event
+ * record (Stripe payment events) can tell "delivered" from "failed" and
+ * retry safely (already-enrolled workflows are skipped by the
+ * eventId / deduplicationKey checks below).
+ */
+export async function deliverWorkflowTrigger(
+  input: FireInput
+): Promise<{ enrolled: number; runIds: string[]; skippedReason: "automations_paused" | "no_active_workflow" | "contact_missing" | null }> {
+  const db = getAdminDb();
+  const runIds: string[] = [];
+  {
     const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
-    if (subSnap.data()?.automationsPaused === true) return;
+    if (subSnap.data()?.automationsPaused === true) return { enrolled: 0, runIds, skippedReason: "automations_paused" };
 
     const matches = await db
       .collection("workflows")
@@ -1146,20 +1212,28 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
       .where("status", "==", "active")
       .where("trigger.type", "==", input.type)
       .get();
-    if (matches.empty) return;
+    if (matches.empty) return { enrolled: 0, runIds, skippedReason: "no_active_workflow" };
 
     const contactSnap = await db.doc(`contacts/${input.contactId}`).get();
-    if (!contactSnap.exists) return;
+    if (!contactSnap.exists) return { enrolled: 0, runIds, skippedReason: "contact_missing" };
     const contact = {
       id: contactSnap.id,
       ...(contactSnap.data() as Omit<Contact, "id">),
     };
+
+    // Contacts & Tags (2026-11): a change made by a workflow step carries
+    // `chainDepth`; past the cap nothing more is enrolled, and a workflow
+    // never re-enrolls itself from its own tag change.
+    const chainDepth = Number(input.context?.chainDepth ?? 0);
+    if (Number.isFinite(chainDepth) && chainDepth >= MAX_WORKFLOW_CHAIN_DEPTH) return { enrolled: 0, runIds, skippedReason: null };
+    const isTagEvent = input.type === "contact.tag.added" || input.type === "contact.tag.removed";
 
     for (const doc of matches.docs) {
       const wf = { id: doc.id, ...(doc.data() as Omit<WorkflowDoc, "id">) };
       if (!wf.trigger) continue;
       const trigger = wf.trigger;
       if (!wf.startNodeId) continue;
+      if (isTagEvent && input.context?.sourceWorkflowId === wf.id) continue;
       if (
         (input.type === "workflow.completed" ||
           input.type === "workflow.failed") &&
@@ -1264,11 +1338,10 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
           continue;
       }
 
-      await enroll(wf, contact.id, input.context ?? {});
+      runIds.push(await enroll(wf, contact.id, input.context ?? {}));
     }
-  } catch (err) {
-    console.error("[workflows] fireWorkflowTrigger failed", err);
   }
+  return { enrolled: runIds.length, runIds, skippedReason: null };
 }
 
 /**
@@ -1306,7 +1379,7 @@ async function enroll(
   wf: WorkflowDoc,
   contactId: string,
   context: Record<string, unknown>
-): Promise<void> {
+): Promise<string> {
   const db = getAdminDb();
   const runRef = db.collection("workflowRuns").doc();
   await runRef.set({
@@ -1323,13 +1396,17 @@ async function enroll(
     enrolledAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  // Batch B: Test runs (and runs a Test started) are counted separately so
+  // workflow totals reflect real customer enrollments.
   await db
     .doc(`workflows/${wf.id}`)
-    .update({ "stats.enrolled": FieldValue.increment(1) })
+    .update({ [isTestRelated(context) ? "stats.testEnrolled" : "stats.enrolled"]: FieldValue.increment(1) })
     .catch(() => {});
+  await recordRunActivity(runRef.id, "started");
 
   if (!qstashIsConfigured()) {
     await runRef.update({ status: "failed" });
+    await recordRunActivity(runRef.id, "failed", { message: describeRunError("schedule_failed") });
     void fireWorkflowTrigger({
       subAccountId: wf.subAccountId,
       agencyId: wf.agencyId,
@@ -1340,11 +1417,13 @@ async function enroll(
         workflowId: wf.id,
         runId: runRef.id,
         sourceWorkflowId: wf.id,
+        ...testOriginContext({ id: runRef.id, workflowId: wf.id, context }),
       },
     });
-    return;
+    return runRef.id;
   }
   await scheduleNode(runRef, wf.startNodeId!, 0);
+  return runRef.id;
 }
 
 /* ------------------------------ Run worker ----------------------------- */
@@ -1366,6 +1445,7 @@ async function scheduleNode(
       status: "failed",
       updatedAt: FieldValue.serverTimestamp(),
     });
+    await recordRunActivity(runRef.id, "failed", { nodeId, message: describeRunError("schedule_failed") });
     return;
   }
   await runRef.update({
@@ -1385,12 +1465,13 @@ async function completeRun(
     currentNodeId: null,
     updatedAt: FieldValue.serverTimestamp(),
   });
-  await getAdminDb()
-    .doc(`workflows/${workflowId}`)
-    .update({ "stats.completed": FieldValue.increment(1) })
-    .catch(() => {});
   const snap = await runRef.get();
   const run = snap.data() as WorkflowRunDoc | undefined;
+  await getAdminDb()
+    .doc(`workflows/${workflowId}`)
+    .update({ [isTestRelated(run?.context) ? "stats.testCompleted" : "stats.completed"]: FieldValue.increment(1) })
+    .catch(() => {});
+  if (run) await recordRunActivity(run.id, "completed");
   if (run)
     void fireWorkflowTrigger({
       subAccountId: run.subAccountId,
@@ -1402,6 +1483,7 @@ async function completeRun(
         workflowId,
         runId: run.id,
         sourceWorkflowId: workflowId,
+        ...testOriginContext(run),
       },
     });
 }
@@ -1450,6 +1532,7 @@ export async function runStep(
       status: "failed",
       updatedAt: FieldValue.serverTimestamp(),
     });
+    await recordRunActivity(run.id, "failed", { nodeId, message: describeRunError("workflow_missing") });
     return;
   }
   const wf = wfSnap.data() as WorkflowDoc;
@@ -1469,6 +1552,51 @@ export async function runStep(
     return;
   }
 
+  // Contacts & Tags (2026-11): a step whose tag was deleted (an If/else or
+  // other condition, an Add / Remove Tag step) needs attention. Stop the
+  // run here — never branch as if the condition were true/false and never
+  // recreate the deleted tag.
+  const tagIssues = nodeInvalidations(node);
+  if (tagIssues.length > 0) {
+    const message = invalidationMessage(tagIssues[0]);
+    const failEntry: WorkflowRunHistoryEntry = {
+      nodeId,
+      type: node.type,
+      at: Timestamp.now(),
+      result: "error:configuration_required",
+      execution: {
+        actionId: nodeId,
+        attempt: 1,
+        status: "terminal_failure",
+        errorCategory: "configuration_required",
+        errorMessage: message,
+        referenceId: null,
+        at: Timestamp.now(),
+      },
+    };
+    await runRef.update({
+      status: "failed",
+      history: FieldValue.arrayUnion(failEntry),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await recordRunActivity(run.id, "failed", { nodeId, message });
+    void fireWorkflowTrigger({
+      subAccountId: run.subAccountId,
+      agencyId: run.agencyId,
+      type: "workflow.failed",
+      contactId: run.contactId,
+      context: {
+        eventId: `${run.id}:failed:${nodeId}`,
+        workflowId: wf.id,
+        runId: run.id,
+        sourceWorkflowId: wf.id,
+        nodeId,
+        ...testOriginContext(run),
+      },
+    });
+    return;
+  }
+
   // wait_for_reply is a two-phase node handled outside the registry: it arms
   // (parks the run + schedules a timeout), then is resolved EITHER by the
   // inbound-message hook (Replied) or the timeout callback (No reply).
@@ -1483,6 +1611,7 @@ export async function runStep(
       status: "failed",
       updatedAt: FieldValue.serverTimestamp(),
     });
+    // The contact is gone, so there's no Contact Activity to write.
     return;
   }
   const contact = {
@@ -1603,6 +1732,7 @@ export async function runStep(
           history: FieldValue.arrayUnion(exhaustedEntry),
           updatedAt: FieldValue.serverTimestamp(),
         });
+        await recordRunActivity(run.id, "failed", { nodeId, message: describeRunError("retry_exhausted", entry.execution?.errorMessage) });
         return;
       }
       await runRef.update({
@@ -1610,6 +1740,7 @@ export async function runStep(
         history: FieldValue.arrayUnion(entry),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      await recordRunActivity(run.id, "failed", { nodeId, message: describeRunError(entry.execution?.errorCategory, entry.execution?.errorMessage) });
       return;
     }
     await runRef.update({
@@ -1617,6 +1748,7 @@ export async function runStep(
       history: FieldValue.arrayUnion(entry),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    await recordRunActivity(run.id, "failed", { nodeId, message: describeRunError(entry.execution?.errorCategory, entry.execution?.errorMessage) });
     void fireWorkflowTrigger({
       subAccountId: run.subAccountId,
       agencyId: run.agencyId,
@@ -1628,6 +1760,7 @@ export async function runStep(
         runId: run.id,
         sourceWorkflowId: wf.id,
         nodeId,
+        ...testOriginContext(run),
       },
     });
     return;
@@ -1722,6 +1855,7 @@ async function stepWaitForReply(
         status: "failed",
         updatedAt: FieldValue.serverTimestamp(),
       });
+      await recordRunActivity(run.id, "failed", { nodeId: node.id, message: describeRunError("schedule_failed") });
       return;
     }
     await runRef.update({ qstashMessageId: res.messageId });
@@ -1832,7 +1966,9 @@ export async function enrollForTest(opts: {
   subAccountId: string;
   workflowId: string;
   contactId: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Batch B: who started the test (audit). */
+  startedByUid?: string | null;
+}): Promise<{ ok: boolean; error?: string; runId?: string }> {
   const db = getAdminDb();
   const wfSnap = await db.doc(`workflows/${opts.workflowId}`).get();
   if (!wfSnap.exists) return { ok: false, error: "Workflow not found" };
@@ -1846,8 +1982,12 @@ export async function enrollForTest(opts: {
   if (!cSnap.exists || cSnap.data()!.subAccountId !== opts.subAccountId) {
     return { ok: false, error: "Contact not found" };
   }
-  await enroll(wf, opts.contactId, { test: true });
-  return { ok: true };
+  const runId = await enroll(wf, opts.contactId, {
+    test: true,
+    source: "workflow_test",
+    ...(opts.startedByUid ? { startedByUid: opts.startedByUid } : {}),
+  });
+  return { ok: true, runId };
 }
 
 async function loadOwner(

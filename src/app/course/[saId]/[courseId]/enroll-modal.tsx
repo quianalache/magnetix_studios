@@ -64,6 +64,7 @@ export function EnrollModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripeContext, setStripeContext] = useState<{ publishableKey: string; stripeAccount: string | null } | null>(null);
   // Set when the email already has an account: the server signed nobody in
   // and emailed the owner a sign-in link back to this page.
   const [notice, setNotice] = useState<string | null>(null);
@@ -102,6 +103,8 @@ export function EnrollModal({
         mode?: "free" | "paid" | "verify";
         redirectTo?: string;
         clientSecret?: string;
+        publishableKey?: string;
+        stripeAccount?: string | null;
         message?: string;
         error?: string;
       };
@@ -117,7 +120,9 @@ export function EnrollModal({
         return;
       }
       if (data.mode === "paid" && data.clientSecret) {
+        if (!data.publishableKey) throw new Error("Card payments aren't configured on this site yet.");
         setClientSecret(data.clientSecret);
+        setStripeContext({ publishableKey: data.publishableKey, stripeAccount: data.stripeAccount ?? null });
         setStep("checkout");
         return;
       }
@@ -139,6 +144,7 @@ export function EnrollModal({
         if (!next) {
           setStep("form");
           setClientSecret(null);
+          setStripeContext(null);
           setError(null);
           setNotice(null);
         }
@@ -275,7 +281,7 @@ export function EnrollModal({
         ) : (
           clientSecret && (
             <EmbeddedCheckoutProvider
-              stripe={getStripe()}
+              stripe={stripeContext ? getStripe(stripeContext.publishableKey, stripeContext.stripeAccount) : null}
               options={{ clientSecret }}
             >
               <EmbeddedCheckout />

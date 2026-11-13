@@ -12,6 +12,7 @@ import {
   getStripeEnvironment,
   getStripeServer,
   normalizePaymentMode,
+  publishableKeyForMode,
   resolveStripeForSubAccount,
 } from "@/lib/stripe/server";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
@@ -323,7 +324,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
    *  on that offer's own page. */
   attribution?: ContactAttribution | null;
   paymentMode?: "test" | "live";
-}): Promise<{ clientSecret: string }> {
+}): Promise<{ clientSecret: string; paymentMode: "test" | "live"; publishableKey: string; stripeAccount: string | null }> {
   const offer = await getCourseOffer(opts.subAccountId, opts.offerId);
   // Pre-Funnel safety: a NEW purchase needs a published offer (never draft /
   // archived) — defence in depth behind the route's own access check.
@@ -351,6 +352,10 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     throw error;
   });
   const connectAccountId = resolved?.accountId ?? null;
+  const publishableKey = publishableKeyForMode(paymentMode);
+  if (!publishableKey) {
+    throw new Error(`${paymentMode === "live" ? "Live" : "Test"} card payments aren't configured on this site yet.`);
+  }
   const useSharedAccount =
     subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {
@@ -491,7 +496,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     billingCountry: null,
   });
 
-  return { clientSecret: session.client_secret };
+  return { clientSecret: session.client_secret, paymentMode, publishableKey, stripeAccount: connectAccountId };
 }
 
 /* ------------------------------- Access grant ------------------------------ */
@@ -650,6 +655,7 @@ async function syncCourseOfferPurchaseLedger(input: {
   stripeSubscriptionId: string | null;
   stripePaymentIntentId: string | null;
   stripeConnectAccountId: string | null;
+  paymentMode?: "test" | "live";
 }): Promise<void> {
   const memberSnap = await getAdminDb()
     .doc(`subAccounts/${input.subAccountId}/members/${input.memberId}`)
@@ -671,12 +677,14 @@ async function syncCourseOfferPurchaseLedger(input: {
       memberEmail,
       stripeSubscriptionId: input.stripeSubscriptionId,
       stripeConnectAccountId: input.stripeConnectAccountId,
+      paymentMode: input.paymentMode,
       fallbackProductName: null,
     });
   } else if (input.stripePaymentIntentId) {
     await syncNativeOneTimePurchaseServerSide({
       stripePaymentIntentId: input.stripePaymentIntentId,
       stripeConnectAccountId: input.stripeConnectAccountId,
+      paymentMode: input.paymentMode,
     });
   }
 }
@@ -739,6 +747,7 @@ export async function grantCourseOfferAccessServerSide(opts: {
       stripePaymentIntentId:
         opts.stripePaymentIntentId ?? purchase.stripePaymentIntentId,
       stripeConnectAccountId: purchase.stripeConnectAccountId,
+      paymentMode: purchase.paymentMode,
     }).catch((err) =>
       console.warn("[course-offer] ledger sync retry failed", err)
     );
@@ -784,6 +793,7 @@ export async function grantCourseOfferAccessServerSide(opts: {
     stripePaymentIntentId:
       opts.stripePaymentIntentId ?? purchase.stripePaymentIntentId,
     stripeConnectAccountId: purchase.stripeConnectAccountId,
+    paymentMode: purchase.paymentMode,
   }).catch((err) => console.warn("[course-offer] ledger sync failed", err));
 
   // Contacts redesign (2026-09-25) — contact timeline row, written once per
@@ -792,18 +802,23 @@ export async function grantCourseOfferAccessServerSide(opts: {
     subAccountId: opts.subAccountId,
     memberId: purchase.memberId,
     type: "purchase_completed",
-    content: `Purchased "${offer?.title ?? "offer"}" (${formatActivityAmount(
-      purchase.amountCents,
-      purchase.currency,
-    )})`,
+    // Funnel free-trial acceptance (2026-11-13): nothing was paid — say so.
+    content:
+      purchase.acceptedAs === "trial"
+        ? `Started a ${purchase.trialDays ? `${purchase.trialDays}-day ` : ""}free trial of "${offer?.title ?? "offer"}" (then ${formatActivityAmount(purchase.amountCents, purchase.currency)} per billing period)`
+        : `Purchased "${offer?.title ?? "offer"}" (${formatActivityAmount(
+            purchase.amountCents,
+            purchase.currency,
+          )})`,
     meta: {
       purchaseScope: "offer",
       offerId: opts.offerId,
       purchaseId: purchase.id,
       memberId: purchase.memberId,
-      amountCents: purchase.amountCents,
+      amountCents: purchase.acceptedAs === "trial" ? 0 : purchase.amountCents,
       currency: purchase.currency,
       via: opts.grantedByUid ? "staff_marked_paid" : "checkout",
+      ...(purchase.acceptedAs === "trial" ? { acceptedAs: "trial", trialDays: purchase.trialDays ?? null, recurringAmountCents: purchase.amountCents } : {}),
     },
     createdBy: opts.grantedByUid ?? "checkout",
     dedupeKey: `purchase_offer_${purchase.id}`,
@@ -1241,6 +1256,7 @@ export async function syncCourseOfferSubscriptionStatusServerSide(
       personId: (memberSnap.data()?.personId as string | undefined) ?? null,
       memberEmail,
       stripeConnectAccountId: purchase.stripeConnectAccountId,
+      paymentMode: purchase.paymentMode,
       fallbackProductName: null,
       subscription,
     });
@@ -1337,6 +1353,7 @@ export async function handleCourseOfferSubscriptionDeleted(
         personId: (memberSnap.data()?.personId as string | undefined) ?? null,
         memberEmail,
         stripeConnectAccountId: purchase.stripeConnectAccountId,
+        paymentMode: purchase.paymentMode,
         fallbackProductName: null,
         subscription,
       }).catch((err) =>

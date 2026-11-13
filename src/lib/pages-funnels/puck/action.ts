@@ -203,9 +203,19 @@ export function normalizeStoredAction(raw: unknown): PageAction {
       return { type: "open_popup", popupId: str(a.popupId) };
     case "close_popup":
       return { type: "close_popup" };
+    // Post-purchase funnel runtime (Upsell / Downsell pages).
+    case "accept_upsell":
+      return { type: "accept_upsell" };
+    case "decline_continue":
+      return { type: "decline_continue" };
     default:
       return { type: "none" };
   }
+}
+
+/** "accept" / "decline" for an Upsell / Downsell button, else null. */
+export function funnelOfferDecision(action: PageAction | null | undefined): "accept" | "decline" | null {
+  return action?.type === "accept_upsell" ? "accept" : action?.type === "decline_continue" ? "decline" : null;
 }
 
 /**

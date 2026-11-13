@@ -1,5 +1,7 @@
 import "server-only";
 
+import { hasTag } from "@/lib/contacts/tag-names";
+import { audienceFilterInvalidations, groupInvalidations, groupNeedsAttention } from "@/lib/contacts/tag-rule-validity";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   evalConditionGroup,
@@ -14,10 +16,23 @@ import type { ConditionGroup } from "@/types/workflows";
 /** Thrown when a `list` audience references a list that no longer exists
  *  (or belongs to another sub-account). Routes map it to a 400. */
 export class AudienceListMissingError extends Error {
-  constructor() {
+  constructor(message?: string) {
     super(
-      "The Contact List for this audience no longer exists. Pick another audience and review the count again.",
+      message ??
+        "The Contact List for this audience no longer exists. Pick another audience and review the count again.",
     );
+  }
+}
+
+/**
+ * Contacts & Tags (2026-11): the audience (or its Contact List) tests a tag
+ * that was deleted. Fail closed — never resolve to "everyone" — until the
+ * creator picks another tag. Subclass of the list error so every route that
+ * already refuses a missing list refuses this too.
+ */
+export class AudienceNeedsAttentionError extends AudienceListMissingError {
+  constructor(tag: string) {
+    super(`This audience needs attention: the tag “${tag}” was deleted. Choose another tag before sending.`);
   }
 }
 
@@ -103,9 +118,11 @@ export async function resolveAudience(
     .collection("contacts")
     .where("subAccountId", "==", subAccountId);
 
-  if (filter.kind === "tag") {
-    query = query.where("tags", "array-contains", filter.tag);
-  } else if (filter.kind === "pipeline_stage") {
+  // Tags match regardless of capitalization / spacing (CRM-wide rule), so a
+  // tag audience is matched in memory, not with an exact array-contains.
+  const filterIssue = audienceFilterInvalidations(filter)[0];
+  if (filterIssue) throw new AudienceNeedsAttentionError(filterIssue.tag);
+  if (filter.kind === "pipeline_stage") {
     query = query.where("pipelineStage", "==", filter.stage);
   }
 
@@ -118,6 +135,11 @@ export async function resolveAudience(
     const list = await getContactList(subAccountId, filter.listId);
     if (!list) throw new AudienceListMissingError();
     group = list.group;
+    const listIssue = groupInvalidations(list.group)[0];
+    if (listIssue) throw new AudienceNeedsAttentionError(listIssue.tag);
+  }
+  if (filter.kind === "conditions" && groupNeedsAttention(group)) {
+    throw new AudienceNeedsAttentionError(groupInvalidations(group)[0].tag);
   }
   const accessIndex =
     group && groupUsesAccessConditions(group)
@@ -151,6 +173,7 @@ export async function resolveAudience(
     if (group && !evalConditionGroup(group, contact, evalCtx)) {
       continue;
     }
+    if (filter.kind === "tag" && !hasTag(contact.tags, filter.tag)) continue;
     if (contact.emailOptedOut) {
       skipped.push({ contact, reason: "opt_out" });
       continue;

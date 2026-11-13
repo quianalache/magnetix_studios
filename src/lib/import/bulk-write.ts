@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { GLOBAL_TERRITORY_ID } from "@/types";
+import { registerTagNames } from "@/lib/server/contact-tags/registry";
 import { parseContactCreate } from "@/lib/api/serializers/contacts";
 import { parseDealCreate } from "@/lib/api/serializers/deals";
 import { parseTaskCreate } from "@/lib/api/serializers/tasks";
@@ -87,6 +88,7 @@ export async function writeImportChunk(
   const { subAccountId, agencyId, createdByUid, source, entity } = input;
   const records = Array.isArray(input.records) ? input.records : [];
   const result: WriteChunkResult = { ...emptyTotals(), errors: [] };
+  const importedTagNames = new Set<string>();
   result.received = records.length;
   if (records.length === 0) return result;
   if (records.length > MAX_RECORDS_PER_CHUNK) {
@@ -261,6 +263,11 @@ export async function writeImportChunk(
 
       batch.set(built.ref, built.data, { merge: built.merge });
       ops++;
+      if (entity === "contacts" && Array.isArray((built.data as { tags?: unknown }).tags)) {
+        for (const t of (built.data as { tags: unknown[] }).tags) {
+          if (typeof t === "string" && t.trim()) importedTagNames.add(t);
+        }
+      }
 
       if (externalId && !ownMap) {
         const mapRef = mappingsCol.doc(mappingKey(source, entity, externalId));
@@ -295,6 +302,17 @@ export async function writeImportChunk(
     }
   }
   await flush();
+  // Contacts & Tags (2026-11): imported tags join the central library. A
+  // migration import is historical data, so no Tag Added events fire.
+  if (importedTagNames.size > 0) {
+    await registerTagNames({
+      subAccountId,
+      agencyId,
+      names: [...importedTagNames],
+      createdByUid,
+      createdVia: "import",
+    }).catch((err) => console.warn("[import] tag registry sync failed", err));
+  }
   return result;
 }
 

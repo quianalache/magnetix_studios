@@ -1,5 +1,6 @@
 import "server-only";
 
+import { hasTag } from "@/lib/contacts/tag-names";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -48,9 +49,9 @@ export async function resolveVoiceAudience(
     .collection("contacts")
     .where("subAccountId", "==", subAccountId);
 
-  if (filter.kind === "tag") {
-    query = query.where("tags", "array-contains", filter.tag);
-  } else if (filter.kind === "pipeline_stage") {
+  // Tags match regardless of capitalization / spacing (CRM-wide rule): a
+  // tag audience is matched in memory below, not with an exact query.
+  if (filter.kind === "pipeline_stage") {
     query = query.where("pipelineStage", "==", filter.stage);
   }
 
@@ -81,6 +82,7 @@ export async function resolveVoiceAudience(
 
   for (const doc of snap.docs) {
     const contact = { id: doc.id, ...(doc.data() as Omit<Contact, "id">) };
+    if (filter.kind === "tag" && !hasTag(contact.tags, filter.tag)) continue;
     if (territoryFilter) {
       const tId = contact.territoryId ?? null;
       if (!tId || !territoryFilter.includes(tId)) continue;
@@ -101,7 +103,7 @@ export async function resolveVoiceAudience(
       skipped.push({ contact, reason: "prior_campaign" });
       continue;
     }
-    if (excludeTag && (contact.tags ?? []).includes(excludeTag)) {
+    if (excludeTag && hasTag(contact.tags, excludeTag)) {
       skipped.push({ contact, reason: "suppressed_tag" });
       continue;
     }

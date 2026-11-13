@@ -120,6 +120,7 @@ export async function POST(request: Request) {
     postalCode: str(body.postalCode, 20),
     customFields,
     territoryId: typeof body.territoryId === "string" ? body.territoryId : null,
+    tagContext: { source: "manual", actorUid: access.uid },
   });
   invalidateContactsCache(subAccountId);
 

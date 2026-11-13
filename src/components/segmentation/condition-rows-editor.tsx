@@ -8,7 +8,8 @@ import {
   TEXT_OPS,
   type FieldOption,
 } from "@/lib/segmentation/field-options";
-import type { Condition, ConditionGroup, ConditionOp } from "@/types/workflows";
+import type { Condition, ConditionGroup, ConditionOp, TagRuleInvalidation } from "@/types/workflows";
+import { conditionInvalidation, invalidationMessage } from "@/lib/contacts/tag-rule-validity";
 
 /**
  * Condition-group editor for the shared segmentation engine (Contacts
@@ -23,6 +24,8 @@ export interface ConditionRow {
   field: string;
   op: ConditionOp;
   value: string;
+  /** Contacts & Tags (2026-11): the tested tag was deleted (fail-closed). */
+  invalid?: TagRuleInvalidation;
 }
 
 export interface ConditionRowsState {
@@ -49,7 +52,7 @@ export function rowToCondition(row: ConditionRow): Condition | null {
   if (!value) return null;
   if (DAY_COUNT_OPS.has(row.op) && !/^\d{1,5}$/.test(value)) return null;
   if (CALENDAR_DATE_OPS.has(row.op) && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  return { field: row.field, op: row.op, value };
+  return { field: row.field, op: row.op, value, ...(conditionInvalidation(row) ? { invalid: row.invalid } : {}) };
 }
 
 /** Complete rows only — incomplete rows simply don't narrow yet. */
@@ -70,6 +73,7 @@ export function groupToRows(group: ConditionGroup | null | undefined): Condition
       field: c.field,
       op: c.op,
       value: c.value ?? "",
+      ...(conditionInvalidation(c) ? { invalid: c.invalid } : {}),
     })),
   };
 }
@@ -105,7 +109,13 @@ export function ConditionRowsEditor({
   function updateCondition(id: string, patch: Partial<ConditionRow>) {
     onChange({
       ...value,
-      conditions: value.conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      conditions: value.conditions.map((c) => {
+        if (c.id !== id) return c;
+        const next = { ...c, ...patch };
+        // Picking another tag repairs a deleted-tag rule.
+        if (next.invalid && !conditionInvalidation(next)) delete next.invalid;
+        return next;
+      }),
     });
   }
 
@@ -143,7 +153,7 @@ export function ConditionRowsEditor({
         return (
           <div
             key={row.id}
-            className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/20 p-2"
+            className={`flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/20 p-2${conditionInvalidation(row) ? " border-destructive/60" : ""}`}
           >
             <select
               value={row.field}
@@ -250,6 +260,11 @@ export function ConditionRowsEditor({
             >
               <X className="h-3.5 w-3.5" />
             </button>
+            {conditionInvalidation(row) ? (
+              <p className="w-full text-caption text-destructive" role="alert">
+                {invalidationMessage(row.invalid!)}
+              </p>
+            ) : null}
           </div>
         );
       })}

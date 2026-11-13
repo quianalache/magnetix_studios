@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { funnelOfferViewForPage } from "@/lib/server/checkout/funnel-runtime-service";
 import { pageServableOnHost } from "@/lib/domains/custom-domain-service";
 import { Render } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -36,7 +37,8 @@ export const dynamic = "force-dynamic";
  * published from the New Builder, 404 so a guessed id can't leak anything.
  * The legacy (V1/V2 `blocks`) public renderer was retired on 2026-10-23 after
  * every published page had a New Builder snapshot. Reading Result Pages take
- * their own branch below. This route never writes to Firestore.
+ * their own branch below. This route never writes to Firestore (the funnel
+ * Accept / Decline runtime view is read-only here).
  */
 /**
  * Public document head from the page's PUBLISHED Page Settings (Wave 3 —
@@ -149,7 +151,13 @@ export default async function PublicPagePreview({
   const qaPopupId = typeof query.qa_popup === "string" && page.name.startsWith("QA ·") ? query.qa_popup : null;
   // Media Library videos (Wave 3): fresh short-lived playback per visit, own workspace only.
   const resolvedVideos = await resolveMediaVideosForPage(page, collectable);
-  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, resolvedBookings, resolvedCheckouts, resolvedVideos, brandColors, brandKit, pageId: page.id, publishedPopups };
+  // Post-purchase funnel runtime: this visitor's Accept / Decline context, from
+  // their funnel-session cookie only (never for thumbnail captures).
+  const funnelOffer = capture || !page.subAccountId ? null : await funnelOfferViewForPage({ id: page.id, subAccountId: page.subAccountId }, (await cookies()).getAll()).catch((err) => {
+    console.error(`[p/${pageId}] funnel runtime unavailable`, err);
+    return null;
+  });
+  const metadata = { subAccountId: page.subAccountId ?? "", resolvedForms, resolvedEmbeds, resolvedOffers, resolvedActions, resolvedBookings, resolvedCheckouts, resolvedVideos, brandColors, brandKit, pageId: page.id, publishedPopups, funnelOffer };
   // The host holds ONLY this page's PUBLISHED Popups: an Open Popup action can
   // never reach a draft-only Popup or another page's Popup (Slice 5).
   // The tenant's own tracking, from the PUBLISHED settings only.

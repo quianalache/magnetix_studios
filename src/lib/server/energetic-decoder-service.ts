@@ -1,4 +1,5 @@
 import "server-only";
+import { applyContactTags } from "@/lib/server/contact-tags/tag-writer";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -216,6 +217,7 @@ export async function createEnergeticDecoderReading(
           source: "Energetic Decoder",
           tags: [...new Set(["energetic-decoder", ...extraTags])],
           attribution: input.attribution ?? null,
+          tagContext: { source: "energetic_decoder" },
         });
         contactId = id;
         contactCreated = true;
@@ -322,12 +324,19 @@ async function fillReturningContact(
   const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
   if (!snap.exists) return;
   const c = snap.data() ?? {};
-  const patch: { phone?: string; tags?: string[]; attribution?: ContactAttribution } = {};
+  const patch: { phone?: string; attribution?: ContactAttribution } = {};
   if (opts.phone && !(typeof c.phone === "string" && c.phone.trim())) patch.phone = opts.phone;
-  const existingTags = Array.isArray(c.tags) ? (c.tags as string[]) : [];
-  const missing = opts.tags.filter((t) => !existingTags.includes(t));
-  if (missing.length > 0) patch.tags = [...existingTags, ...missing];
   if (opts.attribution && !c.attribution) patch.attribution = opts.attribution;
+  // Tags are only ever added — through the shared tag service (Contacts &
+  // Tags, 2026-11), so events + activity fire only for new tags.
+  if (opts.tags.length > 0 && typeof c.subAccountId === "string") {
+    await applyContactTags({
+      subAccountId: c.subAccountId,
+      contactId,
+      add: opts.tags,
+      ctx: { source: "energetic_decoder" },
+    }).catch((err) => console.warn("[energetic-decoder] returning-contact tags failed", err));
+  }
   if (Object.keys(patch).length === 0) return;
   await updateContactServerSide({ contactId, patch }).catch((err) =>
     console.warn("[energetic-decoder] returning-contact update failed", err),

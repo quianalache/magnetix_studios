@@ -1,5 +1,6 @@
 "use client";
 
+import { hasTag } from "@/lib/contacts/tag-names";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
@@ -59,6 +60,22 @@ export function ContactInfoCard({
   const [marketingActionSaving, setMarketingActionSaving] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  // Contacts & Tags (2026-11): suggest the workspace's existing tags so the
+  // same spelling is reused (the server also maps spellings to the library).
+  const [tagOptions, setTagOptions] = useState<string[]>([]);
+  useEffect(() => {
+    if (!addingTag || !subAccountId) return;
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/contact-tags?names=1`)
+      .then((r) => r.json())
+      .then((b: { names?: unknown }) => {
+        if (!cancelled && Array.isArray(b.names)) setTagOptions(b.names.filter((n): n is string => typeof n === "string"));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [addingTag, subAccountId]);
   const [tagSaving, setTagSaving] = useState(false);
 
   useEffect(() => {
@@ -144,7 +161,7 @@ export function ContactInfoCard({
     const tag = tagDraft.trim();
     if (!tag) return;
     const current = contact.tags ?? [];
-    if (current.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+    if (hasTag(current, tag)) {
       toast.message("That tag is already on this contact.");
       return;
     }
@@ -331,10 +348,18 @@ export function ContactInfoCard({
                   }
                 }}
                 placeholder="New tag"
-                maxLength={60}
+                maxLength={50}
                 aria-label="New tag"
+                list="contact-tag-options"
                 className="h-7 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               />
+              <datalist id="contact-tag-options">
+                {tagOptions
+                  .filter((t) => !hasTag(contact.tags, t))
+                  .map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+              </datalist>
               <Button type="submit" size="sm" className="h-7 px-2 text-xs" disabled={tagSaving || !tagDraft.trim()}>
                 Add
               </Button>

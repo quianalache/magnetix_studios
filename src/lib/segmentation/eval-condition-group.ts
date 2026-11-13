@@ -1,5 +1,7 @@
 import type { Condition, ConditionGroup, ConditionOp } from "@/types/workflows";
 import type { Contact } from "@/types/contacts";
+import { tagKey } from "@/lib/contacts/tag-names";
+import { groupNeedsAttention } from "@/lib/contacts/tag-rule-validity";
 
 /**
  * Broadcast Segmentation V1 (2026-08-27) — the SAME condition-group engine
@@ -121,10 +123,12 @@ function evalOne(
       return raw !== null && raw !== undefined && raw !== "";
     case "not_set":
       return raw === null || raw === undefined || raw === "";
+    // Contacts & Tags (2026-11): one tag regardless of capitalization or
+    // extra spaces — the same identity the tag library uses (tagKey).
     case "has_tag":
-      return Array.isArray(contact.tags) && contact.tags.includes(val);
+      return hasTagKey(contact, val);
     case "not_has_tag":
-      return !(Array.isArray(contact.tags) && contact.tags.includes(val));
+      return !hasTagKey(contact, val);
     case "in_stage":
       return (contact.pipelineStage ?? "") === val;
     case "source_is":
@@ -149,6 +153,10 @@ export function evalConditionGroup(
 ): boolean {
   const all = group?.all ?? [];
   if (all.length === 0) return true;
+  // Contacts & Tags (2026-11): a rule whose tag was deleted fails closed —
+  // the whole group matches nobody (never "everyone", even for "doesn't
+  // have tag" or OR groups) until the creator picks another tag.
+  if (groupNeedsAttention(group)) return false;
   return group?.match === "any"
     ? all.some((c) => evalOne(contact, c, ctx))
     : all.every((c) => evalOne(contact, c, ctx));
@@ -161,4 +169,11 @@ export function groupUsesAccessConditions(
   return !!group?.all?.some(
     (c) => c.op === "has_access" || c.op === "not_has_access" || c.op === "has_submitted" || c.op === "not_has_submitted",
   );
+}
+
+function hasTagKey(contact: Partial<Contact>, value: string): boolean {
+  if (!Array.isArray(contact.tags)) return false;
+  const key = tagKey(value);
+  if (!key) return false;
+  return contact.tags.some((t) => typeof t === "string" && tagKey(t) === key);
 }

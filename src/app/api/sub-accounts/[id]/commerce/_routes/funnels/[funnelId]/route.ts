@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { checkoutErrorResponse, readBody } from "@/lib/server/checkout/common";
-import { archiveFunnel, getFunnelForWorkspace, listSteps, updateFunnel } from "@/lib/server/checkout/funnels-service";
+import { archiveFunnel, getFunnelHub, updateFunnel } from "@/lib/server/checkout/funnels-service";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string; funnelId: string }> };
@@ -13,8 +13,8 @@ export async function GET(request: Request, ctx: Ctx) {
   const access = await requireSubAccountMember(request, id);
   if (access instanceof NextResponse) return access;
   try {
-    const funnel = await getFunnelForWorkspace(id, funnelId);
-    return NextResponse.json({ funnel, steps: await listSteps(funnel.id) });
+    // Funnel hub (Phase 2): funnel, steps, workspace pages, checkout summaries, routing issues.
+    return NextResponse.json(await getFunnelHub(id, funnelId));
   } catch (err) {
     return checkoutErrorResponse(err);
   }

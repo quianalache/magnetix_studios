@@ -20,7 +20,7 @@ import { BookingSourceFieldEditor } from "@/components/pages-funnels/puck/bookin
 
 const useTypedPuck = createUsePuck();
 
-type LiveType = "none" | "url" | "page" | "purchase" | "booking" | "scroll" | "call" | "email" | "sms" | "open_popup" | "close_popup";
+type LiveType = "none" | "url" | "page" | "purchase" | "booking" | "scroll" | "call" | "email" | "sms" | "open_popup" | "close_popup" | "accept_upsell" | "decline_continue";
 
 /**
  * Where the ActionField is being used (Wave 2A Slice 5), provided by the
@@ -53,7 +53,14 @@ const BASE_ACTION_OPTIONS: { value: LiveType; label: string }[] = [
 ];
 
 export function actionOptions(ctx: ActionFieldContextValue | null): { value: LiveType; label: string }[] {
-  if (ctx?.surface === "page") return [...BASE_ACTION_OPTIONS, { value: "open_popup", label: "Open popup" }];
+  if (ctx?.surface === "page")
+    return [
+      ...BASE_ACTION_OPTIONS,
+      { value: "open_popup", label: "Open popup" },
+      // Upsell / Downsell pages: the funnel step's own Accept / Decline flow.
+      { value: "accept_upsell", label: "Accept offer (Upsell / Downsell)" },
+      { value: "decline_continue", label: "Decline offer (Upsell / Downsell)" },
+    ];
   if (ctx?.surface === "popup") return [...BASE_ACTION_OPTIONS, { value: "close_popup", label: "Close popup" }];
   return BASE_ACTION_OPTIONS;
 }
@@ -70,6 +77,8 @@ function blank(type: LiveType): PageAction {
     case "email": return { type: "email", emailAddress: "" };
     case "open_popup": return { type: "open_popup", popupId: "" };
     case "close_popup": return { type: "close_popup" };
+    case "accept_upsell": return { type: "accept_upsell" };
+    case "decline_continue": return { type: "decline_continue" };
     default: return { type: "none" };
   }
 }
@@ -141,6 +150,14 @@ export function ActionFieldEditor({
       {action.type === "email" && <EmailFields action={action} onChange={onChange} />}
       {action.type === "open_popup" && offered && <PopupFields action={action} onChange={onChange} ctx={ctx} />}
       {action.type === "close_popup" && offered && <Hint>Closes this popup and returns the visitor to the page.</Hint>}
+      {action.type === "accept_upsell" && (
+        <Hint>
+          Buys this step&apos;s Offer for the buyer in one click (price, payment and what happens next come from the funnel step&apos;s settings). Works when this page is an Upsell or Downsell step and the buyer has just checked out.
+        </Hint>
+      )}
+      {action.type === "decline_continue" && (
+        <Hint>Skips this step&apos;s Offer and sends the buyer to the step&apos;s Decline route. Works when this page is an Upsell or Downsell step.</Hint>
+      )}
     </div>
   );
 }

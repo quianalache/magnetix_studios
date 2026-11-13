@@ -1,5 +1,6 @@
 "use client";
 
+import { conditionInvalidation, groupInvalidations, groupNeedsAttention } from "@/lib/contacts/tag-rule-validity";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,6 +11,7 @@ import {
   PhoneOutgoing,
   RotateCw,
   SearchX,
+  Tag as TagIcon,
   Upload,
   Users,
   X,
@@ -62,6 +64,7 @@ import { ContactListsMenu } from "@/components/contacts/contact-lists-menu";
 import { AddContactModal } from "@/components/contacts/add-contact-modal";
 import { ImportContactsDialog } from "@/components/contacts/import-contacts-dialog";
 import { BulkCallDialog } from "@/components/contacts/bulk-call-dialog";
+import { TagsLibrary } from "@/components/contacts/tags/tags-library";
 import type { Contact } from "@/types/contacts";
 import type { TerritoryDoc } from "@/types";
 import type { CustomFieldDef } from "@/types/custom-fields";
@@ -94,6 +97,38 @@ function ImportQueryWatcher({ onOpen }: { onOpen: () => void }) {
   return null;
 }
 
+interface ContactsUrlState {
+  /** `?view=tags` shows the Tags library instead of the contact list. */
+  view: "contacts" | "tags";
+  /** `?tagId=` — the open tag in the Tags library. */
+  tagId: string | null;
+  /** `?tag=NAME` — open the list filtered to one tag ("View all contacts"). */
+  tag: string | null;
+  /** `?list=ID` — open a saved Contact List (links from tag usage). */
+  list: string | null;
+}
+
+/** Reports the URL's Contacts view state (Suspense-wrapped like ImportQueryWatcher). */
+function ContactsUrlWatcher({ onChange }: { onChange: (s: ContactsUrlState) => void }) {
+  const searchParams = useSearchParams();
+  const key = searchParams.toString();
+  useEffect(() => {
+    onChange({
+      view: searchParams.get("view") === "tags" ? "tags" : "contacts",
+      tagId: searchParams.get("tagId"),
+      tag: searchParams.get("tag"),
+      list: searchParams.get("list"),
+    });
+    // `key` is the stable stand-in for searchParams.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, onChange]);
+  return null;
+}
+
+function singleTagRows(tag: string): ConditionRowsState {
+  return groupToRows({ all: [{ field: "tags", op: "has_tag", value: tag }], match: "all" });
+}
+
 const DEFAULT_SORT: ContactSort = { field: "createdAt", dir: "desc" };
 const EMPTY_ROWS: ConditionRowsState = { match: "all", conditions: [] };
 
@@ -119,6 +154,9 @@ interface SavedView {
 export default function ContactsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const [urlState, setUrlState] = useState<ContactsUrlState | null>(null);
+  const tagsView = urlState?.view === "tags";
   const { subAccountId, agencyId, subAccount, saPath } = useSubAccount();
   const stages = usePipelineStages();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
@@ -214,6 +252,43 @@ export default function ContactsPage() {
       // ignore
     }
   }, [ready, viewKey, search, group, sort, page, activeListId]);
+
+  // Contacts & Tags (2026-11): `?tag=NAME` opens the list with exactly that
+  // tag filter (direct links, refresh and back/forward included). Once the
+  // filters move away from it, the param is dropped so a refresh shows what
+  // is on screen.
+  const tagParam = urlState?.tag ?? null;
+  const tagMatchedRef = useRef(false);
+  useEffect(() => {
+    if (!ready || !tagParam) return;
+    tagMatchedRef.current = false;
+    setActiveListId(null);
+    setSearchInput("");
+    setSearch("");
+    setRows(singleTagRows(tagParam));
+  }, [ready, tagParam]);
+  const tagGroupKey = useMemo(
+    () => (tagParam ? JSON.stringify(rowsToGroup(singleTagRows(tagParam))) : null),
+    [tagParam],
+  );
+  const stripParam = useCallback(
+    (name: string) => {
+      const next = new URLSearchParams(window.location.search);
+      if (!next.has(name)) return;
+      next.delete(name);
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router],
+  );
+  useEffect(() => {
+    if (!ready || !tagParam || !tagGroupKey) return;
+    if (groupKey === tagGroupKey) tagMatchedRef.current = true;
+    else if (tagMatchedRef.current) {
+      tagMatchedRef.current = false;
+      stripParam("tag");
+    }
+  }, [ready, tagParam, tagGroupKey, groupKey, stripParam]);
 
   // The page itself.
   useEffect(() => {
@@ -366,9 +441,29 @@ export default function ContactsPage() {
   );
 
   const pageRows: ContactRow[] = useMemo(() => data?.contacts ?? [], [data]);
+  // Tag suggestions come from the workspace's tag library (Contacts & Tags,
+  // 2026-11) — every tag, including ones no contact has yet — plus any on
+  // the current page.
+  const [libraryTagNames, setLibraryTagNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user || !subAccountId || tagsView) return;
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/contact-tags?names=1`)
+      .then((r) => r.json())
+      .then((b: { names?: unknown }) => {
+        if (!cancelled && Array.isArray(b.names)) setLibraryTagNames(b.names.filter((n): n is string => typeof n === "string"));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, subAccountId, tagsView]);
   const tagSuggestions = useMemo(
-    () => [...new Set(pageRows.flatMap((r) => r.tags))].sort().slice(0, 30),
-    [pageRows],
+    () =>
+      [...new Set([...libraryTagNames, ...pageRows.flatMap((r) => r.tags)])].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      ),
+    [libraryTagNames, pageRows],
   );
   const sourceChoices = useMemo(() => {
     const known = new Set(KNOWN_SOURCES.map((s) => s.value));
@@ -387,6 +482,22 @@ export default function ContactsPage() {
   function selectList(list: ContactListView | null) {
     setActiveListId(list?.id ?? null);
     setRows(list ? groupToRows(list.group) : EMPTY_ROWS);
+  }
+
+  // `?list=ID` (links from a tag's usage list) opens that saved list once
+  // the lists have loaded, then drops the param.
+  const listParam = urlState?.list ?? null;
+  useEffect(() => {
+    if (!ready || !listParam) return;
+    const list = lists.find((l) => l.id === listParam);
+    if (!list) return;
+    setActiveListId(list.id);
+    setRows(groupToRows(list.group));
+    stripParam("list");
+  }, [ready, listParam, lists, stripParam]);
+
+  function openTags(tagId: string | null) {
+    router.push(tagId ? `${pathname}?view=tags&tagId=${encodeURIComponent(tagId)}` : `${pathname}?view=tags`);
   }
 
   async function handleExport() {
@@ -449,15 +560,16 @@ export default function ContactsPage() {
     <PageShell width="wide" className="gap-5">
       <Suspense fallback={null}>
         <ImportQueryWatcher onOpen={openImport} />
+        <ContactsUrlWatcher onChange={setUrlState} />
       </Suspense>
 
       <PageHeader
         title="Contacts"
         icon={Users}
         accent="crescent"
-        description="Everyone in your pipeline, in one place."
+        description={tagsView ? "Create, organize and manage tags for your contacts." : "Everyone in your pipeline, in one place."}
         actions={
-          <>
+          tagsView ? undefined : <>
           <Button
             variant="outline"
             onClick={() => router.push(saPath("/broadcasts/new"))}
@@ -489,11 +601,14 @@ export default function ContactsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => selectList(null)}
-            aria-pressed={!activeList}
+            onClick={() => {
+              if (tagsView) router.push(pathname);
+              selectList(null);
+            }}
+            aria-pressed={!activeList && !tagsView}
             className={cn(
               "inline-flex h-(--ds-control-sm) items-center gap-2 rounded-chip border px-3 text-body-sm font-medium transition-colors",
-              !activeList
+              !activeList && !tagsView
                 ? "border-primary bg-tint-violet text-link"
                 : "border-border bg-card text-muted-foreground hover:text-foreground",
             )}
@@ -501,7 +616,22 @@ export default function ContactsPage() {
             All contacts
             {data && <span className="text-caption tabular-nums opacity-80">{visibleTotal}</span>}
           </button>
-          {activeList && (
+          <button
+            type="button"
+            onClick={() => openTags(null)}
+            aria-pressed={tagsView}
+            aria-label="Tags library"
+            className={cn(
+              "inline-flex h-(--ds-control-sm) items-center gap-2 rounded-chip border px-3 text-body-sm font-medium transition-colors",
+              tagsView
+                ? "border-primary bg-tint-violet text-link"
+                : "border-border bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <TagIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            Tags
+          </button>
+          {activeList && !tagsView && (
             <span className="inline-flex h-(--ds-control-sm) items-center gap-1.5 rounded-chip border border-primary bg-tint-violet px-3 text-body-sm font-medium text-link">
               <ListFilter className="h-3.5 w-3.5" />
               {activeList.name}
@@ -517,6 +647,7 @@ export default function ContactsPage() {
             </span>
           )}
         </div>
+        {!tagsView && (
         <div className="flex flex-wrap items-center gap-2">
         <ContactsColumnsMenu
           all={allColumns}
@@ -541,7 +672,13 @@ export default function ContactsPage() {
           }}
         />
         </div>
+        )}
       </div>
+
+      {tagsView ? (
+        <TagsLibrary subAccountId={subAccountId} selectedId={urlState?.tagId ?? null} onSelect={openTags} />
+      ) : (
+      <>
 
       <ContactsFilterBar
         search={searchInput}
@@ -553,6 +690,12 @@ export default function ContactsPage() {
         tagSuggestions={tagSuggestions}
       />
       <ActiveFilterChips rows={rows} onRowsChange={setRows} fieldOptions={fieldOptions} />
+      {(activeList && groupNeedsAttention(activeList.group)) || rows.conditions.some((r) => conditionInvalidation(r)) ? (
+        <Alert tone="warning" title="This list needs attention">
+          A tag it filters by was deleted ({[...new Set([...(activeList ? groupInvalidations(activeList.group) : []), ...rows.conditions.map((r) => conditionInvalidation(r)).filter((x) => !!x)].map((i) => `“${i!.tag}”`))].join(", ")}),
+          so it matches no one until you choose another tag in More filters and save the list.
+        </Alert>
+      ) : null}
 
       {error && !data ? (
         <Alert tone="danger" title="Couldn't load contacts.">
@@ -601,6 +744,8 @@ export default function ContactsPage() {
         />
       )}
       {error && data && <p className="text-center text-caption text-destructive">{error}</p>}
+      </>
+      )}
 
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">

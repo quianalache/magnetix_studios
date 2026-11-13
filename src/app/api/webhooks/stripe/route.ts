@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripeServer } from "@/lib/stripe/server";
+import { verifyStripeWebhook } from "@/lib/stripe/webhook-verification";
 import {
   handleCheckoutCompleted,
   handleSubscriptionUpdated,
@@ -22,64 +23,9 @@ import {
 } from "@/lib/server/checkout/order-service";
 import { handleStripeConnectAccountUpdated } from "@/lib/stripe/connect";
 import type Stripe from "stripe";
-import { getAdminDb } from "@/lib/firebase/admin";
-import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { processStripeWorkflowEvent } from "@/lib/server/payment-workflow-events";
 
 export const dynamic = "force-dynamic";
-
-async function emitNormalizedPaymentEvent(event: Stripe.Event): Promise<void> {
-  const object = event.data.object as unknown as {
-    metadata?: Record<string, string>;
-    customer?: string | null;
-    amount_received?: number;
-    amount?: number;
-    currency?: string;
-    status?: string;
-  };
-  const metadata = object.metadata ?? {};
-  const subAccountId = metadata.subAccountId ?? metadata.sub_account_id;
-  const contactId = metadata.contactId ?? metadata.contact_id;
-  if (!subAccountId || !contactId) return;
-  const sub = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
-  const agencyId = sub.data()?.agencyId as string | undefined;
-  if (!agencyId) return;
-  const type =
-    event.type === "checkout.session.completed"
-      ? "payment.succeeded"
-      : event.type === "payment_intent.payment_failed"
-        ? "payment.failed"
-        : event.type === "customer.subscription.created"
-          ? "subscription.created"
-          : event.type === "invoice.paid"
-            ? "subscription.renewed"
-            : event.type === "customer.subscription.deleted"
-              ? "subscription.cancelled"
-              : event.type === "charge.refunded"
-                ? "refund.issued"
-                : event.type === "customer.subscription.updated" &&
-                    object.status === "paused"
-                  ? "subscription.paused"
-                  : null;
-  if (!type) return;
-  emitWorkflowEvent({
-    eventType: type,
-    eventId: event.id,
-    agencyId,
-    subAccountId,
-    contactId,
-    source: "stripe",
-    occurredAt: new Date(event.created * 1000).toISOString(),
-    deduplicationKey: event.id,
-    payload: {
-      customerId: object.customer ?? metadata.customerId ?? null,
-      amount: object.amount_received ?? object.amount ?? null,
-      currency: object.currency ?? null,
-      subscriptionId:
-        metadata.subscriptionId ?? metadata.subscription_id ?? null,
-      providerEventType: event.type,
-    },
-  });
-}
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -92,39 +38,34 @@ export async function POST(request: Request) {
     );
   }
 
-  const stripe = getStripeServer();
+  // Signature construction is local, but the Stripe SDK still needs a
+  // configured key. Prefer the existing deployment default; allow a
+  // live-only configuration to verify its live endpoint without inventing a
+  // test fallback.
+  const stripe = getStripeServer(
+    process.env.STRIPE_SECRET_KEY?.trim() ? undefined : "live"
+  );
 
-  // Two separate Stripe event destinations point at this endpoint — one
-  // scoped "Your account" (platform-level: our own Pro/Founders
-  // subscriptions, disputes on our own charges) and one scoped "Connected
-  // accounts" (course/offer purchases that ran as a direct charge on a
-  // sub-account's own connected Stripe account, see stripe/connect.ts).
-  // Stripe signs each destination with its own secret, so we try both.
-  const secrets = [
-    process.env.STRIPE_WEBHOOK_SECRET,
-    process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
-  ].filter((s): s is string => !!s);
-
-  let event: Stripe.Event | null = null;
-  let lastError: unknown = null;
-  for (const secret of secrets) {
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, secret);
-      break;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  if (!event) {
-    const message =
-      lastError instanceof Error ? lastError.message : "Unknown error";
-    console.error(`Webhook signature verification failed: ${message}`);
+  // Up to four Stripe event destinations point at this endpoint: "Your
+  // account" (platform-level: our own Pro/Founders subscriptions, disputes on
+  // our own charges) and "Connected accounts" (course/offer purchases that
+  // ran as a direct charge on a sub-account's own connected Stripe account,
+  // see stripe/connect.ts), each in TEST and — once configured — LIVE mode.
+  // Stripe signs each destination with its own secret; the secret that
+  // verifies the event fixes its trusted mode + scope
+  // (lib/stripe/webhook-verification.ts).
+  const verified = verifyStripeWebhook({ stripe, body, signature });
+  if (!verified.ok) {
+    console.error(`Webhook signature verification failed: ${verified.message}`);
     return NextResponse.json(
-      { error: `Webhook Error: ${message}` },
+      { error: `Webhook Error: ${verified.message}` },
       { status: 400 }
     );
   }
+  const event: Stripe.Event = verified.event;
+  // The verified endpoint's mode — authoritative for every Stripe call and
+  // record match below (never the deployment's default key).
+  const mode = verified.context.mode;
 
   try {
     switch (event.type) {
@@ -193,6 +134,7 @@ export async function POST(request: Request) {
           eventAccountId: event.account ?? null,
           eventCreated: event.created,
           outcome: "succeeded",
+          mode,
         });
         break;
       case "invoice.payment_failed":
@@ -201,6 +143,7 @@ export async function POST(request: Request) {
           eventAccountId: event.account ?? null,
           eventCreated: event.created,
           outcome: "failed",
+          mode,
         });
         break;
       case "payment_intent.succeeded":
@@ -218,6 +161,7 @@ export async function POST(request: Request) {
           eventAccountId: event.account ?? null,
           eventCreated: event.created,
           outcome: "succeeded",
+          mode,
         });
         break;
       case "payment_intent.payment_failed":
@@ -226,6 +170,7 @@ export async function POST(request: Request) {
           eventAccountId: event.account ?? null,
           eventCreated: event.created,
           outcome: "failed",
+          mode,
         });
         break;
       case "charge.refunded":
@@ -233,6 +178,7 @@ export async function POST(request: Request) {
           charge: event.data.object as Stripe.Charge,
           eventAccountId: event.account ?? null,
           eventCreated: event.created,
+          mode,
         });
         break;
       // Fires whenever a connected sub-account's capabilities change —
@@ -240,13 +186,19 @@ export async function POST(request: Request) {
       // they finish Stripe's onboarding requirements post-connect.
       case "account.updated":
         await handleStripeConnectAccountUpdated(
-          event.data.object as Stripe.Account
+          event.data.object as Stripe.Account,
+          mode
         );
         break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
-    await emitNormalizedPaymentEvent(event);
+    // CRM Foundations Batch C: the verified event → the Workflow Builder's
+    // payment & subscription triggers (logical events, account-scoped
+    // contact resolution, persisted idempotency). Runs AFTER the billing
+    // handlers above so order / purchase / ledger records exist. Agency and
+    // platform billing never reach workspace workflows. Never calls Stripe.
+    await processStripeWorkflowEvent(event);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`Error processing webhook event: ${message}`);

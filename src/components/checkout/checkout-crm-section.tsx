@@ -1,5 +1,6 @@
 "use client";
 
+import { sameTag } from "@/lib/contacts/tag-names";
 import { useId, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Plus, X } from "lucide-react";
@@ -207,7 +208,7 @@ function TagsField({ label, hint, value, onChange, disabled }: { label: string; 
   function add() {
     const t = draft.replace(/\s+/g, " ").trim().slice(0, 60);
     setDraft("");
-    if (!t || value.some((v) => v.toLowerCase() === t.toLowerCase()) || full) return;
+    if (!t || value.some((v) => sameTag(v, t)) || full) return;
     onChange([...value, t]);
   }
   return (
@@ -249,7 +250,7 @@ function TagsField({ label, hint, value, onChange, disabled }: { label: string; 
   );
 }
 
-function WorkflowPicker({
+export function WorkflowPicker({
   id,
   label,
   value,

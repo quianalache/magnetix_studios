@@ -10,6 +10,7 @@ import * as h3 from "@/app/api/order-checkout/_routes/[configId]/resume/route";
 import * as h4 from "@/app/api/order-checkout/_routes/[configId]/session/route";
 import * as h5 from "@/app/api/order-checkout/_routes/[configId]/start/route";
 import * as h6 from "@/app/api/order-checkout/_routes/abandonment/step/route";
+import * as h7 from "@/app/api/order-checkout/_routes/funnel-offer/[funnelId]/[stepId]/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,6 +23,7 @@ const d = createApiDispatcher([
   ["[configId]/session", h4],
   ["[configId]/start", h5],
   ["abandonment/step", h6],
+  ["funnel-offer/[funnelId]/[stepId]", h7],
 ]);
 
 export const GET = d.GET;

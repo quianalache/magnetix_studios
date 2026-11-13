@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reconcileGroup, reconcileNodes } from "@/lib/contacts/tag-rule-validity";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { tenantFrom } from "@/lib/comms/resend";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
@@ -337,6 +338,20 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid nodes" }, { status: 400 });
     }
     patch.nodes = nodes;
+  }
+
+  // Contacts & Tags (2026-11): keep "needs attention" markers on rules whose
+  // tag was deleted (an editor that drops unknown fields can't re-enable
+  // them), and drop a marker once its rule names another tag (repaired).
+  if (patch.trigger || patch.nodes) {
+    const existing = await getWorkflow(subAccountId, workflowId);
+    if (patch.trigger) {
+      patch.trigger = {
+        ...patch.trigger,
+        filters: reconcileGroup(existing?.trigger?.filters, patch.trigger.filters),
+      };
+    }
+    if (patch.nodes) patch.nodes = reconcileNodes(existing?.nodes, patch.nodes);
   }
 
   if (patch.status === "active") {

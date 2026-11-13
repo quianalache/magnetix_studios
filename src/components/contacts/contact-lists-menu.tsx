@@ -1,5 +1,6 @@
 "use client";
 
+import { groupNeedsAttention } from "@/lib/contacts/tag-rule-validity";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Check, ChevronDown, ListFilter, Pencil, Plus, Save, Trash2 } from "lucide-react";
@@ -176,6 +177,9 @@ export function ContactListsMenu({
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{l.name}</span>
+                {groupNeedsAttention(l.group) && (
+                  <span className="block text-micro font-medium text-destructive">Needs attention — a tag it uses was deleted</span>
+                )}
                 {l.description && (
                   <span className="block truncate text-micro text-muted-foreground">{l.description}</span>
                 )}

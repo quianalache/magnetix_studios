@@ -13,11 +13,40 @@ import { CheckoutSettingsEditor, type EditorPayload } from "@/components/checkou
 import { useSubAccount } from "@/context/sub-account-context";
 import { commerceFetch } from "@/lib/client/commerce-api";
 import type { Funnel, FunnelStep } from "@/types/checkout";
+import type { FunnelHubPayload } from "@/components/funnels/funnel-ui";
+import { StepSettingsForm } from "@/components/funnels/step-settings-form";
 
 type StepPayload = EditorPayload & { funnel: Funnel; step: FunnelStep; steps: FunnelStep[] };
 
+/**
+ * Funnel → Step Settings. Checkout steps open Checkout Settings (unchanged);
+ * Page, Upsell, Downsell and Thank you steps open the step settings form
+ * (name, page, Accept / Decline routing) — Funnel Phase 2.
+ */
+export default function StepSettingsPage() {
+  const { subAccountId, funnelId, stepId } = useParams<{ subAccountId: string; funnelId: string; stepId: string }>();
+  const [hub, setHub] = useState<FunnelHubPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      setHub(await commerceFetch<FunnelHubPayload>(subAccountId, `funnels/${funnelId}`));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [subAccountId, funnelId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  if (error) return <PageShell width="wide"><EmptyState title="Couldn't open this step" description={error} /></PageShell>;
+  if (!hub) return <PageShellLoading width="form" blocks={3} />;
+  const step = hub.steps.find((s) => s.id === stepId);
+  if (!step) return <PageShell width="form"><EmptyState title="Step not found" description="It may have been removed from this funnel." /></PageShell>;
+  if (step.type !== "checkout") return <StepSettingsForm key={stepId} subAccountId={subAccountId} hub={hub} stepId={stepId} onSaved={load} />;
+  return <CheckoutStepSettings />;
+}
+
 /** Funnel → Checkout Step Settings. */
-export default function CheckoutStepSettingsPage() {
+function CheckoutStepSettings() {
   const { subAccountId, funnelId, stepId } = useParams<{ subAccountId: string; funnelId: string; stepId: string }>();
   const { isAdmin } = useSubAccount();
   const router = useRouter();

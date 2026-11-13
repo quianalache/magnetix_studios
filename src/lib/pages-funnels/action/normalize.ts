@@ -84,9 +84,12 @@ export function canonicalizeStoredAction(raw: unknown): {
       const funnelStepId = text("funnelStepId");
       return funnelStepId ? unsupported({ type: "navigate", destination: { type: "funnel_step", funnelStepId } }) : invalid();
     }
-    case "download":
+    // Post-purchase funnel runtime: the step's own Accept / Decline flow.
     case "accept_upsell":
+      return { action: { type: "funnel_offer", decision: "accept" }, status: "supported", rawType, raw };
     case "decline_continue":
+      return { action: { type: "funnel_offer", decision: "decline" }, status: "supported", rawType, raw };
+    case "download":
       return unsupported();
     default:
       return unsupported();
@@ -95,6 +98,7 @@ export function canonicalizeStoredAction(raw: unknown): {
 /** Convert the canonical supported subset back to the current persisted shape. */
 export function toLegacyPageAction(action: CanonicalPageAction): PageAction {
   if (action.type === "none") return { type: "none" };
+  if (action.type === "funnel_offer") return { type: action.decision === "accept" ? "accept_upsell" : "decline_continue" };
   if (action.type !== "navigate") return action as PageAction;
   const d: Destination = action.destination;
   switch (d.type) {

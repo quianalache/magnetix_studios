@@ -113,6 +113,7 @@ export async function POST(request: Request) {
         state: str(row.state, 100),
         postalCode: str(row.postalCode, 20),
         territoryId: typeof row.territoryId === "string" ? row.territoryId : null,
+        tagContext: { source: "import", actorUid: access.uid },
       });
       created++;
     } catch (err) {

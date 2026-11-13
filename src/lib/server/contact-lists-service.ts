@@ -1,5 +1,6 @@
 import "server-only";
 
+import { reconcileGroup } from "@/lib/contacts/tag-rule-validity";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sanitizeConditionGroup } from "@/lib/segmentation/sanitize-group";
@@ -176,7 +177,9 @@ export async function updateContactList(opts: {
     patch.name = name;
   }
   if (opts.description !== undefined) patch.description = cleanDescription(opts.description);
-  if (opts.group !== undefined) patch.group = cleanGroup(opts.group);
+  // Contacts & Tags (2026-11): a save can't silently drop a deleted-tag
+  // marker; choosing another tag repairs it.
+  if (opts.group !== undefined) patch.group = reconcileGroup(existing.group, cleanGroup(opts.group));
   const ref = getAdminDb().collection(COLLECTION).doc(existing.id);
   await ref.update(patch);
   const fresh = await ref.get();

@@ -360,7 +360,20 @@ export type ActivityType =
   // src/lib/server/checkout/crm-service.ts with deterministic ids.
   | "checkout_started"
   | "checkout_abandoned"
-  | "checkout_completed";
+  | "checkout_completed"
+  // Contacts & Tags (2026-11) — a tag was genuinely added to / removed from
+  // the contact. Written by the shared tag service
+  // (src/lib/server/contact-tags/tag-writer.ts) with meta
+  // { tag, tagSource, sourceId?, workflowId?, runId? }.
+  | "tag_added"
+  | "tag_removed"
+  // CRM Foundations Batch B (2026-11) — a workflow run started / completed /
+  // failed for this contact. Written once per run by
+  // src/lib/workflows/run-lifecycle.ts with meta
+  // { workflowId, runId, workflowName, test, testOriginRunId?, nodeId? }.
+  | "workflow_started"
+  | "workflow_completed"
+  | "workflow_failed";
 
 export interface Note {
   id: string;
