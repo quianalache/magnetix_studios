@@ -38,6 +38,8 @@ export interface TagChangeContext {
     chainDepth: number;
     /** Batch B: the Test run this change traces back to, if any. */
     testOrigin?: { rootRunId: string; rootWorkflowId: string } | null;
+    /** Preserve the TEST funnel no-delivery boundary through tag triggers. */
+    sandbox?: boolean;
   } | null;
 }
 
@@ -117,6 +119,7 @@ export function emitTagChanges(input: {
         sourceWorkflowId: ctx.workflow.workflowId,
         sourceRunId: ctx.workflow.runId,
         ...(ctx.workflow.testOrigin ? { testOrigin: ctx.workflow.testOrigin } : {}),
+        ...(ctx.workflow.sandbox ? { sandbox: true } : {}),
       }
     : {};
 

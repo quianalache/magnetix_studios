@@ -276,6 +276,10 @@ async function runPendingEffects(sessionId: string, stepId: string): Promise<voi
               eventId: rec.effectsKey,
               eventType: rec.state !== "succeeded" ? "funnel.offer.declined" : trial ? "funnel.offer.trial_started" : "funnel.offer.purchased",
               acceptance: rec.state === "succeeded" ? (trial ? "trial_activation" : "payment") : null,
+              // This marker is created only after the server has verified the
+              // TEST-mode, allow-listed funnel session. Workflow execution
+              // stays observable, while external delivery nodes are skipped.
+              sandbox: true,
               funnelId: session.funnelId,
               funnelStepId: stepId,
               ...(rec.orderId ? { orderId: rec.orderId } : {}),

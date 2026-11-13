@@ -159,6 +159,13 @@ type NodeExecutor = (
 
 const EMAIL_RETRY_DELAYS_SECONDS = [60, 5 * 60, 15 * 60] as const;
 
+/** TEST funnel runs may write CRM/workflow audit state but never deliver to
+ * external email, SMS, WhatsApp or webhook destinations. The marker is added
+ * only by the server-side allow-listed funnel runtime. */
+function sandboxDeliverySuppressed(ctx: NodeContext): boolean {
+  return ctx.triggerContext.sandbox === true;
+}
+
 function mergeSubject(
   ctx: NodeContext,
   unsubscribeLink: string
@@ -186,6 +193,7 @@ function mergeSubject(
 }
 
 const execSendEmail: NodeExecutor = async (ctx) => {
+  if (sandboxDeliverySuppressed(ctx)) return { result: { kind: "next" }, log: "skipped:sandbox_no_delivery" };
   const cfg = ctx.node.config as unknown as SendEmailConfig;
   const contact = ctx.contact;
   const isLegacy = typeof cfg.emailType === "undefined";
@@ -408,6 +416,7 @@ const execSendEmail: NodeExecutor = async (ctx) => {
 };
 
 const execSendSms: NodeExecutor = async (ctx) => {
+  if (sandboxDeliverySuppressed(ctx)) return { result: { kind: "next" }, log: "skipped:sandbox_no_delivery" };
   const cfg = ctx.node.config as unknown as SendSmsConfig;
   const contact = ctx.contact;
   if (contact.smsOptedOut)
@@ -443,6 +452,7 @@ const execSendSms: NodeExecutor = async (ctx) => {
 };
 
 const execWhatsappTemplate: NodeExecutor = async (ctx) => {
+  if (sandboxDeliverySuppressed(ctx)) return { result: { kind: "next" }, log: "skipped:sandbox_no_delivery" };
   const cfg = ctx.node.config as unknown as WhatsappTemplateConfig;
   const contact = ctx.contact;
   if (contact.whatsappOptedOut)
@@ -530,6 +540,7 @@ function workflowTagContext(ctx: NodeContext): TagChangeContext {
       runId: ctx.runId,
       chainDepth: Number.isFinite(depth) ? depth : 0,
       testOrigin: testOriginOf({ id: ctx.runId, workflowId: ctx.workflowId, context: ctx.triggerContext }),
+      sandbox: sandboxDeliverySuppressed(ctx),
     },
   };
 }
@@ -641,6 +652,7 @@ function resolveNotifyTo(cfg: NotifyConfig, ctx: NodeContext): string {
 }
 
 const execNotify: NodeExecutor = async (ctx) => {
+  if (sandboxDeliverySuppressed(ctx)) return { result: { kind: "next" }, log: "skipped:sandbox_no_delivery" };
   const cfg = ctx.node.config as unknown as NotifyConfig;
   const to = resolveNotifyTo(cfg, ctx);
   if (!to) return { result: { kind: "next" }, log: "skipped:no_recipient" };
@@ -674,6 +686,7 @@ const execNotify: NodeExecutor = async (ctx) => {
 };
 
 const execWebhook: NodeExecutor = async (ctx) => {
+  if (sandboxDeliverySuppressed(ctx)) return { result: { kind: "next" }, log: "skipped:sandbox_no_delivery" };
   const url = ((ctx.node.config as unknown as WebhookConfig).url ?? "").trim();
   if (!/^https?:\/\//i.test(url)) {
     return { result: { kind: "next" }, log: "skipped:bad_url" };
@@ -915,6 +928,8 @@ async function startWorkflowForContact(opts: {
   chainDepth: number;
   /** Batch B: set when the parent run is (or was started by) a Test. */
   testOrigin?: TestOrigin | null;
+  /** Preserve the authorized funnel sandbox boundary through child runs. */
+  sandbox?: boolean;
 }): Promise<string> {
   if (opts.workflowId === opts.sourceWorkflowId)
     throw new Error("workflow_self_invocation");
@@ -933,6 +948,7 @@ async function startWorkflowForContact(opts: {
     sourceRunId: opts.sourceRunId,
     chainDepth: opts.chainDepth + 1,
     ...(opts.testOrigin ? { testOrigin: opts.testOrigin } : {}),
+    ...(opts.sandbox ? { sandbox: true } : {}),
   });
   return "started";
 }
@@ -949,6 +965,7 @@ const execStartWorkflow: NodeExecutor = async (ctx) => {
     sourceRunId: ctx.runId,
     chainDepth: Number.isFinite(depth) ? depth : 0,
     testOrigin: testOriginOf({ id: ctx.runId, workflowId: ctx.workflowId, context: ctx.triggerContext }),
+    sandbox: sandboxDeliverySuppressed(ctx),
   });
   return {
     result: { kind: "next" },
