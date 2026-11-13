@@ -3,7 +3,6 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
 import {
-  createAgencyOneClickUpsellServerSide,
   updateAgencyOneClickUpsellServerSide,
   deleteAgencyOneClickUpsellServerSide,
   getAgencyOneClickUpsell,
@@ -28,22 +27,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ offerId: st
 export async function POST(request: Request, ctx: { params: Promise<{ offerId: string }> }) {
   const caller = await requireAgencyOwnerAny(request);
   if (caller instanceof NextResponse) return caller;
-  const { offerId } = await ctx.params;
+  await ctx.params;
 
-  let body: { targetOfferId?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  if (!body.targetOfferId) return NextResponse.json({ error: "targetOfferId is required" }, { status: 400 });
+  return NextResponse.json(
+    { error: "Legacy Offer Upsells are frozen. Create an Upsell step in Pages & Funnels instead." },
+    { status: 410 },
+  );
 
-  try {
-    const upsell = await createAgencyOneClickUpsellServerSide({ agencyId: caller.agencyId!, offerId, targetOfferId: body.targetOfferId });
-    return NextResponse.json({ ok: true, upsell });
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't create upsell" }, { status: 400 });
-  }
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ offerId: string }> }) {

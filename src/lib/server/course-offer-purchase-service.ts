@@ -1477,7 +1477,13 @@ export interface ChargeOneClickUpsellResult {
   /** True when the off-session charge failed (e.g. authentication required)
    *  and the UI should fall back to a normal checkout link instead. */
   needsManualCheckout?: boolean;
+  /** Another request is currently processing the same accepted upsell. */
+  inProgress?: boolean;
   purchaseId?: string;
+}
+
+function legacyUpsellKey(triggerPurchaseId: string, targetOfferId: string): string {
+  return `legacy_${triggerPurchaseId}_${targetOfferId}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
 }
 
 /**
@@ -1494,6 +1500,8 @@ export async function chargeOneClickUpsellServerSide(opts: {
   triggerPurchaseId: string;
   targetOfferId: string;
   memberId: string;
+  /** Required by the caller when the target Offer is recurring. */
+  recurringConsent?: boolean;
 }): Promise<ChargeOneClickUpsellResult> {
   const triggerSnap = await purchasesCol(opts.subAccountId, opts.triggerOfferId)
     .doc(opts.triggerPurchaseId)
@@ -1505,10 +1513,8 @@ export async function chargeOneClickUpsellServerSide(opts: {
     return { ok: false, needsManualCheckout: true };
   }
 
-  const targetOffer = await getCourseOffer(
-    opts.subAccountId,
-    opts.targetOfferId
-  );
+  const triggerOffer = await getCourseOffer(opts.subAccountId, opts.triggerOfferId);
+  const targetOffer = await getCourseOffer(opts.subAccountId, opts.targetOfferId);
   if (!targetOffer || targetOffer.type === "free" || !targetOffer.priceCents) {
     return { ok: false, needsManualCheckout: true };
   }
@@ -1520,12 +1526,68 @@ export async function chargeOneClickUpsellServerSide(opts: {
     return { ok: false };
   }
 
-  const stripe = getStripeServer();
-  const stripeCustomerId = trigger.stripeCustomerId;
+  if (targetOffer.type === "recurring" && opts.recurringConsent !== true) {
+    return { ok: false, needsManualCheckout: true };
+  }
+  if (triggerOffer?.paymentMode && targetOffer.paymentMode && triggerOffer.paymentMode !== targetOffer.paymentMode) {
+    return { ok: false };
+  }
+
+  const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
+  const subData = subSnap.data();
+  // Old purchases without mode/account provenance cannot be safely replayed
+  // once a workspace has a Connect account: guessing would mix a platform
+  // customer with a connected account. The owner can use normal checkout.
+  if (!trigger.paymentMode && !trigger.stripeConnectAccountId && subData?.stripeCourseCheckoutEnabledByAgency !== true) {
+    return { ok: false, needsManualCheckout: true };
+  }
+
+  const paymentMode = normalizePaymentMode(
+    trigger.paymentMode ?? triggerOffer?.paymentMode,
+    getStripeEnvironment(),
+  );
+  let resolved: Awaited<ReturnType<typeof resolveStripeForSubAccount>> | null;
+  try {
+    resolved = await resolveStripeForSubAccount(opts.subAccountId, paymentMode);
+  } catch {
+    if (subData?.stripeCourseCheckoutEnabledByAgency === true && !trigger.paymentMode && !trigger.stripeConnectAccountId) resolved = null;
+    else return { ok: false };
+  }
+  const stripeConnectAccountId = resolved?.accountId ?? null;
+  if (targetOffer.paymentMode && targetOffer.paymentMode !== paymentMode) return { ok: false };
+  if (trigger.stripeConnectAccountId && trigger.stripeConnectAccountId !== stripeConnectAccountId) {
+    return { ok: false };
+  }
+  const stripeRequestOptions = stripeConnectAccountId ? { stripeAccount: stripeConnectAccountId } : undefined;
+  const stripe = resolved?.stripe ?? getStripeServer(paymentMode);
+  const key = legacyUpsellKey(opts.triggerPurchaseId, opts.targetOfferId);
+  const lockRef = getAdminDb().doc(`subAccounts/${opts.subAccountId}/courseOffers/${opts.triggerOfferId}/upsellCharges/${key}`);
+  const purchaseRef = purchasesCol(opts.subAccountId, opts.targetOfferId).doc(`upsell_${key}`);
+
+  const claim = await getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(lockRef);
+    const data = snap.data() as { status?: string; purchaseId?: string; leaseUntilMs?: number } | undefined;
+    if (data?.status === "completed") return { state: "completed" as const, purchaseId: data.purchaseId ?? null };
+    if (data?.status === "processing" && (data.leaseUntilMs ?? 0) > Date.now()) return { state: "in_progress" as const, purchaseId: null };
+    tx.set(lockRef, { status: "processing", leaseUntilMs: Date.now() + 120_000, idempotencyKey: key, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { state: "claimed" as const, purchaseId: null };
+  });
+  if (claim.state === "completed") return { ok: true, purchaseId: claim.purchaseId ?? undefined };
+  if (claim.state === "in_progress") return { ok: false, inProgress: true };
+
+  const existingPurchase = await purchaseRef.get();
+  const existing = existingPurchase.data() as Omit<CourseOfferPurchase, "id"> | undefined;
+  if (existing?.status === "paid") {
+    await lockRef.set({ status: "completed", purchaseId: purchaseRef.id, completedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { ok: true, purchaseId: purchaseRef.id };
+  }
+
   try {
     const originalIntent = await stripe.paymentIntents.retrieve(
-      trigger.stripePaymentIntentId
+      trigger.stripePaymentIntentId,
+      stripeRequestOptions,
     );
+    if (originalIntent.livemode !== (paymentMode === "live")) throw new Error("Stripe payment mode does not match the purchase.");
     const paymentMethodId =
       typeof originalIntent.payment_method === "string"
         ? originalIntent.payment_method
@@ -1533,6 +1595,8 @@ export async function chargeOneClickUpsellServerSide(opts: {
     if (!paymentMethodId) {
       return { ok: false, needsManualCheckout: true };
     }
+    const originalCustomerId = typeof originalIntent.customer === "string" ? originalIntent.customer : originalIntent.customer?.id;
+    if (originalCustomerId && originalCustomerId !== trigger.stripeCustomerId) throw new Error("Stripe customer does not match the purchase.");
 
     const metadata = {
       kind: OFFER_CHARGE_KIND,
@@ -1540,21 +1604,9 @@ export async function chargeOneClickUpsellServerSide(opts: {
       offerId: opts.targetOfferId,
       memberId: opts.memberId,
     };
-    const intent = await stripe.paymentIntents.create({
-      amount: targetOffer.priceCents,
-      currency: targetOffer.currency ?? "USD",
-      customer: stripeCustomerId,
-      payment_method: paymentMethodId,
-      off_session: true,
-      confirm: true,
-      metadata,
-    });
-
-    const subSnap = await getAdminDb()
-      .doc(`subAccounts/${opts.subAccountId}`)
-      .get();
+    const stripeCustomerId = trigger.stripeCustomerId;
     const agencyId = (subSnap.data()?.agencyId as string) ?? "";
-    const ref = await purchasesCol(opts.subAccountId, opts.targetOfferId).add({
+    const basePurchase = {
       subAccountId: opts.subAccountId,
       agencyId,
       offerId: opts.targetOfferId,
@@ -1570,24 +1622,58 @@ export async function chargeOneClickUpsellServerSide(opts: {
       stripeCheckoutSessionId: null,
       stripeCustomerId,
       stripeSubscriptionId: null,
-      stripePaymentIntentId: intent.id,
+      stripePaymentIntentId: null,
       status: "pending",
       grantedByUid: null,
       requestedAt: FieldValue.serverTimestamp(),
       paidAt: null,
-    });
+      upsellTriggerPurchaseId: opts.triggerPurchaseId,
+      upsellIdempotencyKey: key,
+      stripeConnectAccountId,
+      paymentMode,
+    };
+
+    if (existing?.stripePaymentIntentId || existing?.stripeSubscriptionId) {
+      // A timed-out request may already have written the provider id. Reuse it
+      // rather than creating a second provider object.
+      await purchaseRef.set({ ...basePurchase, ...existing }, { merge: true });
+    } else if (targetOffer.type === "recurring") {
+      const subscription = await stripe.subscriptions.create({
+        customer: stripeCustomerId,
+        items: [{ price_data: { currency: targetOffer.currency ?? "USD", unit_amount: targetOffer.priceCents, product_data: { name: targetOffer.title }, recurring: { interval: targetOffer.recurringInterval ?? "month" } } as unknown as Stripe.SubscriptionCreateParams.Item.PriceData, quantity: 1 }],
+        default_payment_method: paymentMethodId,
+        payment_behavior: "error_if_incomplete",
+        ...(targetOffer.trialDays ? { trial_period_days: targetOffer.trialDays } : {}),
+        metadata,
+      }, { ...stripeRequestOptions, idempotencyKey: key });
+      await purchaseRef.set({ ...basePurchase, stripePaymentIntentId: null, stripeSubscriptionId: subscription.id }, { merge: true });
+    } else {
+      const intent = await stripe.paymentIntents.create({
+        amount: targetOffer.priceCents,
+        currency: targetOffer.currency ?? "USD",
+        customer: stripeCustomerId,
+        payment_method: paymentMethodId,
+        off_session: true,
+        confirm: true,
+        metadata,
+      }, { ...stripeRequestOptions, idempotencyKey: key });
+      await purchaseRef.set({ ...basePurchase, stripePaymentIntentId: intent.id, stripeSubscriptionId: null }, { merge: true });
+    }
 
     await grantCourseOfferAccessServerSide({
       subAccountId: opts.subAccountId,
       offerId: opts.targetOfferId,
-      purchaseId: ref.id,
+      purchaseId: purchaseRef.id,
       grantedByUid: null,
-      stripePaymentIntentId: intent.id,
+      stripePaymentIntentId: existing?.stripePaymentIntentId ?? null,
       stripeCustomerId,
     });
 
-    return { ok: true, purchaseId: ref.id };
+    await lockRef.set({ status: "completed", purchaseId: purchaseRef.id, completedAt: FieldValue.serverTimestamp() }, { merge: true });
+
+    return { ok: true, purchaseId: purchaseRef.id };
   } catch (err) {
+    await lockRef.set({ status: "failed", leaseUntilMs: 0, error: err instanceof Error ? err.message.slice(0, 200) : "charge_failed", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     console.error("[course-offer] one-click upsell charge failed", err);
     return { ok: false, needsManualCheckout: true };
   }

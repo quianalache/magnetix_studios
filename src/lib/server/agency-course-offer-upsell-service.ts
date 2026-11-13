@@ -21,23 +21,13 @@ function upsellsCol(agencyId: string, offerId: string) {
   return getAdminDb().collection(`agencies/${agencyId}/courseOffers/${offerId}/upsells`);
 }
 
-export async function createAgencyOneClickUpsellServerSide(opts: {
+export async function createAgencyOneClickUpsellServerSide(_opts: {
   agencyId: string;
   offerId: string;
   targetOfferId: string;
 }): Promise<CourseOfferUpsell> {
-  const existing = await upsellsCol(opts.agencyId, opts.offerId).where("type", "==", "oneClick").limit(1).get();
-  if (!existing.empty) throw new Error("A single one-click upsell is allowed per offer.");
-  const doc = {
-    offerId: opts.offerId,
-    type: "oneClick" as const,
-    targetOfferId: opts.targetOfferId,
-    visibility: "draft" as OfferVisibility,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  const ref = await upsellsCol(opts.agencyId, opts.offerId).add(doc);
-  return { id: ref.id, ...doc } as CourseOfferUpsell;
+  void _opts;
+  throw new Error("Legacy Offer Upsells are frozen. Create an Upsell step in Pages & Funnels instead.");
 }
 
 export async function updateAgencyOneClickUpsellServerSide(opts: {

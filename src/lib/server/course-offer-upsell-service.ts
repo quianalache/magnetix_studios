@@ -17,31 +17,14 @@ function upsellsCol(saId: string, offerId: string) {
   );
 }
 
-export async function createCourseOfferUpsellServerSide(opts: {
+export async function createCourseOfferUpsellServerSide(_opts: {
   subAccountId: string;
   offerId: string;
   type: UpsellType;
   targetOfferId: string;
 }): Promise<CourseOfferUpsell> {
-  if (opts.type === "oneClick") {
-    const existing = await upsellsCol(opts.subAccountId, opts.offerId)
-      .where("type", "==", "oneClick")
-      .limit(1)
-      .get();
-    if (!existing.empty) {
-      throw new Error("A single one-click upsell is allowed per offer.");
-    }
-  }
-  const doc = {
-    offerId: opts.offerId,
-    type: opts.type,
-    targetOfferId: opts.targetOfferId,
-    visibility: "draft" as OfferVisibility,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  const ref = await upsellsCol(opts.subAccountId, opts.offerId).add(doc);
-  return { id: ref.id, ...doc } as CourseOfferUpsell;
+  void _opts;
+  throw new Error("Legacy Offer Upsells are frozen. Create an Upsell step in Pages & Funnels instead.");
 }
 
 export async function updateCourseOfferUpsellServerSide(opts: {

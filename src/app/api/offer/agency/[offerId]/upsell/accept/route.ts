@@ -20,7 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ off
   const person = await getCurrentPerson();
   if (!person) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
 
-  const body = (await request.json().catch(() => null)) as { targetOfferId?: string } | null;
+  const body = (await request.json().catch(() => null)) as { targetOfferId?: string; recurringConsent?: boolean } | null;
   if (!body?.targetOfferId) return NextResponse.json({ error: "Missing targetOfferId" }, { status: 400 });
 
   const triggerPurchaseId = await getPaidAgencyOfferPurchaseId(agencyId, offerId, person.id);
@@ -32,6 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ off
     triggerPurchaseId,
     targetOfferId: body.targetOfferId,
     personId: person.id,
+    recurringConsent: body.recurringConsent,
   });
   return NextResponse.json(result);
 }

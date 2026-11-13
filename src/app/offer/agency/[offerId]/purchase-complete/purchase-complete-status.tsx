@@ -13,6 +13,7 @@ interface OneClickUpsell {
   targetTitle: string;
   targetPriceCents: number | null;
   targetCurrency: string;
+  targetRecurring?: boolean;
 }
 
 function formatPrice(cents: number | null, currency: string): string {
@@ -41,6 +42,7 @@ export function AgencyOfferPurchaseCompleteStatus({
   const [timedOut, setTimedOut] = useState(false);
   const [upsell, setUpsell] = useState<OneClickUpsell | null>(null);
   const [upsellBusy, setUpsellBusy] = useState(false);
+  const [recurringConsent, setRecurringConsent] = useState(false);
   const startedAt = useRef(Date.now());
   const destination = firstCourseId ? `/course/agency/${firstCourseId}/classroom` : "/my";
 
@@ -84,7 +86,7 @@ export function AgencyOfferPurchaseCompleteStatus({
       const res = await fetch(`/api/offer/agency/${offerId}/upsell/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetOfferId: upsell.targetOfferId }),
+        body: JSON.stringify({ targetOfferId: upsell.targetOfferId, recurringConsent }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; needsManualCheckout?: boolean };
       if (data.ok) {
@@ -104,15 +106,21 @@ export function AgencyOfferPurchaseCompleteStatus({
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4">
         <div className="max-w-sm space-y-4 rounded-xl border border-[#E4E4E4] bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium tracking-wide text-[#909090] uppercase">Special one-time offer</p>
+          <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">{upsell.targetRecurring ? "Subscription offer" : "Special one-time offer"}</p>
           <p className="text-lg font-semibold text-[#202124]">
             Add {upsell.targetTitle}
             {upsell.targetPriceCents != null && ` for ${formatPrice(upsell.targetPriceCents, upsell.targetCurrency)}`}?
           </p>
-          <p className="text-xs text-[#909090]">One click — no need to re-enter your card.</p>
+          <p className="text-xs text-muted-foreground">{upsell.targetRecurring ? "This starts recurring billing using your saved payment method." : "One click — no need to re-enter your card."}</p>
+          {upsell.targetRecurring && (
+            <label className="flex items-start gap-2 text-left text-xs text-muted-foreground">
+              <input type="checkbox" checked={recurringConsent} onChange={(e) => setRecurringConsent(e.target.checked)} className="mt-0.5" />
+              <span>I agree to start this recurring subscription and authorize future payments.</span>
+            </label>
+          )}
           <button
             onClick={acceptUpsell}
-            disabled={upsellBusy}
+            disabled={upsellBusy || (upsell.targetRecurring === true && !recurringConsent)}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#202124] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
           >
             {upsellBusy && <Loader2 className="h-4 w-4 animate-spin" />}

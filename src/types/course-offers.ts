@@ -253,6 +253,9 @@ export interface CourseOfferPurchase {
   /** The connected Stripe account this charge ran on (`{stripeAccount: id}`), or null when it used the shared platform account (stripeCourseCheckoutEnabledByAgency) or PayPal. Lets any later off-session charge (e.g. a one-click upsell) know which account to target. */
   stripeConnectAccountId: string | null;
   paymentMode?: PaymentMode;
+  /** Durable identity for a legacy One-Click Upsell purchase. */
+  upsellTriggerPurchaseId?: string;
+  upsellIdempotencyKey?: string;
   status: CourseOfferPurchaseStatus;
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;

@@ -13,6 +13,7 @@ interface OneClickUpsell {
   targetTitle: string;
   targetPriceCents: number | null;
   targetCurrency: string;
+  targetRecurring?: boolean;
 }
 
 function formatPrice(cents: number | null, currency: string): string {
@@ -72,6 +73,7 @@ export function PurchaseCompleteStatus({
   const [timedOut, setTimedOut] = useState(false);
   const [upsell, setUpsell] = useState<OneClickUpsell | null>(null);
   const [upsellBusy, setUpsellBusy] = useState(false);
+  const [recurringConsent, setRecurringConsent] = useState(false);
   const startedAt = useRef(Date.now());
 
   const continueUrl = `/api/my/bridge-from-member?next=${encodeURIComponent(`/portal/${spaceSlug}`)}`;
@@ -125,7 +127,7 @@ export function PurchaseCompleteStatus({
       const res = await fetch(`/api/offer/${saId}/${offerId}/upsell/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetOfferId: upsell.targetOfferId }),
+        body: JSON.stringify({ targetOfferId: upsell.targetOfferId, recurringConsent }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -149,7 +151,7 @@ export function PurchaseCompleteStatus({
       <div className="flex min-h-dvh items-center justify-center px-4 py-10">
         <div className="tenant-card w-full max-w-sm space-y-4 p-7 text-center">
           <p className="text-sm font-medium tracking-wide public-body uppercase">
-            Special one-time offer
+            {upsell.targetRecurring ? "Subscription offer" : "Special one-time offer"}
           </p>
           <p className="text-lg font-semibold public-ink">
             Add {upsell.targetTitle}
@@ -158,11 +160,19 @@ export function PurchaseCompleteStatus({
             ?
           </p>
           <p className="text-xs public-body">
-            One click — no need to re-enter your card.
+            {upsell.targetRecurring
+              ? "This starts recurring billing using your saved payment method."
+              : "One click — no need to re-enter your card."}
           </p>
+          {upsell.targetRecurring && (
+            <label className="flex items-start gap-2 text-left text-xs public-body">
+              <input type="checkbox" checked={recurringConsent} onChange={(e) => setRecurringConsent(e.target.checked)} className="mt-0.5" />
+              <span>I agree to start this recurring subscription and authorize future payments.</span>
+            </label>
+          )}
           <button
             onClick={acceptUpsell}
-            disabled={upsellBusy}
+            disabled={upsellBusy || (upsell.targetRecurring === true && !recurringConsent)}
             className="tenant-button inline-flex h-11 w-full items-center justify-center gap-2 border px-4 text-sm font-semibold disabled:opacity-60"
           >
             {upsellBusy && <Loader2 className="h-4 w-4 animate-spin" />}

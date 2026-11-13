@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Info, Plus, Trash2 } from "lucide-react";
+import { Info, Trash2 } from "lucide-react";
 import { subscribeToCourseOfferUpsells } from "@/lib/firestore/course-offers";
-import { Button } from "@/components/ui/button";
-import { AddUpsellModal } from "./add-upsell-modal";
 import type { CourseOffer, CourseOfferUpsell } from "@/types/course-offers";
 
 export function OfferUpsellTab({
@@ -18,24 +16,17 @@ export function OfferUpsellTab({
   allOffers: CourseOffer[];
 }) {
   const [upsells, setUpsells] = useState<CourseOfferUpsell[]>([]);
-  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(
     () => subscribeToCourseOfferUpsells(subAccountId, offer.id, setUpsells),
     [subAccountId, offer.id],
   );
 
-  const otherOffers = useMemo(
-    () => allOffers.filter((o) => o.id !== offer.id && o.visibility !== "archived"),
-    [allOffers, offer.id],
-  );
   const targetTitle = useMemo(() => {
     const map = new Map<string, string>();
     for (const o of allOffers) map.set(o.id, o.visibility === "archived" ? `${o.title} (Archived)` : o.title);
     return map;
   }, [allOffers]);
-  const hasOneClick = upsells.some((u) => u.type === "oneClick");
-
   async function remove(upsellId: string) {
     const res = await fetch(
       `/api/sub-accounts/${subAccountId}/course-offers/${offer.id}/upsells/${upsellId}`,
@@ -60,10 +51,8 @@ export function OfferUpsellTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" /> Add Upsell
-        </Button>
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+        Legacy Offer Upsells are frozen. Existing configurations remain readable; create new Upsells in Pages &amp; Funnels instead.
       </div>
 
       {upsells.length === 0 ? (
@@ -124,15 +113,6 @@ export function OfferUpsellTab({
         </div>
       )}
 
-      <AddUpsellModal
-        subAccountId={subAccountId}
-        offerId={offer.id}
-        otherOffers={otherOffers}
-        hasOneClick={hasOneClick}
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onCreated={() => {}}
-      />
     </div>
   );
 }

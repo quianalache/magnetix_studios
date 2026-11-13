@@ -447,9 +447,12 @@ function OneClickUpsellSection({ offerId, otherOffers }: { offerId: string; othe
       <p className="text-xs text-muted-foreground">
         After a buyer pays for this offer, offer them one more paid offer with a single click — no second checkout form.
       </p>
+      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+        Legacy Offer Upsells are frozen. Existing configurations remain readable; create new Upsells in Pages &amp; Funnels instead.
+      </p>
       {selectable.length === 0 ? (
         <p className="text-xs text-muted-foreground">Publish another paid offer first to use it as an upsell target.</p>
-      ) : (
+      ) : upsell ? (
         <div className="flex flex-wrap items-center gap-2">
           <select value={targetOfferId} onChange={(e) => setTargetOfferId(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2.5 text-sm">
             <option value="">Select an offer…</option>
@@ -474,7 +477,7 @@ function OneClickUpsellSection({ offerId, otherOffers }: { offerId: string; othe
             </>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -34,6 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ off
       targetTitle: targetOffer?.title ?? "this offer",
       targetPriceCents: targetOffer?.priceCents ?? null,
       targetCurrency: targetOffer?.currency ?? "USD",
+      targetRecurring: targetOffer?.type === "recurring",
     },
   });
 }

@@ -29,6 +29,7 @@ export async function POST(
 
   const body = (await request.json().catch(() => null)) as {
     targetOfferId?: string;
+    recurringConsent?: boolean;
   } | null;
   if (!body?.targetOfferId) {
     return NextResponse.json({ error: "Missing targetOfferId" }, { status: 400 });
@@ -52,6 +53,7 @@ export async function POST(
     triggerPurchaseId,
     targetOfferId: body.targetOfferId,
     memberId: access.member.id,
+    recurringConsent: body.recurringConsent,
   });
   return NextResponse.json(result);
 }
