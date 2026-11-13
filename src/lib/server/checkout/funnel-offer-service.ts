@@ -5,7 +5,7 @@ import { tagKey } from "@/lib/contacts/tag-names";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { listTags } from "@/lib/server/contact-tags/service";
 import { getStripeConnectionForEnvironment, getStripeEnvironment, normalizePaymentMode } from "@/lib/stripe/server";
-import { COMMERCE_CAPABILITIES } from "@/lib/checkout/capabilities";
+import { funnelPostPurchaseChargingEnabled } from "@/lib/checkout/capabilities";
 import { normalizeStepOffer, stepOfferProblem, type StepOfferFacts } from "@/lib/checkout/funnel-offer";
 import type { StepCrmAction, StepOfferSettings } from "@/types/checkout";
 import type { CourseOffer } from "@/types/course-offers";
@@ -156,6 +156,13 @@ export async function stepOfferSettingsPayload(subAccountId: string, rawSettings
     savedOfferDeleted: !!settings.offerId && !saved,
     workflows,
     stripe: await stripeReadiness(subAccountId, saved),
-    runtime: { postPurchaseCharging: COMMERCE_CAPABILITIES.funnelPostPurchaseCharging },
+    runtime: {
+      postPurchaseCharging: saved
+        ? funnelPostPurchaseChargingEnabled({
+            subAccountId,
+            paymentMode: saved.paymentMode,
+          })
+        : false,
+    },
   };
 }

@@ -10,7 +10,7 @@ import { duplicatePuckPage } from "@/lib/server/pages-funnels-puck-service";
 import { loadPagesLibrary } from "@/lib/server/pages-funnels/library-service";
 import { normalizeStepOffer, sanitizeStepOfferInput, savedOfferAttention } from "@/lib/checkout/funnel-offer";
 import { offerFacts, validateStepOffer } from "./funnel-offer-service";
-import { COMMERCE_CAPABILITIES } from "@/lib/checkout/capabilities";
+import { funnelPostPurchaseChargingEnabled } from "@/lib/checkout/capabilities";
 import {
   DEFAULT_ROUTING,
   analyzeFunnel,
@@ -114,18 +114,22 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
   const pageExclusiveUses = Object.fromEntries(Object.entries(library.usage).map(([id, uses]) => [id, uses.filter((u) => u.stepType === "upsell" || u.stepType === "downsell").length]));
   const pageMap = Object.fromEntries(pages.map((p) => [p.id, { name: p.name, status: p.status }]));
   const issues = analyzeFunnel({ steps, checkoutDestinations: dest, pages: pageMap, pageUses });
-  // Upsell / Downsell Offer settings. While post-purchase charging is off
-  // they're warnings; once it's on, a step that can't sell blocks publishing
-  // (the runtime refuses such a step anyway).
-  const offerLevel = COMMERCE_CAPABILITIES.funnelPostPurchaseCharging ? "error" : "warning";
+  // Upsell / Downsell Offer settings. The severity follows the saved Offer's
+  // actual server-side capability: only TEST-mode Offers in the explicit QA
+  // workspace can block publishing on payment configuration errors. Other
+  // workspaces remain warnings because their runtime is intentionally off.
   for (const [i, s] of steps.entries()) {
     if (!hasRouting(s.type)) continue;
     const label = `Step ${i + 1} · ${s.name}`;
     const o = normalizeStepOffer(s.offer);
     if (!o.offerId) {
-      issues.push({ level: offerLevel, code: "offer_missing", stepId: s.id, message: `${label}: no Offer chosen yet. Choose one in Step settings.` });
+      issues.push({ level: "warning", code: "offer_missing", stepId: s.id, message: `${label}: no Offer chosen yet. Choose one in Step settings.` });
     } else {
       const offer = await getCourseOffer(subAccountId, o.offerId).catch(() => null);
+      const offerLevel = funnelPostPurchaseChargingEnabled({
+        subAccountId,
+        paymentMode: offer && offer.subAccountId === subAccountId ? offer.paymentMode : null,
+      }) ? "error" : "warning";
       const attention = savedOfferAttention(offer && offer.subAccountId === subAccountId ? offerFacts(offer) : null, subAccountId);
       if (attention) issues.push({ level: offerLevel, code: "offer_unavailable", stepId: s.id, message: `${label}: ${attention}` });
       else if (offer?.type === "recurring" && !o.payment.recurringDisclosureAcknowledged) issues.push({ level: offerLevel, code: "offer_unavailable", stepId: s.id, message: `${label}: confirm the subscription disclosure in Step settings.` });

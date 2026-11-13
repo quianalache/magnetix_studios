@@ -34,6 +34,7 @@ process.env.STRIPE_SECRET_KEY = "sk_test_local_mock_only";
 process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_local_mock_only";
 process.env.AUTOMATIONS_TOKEN_SECRET = "local-test-secret-0123456789abcdef";
 process.env.NEXT_PUBLIC_FUNNEL_POST_PURCHASE_CHARGING = "on";
+process.env.FUNNEL_POST_PURCHASE_TEST_SUBACCOUNT_IDS = "sa_fr";
 
 /* ------------------------------ Mock Stripe ------------------------------ */
 type Obj = Record<string, unknown>;
@@ -264,6 +265,9 @@ async function main() {
   const { CheckoutError } = await import("../src/lib/server/checkout/common");
   const db = getAdminDb();
   assert.equal(caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging, true);
+  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "test" }), true);
+  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false);
+  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA2, paymentMode: "test" }), false);
 
   /* ------------------------------- Fixtures ------------------------------- */
   const now = new Date();

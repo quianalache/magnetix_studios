@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useOptionalSubAccount } from "@/context/sub-account-context";
 import {
   Home,
@@ -52,6 +52,7 @@ import {
   Repeat,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
+import { safeSubscribeWithTimeout } from "@/lib/firestore/safe-subscribe";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
 import { signOutUser } from "@/lib/firebase/auth";
 import { useDueTodayCount } from "@/hooks/use-due-today";
@@ -462,6 +463,16 @@ function SidebarContent({
     setAiSuiteGate(null);
     setGetLeadsGate(null);
     setLabsGate(null);
+    // Unknown is not the same as disabled. A transient listener failure must
+    // not turn every gated entry into a permanently hidden item.
+    setBroadcastsHidden(false);
+    setWebsiteHidden(false);
+    setSocialHidden(false);
+    setCommunityHidden(false);
+    setStandaloneCoursesHidden(false);
+    setGetLeadsHidden(false);
+    setAiSuiteHidden(false);
+    setLabsHidden(false);
   }
 
   // Whether the same document a shared SubAccountProvider is ALREADY
@@ -482,6 +493,10 @@ function SidebarContent({
 
   useEffect(() => {
     if (!usingSharedSubAccount) return;
+    if (sharedSubAccount?.loading) {
+      clearGateData();
+      return;
+    }
     applyGateData(
       (sharedSubAccount!.subAccount as unknown as Record<
         string,
@@ -499,21 +514,30 @@ function SidebarContent({
       clearGateData();
       return;
     }
-    // Defensive try/catch (2026-08-30, same reasoning as
-    // SubAccountProvider's own listener): a synchronous throw here (the
-    // confirmed-real firebase-js-sdk#9267 failure mode) would crash the
-    // whole app shell — it's layout-level, above every route's error.tsx.
-    try {
-      return onSnapshot(
-        doc(getFirebaseDb(), "subAccounts", activeSubId),
-        (snap) => applyGateData(snap.data()),
-        () => clearGateData()
-      );
-    } catch {
-      clearGateData();
-      return undefined;
-    }
-  }, [activeSubId, usingSharedSubAccount]);
+    clearGateData();
+    const ref = doc(getFirebaseDb(), "subAccounts", activeSubId);
+    // The sidebar is layout-level, so a broken or silent Firestore listener
+    // must resolve to an explicit unknown state rather than hiding entries.
+    return safeSubscribeWithTimeout(
+      (onSettled) =>
+        onSnapshot(
+          ref,
+          (snap) => {
+            onSettled();
+            applyGateData(snap.data());
+          },
+          () => {
+            onSettled();
+            clearGateData();
+          },
+        ),
+      () => {
+        getDoc(ref)
+          .then((snap) => applyGateData(snap.data()))
+          .catch(() => clearGateData());
+      },
+    );
+  }, [activeSubId, usingSharedSubAccount, sharedSubAccount?.loading]);
 
   // Agency mode and Sub-account mode are never stacked — the sub-account nav
   // renders only while the URL is actually inside /sa/[id]/..., never as a

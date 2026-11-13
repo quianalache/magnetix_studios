@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { COMMERCE_CAPABILITIES } from "@/lib/checkout/capabilities";
+import { funnelPostPurchaseChargingEnabled } from "@/lib/checkout/capabilities";
 import { normalizeRouting, hasRouting } from "@/lib/checkout/funnel-routing";
 import { normalizeStepOffer, outcomeActionKey, outcomeEffects, runnableAction, stepOfferProblem } from "@/lib/checkout/funnel-offer";
 import { formatMoney, type FunnelOfferActionResponse, type FunnelOfferRuntimeView } from "@/lib/checkout/funnel-runtime-view";
@@ -91,11 +91,11 @@ async function listSteps(funnelId: string): Promise<FunnelStep[]> {
  * null (charging not enabled, not a funnel order, not paid, no next step).
  */
 export async function openFunnelSessionForOrder(orderId: string): Promise<{ cookieName: string; token: string; maxAgeSeconds: number } | null> {
-  if (!COMMERCE_CAPABILITIES.funnelPostPurchaseCharging) return null;
   const db = getAdminDb();
   const snap = await db.collection("checkoutOrders").doc(orderId).get();
   if (!snap.exists) return null;
   const order = { id: snap.id, ...(snap.data() as Omit<CheckoutOrder, "id">) };
+  if (!funnelPostPurchaseChargingEnabled({ subAccountId: order.subAccountId, paymentMode: order.paymentMode })) return null;
   if (order.context.type !== "funnel_step" || order.status !== "paid" || order.items.some((i) => i.fulfillment !== "granted")) return null;
   const { funnelId, stepId } = order.context;
   const config = await getCheckoutConfigDoc(order.configId);
@@ -331,13 +331,13 @@ export async function funnelOfferViewForPage(
   page: { id: string; subAccountId: string },
   cookies: Array<{ name: string; value: string }>,
 ): Promise<FunnelOfferRuntimeView | null> {
-  if (!COMMERCE_CAPABILITIES.funnelPostPurchaseCharging) return null;
   for (const c of cookies.filter((x) => x.name.startsWith(FUNNEL_SESSION_COOKIE_PREFIX)).slice(0, 5)) {
     const funnelId = c.name.slice(FUNNEL_SESSION_COOKIE_PREFIX.length);
     // Page rendering is read-only (the public page route never writes).
     const check = await loadSession(funnelId, c.value, { readOnly: true });
     if (!check.ok || check.session.subAccountId !== page.subAccountId) continue;
     const session = check.session;
+    if (!funnelPostPurchaseChargingEnabled({ subAccountId: session.subAccountId, paymentMode: session.paymentMode })) continue;
     const steps = await listSteps(funnelId);
     const step = steps.find((s) => s.pageId === page.id && hasRouting(s.type));
     if (!step) continue;
@@ -396,10 +396,12 @@ function finalResponse(rec: FunnelSessionStepRecord): FunnelOfferActionResponse 
  * price or amount.
  */
 export async function funnelOfferAction(input: { funnelId: string; stepId: string; action: FunnelOfferAction; token: unknown; consent?: unknown }): Promise<FunnelOfferActionResponse> {
-  if (!COMMERCE_CAPABILITIES.funnelPostPurchaseCharging) throw new CheckoutError("This offer isn't available right now.", 403, null, "not_enabled");
   const check = await loadSession(input.funnelId, input.token);
   if (!check.ok) throw new CheckoutError(check.message, check.status, null, check.code);
   const session = check.session;
+  if (!funnelPostPurchaseChargingEnabled({ subAccountId: session.subAccountId, paymentMode: session.paymentMode })) {
+    throw new CheckoutError("This offer isn't available right now.", 403, null, "not_enabled");
+  }
   const stepId = input.stepId;
   let rec: FunnelSessionStepRecord | null = session.steps?.[stepId] ?? null;
 
