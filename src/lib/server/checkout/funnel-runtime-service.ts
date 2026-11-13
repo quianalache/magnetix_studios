@@ -14,6 +14,7 @@ import type { CheckoutOrder, FunnelSession, FunnelSessionStepRecord, FunnelStep,
 import type { CourseOffer } from "@/types/course-offers";
 import { CheckoutError } from "./common";
 import { getCheckoutConfigDoc } from "./config-service";
+import { recordFunnelAnalyticsEventSafe } from "@/lib/server/funnel-analytics-service";
 import { offerFacts } from "./funnel-offer-service";
 import {
   chargeFunnelOfferOrder,
@@ -242,6 +243,29 @@ async function recordOutcome(sessionId: string, stepId: string, outcome: "succee
       expiresAt: Math.min(s.createdAt + SESSION_MAX_MS, Date.now() + SESSION_IDLE_MS),
     });
   });
+  const accepted = outcome === "succeeded";
+  const offerOrder = orderId ? (await db.doc(`checkoutOrders/${orderId}`).get()).data() as CheckoutOrder | undefined : undefined;
+  await recordFunnelAnalyticsEventSafe({
+    type: accepted ? "offer_accepted" : "offer_declined", agencyId: session.agencyId, subAccountId: session.subAccountId,
+    funnelId: session.funnelId, stepId, funnelSessionId: session.id, memberId: session.memberId, orderId,
+    offerId: (await stepsCol(session.funnelId).doc(stepId).get()).get("offer.offerId") ?? null,
+    paymentMode: session.paymentMode, stripeAccountId: session.stripeAccountId, verified: accepted,
+    outcome: accepted ? acceptance ?? "payment" : "declined", amountCents: accepted ? offerOrder?.totals.dueTodayCents ?? null : null,
+    currency: accepted ? offerOrder?.currency ?? null : null, idempotencyKey: `funnel-outcome:${session.id}:${stepId}:${key}`,
+  });
+  if (route.nextStepId) {
+    await recordFunnelAnalyticsEventSafe({
+      type: "step_transition", agencyId: session.agencyId, subAccountId: session.subAccountId, funnelId: session.funnelId,
+      stepId, funnelSessionId: session.id, memberId: session.memberId, paymentMode: session.paymentMode, verified: accepted,
+      route: accepted ? "accept" : "decline", idempotencyKey: `funnel-transition:${session.id}:${stepId}:${route.nextStepId}:${outcome}`,
+    });
+  } else {
+    await recordFunnelAnalyticsEventSafe({
+      type: "funnel_completed", agencyId: session.agencyId, subAccountId: session.subAccountId, funnelId: session.funnelId,
+      stepId, funnelSessionId: session.id, memberId: session.memberId, paymentMode: session.paymentMode, verified: accepted,
+      idempotencyKey: `funnel-completed:${session.id}`,
+    });
+  }
   await runPendingEffects(sessionId, stepId);
 }
 

@@ -27,6 +27,7 @@ import { publicPageMetadata, resolvePageSettings, safeTrackingIds } from "@/lib/
 import { TenantPageTracking } from "@/components/pages-funnels/tenant-page-tracking";
 import { resolveMediaVideosForPage } from "@/lib/server/page-media-resolver";
 import { verifyThumbnailToken } from "@/lib/server/pages-funnels/thumbnail-token";
+import { FunnelAnalyticsTracker } from "@/components/funnels/funnel-analytics-tracker";
 
 export const dynamic = "force-dynamic";
 
@@ -165,7 +166,10 @@ export default async function PublicPagePreview({
   return (
     <PopupHost popups={publishedPopups} initialPopupId={capture ? null : qaPopupId} metadata={metadata} automaticTriggers={!capture}>
       <Render config={serverPuckConfig} data={publishedData} metadata={metadata} />
-      {capture ? null : <TenantPageTracking {...tracking} />}
+      {capture ? null : <>
+        <FunnelAnalyticsTracker pageId={page.id} />
+        <TenantPageTracking {...tracking} />
+      </>}
     </PopupHost>
   );
 }

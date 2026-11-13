@@ -2,6 +2,7 @@ import { tenantBrandStyle } from "@/lib/brand/tenant-brand";
 import { PoweredByMagnetix } from "@/components/brand/powered-by-magnetix";
 import { CheckoutRenderer } from "@/components/checkout/checkout-renderer";
 import type { CheckoutView } from "@/lib/checkout/view-types";
+import { FunnelAnalyticsTracker } from "@/components/funnels/funnel-analytics-tracker";
 
 /** Public checkout frame: tenant-branded surface + the shared renderer. */
 export function CheckoutPageShell({ view }: { view: CheckoutView }) {
@@ -17,6 +18,7 @@ export function CheckoutPageShell({ view }: { view: CheckoutView }) {
         </p>
       )}
       <CheckoutRenderer view={view} />
+      <FunnelAnalyticsTracker configId={view.configId} />
       <PoweredByMagnetix className="mt-10" />
     </main>
   );

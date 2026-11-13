@@ -31,6 +31,7 @@ import { CheckoutError, assertId } from "./common";
 import { getCheckoutConfigDoc, getHostedCheckoutConfig } from "./config-service";
 import { customerRedemptionCount, findCouponByCode, recordCouponRedemption } from "./coupons-service";
 import { completeCheckoutCrm, linkOrderToSession, upsertCheckoutSession, type SessionResult } from "./crm-service";
+import { recordCheckoutAnalytics } from "@/lib/server/funnel-analytics-service";
 
 /**
  * The shared checkout engine (Checkout Foundation Phase 1). Serves the
@@ -632,6 +633,9 @@ export async function startCheckout(configId: string, body: Record<string, unkno
     };
   } catch (err) {
     await orderRef.update({ status: "failed", failureReason: err instanceof Error ? err.message.slice(0, 300) : "Payment setup failed", updatedAt: Date.now() });
+    if (config.context.type === "funnel_step") {
+      await recordCheckoutAnalytics({ event: "checkout_failed", order: { ...order, status: "failed" }, funnelId: config.context.funnelId, stepId: config.context.stepId, idempotencyKey: `checkout-failed:${order.id}` });
+    }
     if (err instanceof CheckoutError) throw err;
     console.error("[checkout] start failed", err);
     throw new CheckoutError("We couldn't prepare your payment. Try again.", 502);
@@ -744,7 +748,16 @@ export async function completeOrder(orderId: string, opts: { source: "client" | 
   if (order.status === "failed" || order.status === "canceled") return { status: order.status, redirectTo: "" };
 
   const verified = await verifyPaid(order);
-  if (!verified.ok) return { status: "processing", redirectTo: "" };
+  if (!verified.ok) {
+    // A terminal Stripe decline is a failed checkout attempt; authentication
+    // and other transient states remain processing so retries are not counted
+    // as failures. Each order is one deliberate attempt and is idempotent.
+    const terminalFailure = new Set(["requires_payment_method", "canceled", "invoice_unpaid", "incomplete_expired"]);
+    if (order.context.type === "funnel_step" && verified.reason && terminalFailure.has(verified.reason)) {
+      await recordCheckoutAnalytics({ event: "checkout_failed", order, funnelId: order.context.funnelId, stepId: order.context.stepId, idempotencyKey: `checkout-failed:${order.id}` });
+    }
+    return { status: "processing", redirectTo: "" };
+  }
 
   const locked = await getAdminDb().runTransaction(async (tx) => {
     const fresh = await tx.get(ref);
@@ -825,6 +838,9 @@ export async function completeOrder(orderId: string, opts: { source: "client" | 
   // CRM follow-up (tags, session completed, abandoned follow-up stopped,
   // checkout.completed) — once per order, never blocking the buyer.
   await completeCheckoutCrm({ ...order, items }).catch((err) => console.error("[checkout] CRM completion failed", err));
+  if (order.context.type === "funnel_step") {
+    await recordCheckoutAnalytics({ event: "checkout_completed", order: { ...order, items }, funnelId: order.context.funnelId, stepId: order.context.stepId, idempotencyKey: `checkout-completed:${order.id}` });
+  }
   return { status: "paid", redirectTo: await destinationFor({ ...order, items }) };
 }
 

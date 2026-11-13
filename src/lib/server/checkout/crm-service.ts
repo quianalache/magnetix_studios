@@ -13,6 +13,7 @@ import { abandonmentDecision, abandonDueAt, EMAIL_RE, normalizeCrm } from "@/lib
 import type { ContactAttribution } from "@/types/contacts";
 import type { CheckoutConfig, CheckoutCrmSettings, CheckoutOrder, CheckoutSession } from "@/types/checkout";
 import type { WorkflowTriggerType } from "@/types/workflows";
+import { recordFunnelAnalyticsEventSafe } from "@/lib/server/funnel-analytics-service";
 
 /**
  * Checkout CRM & Follow-Up (Checkout Foundation Phase 3).
@@ -388,6 +389,14 @@ export async function upsertCheckoutSession(input: SessionInput): Promise<Sessio
       session: { id: ref.id, offerId: input.offerId },
       offerTitle,
     });
+    if (config.context.type === "funnel_step") {
+      await recordFunnelAnalyticsEventSafe({
+        type: "checkout_started", agencyId: config.agencyId, subAccountId: config.subAccountId,
+        funnelId: config.context.funnelId, stepId: config.context.stepId, contactId,
+        anonymousSessionId: null, paymentMode: null, verified: false,
+        idempotencyKey: `checkout-session:${ref.id}`,
+      });
+    }
   }
   return { sessionId: ref.id, contactId };
 }

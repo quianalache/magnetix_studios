@@ -21,6 +21,7 @@
     "check:popup-triggers": "tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-popup-triggers.ts",
     "check:wave3": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-wave3-builder.ts",
     "check:pre-funnel": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-pre-funnel-safety.ts",
+    "check:funnel-analytics": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-funnel-analytics.ts",
     "check:offer-community-access": "tsx scripts/check-offer-community-access.ts",
     "check:community-activation": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-community-activation.ts",
     "check:community-readiness": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/check-community-readiness.ts",
