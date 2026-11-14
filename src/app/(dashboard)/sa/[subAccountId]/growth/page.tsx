@@ -853,8 +853,12 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
         <MetricCard icon={Percent} tone="aqua" label="Avg. conversion rate" value="—" hint="Not tracked yet" />
       </div>
       <p className="text-caption text-muted-foreground">
-        Impressions and conversions aren&apos;t measured for pages added here yet. Measured visits and conversions for booking pages, Offers and Reading Tools are in{" "}
-        <Link href={saPath("/reports")} className="font-medium text-link hover:underline">
+        The links below are tracked by hand, so impressions and conversions aren&apos;t measured for them. Views and goal completions for your Pages &amp; Funnels pages and funnels are measured in{" "}
+        <Link href={saPath("/reports?tab=analytics&type=pages")} className="font-medium text-link hover:underline">
+          Reports → Page &amp; Funnel Analytics
+        </Link>
+        ; visits and conversions for booking pages, Offers and Reading Tools are in{" "}
+        <Link href={saPath("/reports?tab=attribution")} className="font-medium text-link hover:underline">
           Reports → Attribution
         </Link>
         .
@@ -938,7 +942,16 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
           )}
         </div>
       ) : (
-        <EmptyState icon={Activity} title="Funnel performance is coming soon" description="Funnel results will appear here once funnels are available in Pages & Funnels." />
+        <EmptyState
+          icon={Activity}
+          title="Funnel performance moved to Reports"
+          description="Entries, checkout starts, purchases, accepted offers and revenue for your funnels are measured in Reports, with a quick view in Pages & Funnels."
+          action={
+            <Button render={<Link href={saPath("/reports?tab=analytics&type=funnels")} />}>
+              Open funnel analytics
+            </Button>
+          }
+        />
       )}
     </div>
   );

@@ -33,7 +33,8 @@ export interface FunnelAnalyticsEvent {
   paymentMode: FunnelAnalyticsMode;
   stripeAccountId: string | null;
   verified: boolean;
-  outcome: "payment" | "trial_activation" | "declined" | "failed" | null;
+  /** payment = money collected; trial_activation = $0 free trial; free = $0 non-trial order. */
+  outcome: "payment" | "trial_activation" | "free" | "declined" | "failed" | null;
   route: string | null;
   amountCents: number | null;
   currency: string | null;

@@ -3,37 +3,39 @@
 import "server-only";
 
 import { createApiDispatcher } from "@/lib/server/api-dispatch";
-import * as h0 from "@/app/api/sub-accounts/[id]/commerce/_routes/checkout-preview/[configId]/quote/route";
-import * as h1 from "@/app/api/sub-accounts/[id]/commerce/_routes/checkout-preview/[configId]/route";
-import * as h2 from "@/app/api/sub-accounts/[id]/commerce/_routes/coupons/[couponId]/route";
-import * as h3 from "@/app/api/sub-accounts/[id]/commerce/_routes/coupons/route";
-import * as h4 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/analytics/route";
-import * as h5 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/route";
-import * as h6 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/checkout/route";
-import * as h7 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/duplicate/route";
-import * as h8 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/route";
-import * as h9 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/route";
-import * as h10 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/route";
-import * as h11 from "@/app/api/sub-accounts/[id]/commerce/_routes/offer-options/route";
-import * as h12 from "@/app/api/sub-accounts/[id]/commerce/_routes/offers/[offerId]/hosted-checkout/route";
+import * as h0 from "@/app/api/sub-accounts/[id]/commerce/_routes/analytics/route";
+import * as h1 from "@/app/api/sub-accounts/[id]/commerce/_routes/checkout-preview/[configId]/quote/route";
+import * as h2 from "@/app/api/sub-accounts/[id]/commerce/_routes/checkout-preview/[configId]/route";
+import * as h3 from "@/app/api/sub-accounts/[id]/commerce/_routes/coupons/[couponId]/route";
+import * as h4 from "@/app/api/sub-accounts/[id]/commerce/_routes/coupons/route";
+import * as h5 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/analytics/route";
+import * as h6 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/route";
+import * as h7 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/checkout/route";
+import * as h8 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/duplicate/route";
+import * as h9 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/route";
+import * as h10 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/route";
+import * as h11 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/route";
+import * as h12 from "@/app/api/sub-accounts/[id]/commerce/_routes/offer-options/route";
+import * as h13 from "@/app/api/sub-accounts/[id]/commerce/_routes/offers/[offerId]/hosted-checkout/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const d = createApiDispatcher([
-  ["checkout-preview/[configId]/quote", h0],
-  ["checkout-preview/[configId]", h1],
-  ["coupons/[couponId]", h2],
-  ["coupons", h3],
-  ["funnels/[funnelId]/analytics", h4],
-  ["funnels/[funnelId]", h5],
-  ["funnels/[funnelId]/steps/[stepId]/checkout", h6],
-  ["funnels/[funnelId]/steps/[stepId]/duplicate", h7],
-  ["funnels/[funnelId]/steps/[stepId]", h8],
-  ["funnels/[funnelId]/steps", h9],
-  ["funnels", h10],
-  ["offer-options", h11],
-  ["offers/[offerId]/hosted-checkout", h12],
+  ["analytics", h0],
+  ["checkout-preview/[configId]/quote", h1],
+  ["checkout-preview/[configId]", h2],
+  ["coupons/[couponId]", h3],
+  ["coupons", h4],
+  ["funnels/[funnelId]/analytics", h5],
+  ["funnels/[funnelId]", h6],
+  ["funnels/[funnelId]/steps/[stepId]/checkout", h7],
+  ["funnels/[funnelId]/steps/[stepId]/duplicate", h8],
+  ["funnels/[funnelId]/steps/[stepId]", h9],
+  ["funnels/[funnelId]/steps", h10],
+  ["funnels", h11],
+  ["offer-options", h12],
+  ["offers/[offerId]/hosted-checkout", h13],
 ]);
 
 export const GET = d.GET;

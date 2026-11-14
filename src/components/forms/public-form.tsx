@@ -23,6 +23,9 @@ import { readAttributionFromBrowser } from "@/lib/attribution";
 
 interface PublicFormProps {
   form: LeadForm;
+  /** The published Pages & Funnels page this form sits on — lets the server
+   *  count the submission as that page's goal completion (verified there). */
+  sourcePageId?: string;
 }
 
 /**
@@ -133,7 +136,7 @@ function TextboxListField({
   );
 }
 
-export function PublicForm({ form }: PublicFormProps) {
+export function PublicForm({ form, sourcePageId }: PublicFormProps) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const f of form.fields) initial[f.id] = "";
@@ -272,6 +275,7 @@ export function PublicForm({ form }: PublicFormProps) {
         body: JSON.stringify({
           values,
           attribution: attributionRef.current,
+          ...(sourcePageId ? { sourcePageId } : {}),
         }),
       });
       const data = (await res.json()) as {

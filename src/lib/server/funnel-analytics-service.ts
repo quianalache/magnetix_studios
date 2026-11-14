@@ -5,6 +5,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { CheckoutOrder, Funnel, FunnelStep } from "@/types/checkout";
 import type { FunnelAnalyticsDaily, FunnelAnalyticsEvent, FunnelAnalyticsEventType, FunnelAnalyticsMode } from "@/types/funnel-analytics";
+import { getStripeEnvironment, normalizePaymentMode } from "@/lib/stripe/server";
+import { recordCheckoutPagePurchase } from "@/lib/server/page-analytics-service";
 
 const eventsCol = () => getAdminDb().collection("funnelAnalyticsEvents");
 const dailyCol = (funnelId: string) => getAdminDb().collection(`funnels/${funnelId}/analyticsDaily`);
@@ -57,11 +59,23 @@ function deltas(input: FunnelAnalyticsEvent, unique: boolean): Record<string, un
     updates[`modes.${mode}.byStep.${step}.events.${type}`] = FieldValue.increment(1);
     if (unique) updates[`modes.${mode}.byStep.${step}.uniqueVisitors`] = FieldValue.increment(1);
   }
+  // Outcome counters keep paid purchases, $0 free trials and free orders
+  // apart (reports never count a trial as a purchase or as revenue).
+  if (input.outcome && (input.type === "checkout_completed" || input.type === "offer_accepted")) {
+    updates[`modes.${mode}.outcomes.${type}.${safe(input.outcome)}`] = FieldValue.increment(1);
+    if (input.stepId) updates[`modes.${mode}.byStep.${safe(input.stepId)}.outcomes.${type}.${safe(input.outcome)}`] = FieldValue.increment(1);
+  }
   if (input.verified && input.amountCents && input.amountCents > 0) {
     const key = input.type === "checkout_completed" ? "initialPurchaseCents" : input.type === "offer_accepted" ? "offerPurchaseCents" : null;
     if (key) {
       updates[`modes.${mode}.revenue.${key}`] = FieldValue.increment(input.amountCents);
       if (input.stepId) updates[`modes.${mode}.byStep.${safe(input.stepId)}.revenue.${key}`] = FieldValue.increment(input.amountCents);
+      // Money is never summed across currencies in reports.
+      const currency = safe((input.currency ?? "").toUpperCase());
+      if (currency) {
+        updates[`modes.${mode}.revenueByCurrency.${currency}`] = FieldValue.increment(input.amountCents);
+        if (input.stepId) updates[`modes.${mode}.byStep.${safe(input.stepId)}.revenueByCurrency.${currency}`] = FieldValue.increment(input.amountCents);
+      }
     }
   }
   return updates;
@@ -91,7 +105,10 @@ export async function recordFunnelAnalyticsEvent(input: Common): Promise<boolean
     tx.create(eventRef, event);
     tx.set(dailyRef, { funnelId: event.funnelId, agencyId: event.agencyId, subAccountId: event.subAccountId, day, updatedAt: now }, { merge: true });
     tx.update(dailyRef, { updatedAt: now, ...deltas(event, unique) });
-    if (uniqueRef) tx.create(uniqueRef, { day, mode, key: input.anonymousUniqueKey, createdAt: now });
+    // Only a NEW visitor creates the marker. (Creating it unconditionally made
+    // every repeat view by the same visitor fail with ALREADY_EXISTS, so
+    // refreshes and second step views were silently dropped.)
+    if (uniqueRef && unique) tx.create(uniqueRef, { day, mode, key: input.anonymousUniqueKey, createdAt: now });
     return true;
   });
 }
@@ -105,15 +122,42 @@ export async function recordFunnelAnalyticsEventSafe(input: Common): Promise<voi
   }
 }
 
+/** What a verified checkout actually was: money collected, a $0 free trial, or a $0 free order. */
+export function checkoutCompletionOutcome(order: Pick<CheckoutOrder, "totals">): "payment" | "trial_activation" | "free" {
+  if (order.totals.dueTodayCents > 0) return "payment";
+  if (order.totals.recurring && order.totals.recurring.trialDays > 0) return "trial_activation";
+  return "free";
+}
+
 export async function recordCheckoutAnalytics(input: { event: "checkout_started" | "checkout_completed" | "checkout_failed"; order?: CheckoutOrder; funnelId: string; stepId: string; idempotencyKey: string }): Promise<void> {
   const order = input.order;
   if (!order) return;
+  const outcome = input.event === "checkout_failed" ? "failed" : input.event === "checkout_completed" ? checkoutCompletionOutcome(order) : null;
   await recordFunnelAnalyticsEventSafe({
     type: input.event, agencyId: order.agencyId, subAccountId: order.subAccountId, funnelId: input.funnelId, stepId: input.stepId,
     funnelSessionId: null, memberId: order.memberId, orderId: order.id, paymentMode: modeFor(order.paymentMode), stripeAccountId: order.stripeAccountId,
     verified: input.event === "checkout_completed", amountCents: input.event === "checkout_completed" ? order.totals.dueTodayCents : null,
-    currency: order.currency, idempotencyKey: input.idempotencyKey, outcome: input.event === "checkout_failed" ? "failed" : input.event === "checkout_completed" ? "payment" : null,
+    currency: order.currency, idempotencyKey: input.idempotencyKey, outcome,
   });
+  // A verified paid purchase is also the conversion of the page that hosts
+  // this checkout (when that page really contains the checkout block).
+  if (input.event === "checkout_completed" && outcome === "payment") {
+    await recordCheckoutPagePurchase({ order, funnelId: input.funnelId, stepId: input.stepId }).catch((err) =>
+      console.error("[page-analytics] purchase goal write failed", err instanceof Error ? err.message : err),
+    );
+  }
+}
+
+/** The payment mode a checkout runs in — the same rule the checkout engine uses (the primary Offer's mode, else the deployment's). */
+export async function offerPaymentModeFor(subAccountId: string, offerId: string | null | undefined): Promise<FunnelAnalyticsMode> {
+  if (!offerId) return "unknown";
+  try {
+    const offer = await getAdminDb().doc(`subAccounts/${subAccountId}/courseOffers/${offerId}`).get();
+    if (!offer.exists) return "unknown";
+    return normalizePaymentMode(offer.get("paymentMode"), getStripeEnvironment());
+  } catch {
+    return "unknown";
+  }
 }
 
 export async function getFunnelAnalyticsDaily(input: { subAccountId: string; funnelId: string; from: string; to: string }): Promise<FunnelAnalyticsDaily[]> {

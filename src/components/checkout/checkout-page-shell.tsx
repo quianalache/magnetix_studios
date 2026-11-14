@@ -18,7 +18,7 @@ export function CheckoutPageShell({ view }: { view: CheckoutView }) {
         </p>
       )}
       <CheckoutRenderer view={view} />
-      <FunnelAnalyticsTracker configId={view.configId} />
+      <FunnelAnalyticsTracker configId={view.configId} subAccountId={view.subAccountId} />
       <PoweredByMagnetix className="mt-10" />
     </main>
   );

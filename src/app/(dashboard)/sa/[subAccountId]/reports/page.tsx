@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   TrendingUp,
@@ -26,6 +27,8 @@ import {
   FunnelChart,
 } from "@/components/reports/charts";
 import { AttributionReport } from "@/components/reports/attribution-report";
+import { PageFunnelAnalytics } from "@/components/reports/page-funnel-analytics";
+import { PageShellLoading } from "@/components/system/page-shell";
 import { type Deal } from "@/types/deals";
 import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
 import { dealPipelineId, toDisplayStages } from "@/types/pipelines";
@@ -40,12 +43,24 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type RangeKey = "7d" | "30d" | "90d" | "all";
-type TabKey = "overview" | "attribution";
+type TabKey = "overview" | "attribution" | "analytics";
 
 const TABS: { id: TabKey; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "attribution", label: "Attribution" },
+  { id: "analytics", label: "Page & Funnel Analytics" },
 ];
+
+const isTabKey = (v: string | null): v is TabKey => v === "overview" || v === "attribution" || v === "analytics";
+
+/** Reports — Overview, Attribution and Page & Funnel Analytics (?tab= deep links). */
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<PageShellLoading width="data" />}>
+      <ReportsContent />
+    </Suspense>
+  );
+}
 
 const RANGES: { id: RangeKey; label: string; days: number | null }[] = [
   { id: "7d", label: "7 days", days: 7 },
@@ -54,7 +69,7 @@ const RANGES: { id: RangeKey; label: string; days: number | null }[] = [
   { id: "all", label: "All time", days: null },
 ];
 
-export default function ReportsPage() {
+function ReportsContent() {
   const { user, loading: authLoading } = useAuth();
   const { subAccountId, agencyId } = useSubAccount();
   const { ready: filterReady, filter: territoryFilter } =
@@ -70,7 +85,23 @@ export default function ReportsPage() {
   const { pipelines } = usePipelineLabels();
   const [pipelineFilter, setPipelineFilter] = useState<string>("all");
   const [currencyChoice, setCurrencyChoice] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>("overview");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const [tab, setTabState] = useState<TabKey>(isTabKey(urlTab) ? urlTab : "overview");
+  // Deep links (e.g. Pages & Funnels → "View detailed analytics") change ?tab=.
+  useEffect(() => {
+    if (isTabKey(urlTab)) setTabState(urlTab);
+  }, [urlTab]);
+  const setTab = (next: TabKey) => {
+    setTabState(next);
+    const q = new URLSearchParams(searchParams.toString());
+    if (next === "overview") q.delete("tab");
+    else q.set("tab", next);
+    if (next !== "analytics") ["type", "range", "funnel", "page"].forEach((k) => q.delete(k));
+    router.replace(q.toString() ? `${pathname}?${q}` : pathname, { scroll: false });
+  };
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -290,7 +321,9 @@ export default function ReportsPage() {
         description={
           tab === "attribution"
             ? "Which sources and campaigns produce your revenue."
-            : "Live analytics across your contacts and pipeline."
+            : tab === "analytics"
+              ? "Track performance across your pages, funnels, and offers."
+              : "Live analytics across your contacts and pipeline."
         }
       />
 
@@ -304,7 +337,7 @@ export default function ReportsPage() {
             ))}
           </TabsList>
         </Tabs>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={tab === "analytics" ? "hidden" : "flex flex-wrap items-center gap-2"}>
           <Select value={pipelineFilter} onValueChange={(value) => value && setPipelineFilter(value)} items={pipelineItems}>
             <SelectTrigger aria-label="Pipeline" className="w-44">
               <SelectValue />
@@ -343,7 +376,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {loading ? (
+      {tab === "analytics" ? (
+        <PageFunnelAnalytics />
+      ) : loading ? (
         <PageSkeleton />
       ) : tab === "attribution" ? (
         <AttributionReport

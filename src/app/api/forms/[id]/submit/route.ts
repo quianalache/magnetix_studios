@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { recordPageFormSubmission } from "@/lib/server/page-analytics-service";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import { fireWorkflowTrigger } from "@/lib/workflows/engine";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
@@ -29,6 +30,8 @@ import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 type SubmitBody = {
   values: Record<string, string>;
   attribution?: Partial<ContactAttribution>;
+  /** Pages & Funnels page the form was submitted on (page goal analytics only). */
+  sourcePageId?: unknown;
 };
 
 function interpolate(template: string, values: Record<string, string>): string {
@@ -575,6 +578,15 @@ async function handleSubmit(
       console.warn("[forms/submit] form.submitted emit failed", err);
     }
   })();
+
+  // Page analytics: this successful submission is the goal completion of the
+  // page it was made on — verified server-side (published page, same
+  // workspace, contains this form). Never blocks or fails the submission.
+  if (typeof body.sourcePageId === "string" && body.sourcePageId) {
+    await recordPageFormSubmission({ pageId: body.sourcePageId, formId: id, subAccountId, submissionId: submissionRef.id }).catch((err) =>
+      console.warn("[forms/submit] page goal analytics failed", err instanceof Error ? err.message : err),
+    );
+  }
 
   return jsonWithCors({
     ok: true,

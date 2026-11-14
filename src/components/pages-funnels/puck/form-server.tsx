@@ -83,7 +83,7 @@ export function FormElementServerRender({
           className="border-border bg-card rounded-2xl border p-4 shadow-sm"
           style={baseStyle}
         >
-          <PublicForm form={resolved} />
+          <PublicForm form={resolved} sourcePageId={published ? metadata?.pageId : undefined} />
         </div>
       );
     }

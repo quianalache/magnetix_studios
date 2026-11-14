@@ -287,6 +287,12 @@ export const PUBLIC_PATHS = [
   // server-side; the checkout config id is not a credential.
   "/checkout",
   "/api/order-checkout",
+  // Anonymous page & funnel analytics beacon from published pages / hosted
+  // checkouts. It accepts only ids + a random per-tab session id, records
+  // views for PUBLISHED pages and funnels only, and never returns data.
+  // (Without this entry every anonymous visitor's beacon was redirected to
+  // /login, so funnel entries and step views were never recorded.)
+  "/api/funnels/analytics/track",
   // Public REST API (v1+). Auth happens INSIDE each route via Bearer-token
   // verification (lib/api/auth.ts), not via session cookie. Sub-account-
   // scoped keys; tenancy enforced in code (Admin SDK writes bypass

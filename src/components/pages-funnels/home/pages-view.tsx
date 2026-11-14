@@ -13,6 +13,8 @@ import { useConfirm } from "@/components/system/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageCard } from "@/components/pages-funnels/home/page-card";
+import { PageAnalyticsSheet } from "@/components/analytics/analytics-sheets";
+import { usePageFunnelAnalytics } from "@/components/analytics/use-page-funnel-analytics";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useAuth } from "@/hooks/use-auth";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
@@ -57,6 +59,12 @@ export function PagesView({
   const { user } = useAuth();
   const { subAccountId, agencyId, subAccount, saPath, isAdmin } = useSubAccount();
   const { confirm, dialog } = useConfirm();
+  // Light page analytics (last 30 days) — the same server report Reports uses.
+  const analytics = usePageFunnelAnalytics(subAccountId, "pages", "30d", pagesState === "ready" && pages.length > 0);
+  const pageReports = useMemo(() => new Map((analytics.data?.pages ?? []).map((r) => [r.id, r])), [analytics.data]);
+  const [quickPageId, setQuickPageId] = useState<string | null>(null);
+  const quickPage = quickPageId ? (pageReports.get(quickPageId) ?? null) : null;
+  const pageReportsHref = (id?: string) => saPath(`/reports?tab=analytics&type=pages&range=30d${id ? `&page=${encodeURIComponent(id)}` : ""}`);
   const [filters, setFilters] = useState<PageFilters>(DEFAULT_PAGE_FILTERS);
   const [pageNo, setPageNo] = useState(1);
 
@@ -198,10 +206,26 @@ export function PagesView({
                 onCopyLink={() => void copyLink(page)}
                 onDuplicate={() => void duplicate(page)}
                 onDelete={() => void remove(page)}
+                analytics={pageReports.get(page.id) ?? null}
+                analyticsState={analytics.state}
+                onQuickPerformance={() => setQuickPageId(page.id)}
+                reportsHref={pageReportsHref(page.id)}
               />
             ))}
           </div>
           <Pagination page={current} pageSize={PAGES_PER_PAGE} total={filtered.length} onPageChange={setPageNo} itemLabel="pages" />
+          {analytics.data ? (
+            <PageAnalyticsSheet
+              page={quickPage}
+              range={analytics.data.range}
+              variant="quick"
+              open={!!quickPage}
+              onOpenChange={(o) => !o && setQuickPageId(null)}
+              reportsHref={quickPage ? pageReportsHref(quickPage.id) : undefined}
+              editHref={quickPage ? saPath(`/pages-funnels/${quickPage.id}/new-builder`) : undefined}
+              liveUrl={quickPage && quickPage.status === "published" ? buildPublishedPageUrl({ subAccount, pageId: quickPage.id }) : null}
+            />
+          ) : null}
         </>
       )}
     </div>

@@ -167,7 +167,7 @@ export default async function PublicPagePreview({
     <PopupHost popups={publishedPopups} initialPopupId={capture ? null : qaPopupId} metadata={metadata} automaticTriggers={!capture}>
       <Render config={serverPuckConfig} data={publishedData} metadata={metadata} />
       {capture ? null : <>
-        <FunnelAnalyticsTracker pageId={page.id} />
+        <FunnelAnalyticsTracker pageId={page.id} subAccountId={page.subAccountId} />
         <TenantPageTracking {...tracking} />
       </>}
     </PopupHost>

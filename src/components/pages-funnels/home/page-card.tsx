@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Copy, CopyPlus, ExternalLink, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, Copy, CopyPlus, ExternalLink, Eye, LineChart, MoreHorizontal, Pencil, Target, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { AnalyticsLoadState } from "@/components/analytics/use-page-funnel-analytics";
+import { formatCount, formatPercent, pageConversionRate } from "@/lib/analytics/page-funnel-metrics";
+import type { PageReport } from "@/types/page-funnel-analytics";
 import { StatusPill, Tag } from "@/components/system/status-pill";
 import {
   DropdownMenu,
@@ -33,6 +37,10 @@ export function PageCard({
   onCopyLink,
   onDuplicate,
   onDelete,
+  analytics = null,
+  analyticsState = "ready",
+  onQuickPerformance,
+  reportsHref,
 }: {
   page: PageDoc;
   uses: PageFunnelUse[];
@@ -42,6 +50,11 @@ export function PageCard({
   onCopyLink: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** Last-30-day page analytics (light view; the full report is in Reports). */
+  analytics?: PageReport | null;
+  analyticsState?: AnalyticsLoadState;
+  onQuickPerformance?: () => void;
+  reportsHref?: string;
 }) {
   const hasLivePage = page.status === "published" && !!page.puckPublishedData;
   const outdated = derivePuckPublishStatus(page) === "published-outdated";
@@ -67,10 +80,20 @@ export function PageCard({
               </button>
             }
           />
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem render={<Link href={editHref} />}>
               <Pencil aria-hidden="true" /> Edit
             </DropdownMenuItem>
+            {onQuickPerformance ? (
+              <DropdownMenuItem onClick={onQuickPerformance} disabled={!analytics}>
+                <LineChart aria-hidden="true" /> Quick performance
+              </DropdownMenuItem>
+            ) : null}
+            {reportsHref ? (
+              <DropdownMenuItem render={<Link href={reportsHref} />}>
+                <BarChart3 aria-hidden="true" /> View detailed analytics
+              </DropdownMenuItem>
+            ) : null}
             {hasLivePage ? (
               <>
                 <DropdownMenuItem render={<a href={liveUrl} target="_blank" rel="noreferrer" />}>
@@ -111,6 +134,7 @@ export function PageCard({
           </Link>
         </h3>
         <p className="text-caption text-muted-foreground">{updated ? `Updated ${dateFmt.format(updated)}` : "Updated just now"}</p>
+        {onQuickPerformance ? <PageCardMetrics report={analytics} state={analyticsState} onOpen={onQuickPerformance} name={page.name} /> : null}
         {uses.length ? (
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5" title={uses.map(describeUse).join("\n")}>
             <Tag color="violet" className="max-w-full truncate">
@@ -121,5 +145,29 @@ export function PageCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+/** Compact 30-day metrics on a page card; opens the quick performance panel. */
+function PageCardMetrics({ report, state, onOpen, name }: { report: PageReport | null; state: AnalyticsLoadState; onOpen: () => void; name: string }) {
+  if (!report) return state === "loading" ? <Skeleton className="mt-1 h-5 w-40" /> : null;
+  const rate = pageConversionRate(report.totals, report.goal);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Quick performance for ${name}`}
+      className="mt-1 flex w-fit max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-md text-caption text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <span className="inline-flex items-center gap-1 tabular-nums">
+        <Eye className="size-3.5 text-primary" aria-hidden="true" />
+        {formatCount(report.totals.views)} {report.totals.views === 1 ? "view" : "views"}
+      </span>
+      <span className="inline-flex items-center gap-1 tabular-nums">
+        <Target className="size-3.5 text-primary" aria-hidden="true" />
+        {report.goal.kind ? `${formatPercent(rate)} conv.` : report.goal.label}
+      </span>
+      <span className="sr-only"> (last 30 days)</span>
+    </button>
   );
 }
