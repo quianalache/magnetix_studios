@@ -231,6 +231,21 @@ async function main() {
     assert.deepEqual(light.totals, f1.totals);
   });
 
+  console.log("Beacon page → funnel step lookup (no collection-group index needed)");
+  await check("published page in a published funnel resolves to its step; other pages don't", async () => {
+    const hit = await funnels.publicFunnelStepForPage("pg_lead");
+    assert.equal(hit?.funnel.id, "F1");
+    assert.equal(hit?.step.id, "s0");
+    assert.equal(await funnels.publicFunnelStepForPage("pg_draft"), null);
+    assert.equal(await funnels.publicFunnelStepForPage("nope"), null);
+    assert.equal(await funnels.publicFunnelStepForPage("bad/id"), null);
+  });
+  await check("no collection-group query on steps (production has no such index; the emulator doesn't enforce indexes)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/server/funnel-analytics-service.ts", "utf8") + readFileSync("src/app/api/funnels/analytics/track/route.ts", "utf8");
+    assert.equal(/collectionGroup\(\s*["']steps["']/.test(src), false);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

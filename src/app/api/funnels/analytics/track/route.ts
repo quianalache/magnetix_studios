@@ -30,19 +30,25 @@ export async function POST(request: Request) {
   if (pageId) {
     await recordPageView({ pageId, visitorId }).catch((err) => console.error("[page-analytics] view write failed", err instanceof Error ? err.message : err));
   }
-  const context = pageId ? await publicFunnelStepForPage(pageId) : await publicFunnelStepForCheckoutConfig(configId!);
-  if (!context) return noop();
-  const { funnel, step } = context;
-  const cookieStore = await cookies();
-  const token = cookieStore.get(funnelSessionCookieName(funnel.id))?.value;
-  const sessionId = verifyFunnelSessionToken(token);
-  const first = step.order === 0;
-  const common = { agencyId: funnel.agencyId, subAccountId: funnel.subAccountId, funnelId: funnel.id, stepId: step.id, pageId, funnelSessionId: sessionId, anonymousSessionId: visitorId, paymentMode: "unknown" as const, verified: false, anonymousUniqueKey: `${visitorId}:view:${step.id}`, };
-  await recordFunnelAnalyticsEventSafe({ ...common, type: "step_viewed", idempotencyKey: `view:${viewId}` });
-  if (step.type === "upsell" || step.type === "downsell") {
-    await recordFunnelAnalyticsEventSafe({ ...common, type: "offer_viewed", idempotencyKey: `offer-view:${viewId}`, anonymousUniqueKey: `${visitorId}:offer:${step.id}` });
-  } else if (first) {
-    await recordFunnelAnalyticsEventSafe({ ...common, type: "funnel_entry", idempotencyKey: `entry:${visitorId}:${funnel.id}`, anonymousUniqueKey: `${visitorId}:entry:${funnel.id}` });
+  // Funnel analytics. Best-effort like the page view: a lookup or write
+  // problem is logged, never returned to the visitor as an error.
+  try {
+    const context = pageId ? await publicFunnelStepForPage(pageId) : await publicFunnelStepForCheckoutConfig(configId!);
+    if (!context) return noop();
+    const { funnel, step } = context;
+    const cookieStore = await cookies();
+    const token = cookieStore.get(funnelSessionCookieName(funnel.id))?.value;
+    const sessionId = verifyFunnelSessionToken(token);
+    const first = step.order === 0;
+    const common = { agencyId: funnel.agencyId, subAccountId: funnel.subAccountId, funnelId: funnel.id, stepId: step.id, pageId, funnelSessionId: sessionId, anonymousSessionId: visitorId, paymentMode: "unknown" as const, verified: false, anonymousUniqueKey: `${visitorId}:view:${step.id}`, };
+    await recordFunnelAnalyticsEventSafe({ ...common, type: "step_viewed", idempotencyKey: `view:${viewId}` });
+    if (step.type === "upsell" || step.type === "downsell") {
+      await recordFunnelAnalyticsEventSafe({ ...common, type: "offer_viewed", idempotencyKey: `offer-view:${viewId}`, anonymousUniqueKey: `${visitorId}:offer:${step.id}` });
+    } else if (first) {
+      await recordFunnelAnalyticsEventSafe({ ...common, type: "funnel_entry", idempotencyKey: `entry:${visitorId}:${funnel.id}`, anonymousUniqueKey: `${visitorId}:entry:${funnel.id}` });
+    }
+  } catch (err) {
+    console.error("[funnel-analytics] beacon failed", err instanceof Error ? err.message : err);
   }
   return noop();
 }

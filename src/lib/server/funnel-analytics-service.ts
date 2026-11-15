@@ -172,15 +172,41 @@ export async function getFunnelAnalyticsDaily(input: { subAccountId: string; fun
   return snaps.filter((s) => s.exists && s.get("subAccountId") === input.subAccountId).map((s) => s.data() as FunnelAnalyticsDaily);
 }
 
+/** Short per-instance cache: a busy page's beacons don't repeat the lookup. */
+const pageStepCache = new Map<string, { at: number; value: { funnel: Funnel; step: FunnelStep } | null }>();
+const PAGE_STEP_CACHE_MS = 60_000;
+
+/**
+ * The published funnel step that shows this page, or null. Uses only
+ * single-collection queries (the workspace's funnels, then each published
+ * funnel's own steps) — the same pattern as the Pages library. (A
+ * collection-group query on `steps` needs an index production doesn't have.)
+ */
 export async function publicFunnelStepForPage(pageId: string): Promise<{ funnel: Funnel; step: FunnelStep } | null> {
-  const snaps = await getAdminDb().collectionGroup("steps").where("pageId", "==", pageId).limit(5).get();
-  for (const snap of snaps.docs) {
-    const step = { id: snap.id, ...(snap.data() as Omit<FunnelStep, "id">) };
-    const funnelSnap = await getAdminDb().doc(`funnels/${step.funnelId}`).get();
-    const funnel = funnelSnap.data() as Funnel | undefined;
-    if (funnelSnap.exists && funnel?.status === "published" && funnel.subAccountId === step.subAccountId) return { funnel: { ...funnel, id: funnelSnap.id }, step };
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(pageId)) return null;
+  const cached = pageStepCache.get(pageId);
+  if (cached && Date.now() - cached.at < PAGE_STEP_CACHE_MS) return cached.value;
+  const db = getAdminDb();
+  const page = await db.doc(`pages/${pageId}`).get();
+  const subAccountId = page.get("subAccountId");
+  let value: { funnel: Funnel; step: FunnelStep } | null = null;
+  if (page.exists && page.get("status") === "published" && typeof subAccountId === "string" && subAccountId) {
+    const funnels = await db.collection("funnels").where("subAccountId", "==", subAccountId).get();
+    for (const f of funnels.docs) {
+      const funnel = f.data() as Funnel;
+      if (funnel.status !== "published") continue;
+      const steps = await db.collection(`funnels/${f.id}/steps`).where("pageId", "==", pageId).limit(1).get();
+      const snap = steps.docs[0];
+      if (!snap) continue;
+      const step = { id: snap.id, ...(snap.data() as Omit<FunnelStep, "id">) };
+      if (step.subAccountId !== subAccountId) continue;
+      value = { funnel: { ...funnel, id: f.id }, step };
+      break;
+    }
   }
-  return null;
+  if (pageStepCache.size > 2000) pageStepCache.clear();
+  pageStepCache.set(pageId, { at: Date.now(), value });
+  return value;
 }
 
 export async function publicFunnelStepForCheckoutConfig(configId: string): Promise<{ funnel: Funnel; step: FunnelStep } | null> {
