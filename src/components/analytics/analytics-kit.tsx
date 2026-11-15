@@ -77,7 +77,9 @@ export function KpiTile({
         <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg", TONES[tone])}>
           <Icon className="size-3.5" aria-hidden="true" />
         </span>
-        <span className="truncate text-caption font-medium text-muted-foreground">{label}</span>
+        {/* Wraps instead of truncating, so "Checkout starts" / "Conversion
+            rate" stay readable in the 2-up phone grid. */}
+        <span className="min-w-0 text-caption leading-snug font-medium break-words text-muted-foreground">{label}</span>
       </div>
       {loading ? (
         <Skeleton className="h-7 w-24" />

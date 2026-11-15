@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Plus, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Trash2,
-  DollarSign, Wallet, Activity, Percent, CheckCircle2, Clock, Share2,
-  Target, Sparkles, NotebookPen, Gauge, LayoutTemplate, Users, ChevronDown,
+  DollarSign, Wallet, CheckCircle2, Clock, Share2,
+  Target, Sparkles, NotebookPen, Gauge, Users, ChevronDown,
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,7 +14,6 @@ import { useSubAccount } from "@/context/sub-account-context";
 import {
   subscribeToGoals,
   subscribeToMoneyEntries,
-  subscribeToPagePerformance,
   subscribeToSocialPlatforms,
 } from "@/lib/firestore/growth";
 import { Button } from "@/components/ui/button";
@@ -35,12 +34,13 @@ import { StatusPill } from "@/components/system/status-pill";
 import { useConfirm } from "@/components/system/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { goalProgressPct } from "@/types/growth";
-import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/growth";
+import type { Goal, MoneyEntry, SocialPlatform } from "@/types/growth";
 
 /**
- * Growth — Magnetix Visual Direction 2 (2026-10-23). Six areas behind one
- * underline tab row: Overview, Social, Money, Goals, Business Pulse and
- * Weekly Review. Same data paths as the MomentumOS port it replaces
+ * Growth — Magnetix Visual Direction 2 (2026-10-23). Five areas behind one
+ * underline tab row: Overview, Social, Money, Goals and Weekly Review
+ * (Business Pulse retired 2026-11-15 — page and funnel performance live in
+ * Pages & Funnels and Reports; its `pagePerformance` records are kept). Same data paths as the MomentumOS port it replaces
  * (Firestore subscriptions + the /growth API group); only the presentation
  * moved onto the shared system (PageShell, PageHeader, MetricCard, Card,
  * SegmentedControl, StatusPill/Tag, EmptyState, useConfirm).
@@ -52,8 +52,8 @@ import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/
  * the value red — so the scan-by-colour still works on white cards.
  */
 
-type GrowthTab = "overview" | "social" | "money" | "goals" | "pulse" | "review";
-const TAB_IDS: GrowthTab[] = ["overview", "social", "money", "goals", "pulse", "review"];
+type GrowthTab = "overview" | "social" | "money" | "goals" | "review";
+const TAB_IDS: GrowthTab[] = ["overview", "social", "money", "goals", "review"];
 
 type MoneyStats = {
   incomeThisMonth: number;
@@ -110,14 +110,22 @@ function Amount({ value }: { value: number }) {
 
 export default function GrowthPage() {
   const { user, loading: authLoading } = useAuth();
-  const { subAccountId, agencyId } = useSubAccount();
+  const { subAccountId, agencyId, saPath } = useSubAccount();
+  const router = useRouter();
   const [tab, setTabState] = useState<GrowthTab>("overview");
 
   // The active tab lives in ?tab= so a refresh or a shared link keeps it.
+  // Business Pulse was retired (2026-11-15): its page / funnel performance
+  // moved to Reports → Page & Funnel Analytics, so old ?tab=pulse links land
+  // there instead of on an unrelated Growth tab.
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("tab") as GrowthTab | null;
-    if (requested && TAB_IDS.includes(requested)) setTabState(requested);
-  }, []);
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested === "pulse") {
+      router.replace(saPath("/reports?tab=analytics&type=pages"));
+      return;
+    }
+    if (requested && (TAB_IDS as string[]).includes(requested)) setTabState(requested as GrowthTab);
+  }, [router, saPath]);
   function setTab(next: GrowthTab) {
     setTabState(next);
     const url = new URL(window.location.href);
@@ -129,7 +137,6 @@ export default function GrowthPage() {
   const [platforms, setPlatforms] = useState<SocialPlatform[]>([]);
   const [money, setMoney] = useState<MoneyEntry[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [pages, setPages] = useState<PagePerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -140,9 +147,9 @@ export default function GrowthPage() {
     setLoading(true);
     setLoadError(false);
     const scope = { agencyId, subAccountId };
-    let a = false, b = false, c = false, d = false;
+    let a = false, b = false, c = false;
     const settle = () => {
-      if (a && b && c && d) setLoading(false);
+      if (a && b && c) setLoading(false);
     };
     // A failed subscription used to leave the page on its skeleton forever.
     const fail = () => {
@@ -152,8 +159,7 @@ export default function GrowthPage() {
     const u1 = subscribeToSocialPlatforms(scope, (l) => { setPlatforms(l); a = true; settle(); }, fail);
     const u2 = subscribeToMoneyEntries(scope, (l) => { setMoney(l); b = true; settle(); }, fail);
     const u3 = subscribeToGoals(scope, (l) => { setGoals(l); c = true; settle(); }, fail);
-    const u4 = subscribeToPagePerformance(scope, (l) => { setPages(l); d = true; settle(); }, fail);
-    return () => { u1(); u2(); u3(); u4(); };
+    return () => { u1(); u2(); u3(); };
   }, [user, agencyId, subAccountId, authLoading, attempt]);
 
   useEffect(() => {
@@ -171,7 +177,6 @@ export default function GrowthPage() {
     { id: "social", label: "Social", icon: Share2 },
     { id: "money", label: "Money", icon: DollarSign },
     { id: "goals", label: "Goals", icon: Target },
-    { id: "pulse", label: "Business Pulse", icon: Activity },
     { id: "review", label: "Weekly Review", icon: NotebookPen },
   ];
 
@@ -233,7 +238,6 @@ export default function GrowthPage() {
           {tab === "social" && <SocialPanel subAccountId={subAccountId} platforms={platforms} />}
           {tab === "money" && <MoneyPanel subAccountId={subAccountId} entries={money} stats={moneyStats} />}
           {tab === "goals" && <GoalsPanel subAccountId={subAccountId} goals={goals} />}
-          {tab === "pulse" && <PulsePanel subAccountId={subAccountId} pages={pages} />}
           {tab === "review" && <WeeklyReviewPanel subAccountId={subAccountId} />}
         </>
       )}
@@ -814,144 +818,6 @@ function GoalsPanel({ subAccountId, goals }: { subAccountId: string; goals: Goal
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {history.map((g) => <GoalCard key={g.id} goal={g} />)}
         </div>
-      )}
-    </div>
-  );
-}
-
-// ── Business Pulse ──────────────────────────────────────────────────────
-
-function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: PagePerformance[] }) {
-  const { confirm, dialog } = useConfirm();
-  const [pulseTab, setPulseTab] = useState<"pages" | "funnels">("pages");
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-
-  const { saPath } = useSubAccount();
-
-  async function addPage() {
-    if (!title.trim()) return;
-    if (!(await send(`/api/sub-accounts/${subAccountId}/growth/pages`, json("POST", { title: title.trim(), url: url.trim(), pageType: "Sales Page" }), "Couldn't add the page."))) return;
-    setTitle(""); setUrl(""); setOpen(false);
-    toast.success("Page added");
-  }
-  async function removePage(p: PagePerformance) {
-    if (!(await confirm({ title: `Stop tracking “${p.title}”?`, description: "It's removed from Business Pulse. Your actual page isn't affected.", confirmLabel: "Remove", tone: "danger" }))) return;
-    if (await send(`/api/sub-accounts/${subAccountId}/growth/pages/${p.id}`, { method: "DELETE" }, "Couldn't remove the page.")) toast.success("Page removed");
-  }
-
-  return (
-    <div className="space-y-4">
-      {dialog}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {/* Nothing records impressions or conversions for pages tracked here
-            (rows are hand-entered links, not tied to a Magnetix page), so
-            these show "—", never a measured-looking 0. */}
-        <MetricCard className="col-span-2 sm:col-span-1" icon={Activity} tone="violet" label="Total impressions" value="—" hint="Not tracked yet" />
-        <MetricCard icon={TrendingUp} tone="green" label="Total conversions" value="—" hint="Not tracked yet" />
-        <MetricCard icon={Percent} tone="aqua" label="Avg. conversion rate" value="—" hint="Not tracked yet" />
-      </div>
-      <p className="text-caption text-muted-foreground">
-        The links below are tracked by hand, so impressions and conversions aren&apos;t measured for them. Views and goal completions for your Pages &amp; Funnels pages and funnels are measured in{" "}
-        <Link href={saPath("/reports?tab=analytics&type=pages")} className="font-medium text-link hover:underline">
-          Reports → Page &amp; Funnel Analytics
-        </Link>
-        ; visits and conversions for booking pages, Offers and Reading Tools are in{" "}
-        <Link href={saPath("/reports?tab=attribution")} className="font-medium text-link hover:underline">
-          Reports → Attribution
-        </Link>
-        .
-      </p>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SegmentedControl
-          value={pulseTab}
-          onChange={setPulseTab}
-          options={[
-            { value: "pages", label: "Page performance" },
-            { value: "funnels", label: "Funnel performance" },
-          ]}
-        />
-        {pulseTab === "pages" && (
-          <Button variant="secondary" onClick={() => setOpen((v) => !v)}>
-            <Plus />
-            Add page
-          </Button>
-        )}
-      </div>
-
-      {pulseTab === "pages" ? (
-        <div className="space-y-3">
-          {open && (
-            <Card size="sm" className="p-4">
-              <form
-                className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] sm:items-end"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addPage();
-                }}
-              >
-                <div className="space-y-1.5">
-                  <Label htmlFor="pulse-title">Page title</Label>
-                  <Input id="pulse-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Free guide landing" autoFocus />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="pulse-url">URL</Label>
-                  <Input id="pulse-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" inputMode="url" />
-                </div>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={!title.trim()}>Save</Button>
-                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                </div>
-              </form>
-            </Card>
-          )}
-          {pages.length === 0 ? (
-            <EmptyState icon={LayoutTemplate} title="No pages tracked yet" description="Add the pages you want to keep an eye on here." />
-          ) : (
-            <Card className="gap-0 p-0">
-              <ul className="divide-y divide-border">
-                {pages.map((p) => {
-                  return (
-                    <li key={p.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate text-body-sm font-semibold">{p.title}</p>
-                        <p className="text-caption text-muted-foreground">{p.pageType}</p>
-                        {p.url && (
-                          <a href={p.url} target="_blank" rel="noreferrer" className="block truncate text-caption text-link hover:underline">
-                            {p.url}
-                          </a>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-4">
-                        <dl className="flex gap-4 text-caption">
-                          <div><dt className="text-muted-foreground">Impressions</dt><dd className="font-semibold text-muted-foreground" title="Not tracked yet">—</dd></div>
-                          <div><dt className="text-muted-foreground">Conversions</dt><dd className="font-semibold text-muted-foreground" title="Not tracked yet">—</dd></div>
-                          <div><dt className="text-muted-foreground">Rate</dt><dd className="font-semibold text-muted-foreground" title="Not tracked yet">—</dd></div>
-                        </dl>
-                        <Button variant="ghost" size="icon-sm" onClick={() => removePage(p)} aria-label={`Stop tracking ${p.title}`} title="Remove">
-                          <Trash2 className="text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-          )}
-        </div>
-      ) : (
-        <EmptyState
-          icon={Activity}
-          title="Funnel performance moved to Reports"
-          description="Entries, checkout starts, purchases, accepted offers and revenue for your funnels are measured in Reports, with a quick view in Pages & Funnels."
-          action={
-            <Button render={<Link href={saPath("/reports?tab=analytics&type=funnels")} />}>
-              Open funnel analytics
-            </Button>
-          }
-        />
       )}
     </div>
   );
