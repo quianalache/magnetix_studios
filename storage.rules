@@ -1,12 +1,14 @@
 rules_version = '2';
 
-// Firebase Storage rules. Writer surfaces: Community's group cover/logo/
-// lesson uploads, and Standalone Courses' cover/lesson uploads (+ rehosted
-// Skool lesson-resource PDFs, Admin-SDK-written only — see that match
-// block's own comment). Both are PUBLIC reads (the /c/* and /course/*
-// pages are public), writes require a signed-in Firebase user (staff —
-// members/buyers are NOT Firebase users, so they can't write here) plus an
-// image (or, standalone-courses only, PDF) content-type + 5 MB size cap.
+// Firebase Storage rules. Browser uploads (staff only — community members,
+// students and buyers are not Firebase users) go to Pages & Funnels, Broadcast,
+// Community, Standalone Course, Course Offer and Form folders. Since the
+// 2026-11-16 hardening each folder allows only CREATE of a new file, only by a
+// verified account with the right role in the workspace that owns the folder
+// (checked against Firestore membership + the owning record); no browser
+// overwrite or delete. Agency-scope folders are written only by Admin-SDK
+// server routes. Public reads are unchanged (pages, emails, courses and forms
+// are viewed by people with no Firebase session).
 //
 // Deploy with: firebase deploy --only storage
 service firebase.storage {
@@ -29,16 +31,64 @@ service firebase.storage {
         );
     }
 
+    // ── Wave 2 Storage hardening (2026-11-16) ─────────────────────────────
+    // Same model as canAddPageAsset, per module. The identity comes from the
+    // verified token; workspace membership, role and the owning record come
+    // from Firestore — never from the path alone. Each check reads at most
+    // two distinct documents (the cross-service limit per evaluation).
+    function activeUser() {
+      return request.auth != null && request.auth.token.status == "active";
+    }
+    function memberPath(subAccountId) {
+      return /databases/(default)/documents/subAccounts/$(subAccountId)/subAccountMembers/$(request.auth.uid);
+    }
+    function isActiveMember(subAccountId) {
+      return firestore.exists(memberPath(subAccountId))
+        && firestore.get(memberPath(subAccountId)).data.status == "active";
+    }
+    function isActiveAdmin(subAccountId) {
+      return isActiveMember(subAccountId)
+        && firestore.get(memberPath(subAccountId)).data.role == "admin";
+    }
+    function ownsWorkspaceAgency(subAccountId) {
+      return request.auth.token.agencyRole == "owner"
+        && request.auth.token.agencyId == firestore.get(/databases/(default)/documents/subAccounts/$(subAccountId)).data.agencyId;
+    }
+    // A record kept under the workspace (communityGroups / standaloneCourses / courseOffers).
+    function canAddWorkspaceRecordAsset(subAccountId, collection, recordId) {
+      return activeUser()
+        && firestore.exists(/databases/(default)/documents/subAccounts/$(subAccountId)/$(collection)/$(recordId))
+        && (ownsWorkspaceAgency(subAccountId) || isActiveAdmin(subAccountId));
+    }
+    // Broadcast composer images: any active member may send broadcasts, so any
+    // active member (or the agency owner) may add images for that workspace.
+    function canAddBroadcastAsset(subAccountId) {
+      return activeUser()
+        && (ownsWorkspaceAgency(subAccountId) || isActiveMember(subAccountId));
+    }
+    // Forms are top-level records that name their workspace.
+    function canAddFormAsset(subAccountId, formId) {
+      return activeUser()
+        && firestore.exists(/databases/(default)/documents/forms/$(formId))
+        && firestore.get(/databases/(default)/documents/forms/$(formId)).data.subAccountId == subAccountId
+        && (
+          (request.auth.token.agencyRole == "owner"
+            && request.auth.token.agencyId == firestore.get(/databases/(default)/documents/forms/$(formId)).data.agencyId)
+          || isActiveAdmin(subAccountId)
+        );
+    }
+
     // Broadcast composer image/video-thumbnail uploads. `allow read: if true`
     // is structurally required here (not just a rubber-stamp copy) — these
     // URLs get embedded in outbound email, fetched by third-party mail
     // clients with no Firebase session at all.
     match /broadcasts/{subAccountId}/{draftId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if canAddBroadcastAsset(subAccountId)
+        && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow update, delete: if false;
     }
 
     // Agency Communications composer image/video-thumbnail uploads — the
@@ -49,19 +99,20 @@ service firebase.storage {
     // Firebase session.
     match /broadcasts/agency/{agencyId}/{draftId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      // Uploaded only by Admin-SDK server routes (which bypass these rules);
+      // the browser never writes here (2026-11-16 hardening — previously any
+      // signed-in account could).
+      allow write: if false;
     }
 
     // Community group cover/logo images.
     match /community/{subAccountId}/{groupId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if canAddWorkspaceRecordAsset(subAccountId, "communityGroups", groupId)
+        && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow update, delete: if false;
     }
 
     // Agency Community group cover/logo/favicon images — the agency-scope
@@ -75,10 +126,10 @@ service firebase.storage {
     // this rule regardless; kept for parity/defense-in-depth only.
     match /community/agency/{agencyId}/{groupId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      // Uploaded only by Admin-SDK server routes (which bypass these rules);
+      // the browser never writes here (2026-11-16 hardening — previously any
+      // signed-in account could).
+      allow write: if false;
     }
 
     // Standalone Course cover/lesson images — same rules, independent path
@@ -91,11 +142,12 @@ service firebase.storage {
     // uploader for a lesson resource wouldn't need a second rule).
     match /standalone-courses/{subAccountId}/{courseId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if canAddWorkspaceRecordAsset(subAccountId, "standaloneCourses", courseId)
+        && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && (request.resource.contentType.matches('image/.*')
           || request.resource.contentType == 'application/pdf');
-      allow delete: if request.auth != null;
+      allow update, delete: if false;
     }
 
     // Agency Standalone Course cover/lesson images — the agency-scope
@@ -106,19 +158,20 @@ service firebase.storage {
     // for parity/defense-in-depth only.
     match /standalone-courses/agency/{agencyId}/{courseId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      // Uploaded only by Admin-SDK server routes (which bypass these rules);
+      // the browser never writes here (2026-11-16 hardening — previously any
+      // signed-in account could).
+      allow write: if false;
     }
 
     // Course Offer thumbnail images — same rules, independent path.
     match /course-offers/{subAccountId}/{offerId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if canAddWorkspaceRecordAsset(subAccountId, "courseOffers", offerId)
+        && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow update, delete: if false;
     }
 
     // Agency Course Offer thumbnail/theme images — agency sibling of the
@@ -126,10 +179,10 @@ service firebase.storage {
     // /api/agency/course-offers/[offerId]/upload); kept for parity only.
     match /course-offers/agency/{agencyId}/{offerId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      // Uploaded only by Admin-SDK server routes (which bypass these rules);
+      // the browser never writes here (2026-11-16 hardening — previously any
+      // signed-in account could).
+      allow write: if false;
     }
 
     // Form Design panel background/header images — same rules, independent
@@ -137,10 +190,11 @@ service firebase.storage {
     // both public, no session.
     match /forms/{subAccountId}/{formId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if canAddFormAsset(subAccountId, formId)
+        && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow update, delete: if false;
     }
 
     // Pages & Funnels Image element uploads (real user QA blocker — the
