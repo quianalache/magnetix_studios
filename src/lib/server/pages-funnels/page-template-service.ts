@@ -13,13 +13,13 @@ import { pageNameProblem, resolvePageSettings } from "@/lib/pages-funnels/page-s
 import {
   EMPTY_TEMPLATE_CONNECTIONS,
   PAGE_TEMPLATE_LIMITS,
+  decodeTemplateDesign,
   prepareNewPageFromTemplate,
   summarizeTemplateConnections,
   templateDescriptionProblem,
   templateNameProblem,
 } from "@/lib/pages-funnels/page-templates";
 import { preparePageWrite, type PuckPersistenceResult } from "@/lib/server/pages-funnels-puck-service";
-import { appBaseUrl, bucketName, downloadUrl, screenshot } from "@/lib/server/pages-funnels/page-thumbnail-service";
 import { issueTemplateThumbnailToken } from "@/lib/server/pages-funnels/thumbnail-token";
 import { THUMBNAIL_SCALE, THUMBNAIL_VIEWPORT } from "@/lib/pages-funnels/thumbnail";
 import { normalizePopupMap, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
@@ -90,9 +90,9 @@ async function loadOwnedTemplate(subAccountId: string, templateId: string) {
 
 /** Read the template's design. Unreadable content is an error, never an empty page. */
 export function templateDesign(doc: Pick<PageTemplateDoc, "puckData" | "popups">): { data: PuckData; popups: PopupDefinitionMap } {
-  const decoded = decodeStoredPuckData(doc.puckData);
-  if (!decoded.ok) throw new PageTemplateError("This template's design couldn't be read.", 409);
-  return { data: decoded.data, popups: normalizePopupMap(doc.popups) };
+  const design = decodeTemplateDesign(doc);
+  if (!design) throw new PageTemplateError("This template's design couldn't be read.", 409);
+  return design;
 }
 
 export async function listPageTemplates(subAccountId: string): Promise<PageTemplateSummary[]> {
@@ -239,7 +239,7 @@ export async function updatePageTemplate(subAccountId: string, templateId: strin
 export async function deletePageTemplate(subAccountId: string, templateId: string): Promise<void> {
   const { ref } = await loadOwnedTemplate(subAccountId, templateId);
   await ref.delete();
-  const bucket = bucketName();
+  const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || null;
   if (bucket) {
     await getStorage()
       .bucket(bucket)
@@ -364,6 +364,10 @@ export async function captureTemplatePreview(templateId: string): Promise<{ stat
   const ref = getAdminDb().collection(TEMPLATES).doc(templateId);
   const doc = (await ref.get().catch(() => null))?.data() as PageTemplateDoc | undefined;
   if (!doc) return { status: "skipped", reason: "missing" };
+  // Loaded only here: the headless-browser runtime must never be part of the
+  // routes and pages that merely import this service (it isn't traced into
+  // their Vercel functions). Captures run in /api/pages-funnels/thumbnail/step.
+  const { appBaseUrl, bucketName, downloadUrl, screenshot } = await import("@/lib/server/pages-funnels/page-thumbnail-service");
   const base = appBaseUrl();
   const bucket = bucketName();
   const token = issueTemplateThumbnailToken(templateId);

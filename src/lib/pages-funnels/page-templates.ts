@@ -6,7 +6,8 @@ import { collectActionTargets } from "@/lib/pages-funnels/puck/action";
 import { collectPuckEmbedIds, collectPuckFeaturedOfferIds, collectPuckFormIds, collectPuckOfferSummaryIds } from "@/lib/pages-funnels/puck/resolve";
 import { collectMediaVideoIds } from "@/lib/pages-funnels/puck/media-video";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
-import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import { normalizePopupMap, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
+import { decodeStoredPuckData } from "@/lib/pages-funnels/puck-storage";
 import type { PageTemplateConnections } from "@/types/page-templates";
 import type { PageDoc } from "@/types/pages-funnels";
 import { toMillis } from "@/lib/pages-funnels/thumbnail";
@@ -113,4 +114,10 @@ export function thumbnailShowsCurrentDesign(page: Pick<PageDoc, "thumbnail" | "s
   if (t.variant === "draft") return draft !== null && t.sourceVersion >= draft;
   const published = toMillis(page.puckPublishedAt);
   return page.status === "published" && !!page.puckPublishedData && published !== null && t.sourceVersion >= published && (draft === null || draft <= published);
+}
+
+/** A saved template's design (page tree + Popups), or null when it can't be read. */
+export function decodeTemplateDesign(doc: { puckData: unknown; popups: unknown }): { data: PuckData; popups: PopupDefinitionMap } | null {
+  const decoded = decodeStoredPuckData(doc.puckData);
+  return decoded.ok ? { data: decoded.data, popups: normalizePopupMap(doc.popups) } : null;
 }

@@ -95,6 +95,12 @@ const nextConfig: NextConfig = {
       "./node_modules/.pnpm/playwright-core@1.62.1/node_modules/playwright-core/browsers.json",
       "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
     ],
+    // Saved Page Templates (2026-11-16): the template service loads the
+    // capture runtime lazily, but keep these functions able to resolve it.
+    "/api/pages-funnels/templates": [
+      "./node_modules/.pnpm/playwright-core@1.62.1/node_modules/playwright-core/browsers.json",
+      "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
+    ],
   },
   async headers() {
     return [

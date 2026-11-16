@@ -20,7 +20,7 @@ import { resolveMediaVideosForPage } from "@/lib/server/page-media-resolver";
 import { buildReadingBlockContext, collectFeaturedOfferIds } from "@/lib/server/reading-block-context";
 import { buildSampleReading } from "@/lib/server/reading-samples";
 import { verifyTemplateThumbnailToken } from "@/lib/server/pages-funnels/thumbnail-token";
-import { templateDesign } from "@/lib/server/pages-funnels/page-template-service";
+import { decodeTemplateDesign } from "@/lib/pages-funnels/page-templates";
 import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingBlockContext, type ReadingResultPageSettings } from "@/types/reading-blocks";
 import type { PageTemplateDoc } from "@/types/page-templates";
 
@@ -53,12 +53,8 @@ export default async function PageTemplatePreview({ searchParams }: { searchPara
   const capture = verifyTemplateThumbnailToken(query.mx_thumb, templateId);
   if (!capture && !(await getStaffForSubAccount(template.subAccountId))) notFound();
 
-  let design: ReturnType<typeof templateDesign>;
-  try {
-    design = templateDesign(template);
-  } catch {
-    notFound();
-  }
+  const design = decodeTemplateDesign(template);
+  if (!design) notFound();
   const { data, popups } = design;
   const subAccountId = template.subAccountId;
   const anchor = { id: `template_${templateId}`, subAccountId, agencyId: template.agencyId };
