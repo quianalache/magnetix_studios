@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { PAGE_TEMPLATES } from "@/lib/pages-funnels/templates";
+import { DEFAULT_BLOCK_SPACING, type PageBlock } from "@/types/pages-funnels";
+import { newBlockId } from "@/lib/pages-funnels/blocks";
 import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1";
 
 /**
@@ -12,8 +13,9 @@ import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1
  * Firebase Auth + a real sub-account/page, which this session cannot
  * obtain — see the Phase 2A task report's QA section for the full
  * explanation. Renders the EXACT SAME `MagnetixPuckEditorShell` component
- * the real route uses, fed a realistic V1 blocks fixture (one of the real
- * `PAGE_TEMPLATES`) converted through the same production
+ * the real route uses, fed a realistic V1 blocks fixture (the former "Free
+ * Guide Landing Page" demo template, kept here as a fixture after the demo
+ * templates were retired on 2026-11-16) converted through the same production
  * `migratePageBlocksToPuckData` the real route calls — so verifying the
  * Magnetix visual shell, drag/drop, inline editing, etc. here is a genuine
  * proof of the real component's behavior, not a separate reimplementation.
@@ -37,7 +39,67 @@ const NewBuilderEditor = dynamic(
   }
 );
 
-const fixtureBlocks = PAGE_TEMPLATES[0].blocks();
+/** Legacy V1 blocks fixture — the former "Free Guide Landing Page" demo template. */
+function fixtureLegacyBlocks(): PageBlock[] {
+  return [
+    {
+      id: newBlockId(),
+      type: "hero",
+      content: {
+        headline: "Grow your list with a page that actually converts",
+        subheadline: "Magnetix helps digital entrepreneurs build beautiful pages, powerful forms, and high-converting funnels — all in one place.",
+        buttonText: "Get the Free Guide",
+        buttonLink: "#form",
+        buttonOpenInNewTab: false,
+        secondaryLinkText: "Learn more",
+        secondaryLinkLink: "#features",
+        alignment: "left",
+        backgroundStyle: "gradient",
+      },
+      spacing: { paddingTop: 80, paddingBottom: 80 },
+    } as PageBlock,
+    {
+      id: newBlockId(),
+      type: "features",
+      content: {
+        eyebrow: "BUILT FOR CREATORS",
+        headline: "Everything you need to grow and scale",
+        items: [
+          { id: newBlockId(), title: "Launch beautiful pages", description: "Create stunning, mobile-friendly pages that reflect your brand and convert." },
+          { id: newBlockId(), title: "Collect & nurture leads", description: "Build custom forms and automate follow-ups to grow your audience." },
+          { id: newBlockId(), title: "Sell with confidence", description: "Build high-converting funnels and offers that turn leads into loyal customers." },
+        ],
+      },
+      spacing: { ...DEFAULT_BLOCK_SPACING },
+    } as PageBlock,
+    {
+      id: newBlockId(),
+      type: "testimonials",
+      content: {
+        eyebrow: "LOVED BY CREATORS",
+        headline: "What entrepreneurs are saying",
+        items: [
+          { id: newBlockId(), quote: "The pages are gorgeous and my conversions have jumped!", name: "Sarah J." },
+          { id: newBlockId(), quote: "I love having everything in one place — it just works.", name: "Priya K." },
+          { id: newBlockId(), quote: "The page builder is so intuitive I can build what I need.", name: "Megan R." },
+        ],
+      },
+      spacing: { ...DEFAULT_BLOCK_SPACING },
+    } as PageBlock,
+    {
+      id: newBlockId(),
+      type: "faq",
+      content: {
+        eyebrow: "FREQUENTLY ASKED QUESTIONS",
+        headline: "Got questions? We've got answers.",
+        items: [{ id: newBlockId(), question: "Is Magnetix easy to use for beginners?", answer: "Yes — everything is drag-and-drop, no code required." }],
+      },
+      spacing: { ...DEFAULT_BLOCK_SPACING },
+    } as PageBlock,
+  ];
+}
+
+const fixtureBlocks = fixtureLegacyBlocks();
 const fixtureData = migratePageBlocksToPuckData(fixtureBlocks);
 
 // QA-only addition (Puck user-QA blockers task): the "Free Guide Landing

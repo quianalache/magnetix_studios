@@ -15,6 +15,7 @@ import {
   type PageLoadState,
 } from "@/components/pages-funnels/page-load-state";
 import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1";
+import { thumbnailShowsCurrentDesign } from "@/lib/pages-funnels/page-templates";
 import { derivePuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import { buildPublishedPageUrl } from "@/lib/domains/public-url";
 import { PAGE_TYPE_LABELS, type PageDoc } from "@/types/pages-funnels";
@@ -177,6 +178,8 @@ export default function NewBuilderPage({
       hasLivePage={hasLivePage}
       hasPublishedCopy={page.puckPublishedData != null}
       legacySeo={page.seo ?? null}
+      pageType={page.pageType}
+      currentDesignPreviewUrl={thumbnailShowsCurrentDesign(page) ? (page.thumbnail?.url ?? null) : null}
       liveUrl={liveUrl}
       initialData={initialData}
       initialPopups={normalizePopupMap(page.puckDraftPopups)}

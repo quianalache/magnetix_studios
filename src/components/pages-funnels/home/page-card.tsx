@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, Copy, CopyPlus, ExternalLink, Eye, LineChart, MoreHorizontal, Pencil, Target, Trash2 } from "lucide-react";
+import { BarChart3, Copy, CopyPlus, ExternalLink, Eye, LayoutTemplate, LineChart, MoreHorizontal, Pencil, Target, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AnalyticsLoadState } from "@/components/analytics/use-page-funnel-analytics";
 import { formatCount, formatPercent, pageConversionRate } from "@/lib/analytics/page-funnel-metrics";
@@ -36,6 +36,7 @@ export function PageCard({
   canManage,
   onCopyLink,
   onDuplicate,
+  onSaveAsTemplate,
   onDelete,
   analytics = null,
   analyticsState = "ready",
@@ -49,6 +50,8 @@ export function PageCard({
   canManage: boolean;
   onCopyLink: () => void;
   onDuplicate: () => void;
+  /** Save this page's design to the workspace's template library. */
+  onSaveAsTemplate?: () => void;
   onDelete: () => void;
   /** Last-30-day page analytics (light view; the full report is in Reports). */
   analytics?: PageReport | null;
@@ -109,6 +112,11 @@ export function PageCard({
                 <DropdownMenuItem onClick={onDuplicate}>
                   <CopyPlus aria-hidden="true" /> Duplicate
                 </DropdownMenuItem>
+                {onSaveAsTemplate ? (
+                  <DropdownMenuItem onClick={onSaveAsTemplate}>
+                    <LayoutTemplate aria-hidden="true" /> Save as Template
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onClick={onDelete}>
                   <Trash2 aria-hidden="true" /> Delete

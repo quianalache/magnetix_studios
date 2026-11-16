@@ -8,8 +8,8 @@ import { HERO_DEFAULT_BACKGROUND } from "@/lib/pages-funnels/puck/background";
  * implementation ("Hero must NOT be an indivisible mega-block... implement
  * at least one reference: Hero"). Produces real, independently-editable
  * `ComponentData` (Section → Row → [Column(Heading/Text/Button),
- * Column(Image)]) — mechanically the same approach V1's
- * `src/lib/pages-funnels/templates.ts` already uses for its own prebuilt
+ * Column(Image)]) — mechanically the same approach the
+ * former V1 demo templates (retired 2026-11-16) used for their prebuilt
  * pages, now targeting Puck's `ComponentData` shape instead of `PageBlock[]`.
  *
  * Every nested node gets an explicit, unique id via `newPuckNodeId()` — see

@@ -48,3 +48,31 @@ export function verifyThumbnailToken(token: unknown, pageId: string, now = Date.
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   return variant;
 }
+
+// ── Saved Page Templates (2026-11-16) ──────────────────────────────────────
+// The same 3-minute capture pass, for a template's preview screenshot. A
+// separate signing domain, so a page token can never open a template (or the
+// other way round).
+const TEMPLATE_DOMAIN = "mx-template-thumb-v1";
+const signTemplate = (key: string, payload: string) => createHmac("sha256", key).update(`${TEMPLATE_DOMAIN}:${payload}`).digest("base64url");
+
+export function issueTemplateThumbnailToken(templateId: string, now = Date.now()): string | null {
+  const key = secret();
+  if (!key || !ID.test(templateId)) return null;
+  const payload = `${templateId}.${now + TTL_MS}`;
+  return `${payload}.${signTemplate(key, payload)}`;
+}
+
+export function verifyTemplateThumbnailToken(token: unknown, templateId: string, now = Date.now()): boolean {
+  const key = secret();
+  if (!key || typeof token !== "string" || token.length > 300) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [id, exp, sig] = parts;
+  if (id !== templateId) return false;
+  const expMs = Number(exp);
+  if (!Number.isFinite(expMs) || expMs < now || expMs > now + TTL_MS + 60_000) return false;
+  const expected = Buffer.from(signTemplate(key, `${id}.${exp}`));
+  const given = Buffer.from(sig);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}

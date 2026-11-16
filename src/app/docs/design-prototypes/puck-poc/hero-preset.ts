@@ -7,7 +7,7 @@ import type { ComponentData } from "@puckeditor/core";
  * function producing real, independently-editable ComponentData (a
  * Section containing a Row containing two Columns containing Heading/
  * Text/Button and an Image) — mechanically identical to how
- * src/lib/pages-funnels/templates.ts's PAGE_TEMPLATES already work for the
+ * the former V1 demo page templates (retired 2026-11-16) worked for the
  * production V1/V2 builder, just targeting Puck's ComponentData shape.
  *
  * IMPORTANT, discovered by actually running this against the installed

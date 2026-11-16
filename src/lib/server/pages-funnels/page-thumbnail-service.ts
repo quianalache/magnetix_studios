@@ -48,15 +48,15 @@ import type { PageDoc, PageThumbnail } from "@/types/pages-funnels";
 const PAGES = "pages";
 const CAPTURE_TIMEOUT_MS = 30_000;
 
-function appBaseUrl(): string | null {
+export function appBaseUrl(): string | null {
   return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || null;
 }
 
-function bucketName(): string | null {
+export function bucketName(): string | null {
   return process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || null;
 }
 
-function downloadUrl(bucket: string, key: string, token: string) {
+export function downloadUrl(bucket: string, key: string, token: string) {
   const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
   const base = host ? `http://${host}` : "https://firebasestorage.googleapis.com";
   return `${base}/v0/b/${bucket}/o/${encodeURIComponent(key)}?alt=media&token=${token}`;
@@ -142,7 +142,7 @@ export async function capturePageThumbnail(pageId: string): Promise<CaptureOutco
   return { status: "captured", thumbnail };
 }
 
-async function screenshot(url: string): Promise<Buffer> {
+export async function screenshot(url: string): Promise<Buffer> {
   const browser = await launchHeadlessChromium();
   try {
     const context = await browser.newContext({

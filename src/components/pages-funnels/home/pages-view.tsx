@@ -13,6 +13,8 @@ import { useConfirm } from "@/components/system/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageCard } from "@/components/pages-funnels/home/page-card";
+import { SaveTemplateDialog } from "@/components/pages-funnels/templates/save-template-dialog";
+import { thumbnailShowsCurrentDesign } from "@/lib/pages-funnels/page-templates";
 import { PageAnalyticsSheet } from "@/components/analytics/analytics-sheets";
 import { usePageFunnelAnalytics } from "@/components/analytics/use-page-funnel-analytics";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -63,6 +65,7 @@ export function PagesView({
   const analytics = usePageFunnelAnalytics(subAccountId, "pages", "30d", pagesState === "ready" && pages.length > 0);
   const pageReports = useMemo(() => new Map((analytics.data?.pages ?? []).map((r) => [r.id, r])), [analytics.data]);
   const [quickPageId, setQuickPageId] = useState<string | null>(null);
+  const [templatePage, setTemplatePage] = useState<PageDoc | null>(null);
   const quickPage = quickPageId ? (pageReports.get(quickPageId) ?? null) : null;
   const pageReportsHref = (id?: string) => saPath(`/reports?tab=analytics&type=pages&range=30d${id ? `&page=${encodeURIComponent(id)}` : ""}`);
   const [filters, setFilters] = useState<PageFilters>(DEFAULT_PAGE_FILTERS);
@@ -205,6 +208,7 @@ export function PagesView({
                 canManage={isAdmin}
                 onCopyLink={() => void copyLink(page)}
                 onDuplicate={() => void duplicate(page)}
+                onSaveAsTemplate={isAdmin ? () => setTemplatePage(page) : undefined}
                 onDelete={() => void remove(page)}
                 analytics={pageReports.get(page.id) ?? null}
                 analyticsState={analytics.state}
@@ -214,6 +218,16 @@ export function PagesView({
             ))}
           </div>
           <Pagination page={current} pageSize={PAGES_PER_PAGE} total={filtered.length} onPageChange={setPageNo} itemLabel="pages" />
+          {templatePage ? (
+            <SaveTemplateDialog
+              open
+              onOpenChange={(o) => !o && setTemplatePage(null)}
+              pageId={templatePage.id}
+              pageName={templatePage.name}
+              pageType={templatePage.pageType}
+              previewUrl={thumbnailShowsCurrentDesign(templatePage) ? (templatePage.thumbnail?.url ?? null) : null}
+            />
+          ) : null}
           {analytics.data ? (
             <PageAnalyticsSheet
               page={quickPage}

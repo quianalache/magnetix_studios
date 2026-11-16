@@ -53,6 +53,9 @@ export interface CheckoutBlockPayload {
   /** Null when the step can't render yet (no primary Offer, unavailable Offer…). */
   view: CheckoutView | null;
   problem: string | null;
+  /** Set when the block's stored connection is another funnel's Checkout Step:
+   *  on this page it resolves through the page's own funnel instead. */
+  replaced?: CheckoutStepContext | null;
 }
 
 function visit(data: unknown, fn: (props: Record<string, unknown>) => void) {
@@ -73,6 +76,36 @@ export function collectCheckoutKeys(data: unknown): string[] {
   const keys = new Set<string>();
   visit(data, (props) => keys.add(checkoutKeyFor(normalizeCheckoutBlock(props))));
   return [...keys].slice(0, 5);
+}
+
+/**
+ * A copy of a page tree with every EXPLICIT Checkout block connection passed
+ * through `remap` (automatic blocks are left alone). Returning "" turns a block
+ * into an automatic one. Used by Duplicate Step (re-point the copied page at
+ * the copied step's own checkout) and by Create from Template (a new page never
+ * inherits another page's checkout). The input is never mutated.
+ */
+export function remapCheckoutConfigIds<T>(data: T, remap: (configId: string) => string): { data: T; changed: number } {
+  if (!data || typeof data !== "object") return { data, changed: 0 };
+  const copy = JSON.parse(JSON.stringify(data)) as T;
+  let changed = 0;
+  visit(copy, (props) => {
+    const current = props.checkoutConfigId;
+    if (!isCheckoutConfigId(current)) return;
+    const next = remap(current);
+    if (next !== current) {
+      props.checkoutConfigId = next;
+      changed++;
+    }
+  });
+  return { data: copy, changed };
+}
+
+/** How many Checkout blocks a tree holds (explicit and automatic). */
+export function countCheckoutBlocks(data: unknown): number {
+  let n = 0;
+  visit(data, () => n++);
+  return n;
 }
 
 /** Where "Edit Checkout Settings" goes for a connected step. */

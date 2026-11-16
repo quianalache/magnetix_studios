@@ -17,6 +17,7 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  LayoutTemplate,
   Loader2,
   MoreHorizontal,
   PanelTop,
@@ -66,6 +67,8 @@ import { createPopupEditorConfig } from "@/components/pages-funnels/puck/popup-e
 import { ActionFieldContext, type ActionFieldContextValue } from "@/components/pages-funnels/puck/action-field";
 import { PopupEditorContext } from "@/components/pages-funnels/puck/popup-edit-canvas";
 import { PageSettingsButton, type PageSettingsDialogProps } from "@/components/pages-funnels/puck/page-settings-dialog";
+import { SaveTemplateDialog } from "@/components/pages-funnels/templates/save-template-dialog";
+import type { PageType } from "@/types/pages-funnels";
 import { resolvePageSettings, withPageSettings, type PageSettings } from "@/lib/pages-funnels/page-settings";
 import { applyPopupEditorChange, popupToEditorData } from "@/lib/pages-funnels/popup-editor";
 import { comparePopupCreationOrder, createDefaultPopup, type PopupDefinitionMap } from "@/types/pages-funnels-popup";
@@ -186,6 +189,10 @@ export interface MagnetixPuckEditorShellProps {
   hasPublishedCopy?: boolean;
   /** Pre-Wave 3 flat SEO field — the Page Settings fallback for older trees. */
   legacySeo?: { title?: string; description?: string; ogImage?: string } | null;
+  /** Saved Page Templates (2026-11-16): the page type, and a screenshot that
+   *  shows the page's current saved design (null when out of date). */
+  pageType?: PageType;
+  currentDesignPreviewUrl?: string | null;
 }
 
 export function MagnetixPuckEditorShell({
@@ -205,6 +212,8 @@ export function MagnetixPuckEditorShell({
   pageTypeLabel,
   hasPublishedCopy = false,
   legacySeo = null,
+  pageType = "generic",
+  currentDesignPreviewUrl = null,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
@@ -274,6 +283,21 @@ export function MagnetixPuckEditorShell({
     popups,
     enabled: persistenceEnabled,
   });
+
+  // Save as Template (2026-11-16): always available in the header — drafts
+  // included — and saves the CURRENT on-screen design (edits not yet
+  // autosaved too), while the page's own draft save is flushed alongside.
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const saveTemplateValue = useMemo(() => ({ open: () => setTemplateOpen(true) }), []);
+  const getCurrentDesign = useCallback(() => ({ data: latestDataRef.current, popups: latestPopupsRef.current }), []);
+  // The page's screenshot shows the saved design only until the first edit here.
+  const [editedSinceOpen, setEditedSinceOpen] = useState(false);
+  const initialDesignKey = useRef<string | null>(null);
+  useEffect(() => {
+    const key = JSON.stringify({ data, popups });
+    if (initialDesignKey.current === null) initialDesignKey.current = key;
+    else if (key !== initialDesignKey.current) setEditedSinceOpen(true);
+  }, [data, popups]);
 
   // Context-dependent, so useMemo (not a fresh literal) — same referential-
   // stability rule as VIEWPORTS/IFRAME_CONFIG below, per the Insert Undo
@@ -674,6 +698,7 @@ export function MagnetixPuckEditorShell({
             </DropdownMenu>
           </>
         )}
+        {!isPopupSurface && <SaveTemplateHeaderButton />}
         {!isPopupSurface && <PageSettingsHeaderButton />}
         <Button variant="outline" size="sm" onClick={openPreview}>
           <Eye className="h-4 w-4" /> Preview
@@ -752,6 +777,7 @@ export function MagnetixPuckEditorShell({
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col" data-editing-surface={isPopupSurface ? "popup" : "page"}>
       <div className="min-h-0 flex-1">
+        <SaveTemplateContext.Provider value={saveTemplateValue}>
         <PageSettingsContext.Provider value={pageSettingsValue}>
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
           <SaveStatusContext.Provider value={{ state: saveState, error: saveError }}>
@@ -781,7 +807,18 @@ export function MagnetixPuckEditorShell({
           </SaveStatusContext.Provider>
         </ReadingResultSettingsContext.Provider>
         </PageSettingsContext.Provider>
+        </SaveTemplateContext.Provider>
       </div>
+      <SaveTemplateDialog
+        open={templateOpen}
+        onOpenChange={setTemplateOpen}
+        pageId={pageId}
+        pageName={pageName}
+        pageType={pageType}
+        previewUrl={editedSinceOpen ? null : currentDesignPreviewUrl}
+        getCurrent={getCurrentDesign}
+        beforeSave={() => void saveDraft()}
+      />
     </div>
   );
 }
@@ -798,6 +835,19 @@ const POPUP_PLUGINS: Plugin[] = [
 
 /** Name of the Popup being edited, read by the header and Layers through context so `overrides` stay stable while it changes. */
 const PageSettingsContext = createContext<PageSettingsDialogProps | null>(null);
+
+/** Opens Save as Template; read through context so `overrides` stay stable. */
+const SaveTemplateContext = createContext<{ open: () => void } | null>(null);
+function SaveTemplateHeaderButton() {
+  const value = useContext(SaveTemplateContext);
+  if (!value) return null;
+  return (
+    <Button variant="outline" size="sm" onClick={value.open} aria-label="Save as Template" title="Save as Template" data-save-template-trigger="">
+      <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+      <span className="hidden 2xl:inline">Save as Template</span>
+    </Button>
+  );
+}
 function PageSettingsHeaderButton() {
   const value = useContext(PageSettingsContext);
   return value ? <PageSettingsButton {...value} /> : null;

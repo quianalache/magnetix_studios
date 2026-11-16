@@ -39,6 +39,10 @@ export const PUBLIC_PATHS = [
   // it was meant to be public, but nothing told the middleware that. Added
   // here the same way "/f" (public forms) already is.
   "/p",
+  // Saved Page Template preview (2026-11-16): the page itself allows only a
+  // signed-in member of the template's workspace or a signed capture token,
+  // and 404s for everyone else — public here so the screenshot pass can load it.
+  "/page-template-preview",
   "/api/forms",
   "/api/auth/signup",
   // Workflow Builder step worker — QStash callback, signature-verified inside

@@ -33,7 +33,7 @@ interface ContextsResponse {
   contexts: CheckoutStepContext[];
   autoConfigId: string | null;
   pageInFunnel: boolean;
-  resolved: Record<string, { connection: CheckoutStepContext; problem: string | null; view: { format: string; couponsEnabled: boolean; bumps: unknown[] } | null } | null>;
+  resolved: Record<string, { connection: CheckoutStepContext; problem: string | null; replaced?: CheckoutStepContext | null; view: { format: string; couponsEnabled: boolean; bumps: unknown[] } | null } | null>;
 }
 
 export function CheckoutConnectionFieldEditor({ value, onChange }: { value: string | undefined; onChange: (configId: string) => void }) {
@@ -76,8 +76,19 @@ export function CheckoutConnectionFieldEditor({ value, onChange }: { value: stri
   const options = data.contexts.map((c) => ({ value: c.configId, label: `${connectionLabel(c)}${c.funnelStatus !== "published" ? " (draft funnel)" : ""}` }));
   if (configId && !data.contexts.some((c) => c.configId === configId)) options.unshift({ value: configId, label: connection ? connectionLabel(connection) : "Unavailable Checkout Step" });
 
+  const replaced = resolved?.replaced ?? null;
+
   return (
     <div className="space-y-2.5" data-checkout-connection-field="">
+      {replaced && resolved?.view ? (
+        <p className="flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900" role="status" data-checkout-replaced="">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            This block was set to <strong>{connectionLabel(replaced)}</strong>, from a funnel this page isn&apos;t part of. On this page it uses this
+            funnel&apos;s own Checkout instead. Choose a Checkout Step below to make that the saved setting.
+          </span>
+        </p>
+      ) : null}
       {connection ? (
         <div className="border-primary/30 bg-primary/5 space-y-2 rounded-lg border p-2.5 text-xs">
           <p className="flex items-start gap-1.5">

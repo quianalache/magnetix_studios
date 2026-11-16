@@ -4,7 +4,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { PageDoc } from "@/types/pages-funnels";
-import { PUCK_CONTENT_MAX_DEPTH, encodePuckData, isPuckData, type EncodedPuckData } from "@/lib/pages-funnels/puck-storage";
+import { PUCK_CONTENT_MAX_DEPTH, decodeStoredPuckData, encodePuckData, isPuckData, type EncodedPuckData } from "@/lib/pages-funnels/puck-storage";
+import { remapCheckoutConfigIds } from "@/lib/pages-funnels/checkout-block";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 import {
   encodePopupMapForStorage,
@@ -71,7 +72,7 @@ const tooLarge = (error: string): PuckPersistenceResult => ({ ok: false, error, 
  * to write, or the clear error to return instead of letting Firestore fail
  * generically.
  */
-function preparePageWrite(
+export function preparePageWrite(
   data: PuckData,
   popups: unknown,
   currentDoc: Record<string, unknown>,
@@ -360,4 +361,34 @@ export async function duplicatePuckPage(
     ...(src.readingResult ? { readingResult: src.readingResult } : {}),
   });
   return { ok: true, pageId: ref.id };
+}
+
+/**
+ * Re-point a page's EXPLICIT Checkout block connections (draft content and
+ * draft Popups) — Duplicate Step (2026-11-16 fix): the copied page of a copied
+ * Checkout step must use the copy's own new checkout, not the original step's.
+ * Only ids in `map` change; automatic blocks and every other id are left as is.
+ * Returns how many blocks changed. Never touches the published copy (a page
+ * copied by Duplicate Step is a new draft with no published copy).
+ */
+export async function remapPageCheckoutConfigs(subAccountId: string, pageId: string, map: Record<string, string>): Promise<number> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return 0;
+  const remap = (id: string) => map[id] ?? id;
+  const decoded = owned.doc.puckDraftData != null ? decodeStoredPuckData(owned.doc.puckDraftData as never) : null;
+  const page = decoded?.ok ? remapCheckoutConfigIds(decoded.data, remap) : { data: null, changed: 0 };
+  const popups = normalizePopupMap(owned.doc.puckDraftPopups);
+  let popupChanges = 0;
+  const nextPopups: PopupDefinitionMap = {};
+  for (const [id, popup] of Object.entries(popups)) {
+    const r = remapCheckoutConfigIds(popup.content, remap);
+    popupChanges += r.changed;
+    nextPopups[id] = { ...popup, content: r.data };
+  }
+  if (!page.changed && !popupChanges) return 0;
+  const patch: Record<string, unknown> = {};
+  if (page.changed && page.data) patch.puckDraftData = encodePuckData(page.data);
+  if (popupChanges) patch.puckDraftPopups = encodePopupMapForStorage(nextPopups);
+  await owned.ref.update(patch);
+  return page.changed + popupChanges;
 }

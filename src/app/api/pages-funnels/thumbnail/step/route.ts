@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { qstashIsConfigured, verifyQStashSignature } from "@/lib/automations/qstash";
 import { capturePageThumbnail } from "@/lib/server/pages-funnels/page-thumbnail-service";
+import { captureTemplatePreview } from "@/lib/server/pages-funnels/page-template-service";
 
 export const dynamic = "force-dynamic";
 // Cold start downloads the Chromium pack (~10–20 s) before the ~5 s capture.
@@ -24,10 +25,16 @@ export async function POST(request: Request) {
   if (!(await verifyQStashSignature(signature, raw))) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 
   let pageId: unknown;
+  let templateId: unknown;
   try {
-    pageId = (JSON.parse(raw) as { pageId?: unknown }).pageId;
+    ({ pageId, templateId } = JSON.parse(raw) as { pageId?: unknown; templateId?: unknown });
   } catch {
     return NextResponse.json({ ok: false, reason: "bad_body" });
+  }
+  // Saved Page Templates (2026-11-16): the same capture, for a template's own preview.
+  if (typeof templateId === "string") {
+    const outcome = await captureTemplatePreview(templateId);
+    return NextResponse.json({ ok: outcome.status !== "failed", status: outcome.status, ...(outcome.reason ? { reason: outcome.reason } : {}) });
   }
   if (typeof pageId !== "string") return NextResponse.json({ ok: false, reason: "bad_body" });
   const outcome = await capturePageThumbnail(pageId);

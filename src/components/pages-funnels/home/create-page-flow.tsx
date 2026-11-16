@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Check, LayoutTemplate, Loader2, Sparkles, SquareDashedMousePointer, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { createPage } from "@/lib/firestore/pages-funnels";
-import { PAGE_TEMPLATES, getTemplate } from "@/lib/pages-funnels/templates";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/system/page-shell";
 import { PageHeader } from "@/components/system/page-header";
 import { OptionSelect } from "@/components/system/option-select";
-import { Tag } from "@/components/system/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CreateWithAiFlow } from "@/components/pages-funnels/create-with-ai-flow";
 import { PAGE_TYPE_ICONS } from "@/components/pages-funnels/home/page-type-icons";
-import type { PageGoal, PageOrigin, PageType } from "@/types/pages-funnels";
+import { MyTemplates } from "@/components/pages-funnels/templates/my-templates";
+import { createPageFromTemplate } from "@/lib/pages-funnels/page-templates-client";
+import { describeRetainedConnections } from "@/lib/pages-funnels/page-templates";
+import type { PageTemplateSummary } from "@/types/page-templates";
+import type { PageGoal, PageType } from "@/types/pages-funnels";
 import { PAGE_GOAL_LABELS, PAGE_TYPE_LABELS } from "@/types/pages-funnels";
 
 /** The page types offered when creating a page (unchanged from the previous library). */
@@ -45,13 +47,15 @@ type CreateMethod = "blank" | "template" | "ai";
  */
 export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; onCreated: (id: string) => void }) {
   const { user } = useAuth();
-  const { subAccountId, agencyId } = useSubAccount();
+  const { subAccountId, agencyId, isAdmin } = useSubAccount();
   const [method, setMethod] = useState<CreateMethod>("ai");
   const [pageType, setPageType] = useState<PageType>("landing");
-  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [template, setTemplate] = useState<PageTemplateSummary | null>(null);
   const [name, setName] = useState("New Page");
   const [goal, setGoal] = useState<PageGoal>("lead_generation");
   const [creating, setCreating] = useState(false);
+  // Synchronous guard: a double click must never create two pages.
+  const submitting = useRef(false);
 
   if (method === "ai") {
     return (
@@ -59,47 +63,67 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
     );
   }
 
-  function pickPageType(type: PageType, opts?: { fromTemplate?: string }) {
+  function pickPageType(type: PageType) {
     setPageType(type);
+    setTemplate(null);
     // A Reading Result Page starts from its own ready-made New Builder layout.
     if (type === "reading_result") {
       setMethod("blank");
       setGoal("confirmation");
+    } else if (method === "template") {
+      setMethod("blank");
     }
-    if (opts?.fromTemplate) {
-      setMethod("template");
-      setTemplateId(opts.fromTemplate);
-      setName(getTemplate(opts.fromTemplate)?.name ?? PAGE_TYPE_LABELS[type]);
-    } else {
-      setTemplateId(null);
-      setName(PAGE_TYPE_LABELS[type]);
+    setName(PAGE_TYPE_LABELS[type]);
+  }
+
+  /** My Templates: a saved design fills Page Setup (its type and goal; the name stays editable). */
+  function pickTemplate(t: PageTemplateSummary) {
+    setMethod("template");
+    setTemplate(t);
+    setPageType(t.pageType);
+    setGoal(t.goal);
+    setName(t.name.slice(0, 60));
+    // Phones and tablets: Page Setup sits below the choices — bring it into view.
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      window.setTimeout(() => document.getElementById("page-setup-heading")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     }
   }
 
   async function handleContinue() {
-    if (!user || !agencyId || !name.trim() || creating) return;
+    if (!user || !agencyId || !name.trim() || creating || submitting.current) return;
+    if (method === "template" && !template) return;
+    submitting.current = true;
     setCreating(true);
     try {
-      const origin: PageOrigin = method === "template" ? "template" : "blank";
-      const template = templateId ? getTemplate(templateId) : undefined;
+      if (method === "template" && template) {
+        // Server-side: a new independent Draft page from the saved design.
+        const created = await createPageFromTemplate({ subAccountId, templateId: template.id, name: name.trim(), goal });
+        const note = describeRetainedConnections(created.connections);
+        toast.success(`Page created from “${template.name}”`, {
+          description: [note.kept, note.checkout].filter(Boolean).join(" ") || "It's a new draft. Nothing changes on the original page or the template.",
+          duration: note.kept || note.checkout ? 12_000 : 5_000,
+        });
+        onCreated(created.pageId);
+        return;
+      }
       const id = await createPage({ agencyId, subAccountId }, user.uid, {
         name: name.trim(),
         pageType,
         goal,
-        origin,
-        templateId: templateId ?? null,
-        blocks: template?.blocks(),
+        origin: "blank",
+        templateId: null,
       });
       toast.success("Page created");
       onCreated(id);
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't create the page. Try again.");
+      toast.error(err instanceof Error && method === "template" ? err.message : "Couldn't create the page. Try again.");
+      submitting.current = false;
       setCreating(false);
     }
   }
 
-  const selectedTemplate = templateId ? getTemplate(templateId) : undefined;
+  const selectedTemplate = method === "template" ? template : null;
 
   return (
     <PageShell width="wide">
@@ -116,7 +140,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
         <div className="flex min-w-0 flex-1 flex-col gap-8">
           <div className="grid gap-3 sm:grid-cols-3">
             <MethodCard icon={SquareDashedMousePointer} title="Start Blank" description="Build from scratch with drag-and-drop blocks." selected={method === "blank"} onClick={() => setMethod("blank")} />
-            <MethodCard icon={LayoutTemplate} title="Use a Template" description="Start from a proven page design and customize it." selected={method === "template"} onClick={() => setMethod("template")} />
+            <MethodCard icon={LayoutTemplate} title="Use a Template" description="Start from a page design saved in this workspace." selected={method === "template"} onClick={() => setMethod("template")} />
             <MethodCard icon={Sparkles} title="Build with AI" description="Generate an editable first draft using Magnetix AI." selected={false} onClick={() => setMethod("ai")} />
           </div>
 
@@ -148,44 +172,22 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
             </div>
           </section>
 
-          <section aria-labelledby="create-templates-heading" className="flex flex-col gap-3">
-            <h2 id="create-templates-heading" className="text-body font-semibold">Popular Templates</h2>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {PAGE_TEMPLATES.map((template) => {
-                const on = templateId === template.id;
-                return (
-                  <button
-                    key={template.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => pickPageType(template.pageType, { fromTemplate: template.id })}
-                    className={cn(
-                      "flex flex-col overflow-hidden rounded-xl border text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      on ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/40",
-                    )}
-                  >
-                    <span className="flex h-24 items-center justify-center bg-tint-violet text-primary">
-                      <LayoutTemplate className="size-6" aria-hidden="true" />
-                    </span>
-                    <span className="flex flex-col gap-1 p-3">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-body-sm font-semibold">{template.name}</span>
-                        {template.badge ? <Tag color="gray">{template.badge}</Tag> : null}
-                      </span>
-                      <span className="text-caption text-muted-foreground">{template.description}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          <MyTemplates
+            subAccountId={subAccountId}
+            canManage={isAdmin}
+            selectedId={selectedTemplate?.id ?? null}
+            onSelect={pickTemplate}
+            onDeleted={(id) => {
+              if (template?.id === id) setTemplate(null);
+            }}
+          />
         </div>
 
         {/* Page Setup — visible at every width (below 1024px it follows the choices). */}
         <aside aria-labelledby="page-setup-heading" className="w-full shrink-0 rounded-card border border-border bg-card p-5 shadow-card lg:sticky lg:top-6 lg:w-80">
           <h2 id="page-setup-heading" className="text-body font-semibold">Page Setup</h2>
           <p className="mb-4 text-caption text-muted-foreground">
-            {method === "template" && selectedTemplate ? `Template: ${selectedTemplate.name}` : `Type: ${PAGE_TYPE_LABELS[pageType]}`}
+            {selectedTemplate ? `Template: ${selectedTemplate.name} · ${PAGE_TYPE_LABELS[selectedTemplate.pageType] ?? "Page"}` : method === "template" ? "Choose a template below" : `Type: ${PAGE_TYPE_LABELS[pageType]}`}
           </p>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
@@ -201,7 +203,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
               You can change everything after the page is created. To use the page in a funnel, add it from the funnel&apos;s steps.
             </p>
           </div>
-          <Button className="mt-5 w-full" size="lg" onClick={handleContinue} disabled={creating || !name.trim()}>
+          <Button className="mt-5 w-full" size="lg" onClick={handleContinue} disabled={creating || !name.trim() || (method === "template" && !selectedTemplate)}>
             {creating ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
             Continue
           </Button>

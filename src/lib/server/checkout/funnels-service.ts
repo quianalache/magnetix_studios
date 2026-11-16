@@ -6,7 +6,7 @@ import { CheckoutError, agencyIdFor, assertId } from "./common";
 import { createStepCheckoutConfig, deleteCheckoutConfig, getCheckoutConfigDoc, saveStepCheckoutConfig } from "./config-service";
 import { listWorkspacePages } from "./pages";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
-import { duplicatePuckPage } from "@/lib/server/pages-funnels-puck-service";
+import { duplicatePuckPage, remapPageCheckoutConfigs } from "@/lib/server/pages-funnels-puck-service";
 import { loadPagesLibrary } from "@/lib/server/pages-funnels/library-service";
 import { normalizeStepOffer, sanitizeStepOfferInput, savedOfferAttention } from "@/lib/checkout/funnel-offer";
 import { offerFacts, validateStepOffer } from "./funnel-offer-service";
@@ -455,6 +455,12 @@ export async function duplicateStep(input: { subAccountId: string; funnelId: str
           notes.push("The checkout settings couldn't be copied as they are (an Offer or Workflow may no longer be available), so the copy starts with blank checkout settings.");
         }
       }
+    }
+    // The copied page belongs to the copy: its explicit Checkout blocks that
+    // pointed at the ORIGINAL step's checkout now point at the copy's own
+    // (2026-11-16 fix — previously the copy kept selling through the original).
+    if (copyPage && created.pageId && step.type === "checkout" && step.checkoutConfigId && created.checkoutConfigId) {
+      await remapPageCheckoutConfigs(input.subAccountId, created.pageId, { [step.checkoutConfigId]: created.checkoutConfigId });
     }
     // Place the copy right after the original.
     const ids = (await listSteps(funnel.id)).map((s) => s.id).filter((id) => id !== created.id);
