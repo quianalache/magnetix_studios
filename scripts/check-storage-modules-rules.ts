@@ -149,6 +149,35 @@ async function main() {
       await denied(put(owner, p));
     }
   });
+  // Storage coverage audit (2026-11-17): the New course wizard uploads cover / description images
+  // before the course exists, into the literal "new" folder (course-wizard.tsx courseIdForUploads).
+  await check("Standalone Courses: New course wizard folder — admin and agency owner can add", async () => {
+    await put(admin, `standalone-courses/${SA}/new/cover-1.png`);
+    await put(owner, `standalone-courses/${SA}/new/lesson-1.png`);
+  });
+  await check("Standalone Courses: New course wizard folder — everyone else refused", async () => {
+    for (const s of [anon, noAccess, sibling, foreignAdmin, foreignOwner, collab, removed, inactive]) await denied(put(s, `standalone-courses/${SA}/new/cover-2.png`));
+    await denied(put(admin, `standalone-courses/${SA2}/new/cover-3.png`));
+    await denied(put(admin, `standalone-courses/${SA}/new/x.html`, "text/html"));
+  });
+  await check("Standalone Courses: New course wizard folder — no overwrite / delete", async () => {
+    await bucket.file(`standalone-courses/${SA}/new/kept.png`).save(Buffer.from([5, 5]), { contentType: "image/png" });
+    await denied(put(owner, `standalone-courses/${SA}/new/kept.png`));
+    await denied(deleteObject(ref(owner, `standalone-courses/${SA}/new/kept.png`)));
+  });
+  await check("Overlap: 'agency' used as a workspace id in a workspace-shaped path is refused", async () => {
+    for (const p of [`broadcasts/agency/d/x.png`, `community/agency/g/x.png`, `standalone-courses/agency/new/x.png`, `course-offers/agency/o/x.png`, `forms/agency/f/x.png`, `pages-funnels/agency/p/x.png`, `content-library/agency/draft-template/image-1.png`, `qr-codes/agency/3f2c8a1e-9b7d-4c2e-8f1a-0d6b5e4c3a21/logo-1.png`]) {
+      await denied(put(owner, p));
+    }
+  });
+  await check("Server-only folders refuse browser writes and reads (default deny)", async () => {
+    for (const p of [`community/${SA}/post-images/m1/x.png`, `community/${SA}/voice-notes/m1/x.webm`, `community/${SA}/members/m1/avatar-1.png`, `media-library/${SA}/a1/x.png`, `media-public/${SA}/a1/x.png`, `page-thumbnails/${SA}/p1/x.jpg`, `page-templates/${SA}/t1/x.jpg`, `ytcs/${SA}/voice-notes/x.webm`, `portalBranding/${SA}/logo-1.png`]) {
+      await denied(put(owner, p));
+    }
+    await bucket.file(`media-library/${SA}/a1/private.png`).save(Buffer.from([1]), { contentType: "image/png" });
+    await denied(getBytes(ref(owner, `media-library/${SA}/a1/private.png`)));
+    await denied(getBytes(ref(anon, `media-library/${SA}/a1/private.png`)));
+  });
   await check("Agency-scope files stay publicly readable", async () => {
     await bucket.file(`community/agency/${AG}/g/logo.png`).save(Buffer.from([9, 9]), { contentType: "image/png" });
     assert.equal((await getBytes(ref(anon, `community/agency/${AG}/g/logo.png`))).byteLength, 2);

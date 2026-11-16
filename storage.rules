@@ -171,9 +171,14 @@ service firebase.storage {
     // `application/pdf` is allowed here too so this rule stays an honest
     // description of what's actually stored, and so a future CLIENT
     // uploader for a lesson resource wouldn't need a second rule).
+    // "new" = the New course wizard, which uploads the cover / description
+    // images before the course is saved (course-wizard.tsx courseIdForUploads);
+    // same role that may create courses (workspace admin or agency owner).
     match /standalone-courses/{subAccountId}/{courseId}/{fileName} {
       allow read: if true;
-      allow create: if canAddWorkspaceRecordAsset(subAccountId, "standaloneCourses", courseId)
+      allow create: if (courseId == "new"
+          ? (activeUser() && isWorkspaceEditor(subAccountId))
+          : canAddWorkspaceRecordAsset(subAccountId, "standaloneCourses", courseId))
         && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && (request.resource.contentType.matches('image/.*')
