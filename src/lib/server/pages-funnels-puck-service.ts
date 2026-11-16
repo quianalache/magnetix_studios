@@ -3,7 +3,11 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
 import { getAdminDb } from "@/lib/firebase/admin";
-import type { PageDoc } from "@/types/pages-funnels";
+import { DEFAULT_PAGE_SEO, PAGE_GOAL_LABELS, PAGE_TYPE_LABELS, type PageDoc, type PageGoal, type PageType } from "@/types/pages-funnels";
+import { buildReadingResultStarterData } from "@/lib/pages-funnels/puck/reading-result-template";
+import { DEFAULT_READING_RESULT_PAGE_SETTINGS, READING_SAMPLE_KINDS, type ReadingResultPageSettings, type ReadingSampleKind } from "@/types/reading-blocks";
+import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
+import { getChartDesignSet } from "@/lib/server/chart-design-set-service";
 import { PUCK_CONTENT_MAX_DEPTH, decodeStoredPuckData, encodePuckData, isPuckData, type EncodedPuckData } from "@/lib/pages-funnels/puck-storage";
 import { remapCheckoutConfigIds } from "@/lib/pages-funnels/checkout-block";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
@@ -391,4 +395,92 @@ export async function remapPageCheckoutConfigs(subAccountId: string, pageId: str
   if (popupChanges) patch.puckDraftPopups = encodePopupMapForStorage(nextPopups);
   await owned.ref.update(patch);
   return page.changed + popupChanges;
+}
+
+// ── Security hardening (2026-11-16): page writes that used to go straight from
+// the browser to Firestore. The Firestore rules now refuse every client create
+// and update of `pages/{id}` (design, publish state and metadata are server-
+// owned), so these two operations run here, behind the same workspace-admin
+// check as Save Draft / Publish.
+
+function pageSlug(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 60) || "page"
+  );
+}
+
+/**
+ * Create Page (Start Blank / a page type) — the same document the browser used
+ * to write: a Draft with no published copy; a Reading Result Page starts from
+ * its ready-made New Builder layout and default Reading settings. The
+ * workspace's agency comes from the sub-account record, never the request.
+ */
+export async function createPuckPage(input: {
+  subAccountId: string;
+  uid: string;
+  name: unknown;
+  pageType: unknown;
+  goal: unknown;
+}): Promise<{ ok: true; pageId: string } | Exclude<PuckPersistenceResult, { ok: true }>> {
+  const nameProblem = pageNameProblem(input.name);
+  if (nameProblem) return { ok: false, error: nameProblem, status: 400 };
+  if (typeof input.pageType !== "string" || !(input.pageType in PAGE_TYPE_LABELS)) return { ok: false, error: "Choose a page type.", status: 400 };
+  if (typeof input.goal !== "string" || !(input.goal in PAGE_GOAL_LABELS)) return { ok: false, error: "Choose a goal.", status: 400 };
+  const db = getAdminDb();
+  const sub = await db.doc(`subAccounts/${input.subAccountId}`).get();
+  if (!sub.exists) return { ok: false, error: "Workspace not found", status: 404 };
+  const name = (input.name as string).trim();
+  const pageType = input.pageType as PageType;
+  const now = FieldValue.serverTimestamp();
+  const ref = db.collection(PAGES_COLLECTION).doc();
+  await ref.set({
+    name,
+    slug: pageSlug(name),
+    pageType,
+    goal: input.goal as PageGoal,
+    status: "draft",
+    origin: "blank",
+    funnelId: null,
+    blocks: [],
+    seo: { ...DEFAULT_PAGE_SEO, title: name },
+    templateId: null,
+    agencyId: (sub.get("agencyId") as string | undefined) ?? null,
+    subAccountId: input.subAccountId,
+    createdByUid: input.uid,
+    createdAt: now,
+    updatedAt: now,
+    publishedAt: null,
+    ...(pageType === "reading_result"
+      ? { puckDraftData: encodePuckData(buildReadingResultStarterData()), puckDraftUpdatedAt: now, readingResult: DEFAULT_READING_RESULT_PAGE_SETTINGS }
+      : {}),
+  });
+  return { ok: true, pageId: ref.id };
+}
+
+/**
+ * Reading Result Page → Reading settings (Chart Design + builder sample).
+ * Same behavior as before (applies immediately, outside draft / publish);
+ * only the writer moved to the server. The Chart Design must be this
+ * workspace's own (or null = inherit).
+ */
+export async function updateReadingResultPageSettings(subAccountId: string, pageId: string, raw: unknown): Promise<PuckPersistenceResult> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return owned;
+  if (owned.doc.pageType !== "reading_result") return { ok: false, error: "Reading settings are only for Reading Result Pages.", status: 400 };
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const sample = r.sample;
+  if (typeof sample !== "string" || !READING_SAMPLE_KINDS.includes(sample as ReadingSampleKind)) return { ok: false, error: "Choose a sample chart.", status: 400 };
+  const chartDesignSetId = r.chartDesignSetId ?? null;
+  if (chartDesignSetId !== null) {
+    if (typeof chartDesignSetId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(chartDesignSetId) || !(await getChartDesignSet(subAccountId, chartDesignSetId))) {
+      return { ok: false, error: "That Chart Design isn't available in this workspace.", status: 400 };
+    }
+  }
+  const settings: ReadingResultPageSettings = { chartDesignSetId: chartDesignSetId as string | null, sample: sample as ReadingSampleKind };
+  await owned.ref.update({ readingResult: settings, updatedAt: FieldValue.serverTimestamp() });
+  return { ok: true };
 }

@@ -6,7 +6,7 @@ import {
 } from "firebase/app";
 import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -47,6 +47,8 @@ function getFirebaseApp(): FirebaseApp {
  */
 const AUTH_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
 const FIRESTORE_EMULATOR = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST;
+/** Local QA only (2026-11-16): without it, a local browser upload would go to the real bucket. */
+const STORAGE_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_HOST;
 
 export function getFirebaseAuth(): Auth {
   if (!_auth) {
@@ -70,6 +72,10 @@ export function getFirebaseDb(): Firestore {
 export function getFirebaseStorage(): FirebaseStorage {
   if (!_storage) {
     _storage = getStorage(getFirebaseApp());
+    if (STORAGE_EMULATOR) {
+      const [host, port] = STORAGE_EMULATOR.split(":");
+      connectStorageEmulator(_storage, host, Number(port));
+    }
   }
   return _storage;
 }

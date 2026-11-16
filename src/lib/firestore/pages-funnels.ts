@@ -1,6 +1,4 @@
-import { encodePuckData } from "@/lib/pages-funnels/puck-storage";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -8,8 +6,6 @@ import {
   getDocs,
   onSnapshot,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -18,23 +14,10 @@ import type { TenantScope } from "@/types";
 import type {
   CreatePageInput,
   PageDoc,
-  PageSeo,
 } from "@/types/pages-funnels";
-import { DEFAULT_PAGE_SEO } from "@/types/pages-funnels";
-import { DEFAULT_READING_RESULT_PAGE_SETTINGS, type ReadingResultPageSettings } from "@/types/reading-blocks";
-import { buildReadingResultStarterData } from "@/lib/pages-funnels/puck/reading-result-template";
+import type { ReadingResultPageSettings } from "@/types/reading-blocks";
 
 const PAGES = "pages";
-
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
-      .slice(0, 60) || "page"
-  );
-}
 
 function toMillis(v: unknown): number {
   if (!v) return 0;
@@ -119,62 +102,42 @@ export async function getPage(id: string): Promise<PageDoc | null> {
   return { id: snap.id, ...(snap.data() as Omit<PageDoc, "id">) };
 }
 
+/**
+ * Create Page — done on the server since the 2026-11-16 security hardening
+ * (the Firestore rules no longer let the browser create or update pages).
+ * Signature kept for existing callers; the workspace's agency, the author and
+ * the Reading Result starter layout are set server-side.
+ */
 export async function createPage(
   scope: TenantScope,
-  createdByUid: string,
+  _createdByUid: string,
   input: CreatePageInput
 ): Promise<string> {
-  const ref = await addDoc(collection(getFirebaseDb(), PAGES), {
-    name: input.name,
-    slug: slugify(input.name),
-    pageType: input.pageType,
-    goal: input.goal,
-    status: "draft",
-    origin: input.origin,
-    funnelId: null,
-    blocks: input.blocks ?? [],
-    seo: { ...DEFAULT_PAGE_SEO, title: input.name },
-    templateId: input.templateId ?? null,
-    agencyId: scope.agencyId,
-    subAccountId: scope.subAccountId,
-    createdByUid,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    publishedAt: null,
-    // A Reading Result Page (2026-10-21) is New Builder-only, so it starts
-    // with a New Builder draft — which also routes it to the New Builder.
-    ...(input.pageType === "reading_result"
-      ? {
-          puckDraftData: encodePuckData(buildReadingResultStarterData()),
-          puckDraftUpdatedAt: serverTimestamp(),
-          readingResult: DEFAULT_READING_RESULT_PAGE_SETTINGS,
-        }
-      : {}),
-  });
-  return ref.id;
+  const json = await pageSettingsRequest(
+    { action: "create", subAccountId: scope.subAccountId, name: input.name, pageType: input.pageType, goal: input.goal },
+    "Couldn't create the page."
+  );
+  if (!json.pageId) throw new Error("Couldn't create the page.");
+  return json.pageId;
 }
 
-/** Reading Result Page defaults — Chart Design + builder sample (2026-10-21). */
+/** Reading Result Page defaults — Chart Design + builder sample (2026-10-21). Server-side since 2026-11-16. */
 export async function updateReadingResultSettings(id: string, settings: ReadingResultPageSettings): Promise<void> {
-  await updateDoc(doc(getFirebaseDb(), PAGES, id), {
-    readingResult: { chartDesignSetId: settings.chartDesignSetId ?? null, sample: settings.sample },
-    updatedAt: serverTimestamp(),
-  });
+  await pageSettingsRequest(
+    { action: "readingResult", pageId: id, settings: { chartDesignSetId: settings.chartDesignSetId ?? null, sample: settings.sample } },
+    "Couldn't save Reading settings."
+  );
 }
 
-/** Persists the full block array — the editor calls this (debounced by the
- *  caller) on every content/reorder edit while in "draft" review, and again
- *  explicitly for "Save Draft". */
-export async function updatePageMeta(
-  id: string,
-  data: Partial<Pick<PageDoc, "name" | "seo" | "funnelId">>
-): Promise<void> {
-  const patch: Record<string, string | PageSeo | null> = { ...data };
-  if (data.name) patch.slug = slugify(data.name);
-  await updateDoc(doc(getFirebaseDb(), PAGES, id), {
-    ...patch,
-    updatedAt: serverTimestamp(),
+async function pageSettingsRequest(body: Record<string, unknown>, fallback: string): Promise<{ pageId?: string }> {
+  const res = await fetch("/api/pages-funnels/puck/page-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
+  const json = (await res.json().catch(() => ({}))) as { pageId?: string; error?: string };
+  if (!res.ok) throw new Error(json.error ?? fallback);
+  return json;
 }
 
 /**

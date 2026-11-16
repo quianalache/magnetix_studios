@@ -1256,14 +1256,15 @@ service cloud.firestore {
     match /pages/{pageId} {
       allow read: if resource.data.status == "published" ||
         canAccessSub(resource.data.subAccountId, resource.data.agencyId);
-      allow create: if canAdminSub(
-        request.resource.data.subAccountId,
-        request.resource.data.agencyId
-      );
-      allow update: if canAdminSub(
-        resource.data.subAccountId,
-        resource.data.agencyId
-      ) && tenantFieldsLockedOnUpdate();
+      // Security hardening (2026-11-16): every page create and update is
+      // server-only. The design (puckDraftData / puckPublishedData / both
+      // Popup maps / legacy blocks), publish state and timestamps, Page
+      // Settings, name, Reading Result settings and thumbnails are all written
+      // by authenticated Admin-SDK routes that check the caller's workspace
+      // role and validate the content (Save Draft, Publish, page-settings
+      // actions incl. create + readingResult, templates, duplicate, funnels).
+      // The browser could previously rewrite any of these directly.
+      allow create, update: if false;
       allow delete: if canAdminSub(
         resource.data.subAccountId,
         resource.data.agencyId

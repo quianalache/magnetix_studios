@@ -12,6 +12,23 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // Page Builder image uploads (2026-11-16): mirrors Firestore's canAdminSub
+    // for the workspace that owns the page. Cross-service reads (firestore.get
+    // / firestore.exists) — the same membership records the Firestore rules use.
+    function canAddPageAsset(subAccountId, pageId) {
+      return request.auth != null
+        && request.auth.token.status == "active"
+        && firestore.exists(/databases/(default)/documents/pages/$(pageId))
+        && firestore.get(/databases/(default)/documents/pages/$(pageId)).data.subAccountId == subAccountId
+        && (
+          (request.auth.token.agencyRole == "owner"
+            && request.auth.token.agencyId == firestore.get(/databases/(default)/documents/subAccounts/$(subAccountId)).data.agencyId)
+          || (firestore.exists(/databases/(default)/documents/subAccounts/$(subAccountId)/subAccountMembers/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/subAccounts/$(subAccountId)/subAccountMembers/$(request.auth.uid)).data.status == "active"
+            && firestore.get(/databases/(default)/documents/subAccounts/$(subAccountId)/subAccountMembers/$(request.auth.uid)).data.role == "admin")
+        );
+    }
+
     // Broadcast composer image/video-thumbnail uploads. `allow read: if true`
     // is structurally required here (not just a rubber-stamp copy) — these
     // URLs get embedded in outbound email, fetched by third-party mail
@@ -131,12 +148,22 @@ service firebase.storage {
     // rules, independent path. Public read: a published Puck page
     // (`/p/[pageId]`) is a public route, fetched by visitors with no
     // Firebase session at all, same rationale as every match block above.
+    //
+    // Security hardening (2026-11-16): any signed-in account used to be able
+    // to upload into, overwrite or delete ANY workspace's page folder. Now:
+    // only an active agency owner of the workspace's agency, or an active
+    // admin of that workspace, may ADD a file, and only into the folder of a
+    // page that really belongs to that workspace (read from Firestore — the
+    // path's ids are never trusted on their own). The builder only ever adds
+    // new, uniquely named files, so overwriting and deleting from the browser
+    // are not allowed at all. Server jobs use the Admin SDK and other folders.
     match /pages-funnels/{subAccountId}/{pageId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if canAddPageAsset(subAccountId, pageId)
+        && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow update, delete: if false;
     }
 
     // Media Library direct uploads (Assets corrections, 2026-09-29). Files
