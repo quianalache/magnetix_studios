@@ -2,7 +2,8 @@ rules_version = '2';
 
 // Firebase Storage rules. Browser uploads (staff only — community members,
 // students and buyers are not Firebase users) go to Pages & Funnels, Broadcast,
-// Community, Standalone Course, Course Offer and Form folders. Since the
+// Community, Standalone Course, Course Offer, Form, Content Library and QR Code
+// folders. Since the
 // 2026-11-16 hardening each folder allows only CREATE of a new file, only by a
 // verified account with the right role in the workspace that owns the folder
 // (checked against Firestore membership + the owning record); no browser
@@ -66,6 +67,36 @@ service firebase.storage {
       return activeUser()
         && (ownsWorkspaceAgency(subAccountId) || isActiveMember(subAccountId));
     }
+    // Content Library + QR Codes (2026-11-17 repair — these folders had no
+    // rule, so every browser upload failed). Same model: staff of the workspace
+    // with the edit role the records already require (admin or agency owner,
+    // matching firestore.rules for contentTemplates / qrCodes).
+    function isWorkspaceEditor(subAccountId) {
+      return ownsWorkspaceAgency(subAccountId) || isActiveAdmin(subAccountId);
+    }
+    function isWorkspaceStaff(subAccountId) {
+      return activeUser() && (ownsWorkspaceAgency(subAccountId) || isActiveMember(subAccountId));
+    }
+    // A saved template must be this workspace's; an unsaved one uploads to the
+    // fixed "draft-template" folder (the dialog's own convention).
+    function canAddContentLibraryAsset(subAccountId, docId) {
+      return activeUser()
+        && (docId == "draft-template"
+          || (firestore.exists(/databases/(default)/documents/contentTemplates/$(docId))
+            && firestore.get(/databases/(default)/documents/contentTemplates/$(docId)).data.subAccountId == subAccountId))
+        && isWorkspaceEditor(subAccountId);
+    }
+    // A saved QR code must be this workspace's; the New QR code page uploads
+    // before the record exists, into a random UUID folder (real QR ids are
+    // 20-character Firestore ids, never UUID-shaped).
+    function canAddQrAsset(subAccountId, qrId) {
+      return activeUser()
+        && (qrId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+          || (firestore.exists(/databases/(default)/documents/qrCodes/$(qrId))
+            && firestore.get(/databases/(default)/documents/qrCodes/$(qrId)).data.subAccountId == subAccountId))
+        && isWorkspaceEditor(subAccountId);
+    }
+
     // Forms are top-level records that name their workspace.
     function canAddFormAsset(subAccountId, formId) {
       return activeUser()
@@ -217,6 +248,32 @@ service firebase.storage {
         && resource == null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
+    // Content Library template-description images (2026-11-17 repair).
+    // Read: staff of the workspace only (the app reads the download link
+    // right after upload; the links it stores keep working as before).
+    match /content-library/{subAccountId}/{docId}/{fileName} {
+      allow read: if isWorkspaceStaff(subAccountId);
+      allow create: if canAddContentLibraryAsset(subAccountId, docId)
+        && resource == null
+        && fileName.matches('image-.*')
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
+    // QR Code logo (≤ 2 MB) and background (≤ 5 MB) images (2026-11-17 repair).
+    match /qr-codes/{subAccountId}/{qrId}/{fileName} {
+      allow read: if isWorkspaceStaff(subAccountId);
+      allow create: if canAddQrAsset(subAccountId, qrId)
+        && resource == null
+        && request.resource.contentType.matches('image/.*')
+        && (
+          (fileName.matches('logo-.*') && request.resource.size < 2 * 1024 * 1024)
+          || (fileName.matches('background-.*') && request.resource.size < 5 * 1024 * 1024)
+        );
       allow update, delete: if false;
     }
 
