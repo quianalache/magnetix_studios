@@ -77,14 +77,14 @@ service firebase.storage {
     function isWorkspaceStaff(subAccountId) {
       return activeUser() && (ownsWorkspaceAgency(subAccountId) || isActiveMember(subAccountId));
     }
-    // A saved template must be this workspace's; an unsaved one uploads to the
-    // fixed "draft-template" folder (the dialog's own convention).
-    function canAddContentLibraryAsset(subAccountId, docId) {
-      return activeUser()
-        && (docId == "draft-template"
-          || (firestore.exists(/databases/(default)/documents/contentTemplates/$(docId))
-            && firestore.get(/databases/(default)/documents/contentTemplates/$(docId)).data.subAccountId == subAccountId))
-        && isWorkspaceEditor(subAccountId);
+    // Workspace-level check (owner-approved 2026-11-17, Storage audit Option 1):
+    // template images (folder = template id or "draft-template") and content
+    // card images (folder = card id or "draft") share this path shape, and
+    // verifying either record type as well would exceed the two-Firestore-
+    // document limit per evaluation. So any folder inside the workspace's own
+    // area, for that workspace's editors only. Reads one document.
+    function canAddContentLibraryAsset(subAccountId) {
+      return activeUser() && isWorkspaceEditor(subAccountId);
     }
     // A saved QR code must be this workspace's; the New QR code page uploads
     // before the record exists, into a random UUID folder (real QR ids are
@@ -256,12 +256,13 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
-    // Content Library template-description images (2026-11-17 repair).
+    // Content Library images — template descriptions and content (pipeline)
+    // card descriptions, saved or not yet saved (2026-11-17 repair).
     // Read: staff of the workspace only (the app reads the download link
     // right after upload; the links it stores keep working as before).
     match /content-library/{subAccountId}/{docId}/{fileName} {
       allow read: if isWorkspaceStaff(subAccountId);
-      allow create: if canAddContentLibraryAsset(subAccountId, docId)
+      allow create: if canAddContentLibraryAsset(subAccountId)
         && resource == null
         && fileName.matches('image-.*')
         && request.resource.size < 5 * 1024 * 1024

@@ -2,8 +2,10 @@
  * Content Library + QR Code image uploads (2026-11-17 repair) — EMULATOR ONLY.
  * These folders had no Storage rule, so every browser upload failed. Checks
  * the new create-only, workspace-scoped rules with the real client SDK:
- * roles, record ownership, the two "not saved yet" draft folders, file type and
- * size limits, no overwrite / delete, and staff-only reads.
+ * roles, record ownership (QR codes), the "not saved yet" draft folders, file
+ * type and size limits, no overwrite / delete, and staff-only reads. Content
+ * Library is checked at workspace level (owner-approved Option 1, 2026-11-17):
+ * template + content-card images, saved or draft, by that workspace's editors.
  *
  * Run (from the repo root):
  *   echo '{"emulators":{"firestore":{"port":8098},"storage":{"port":9198}},"firestore":{"rules":"firestore.rules"},"storage":{"rules":"storage.rules"}}' > firebase.rules-test.json
@@ -91,13 +93,22 @@ async function main() {
   const inactive = as("admin1", { status: "removed", role: "admin", agencyId: AG, agencyRole: null });
 
   const areas = [
+    // Content Library is checked at workspace level (owner-approved Option 1): no record check.
     {
       name: "Content Library (saved template)", dir: `content-library/${SA}/tpl1`, file: (k: number) => `image-${k}.png`,
-      fake: `content-library/${SA}/no_such_template`, spoof: `content-library/${SA}/tpl_sibling`, otherWs: `content-library/${SA2}/tpl1`, max: 5,
+      fake: null, spoof: null, otherWs: `content-library/${SA2}/tpl1`, max: 5,
     },
     {
       name: "Content Library (unsaved template → draft-template)", dir: `content-library/${SA}/draft-template`, file: (k: number) => `image-${k}.png`,
       fake: null, spoof: null, otherWs: `content-library/${SA2}/draft-template`, max: 5,
+    },
+    {
+      name: "Content Library (saved content card)", dir: `content-library/${SA}/item1`, file: (k: number) => `image-${k}.png`,
+      fake: null, spoof: null, otherWs: `content-library/${SA2}/item1`, max: 5,
+    },
+    {
+      name: "Content Library (new content card → draft)", dir: `content-library/${SA}/draft`, file: (k: number) => `image-${k}.png`,
+      fake: null, spoof: null, otherWs: `content-library/${SA2}/draft`, max: 5,
     },
     {
       name: "QR logo (saved QR)", dir: `qr-codes/${SA}/qr1`, file: (k: number) => `logo-${k}.png`,
@@ -172,6 +183,22 @@ async function main() {
     await denied(put(admin, `content-library/${SA}/tpl1/other-1.png`));
   });
   await check("QR: a non-UUID made-up folder (Firestore-style id) is refused", () => denied(put(admin, `qr-codes/${SA}/AbCdEfGhIjKlMnOpQrSt/logo-1.png`)));
+  await check("Content Library (Option 1): any folder inside the workspace's own area works for its editors, no record needed", async () => {
+    await put(admin, `content-library/${SA}/AbCdEfGhIjKlMnOpQrSt/image-1.png`);
+    await put(owner, `content-library/${SA}/tpl_sibling/image-1.png`);
+  });
+  await check("Content Library (Option 1): naming another workspace's record never reaches that workspace's area", async () => {
+    await denied(put(admin, `content-library/${SA2}/tpl_sibling/image-1.png`));
+    await denied(put(sibling, `content-library/${SA}/tpl_sibling/image-2.png`));
+    await denied(put(foreignOwner, `content-library/${SA}/draft/image-3.png`));
+  });
+  await check("Content Library (Option 1): files stay private to the workspace's staff", async () => {
+    const p = `content-library/${SA}/draft/image-9000.png`;
+    await denied(getBytes(ref(anon, p)));
+    await denied(getBytes(ref(sibling, p)));
+    await denied(getBytes(ref(foreignAdmin, p)));
+    await denied(getBytes(ref(noAccess, p)));
+  });
   await check("16 the stored download link (token URL) still serves the image to anyone", async () => {
     const url = await getDownloadURL(ref(admin, `qr-codes/${SA}/qr1/logo-9000.png`));
     const res = await fetch(url);
