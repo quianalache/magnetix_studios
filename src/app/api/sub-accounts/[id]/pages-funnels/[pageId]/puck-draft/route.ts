@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { savePuckDraft } from "@/lib/server/pages-funnels-puck-service";
+import { versionActor } from "@/lib/server/pages-funnels/page-version-core";
 import type { Data as PuckData } from "@puckeditor/core";
 
 /**
@@ -35,12 +36,22 @@ export async function POST(
     );
   }
 
-  const result = await savePuckDraft(subAccountId, pageId, data, popups as never);
+  // Version History (2026-11-17): Save Draft says it's a manual save (a
+  // history checkpoint); autosave doesn't. `baseRevision` is the draft
+  // revision the editor last saw — a stale one is refused as a conflict.
+  const kind = (body as { kind?: unknown }).kind === "manual" ? "manual" : "auto";
+  const rawRevision = (body as { baseRevision?: unknown }).baseRevision;
+  const baseRevision = typeof rawRevision === "number" && Number.isInteger(rawRevision) && rawRevision >= 0 ? rawRevision : null;
+  const result = await savePuckDraft(subAccountId, pageId, data, popups as never, {
+    kind,
+    baseRevision,
+    actor: await versionActor(access.uid),
+  });
   if (!result.ok) {
     return NextResponse.json(
-      { error: result.error },
+      { error: result.error, ...(result.code ? { code: result.code } : {}) },
       { status: result.status }
     );
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, revision: result.revision });
 }

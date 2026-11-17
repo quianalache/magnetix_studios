@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, Copy, CopyPlus, ExternalLink, Eye, LayoutTemplate, LineChart, MoreHorizontal, Pencil, Target, Trash2 } from "lucide-react";
+import { BarChart3, Copy, CopyPlus, ExternalLink, Eye, History, LayoutTemplate, LineChart, MoreHorizontal, Pencil, Target, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AnalyticsLoadState } from "@/components/analytics/use-page-funnel-analytics";
 import { formatCount, formatPercent, pageConversionRate } from "@/lib/analytics/page-funnel-metrics";
@@ -111,6 +111,10 @@ export function PageCard({
               <>
                 <DropdownMenuItem onClick={onDuplicate}>
                   <CopyPlus aria-hidden="true" /> Duplicate
+                </DropdownMenuItem>
+                {/* Version History (2026-11-17): opens the builder with the panel open. */}
+                <DropdownMenuItem render={<Link href={`${editHref}${editHref.includes("?") ? "&" : "?"}history=1`} />}>
+                  <History aria-hidden="true" /> Version history
                 </DropdownMenuItem>
                 {onSaveAsTemplate ? (
                   <DropdownMenuItem onClick={onSaveAsTemplate}>

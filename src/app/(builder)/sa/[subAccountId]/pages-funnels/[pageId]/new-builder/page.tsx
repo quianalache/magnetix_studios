@@ -144,6 +144,13 @@ export default function NewBuilderPage({
   // Unknown-block safety guard: a page holding block types this build doesn't
   // know (saved by a newer build) is never opened for editing — Puck would
   // drop or mangle them and autosave would write that back.
+  // Pages & Funnels page card → "Version history" opens the editor with the panel open.
+  // Read after hydration (this page also renders on the server, where there is
+  // no URL to read); the editor itself mounts only once the page has loaded.
+  const [openVersionHistory, setOpenVersionHistory] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("history") === "1") setOpenVersionHistory(true);
+  }, []);
   const unknownTypes = useMemo(() => (page ? findUnknownBlockTypesInPage(page) : []), [page]);
   const currentBuilderHref = useMemo(() => {
     if (typeof window === "undefined" || !process.env.NEXT_PUBLIC_APP_URL) return null;
@@ -180,6 +187,8 @@ export default function NewBuilderPage({
       legacySeo={page.seo ?? null}
       pageType={page.pageType}
       currentDesignPreviewUrl={thumbnailShowsCurrentDesign(page) ? (page.thumbnail?.url ?? null) : null}
+      initialDraftRevision={typeof page.puckDraftRevision === "number" ? page.puckDraftRevision : 0}
+      openVersionHistory={openVersionHistory}
       liveUrl={liveUrl}
       initialData={initialData}
       initialPopups={normalizePopupMap(page.puckDraftPopups)}

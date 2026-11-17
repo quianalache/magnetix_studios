@@ -17,6 +17,7 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  History,
   LayoutTemplate,
   Loader2,
   MoreHorizontal,
@@ -68,6 +69,8 @@ import { ActionFieldContext, type ActionFieldContextValue } from "@/components/p
 import { PopupEditorContext } from "@/components/pages-funnels/puck/popup-edit-canvas";
 import { PageSettingsButton, type PageSettingsDialogProps } from "@/components/pages-funnels/puck/page-settings-dialog";
 import { SaveTemplateDialog } from "@/components/pages-funnels/templates/save-template-dialog";
+import { VersionHistoryPanel, type RestoreOutcome } from "@/components/pages-funnels/puck/version-history-panel";
+import type { PageVersionMeta } from "@/lib/pages-funnels/page-versions";
 import type { PageType } from "@/types/pages-funnels";
 import { resolvePageSettings, withPageSettings, type PageSettings } from "@/lib/pages-funnels/page-settings";
 import { applyPopupEditorChange, popupToEditorData } from "@/lib/pages-funnels/popup-editor";
@@ -193,6 +196,10 @@ export interface MagnetixPuckEditorShellProps {
    *  shows the page's current saved design (null when out of date). */
   pageType?: PageType;
   currentDesignPreviewUrl?: string | null;
+  /** Page Version History (2026-11-17): the draft revision when the editor opened. */
+  initialDraftRevision?: number;
+  /** Open Version History right away (the page card's "Version history" action). */
+  openVersionHistory?: boolean;
 }
 
 export function MagnetixPuckEditorShell({
@@ -214,6 +221,8 @@ export function MagnetixPuckEditorShell({
   legacySeo = null,
   pageType = "generic",
   currentDesignPreviewUrl = null,
+  initialDraftRevision = 0,
+  openVersionHistory = false,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [popups, setPopups] = useState<PopupDefinitionMap>(initialPopups ?? {});
@@ -270,6 +279,9 @@ export function MagnetixPuckEditorShell({
   const {
     suspend,
     resume,
+    flushAndSuspend,
+    hasUnsavedChanges,
+    getRevision,
     saveState,
     saveError,
     saveDraft,
@@ -282,7 +294,62 @@ export function MagnetixPuckEditorShell({
     data,
     popups,
     enabled: persistenceEnabled,
+    initialRevision: initialDraftRevision,
   });
+
+  // ── Version History (approved mockups 1–4, 2026-11-17) ──────────────────
+  const [historyOpen, setHistoryOpen] = useState(openVersionHistory);
+  const historyValue = useMemo(() => ({ open: () => setHistoryOpen(true) }), []);
+  // An open panel refreshes after each save / publish.
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  useEffect(() => {
+    if (saveState === "saved") setHistoryRefresh((n) => n + 1);
+  }, [saveState]);
+  const restoreBusy = useRef(false);
+  const handleRestoreVersion = useCallback(
+    async (version: PageVersionMeta): Promise<RestoreOutcome> => {
+      if (restoreBusy.current) return { ok: false, error: "A restore is already running." };
+      restoreBusy.current = true;
+      // 1. Stop autosave and save edits not saved yet, so "Before restore" keeps them.
+      const flushed = await flushAndSuspend();
+      if (!flushed.ok) {
+        restoreBusy.current = false;
+        return {
+          ok: false,
+          conflict: flushed.conflict,
+          error: flushed.conflict ? flushed.error : `Your latest edits couldn't be saved, so nothing was restored: ${flushed.error}`,
+        };
+      }
+      // 2. Restore on the server (checks the draft revision, keeps the current draft, never publishes).
+      try {
+        const res = await fetch("/api/pages-funnels/puck/page-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pageId, action: "restore", versionId: version.id, baseRevision: getRevision() }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; code?: string };
+        if (!res.ok || !json.ok) {
+          const conflict = res.status === 409 && json.code === "conflict";
+          if (!conflict) resume();
+          restoreBusy.current = false;
+          return { ok: false, conflict, error: json.error ?? "Couldn't restore this version. Try again." };
+        }
+      } catch {
+        resume();
+        restoreBusy.current = false;
+        return { ok: false, error: "Couldn't reach the server, so nothing was restored. Try again." };
+      }
+      // 3. Reopen the editor on the restored draft (autosave stays stopped until then).
+      toast.success("Version restored as your draft. The live page hasn't changed.");
+      window.setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("history");
+        window.location.replace(url.toString());
+      }, 500);
+      return { ok: true };
+    },
+    [flushAndSuspend, getRevision, pageId, resume]
+  );
 
   // Save as Template (2026-11-16): always available in the header — drafts
   // included — and saves the CURRENT on-screen design (edits not yet
@@ -636,7 +703,9 @@ export function MagnetixPuckEditorShell({
 
   const renderHeaderActions = useCallback(
     () => (
-      <div className="flex items-center gap-2">
+      // Phones: Puck's menu bar row wraps instead of pushing the first
+      // actions (More actions, Version history) off the left edge.
+      <div className="flex items-center gap-2 max-md:flex-wrap max-md:justify-end">
         <SaveStateIndicator />
         {hasReadingSettings && (
           <ReadingResultSettingsButton
@@ -698,6 +767,7 @@ export function MagnetixPuckEditorShell({
             </DropdownMenu>
           </>
         )}
+        {!isPopupSurface && <VersionHistoryHeaderButton />}
         {!isPopupSurface && <SaveTemplateHeaderButton />}
         {!isPopupSurface && <PageSettingsHeaderButton />}
         <Button variant="outline" size="sm" onClick={openPreview}>
@@ -777,6 +847,7 @@ export function MagnetixPuckEditorShell({
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col" data-editing-surface={isPopupSurface ? "popup" : "page"}>
       <div className="min-h-0 flex-1">
+        <VersionHistoryContext.Provider value={historyValue}>
         <SaveTemplateContext.Provider value={saveTemplateValue}>
         <PageSettingsContext.Provider value={pageSettingsValue}>
         <ReadingResultSettingsContext.Provider value={readingSettingsValue}>
@@ -808,7 +879,18 @@ export function MagnetixPuckEditorShell({
         </ReadingResultSettingsContext.Provider>
         </PageSettingsContext.Provider>
         </SaveTemplateContext.Provider>
+        </VersionHistoryContext.Provider>
       </div>
+      <VersionHistoryPanel
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        pageId={pageId}
+        previewHref={previewHref}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onPreviewCurrent={openPreview}
+        onRestore={handleRestoreVersion}
+        refreshKey={historyRefresh}
+      />
       <SaveTemplateDialog
         open={templateOpen}
         onOpenChange={setTemplateOpen}
@@ -838,6 +920,18 @@ const PageSettingsContext = createContext<PageSettingsDialogProps | null>(null);
 
 /** Opens Save as Template; read through context so `overrides` stay stable. */
 const SaveTemplateContext = createContext<{ open: () => void } | null>(null);
+/** Opens Version History; read through context so `overrides` stay stable. */
+const VersionHistoryContext = createContext<{ open: () => void } | null>(null);
+function VersionHistoryHeaderButton() {
+  const value = useContext(VersionHistoryContext);
+  if (!value) return null;
+  return (
+    <Button variant="outline" size="sm" onClick={value.open} aria-label="Version history" title="Version history" data-version-history-trigger="">
+      <History className="h-4 w-4" aria-hidden="true" />
+      <span className="hidden 2xl:inline">Version history</span>
+    </Button>
+  );
+}
 function SaveTemplateHeaderButton() {
   const value = useContext(SaveTemplateContext);
   if (!value) return null;

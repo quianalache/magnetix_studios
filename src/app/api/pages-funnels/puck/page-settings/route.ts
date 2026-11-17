@@ -5,6 +5,7 @@ import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { pageSubAccountId } from "@/lib/server/page-form-resolver";
 import {
   createPuckPage,
+  deletePuckPage,
   duplicatePuckPage,
   updateReadingResultPageSettings,
   renamePuckPage,
@@ -12,10 +13,13 @@ import {
   unpublishPuckPage,
 } from "@/lib/server/pages-funnels-puck-service";
 import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
+import { versionActor } from "@/lib/server/pages-funnels/page-version-core";
+import { getPageVersion, listPageVersions, restorePageVersion } from "@/lib/server/pages-funnels/page-version-service";
 
 /**
  * Page management actions: rename (immediate), unpublish, revert draft to
- * published (Wave 3), duplicate (pre-Funnel safety), and — since the
+ * published (Wave 3), duplicate (pre-Funnel safety), Version History (list /
+ * read one / restore) and delete (2026-11-17), and — since the
  * 2026-11-16 security hardening, when the browser lost direct write access to
  * `pages` — create (Start Blank / page type) and Reading Result settings. A static route (no dynamic segment) so it
  * costs nothing against Vercel's route limit; the page's own workspace is
@@ -66,7 +70,31 @@ export async function POST(request: Request) {
       result = await unpublishPuckPage(subAccountId, pageId);
       break;
     case "revert":
-      result = await revertPuckDraftToPublished(subAccountId, pageId);
+      result = await revertPuckDraftToPublished(subAccountId, pageId, { actor: await versionActor(access.uid) });
+      break;
+    // Page Version History (2026-11-17) — workspace admins and the agency
+    // owner only (the check above); the version must belong to this page.
+    case "versions": {
+      const list = await listPageVersions(subAccountId, pageId);
+      if (!list.ok) return NextResponse.json({ error: list.error }, { status: list.status });
+      return NextResponse.json(list);
+    }
+    case "version": {
+      const v = await getPageVersion(subAccountId, pageId, body.versionId);
+      if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status });
+      return NextResponse.json(v);
+    }
+    case "restore": {
+      const rev = body.baseRevision;
+      const baseRevision = typeof rev === "number" && Number.isInteger(rev) && rev >= 0 ? rev : null;
+      result = await restorePageVersion(subAccountId, pageId, body.versionId, { baseRevision, actor: await versionActor(access.uid) });
+      if (!result.ok) return NextResponse.json({ error: result.error, ...(result.code ? { code: result.code } : {}) }, { status: result.status });
+      return NextResponse.json({ ok: true, revision: result.revision });
+    }
+    // Delete (2026-11-17 — was a direct browser delete): also removes the
+    // page's own Version History and analytics rollups.
+    case "delete":
+      result = await deletePuckPage(subAccountId, pageId);
       break;
     case "duplicate": {
       // Pre-Funnel safety: duplication is server-side and same-workspace only.

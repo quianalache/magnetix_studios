@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -162,6 +161,19 @@ export async function duplicatePage(
   return json.pageId;
 }
 
+/**
+ * Delete a page through the server (2026-11-17), which also removes the page's
+ * own Version History and analytics rollups — a browser delete left those
+ * subcollections behind. Workspace admin / agency owner only.
+ */
 export async function deletePage(id: string): Promise<void> {
-  await deleteDoc(doc(getFirebaseDb(), PAGES, id));
+  const res = await fetch("/api/pages-funnels/puck/page-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pageId: id, action: "delete" }),
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(json.error ?? "Couldn't delete the page.");
+  }
 }

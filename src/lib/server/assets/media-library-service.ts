@@ -14,6 +14,9 @@ import {
 } from "@/lib/server/bunny-stream-service";
 import { listSharesForSubAccount, revokeSharesForAsset, shareView } from "@/lib/server/assets/media-share-service";
 import { AUDIO_MIME_TYPES } from "@/lib/pages-funnels/audio";
+import { collectMediaVideoIds } from "@/lib/pages-funnels/puck/media-video";
+import { readStoredPuckData } from "@/lib/pages-funnels/puck-storage";
+import { normalizePopupMap } from "@/types/pages-funnels-popup";
 import {
   COMMUNITY_FILE_MIME_ALLOWLIST,
   MAX_COMMUNITY_FILE_BYTES,
@@ -148,16 +151,47 @@ async function usageMap(t: Tenant, assets: MediaAsset[]): Promise<Map<string, Me
   // Pages & Funnels pages that play a hosted video from the Media Library
   // (Wave 3 Video block). The page tree stores the asset id, so a match in
   // its draft / published content or popups counts as a use — deleting the
-  // video would silently break the page.
+  // video would silently break the page. Video blocks store it as
+  // `mediaVideo.assetId` (found by the same walker the preview / public page
+  // use to mint playback), so the designs are decoded and walked — the older
+  // text match on `"mediaAssetId"` only ever matched Audio-style sources and
+  // missed Video blocks (fixed 2026-11-17 with Version History).
+  const videosIn = (...trees: unknown[]) => new Set(collectMediaVideoIds(...trees));
   const videoIds = assets.filter((a) => kindOf(a) === "video").map((a) => a.id);
   if (videoIds.length) {
     const pages = await db.collection("pages").where("subAccountId", "==", t.subAccountId).get();
+    const wanted = new Set(videoIds);
     for (const page of pages.docs) {
       const d = page.data();
       const text = JSON.stringify([d.puckDraftData ?? null, d.puckPublishedData ?? null, d.puckDraftPopups ?? null, d.puckPublishedPopups ?? null]);
+      const walked = videosIn(readStoredPuckData(d.puckDraftData), readStoredPuckData(d.puckPublishedData), normalizePopupMap(d.puckDraftPopups), normalizePopupMap(d.puckPublishedPopups));
+      const inPage = new Set<string>();
       for (const id of videoIds) {
-        if (text.includes(`"mediaAssetId":"${id}"`) || text.includes(`\\"mediaAssetId\\":\\"${id}\\"`)) {
+        if (walked.has(id) || text.includes(`"mediaAssetId":"${id}"`) || text.includes(`\\"mediaAssetId\\":\\"${id}\\"`)) {
+          inPage.add(id);
           push(id, { kind: "page", label: "Pages & Funnels", detail: (d.name as string) || "Page", href: `/pages-funnels/${page.id}/new-builder` });
+        }
+      }
+      // Page Version History (2026-11-17): a retained version can be restored,
+      // so a video it plays is still in use. Each version stores the ids of the
+      // Media Library videos it references (`mediaVideoIds`) — read just that
+      // field, never the designs.
+      const versions = await page.ref.collection("versions").select("mediaVideoIds").get();
+      const inHistory = new Set<string>();
+      for (const v of versions.docs) for (const id of (v.get("mediaVideoIds") as string[] | undefined) ?? []) if (wanted.has(id) && !inPage.has(id)) inHistory.add(id);
+      for (const id of inHistory) {
+        push(id, { kind: "page", label: "Pages & Funnels — version history", detail: (d.name as string) || "Page", href: `/pages-funnels/${page.id}/new-builder` });
+      }
+    }
+    // Saved page templates (2026-11-16) keep their own copy of a design; a new
+    // page made from one would play the video.
+    const templates = await db.collection("pageTemplates").where("subAccountId", "==", t.subAccountId).get();
+    for (const tpl of templates.docs) {
+      const d = tpl.data();
+      const walked = videosIn(readStoredPuckData(d.puckData), normalizePopupMap(d.popups));
+      for (const id of videoIds) {
+        if (walked.has(id)) {
+          push(id, { kind: "page", label: "Page templates", detail: (d.name as string) || "Template", href: null });
         }
       }
     }

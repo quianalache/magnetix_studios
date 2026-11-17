@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { publishPuckPage } from "@/lib/server/pages-funnels-puck-service";
+import { versionActor } from "@/lib/server/pages-funnels/page-version-core";
 import { requestThumbnailAfterPublish } from "@/lib/server/pages-funnels/page-thumbnail-service";
 import type { Data as PuckData } from "@puckeditor/core";
 
@@ -36,14 +37,19 @@ export async function POST(
     );
   }
 
-  const result = await publishPuckPage(subAccountId, pageId, data, popups as never);
+  const rawRevision = (body as { baseRevision?: unknown }).baseRevision;
+  const baseRevision = typeof rawRevision === "number" && Number.isInteger(rawRevision) && rawRevision >= 0 ? rawRevision : null;
+  const result = await publishPuckPage(subAccountId, pageId, data, popups as never, {
+    baseRevision,
+    actor: await versionActor(access.uid),
+  });
   if (!result.ok) {
     return NextResponse.json(
-      { error: result.error },
+      { error: result.error, ...(result.code ? { code: result.code } : {}) },
       { status: result.status }
     );
   }
   // Library thumbnail of the new published version (queued; never fails the publish).
   await requestThumbnailAfterPublish(pageId);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, revision: result.revision });
 }

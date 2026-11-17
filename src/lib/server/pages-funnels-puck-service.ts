@@ -34,6 +34,19 @@ import { findBackgroundProblem } from "@/lib/pages-funnels/puck/background";
 import { findColumnOrderProblem } from "@/lib/pages-funnels/puck/column-order";
 import { findWave3BlockProblem } from "@/lib/pages-funnels/puck/wave3-validation";
 import { findUnknownBlockTypes, findUnknownBlockTypesInPage, unknownBlocksSaveError } from "@/lib/pages-funnels/puck/known-blocks";
+import { AUTO_CHECKPOINT_INTERVAL_MS } from "@/lib/pages-funnels/page-versions";
+import {
+  draftRevisionOf,
+  historyMarkerOf,
+  publishedFingerprintOf,
+  pruneVersions,
+  snapshotOfPrepared,
+  snapshotOfStored,
+  versionsCol,
+  writeVersion,
+  type PageHistoryMarker,
+  type VersionActor,
+} from "@/lib/server/pages-funnels/page-version-core";
 
 /**
  * Admin-SDK persistence for the NEW Puck builder's draft/publish content
@@ -64,8 +77,33 @@ import { findUnknownBlockTypes, findUnknownBlockTypesInPage, unknownBlocksSaveEr
 const PAGES_COLLECTION = "pages";
 
 export type PuckPersistenceResult =
-  | { ok: true }
-  | { ok: false; error: string; status: 400 | 404 | 403 | 409 | 413 };
+  | { ok: true; revision?: number }
+  | { ok: false; error: string; status: 400 | 404 | 403 | 409 | 413; code?: "conflict" };
+
+/**
+ * Draft revision (Page Version History, 2026-11-17): every server write that
+ * replaces the draft (save, publish, revert, restore) increments
+ * `puckDraftRevision` inside its transaction. A caller that sends the revision
+ * it last saw (`baseRevision`) is refused with a conflict when the draft has
+ * moved on since — e.g. another tab saved, or a version was restored — instead
+ * of silently overwriting that newer draft. Callers that send no revision
+ * (an editor tab opened before this release) keep the old behavior.
+ */
+export const DRAFT_CONFLICT_MESSAGE =
+  "This page was changed somewhere else (another tab, another person, or a restored version). Reload to get the latest draft — your unsaved edits here weren't saved.";
+export function draftConflict(): PuckPersistenceResult {
+  return { ok: false, error: DRAFT_CONFLICT_MESSAGE, status: 409, code: "conflict" };
+}
+
+export interface DraftWriteOptions {
+  /** "manual" = Save Draft button (a history checkpoint); "auto" = debounced autosave. */
+  kind?: "manual" | "auto";
+  baseRevision?: number | null;
+  actor?: VersionActor | null;
+}
+
+const isStale = (baseRevision: number | null | undefined, doc: Record<string, unknown>) =>
+  typeof baseRevision === "number" && baseRevision !== draftRevisionOf(doc);
 
 const tooLarge = (error: string): PuckPersistenceResult => ({ ok: false, error, status: 413 });
 
@@ -188,73 +226,151 @@ export async function savePuckDraft(
   subAccountId: string,
   pageId: string,
   data: PuckData,
-  popups: PopupDefinitionMap = {}
+  popups: PopupDefinitionMap = {},
+  options: DraftWriteOptions = {}
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
-  const prepared = preparePageWrite(data, popups, owned.doc, ["puckDraftData", "puckDraftPopups"]);
-  if ("ok" in prepared) return prepared;
+  const actor = options.actor ?? { uid: "system", name: null };
+  const created: string[] = [];
+  const result = await getAdminDb().runTransaction(async (tx): Promise<PuckPersistenceResult & { publishedFp?: string | null }> => {
+    created.length = 0;
+    const snap = await tx.get(owned.ref);
+    const doc = snap.data() as Record<string, unknown> | undefined;
+    if (!doc || doc.subAccountId !== subAccountId) return { ok: false, error: "Page not found", status: 404 };
+    if (isStale(options.baseRevision, doc)) return draftConflict();
+    const prepared = preparePageWrite(data, popups, doc, ["puckDraftData", "puckDraftPopups"]);
+    if ("ok" in prepared) return prepared;
 
-  const now = FieldValue.serverTimestamp();
-  await owned.ref.update({
-    puckDraftData: prepared.page,
-    puckDraftPopups: prepared.stored,
-    puckDraftUpdatedAt: now,
-    updatedAt: now,
+    // Version History checkpoints (see lib/pages-funnels/page-versions.ts):
+    //   - Save Draft (manual): the design being saved, unless it's identical
+    //     to the newest version.
+    //   - Autosave: when no version was taken in the last 30 minutes, the draft
+    //     as it stood BEFORE this save — so the first edits of a session (and
+    //     then roughly every 30 minutes of active editing) leave a restore
+    //     point. Autosave only runs when something changed, so an idle editor
+    //     never creates versions.
+    const marker = historyMarkerOf(doc);
+    let nextMarker: PageHistoryMarker = marker;
+    const nowMs = Date.now();
+    if (options.kind === "manual") {
+      const next = snapshotOfPrepared(prepared.page, prepared.stored);
+      if (next.fingerprint !== marker.latestFingerprint) {
+        const id = writeVersion(tx, owned.ref, doc, next, "manual", actor);
+        if (id) {
+          created.push(id);
+          nextMarker = { latestFingerprint: next.fingerprint, latestAtMs: nowMs };
+        }
+      }
+    } else if (marker.latestAtMs == null || nowMs - marker.latestAtMs >= AUTO_CHECKPOINT_INTERVAL_MS) {
+      const before = snapshotOfStored(doc.puckDraftData, doc.puckDraftPopups);
+      if (before && before.fingerprint !== marker.latestFingerprint) {
+        const id = writeVersion(tx, owned.ref, doc, before, "auto", actor);
+        if (id) {
+          created.push(id);
+          nextMarker = { latestFingerprint: before.fingerprint, latestAtMs: nowMs };
+        }
+      }
+    }
+
+    const revision = draftRevisionOf(doc) + 1;
+    const now = FieldValue.serverTimestamp();
+    tx.update(owned.ref, {
+      puckDraftData: prepared.page,
+      puckDraftPopups: prepared.stored,
+      puckDraftUpdatedAt: now,
+      puckDraftRevision: revision,
+      ...(nextMarker !== marker ? { puckHistory: nextMarker } : {}),
+      updatedAt: now,
+    });
+    return { ok: true, revision, publishedFp: created.length ? publishedFingerprintOf(doc) : null };
   });
-  return { ok: true };
+  if (result.ok && created.length) await pruneVersions(owned.ref, result.publishedFp ?? null, created).catch((err) => console.error(`[page-versions] prune failed for ${pageId}`, err));
+  return result.ok ? { ok: true, revision: result.revision } : result;
 }
 
 /**
  * Publish — writes `puckDraftData` AND `puckPublishedData` (plus both their
- * timestamps) in ONE `.update()` call, using the exact same `data` payload
- * for both fields. This is deliberate, not a shortcut: it's what makes
- * "Publish must ensure the current draft is durably saved first" atomic
- * rather than two sequential writes that could race with a concurrent edit
- * landing between them (the exact non-atomicity of the former legacy publish
- * handler — content write followed by publish as two separate
- * `updateDoc` calls — deliberately not repeated here). A single Firestore
- * document `.update()` is atomic at the document level, so this genuinely
- * cannot leave `puckPublishedData` pointing at anything other than exactly
- * what `puckDraftData` was set to in the same call.
+ * timestamps) in ONE atomic write, using the exact same `data` payload for
+ * both fields — "Publish must ensure the current draft is durably saved
+ * first" without two sequential writes that could race with a concurrent
+ * edit (the non-atomicity of the former legacy publish handler, deliberately
+ * not repeated here). Since 2026-11-17 it runs as a transaction so the draft
+ * revision check and the Version History checkpoints land in the same commit.
  *
  * Also sets the SAME top-level `status`/`publishedAt` fields the former
- * legacy publish flow set — deliberately, not a legacy side-effect leaking in:
- * `/p/[pageId]`'s existing gate (`if (page.status !== "published")
- * notFound()`) is the one thing this task was told to reuse rather than
- * duplicate (§10 "use the actual production public `<Render>` path"), so
- * "is this page live at all" stays a single page-level concept V1 and Puck
- * share, while `puckPublishedData` separately controls WHAT renders once
- * it's live. A page Publish-ed for the first time from the new builder,
- * that never went through V1's own Publish, would otherwise 404 at
- * `/p/[pageId]` despite the user having just clicked Publish.
+ * legacy publish flow set — deliberately: `/p/[pageId]`'s gate (`if
+ * (page.status !== "published") notFound()`) keeps "is this page live at
+ * all" a single page-level concept, while `puckPublishedData` separately
+ * controls WHAT renders once it's live. A page Publish-ed for the first time
+ * from the new builder would otherwise 404 at `/p/[pageId]`.
+ *
+ * Version History: the published design is recorded as a "Published"
+ * version — when the newest version already holds exactly this design (e.g.
+ * Save Draft just before Publish), that entry is relabeled "Published"
+ * instead of storing it twice. The design that was live until now is kept as
+ * "Previously live" if history doesn't already hold it (pages published
+ * before Version History existed), so a publish never loses the old live page.
+ * Nothing is recorded unless the publish itself commits.
  */
 export async function publishPuckPage(
   subAccountId: string,
   pageId: string,
   data: PuckData,
-  popups: PopupDefinitionMap = {}
+  popups: PopupDefinitionMap = {},
+  options: DraftWriteOptions = {}
 ): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
-  const prepared = preparePageWrite(data, popups, owned.doc, ["puckDraftData", "puckDraftPopups", "puckPublishedData", "puckPublishedPopups"]);
-  if ("ok" in prepared) return prepared;
+  const actor = options.actor ?? { uid: "system", name: null };
+  const created: string[] = [];
+  const result = await getAdminDb().runTransaction(async (tx): Promise<PuckPersistenceResult & { publishedFp?: string }> => {
+    created.length = 0;
+    const snap = await tx.get(owned.ref);
+    const doc = snap.data() as Record<string, unknown> | undefined;
+    if (!doc || doc.subAccountId !== subAccountId) return { ok: false, error: "Page not found", status: 404 };
+    if (isStale(options.baseRevision, doc)) return draftConflict();
+    const prepared = preparePageWrite(data, popups, doc, ["puckDraftData", "puckDraftPopups", "puckPublishedData", "puckPublishedPopups"]);
+    if ("ok" in prepared) return prepared;
+    const history = await tx.get(versionsCol(owned.ref).select("fingerprint", "createdAtMs"));
 
-  const now = FieldValue.serverTimestamp();
-  // ONE document update: page draft + page published + both Popup maps land
-  // together, so no reader can ever see page version B with Popups version A.
-  await owned.ref.update({
-    puckDraftData: prepared.page,
-    puckDraftPopups: prepared.stored,
-    puckDraftUpdatedAt: now,
-    puckPublishedData: prepared.page,
-    puckPublishedPopups: prepared.stored,
-    puckPublishedAt: now,
-    status: "published",
-    publishedAt: now,
-    updatedAt: now,
+    const next = snapshotOfPrepared(prepared.page, prepared.stored);
+    const nowMs = Date.now();
+    const fingerprints = new Set(history.docs.map((d) => d.get("fingerprint") as string));
+    const previous = doc.puckPublishedData != null ? snapshotOfStored(doc.puckPublishedData, doc.puckPublishedPopups) : null;
+    if (previous && previous.fingerprint !== next.fingerprint && !fingerprints.has(previous.fingerprint)) {
+      const id = writeVersion(tx, owned.ref, doc, previous, "previous_live", actor);
+      if (id) created.push(id);
+    }
+    const newest = [...history.docs].sort((a, b) => ((b.get("createdAtMs") as number) ?? 0) - ((a.get("createdAtMs") as number) ?? 0))[0];
+    if (newest && newest.get("fingerprint") === next.fingerprint) {
+      tx.update(newest.ref, { reason: "publish", createdAt: FieldValue.serverTimestamp(), createdAtMs: nowMs, createdByUid: actor.uid, createdByName: actor.name });
+    } else {
+      const id = writeVersion(tx, owned.ref, doc, next, "publish", actor);
+      if (id) created.push(id);
+    }
+
+    const revision = draftRevisionOf(doc) + 1;
+    const now = FieldValue.serverTimestamp();
+    // ONE document update: page draft + page published + both Popup maps land
+    // together, so no reader can ever see page version B with Popups version A.
+    tx.update(owned.ref, {
+      puckDraftData: prepared.page,
+      puckDraftPopups: prepared.stored,
+      puckDraftUpdatedAt: now,
+      puckDraftRevision: revision,
+      puckHistory: { latestFingerprint: next.fingerprint, latestAtMs: nowMs },
+      puckPublishedData: prepared.page,
+      puckPublishedPopups: prepared.stored,
+      puckPublishedAt: now,
+      status: "published",
+      publishedAt: now,
+      updatedAt: now,
+    });
+    return { ok: true, revision, publishedFp: next.fingerprint };
   });
-  return { ok: true };
+  if (result.ok && created.length) await pruneVersions(owned.ref, result.publishedFp ?? null, created).catch((err) => console.error(`[page-versions] prune failed for ${pageId}`, err));
+  return result.ok ? { ok: true, revision: result.revision } : result;
 }
 
 // ── Page management (Wave 3 Page Settings) ──────────────────────────────────
@@ -288,28 +404,51 @@ export async function unpublishPuckPage(subAccountId: string, pageId: string): P
   return { ok: true };
 }
 
-export async function revertPuckDraftToPublished(subAccountId: string, pageId: string): Promise<PuckPersistenceResult> {
+export async function revertPuckDraftToPublished(
+  subAccountId: string,
+  pageId: string,
+  options: { actor?: VersionActor | null } = {}
+): Promise<PuckPersistenceResult> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return owned;
-  return getAdminDb().runTransaction(async (tx) => {
+  const actor = options.actor ?? { uid: "system", name: null };
+  const created: string[] = [];
+  const result = await getAdminDb().runTransaction(async (tx): Promise<PuckPersistenceResult & { publishedFp?: string | null }> => {
+    created.length = 0;
     const snap = await tx.get(owned.ref);
     const doc = snap.data() as Record<string, unknown> | undefined;
-    if (!doc || doc.subAccountId !== subAccountId) return { ok: false, error: "Page not found", status: 404 } as const;
+    if (!doc || doc.subAccountId !== subAccountId) return { ok: false, error: "Page not found", status: 404 };
     if (doc.puckPublishedData == null) {
-      return { ok: false, error: "This page has never been published, so there's nothing to revert to.", status: 409 } as const;
+      return { ok: false, error: "This page has never been published, so there's nothing to revert to.", status: 409 };
     }
     const unknown = findUnknownBlockTypesInPage(doc);
-    if (unknown.length) return { ok: false, error: unknownBlocksSaveError(unknown), status: 409 } as const;
+    if (unknown.length) return { ok: false, error: unknownBlocksSaveError(unknown), status: 409 };
+    // Version History: keep the draft being replaced as "Before revert" (unless
+    // the newest version already holds it, or it already equals the live page).
+    const marker = historyMarkerOf(doc);
+    const publishedFp = publishedFingerprintOf(doc);
+    const current = snapshotOfStored(doc.puckDraftData, doc.puckDraftPopups);
+    let nextMarker: PageHistoryMarker = marker;
+    if (current && current.fingerprint !== marker.latestFingerprint && current.fingerprint !== publishedFp) {
+      const id = writeVersion(tx, owned.ref, doc, current, "before_revert", actor);
+      if (!id) return { ok: false, error: "The current draft is too large to keep in Version History, so it wasn't replaced.", status: 413 };
+      created.push(id);
+      nextMarker = { latestFingerprint: current.fingerprint, latestAtMs: Date.now() };
+    }
     tx.update(owned.ref, {
       puckDraftData: doc.puckPublishedData,
       puckDraftPopups: doc.puckPublishedPopups ?? {},
       // The draft now equals the published copy: same timestamp, so the
       // builder shows "Published" (not "Unpublished changes").
       puckDraftUpdatedAt: doc.puckPublishedAt ?? null,
+      puckDraftRevision: draftRevisionOf(doc) + 1,
+      ...(nextMarker !== marker ? { puckHistory: nextMarker } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    return { ok: true } as const;
+    return { ok: true, revision: draftRevisionOf(doc) + 1, publishedFp };
   });
+  if (result.ok && created.length) await pruneVersions(owned.ref, result.publishedFp ?? null, created).catch((err) => console.error(`[page-versions] prune failed for ${pageId}`, err));
+  return result.ok ? { ok: true, revision: result.revision } : result;
 }
 
 /**
@@ -393,6 +532,7 @@ export async function remapPageCheckoutConfigs(subAccountId: string, pageId: str
   const patch: Record<string, unknown> = {};
   if (page.changed && page.data) patch.puckDraftData = encodePuckData(page.data);
   if (popupChanges) patch.puckDraftPopups = encodePopupMapForStorage(nextPopups);
+  patch.puckDraftRevision = FieldValue.increment(1);
   await owned.ref.update(patch);
   return page.changed + popupChanges;
 }
@@ -482,5 +622,27 @@ export async function updateReadingResultPageSettings(subAccountId: string, page
   }
   const settings: ReadingResultPageSettings = { chartDesignSetId: chartDesignSetId as string | null, sample: sample as ReadingSampleKind };
   await owned.ref.update({ readingResult: settings, updatedAt: FieldValue.serverTimestamp() });
+  return { ok: true };
+}
+
+/**
+ * Delete a page (Page Version History, 2026-11-17 — was a direct browser
+ * delete that left the page's subcollections behind). Removes ONLY data the
+ * page owns: its Version History, its analytics rollups / dedupe markers,
+ * then the page itself. Funnel steps that used the page are left as they are
+ * (the delete dialog already warns about them — same behavior as before),
+ * and nothing shared is touched: no funnel, purchase, contact, submission,
+ * Media Library file or saved template. A second analytics pass catches a
+ * visit recorded while the delete was running.
+ */
+export async function deletePuckPage(subAccountId: string, pageId: string): Promise<PuckPersistenceResult> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return owned;
+  const db = getAdminDb();
+  const owners = ["analyticsDaily", "analyticsUnique"].map((c) => owned.ref.collection(c));
+  await db.recursiveDelete(versionsCol(owned.ref));
+  for (const col of owners) await db.recursiveDelete(col);
+  await owned.ref.delete();
+  for (const col of owners) await db.recursiveDelete(col);
   return { ok: true };
 }

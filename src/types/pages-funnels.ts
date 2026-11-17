@@ -324,6 +324,15 @@ export interface PageDoc {
   puckDraftData?: StoredPuckData | null;
   puckPublishedData?: StoredPuckData | null;
   puckDraftUpdatedAt?: Timestamp | FieldValue | null;
+  /**
+   * Page Version History (2026-11-17): incremented by every server write that
+   * replaces the draft (save, publish, revert, restore). The editor sends the
+   * revision it last saw so a stale save / restore is refused as a conflict.
+   * Absent on older pages (reads as 0).
+   */
+  puckDraftRevision?: number;
+  /** Newest Version History entry (fingerprint + time) — server-written. */
+  puckHistory?: { latestFingerprint: string | null; latestAtMs: number | null } | null;
   puckPublishedAt?: Timestamp | FieldValue | null;
   /** Page-owned popup definitions. Draft and published snapshots are independent.
    *  RAW stored shape — `StoredPopupMap` (content as a JSON string, 2026-11-03)

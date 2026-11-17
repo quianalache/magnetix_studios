@@ -42,11 +42,14 @@ function SheetContent({
   side = "right",
   showCloseButton = true,
   inline = false,
+  overlayClassName,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
   inline?: boolean
+  /** Extra classes for the backdrop (e.g. a clear backdrop for a docked panel). */
+  overlayClassName?: string
 }) {
   const [inlineContainer, setInlineContainer] = React.useState<HTMLElement | null>(null)
   const popup = (
@@ -93,7 +96,7 @@ function SheetContent({
     )
   }
 
-  return <SheetPortal><SheetOverlay />{popup}</SheetPortal>
+  return <SheetPortal><SheetOverlay className={overlayClassName} />{popup}</SheetPortal>
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {

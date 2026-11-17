@@ -5,6 +5,8 @@ import type { Data } from "@puckeditor/core";
 import type { PopupDefinitionMap } from "@/types/pages-funnels-popup";
 
 export type PuckSaveState = "idle" | "saving" | "saved" | "error";
+export type PuckSaveKind = "manual" | "auto";
+type PostResult = { ok: true } | { ok: false; error: string; conflict: boolean };
 
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 
@@ -31,9 +33,14 @@ const AUTOSAVE_DEBOUNCE_MS = 2000;
  *   scheduling an autosave tick at all, so autosave never fires for a
  *   render where nothing actually changed since the last successful save
  *   (or since mount, before any save has happened yet).
- * - This hook does not solve multi-tab concurrent editing — see the task
- *   report's "Remaining Gaps" for why that's explicitly out of scope here,
- *   not silently ignored.
+ * - Draft revision (Page Version History, 2026-11-17): every save and
+ *   publish sends the draft revision this editor last saw. When the page's
+ *   draft has moved on elsewhere (another tab, another admin, a restored
+ *   version) the server refuses with a conflict instead of overwriting it;
+ *   autosave then stops and the editor asks for a reload. This is conflict
+ *   DETECTION, not collaborative editing.
+ * - Save Draft sends `kind: "manual"` (a Version History checkpoint);
+ *   autosave sends `kind: "auto"`.
  */
 export function usePuckPersistence({
   subAccountId,
@@ -41,6 +48,7 @@ export function usePuckPersistence({
   data,
   popups,
   enabled,
+  initialRevision = 0,
 }: {
   subAccountId: string;
   pageId: string;
@@ -50,6 +58,8 @@ export function usePuckPersistence({
    *  "no save before initial page load completes" even before the natural
    *  same-value comparison below would already prevent it. */
   enabled: boolean;
+  /** The page's `puckDraftRevision` when the editor opened (0 when absent). */
+  initialRevision?: number;
 }) {
   const [saveState, setSaveState] = useState<PuckSaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -59,6 +69,12 @@ export function usePuckPersistence({
   const lastSavedSerializedRef = useRef<string>(JSON.stringify({ data, popups }));
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
+  // A manual Save Draft that arrives while another save is in flight must
+  // still be recorded as manual when it runs.
+  const pendingKindRef = useRef<PuckSaveKind>("auto");
+  const revisionRef = useRef(initialRevision);
+  const [conflict, setConflict] = useState(false);
+  const conflictRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Revert draft to published (Wave 3): while the server replaces the draft,
   // no autosave may write the old draft back over it.
@@ -74,45 +90,67 @@ export function usePuckPersistence({
   const draftEndpoint = `/api/sub-accounts/${subAccountId}/pages-funnels/${pageId}/puck-draft`;
   const publishEndpoint = `/api/sub-accounts/${subAccountId}/pages-funnels/${pageId}/puck-publish`;
 
-  const runSave = useCallback(async () => {
-    if (suspendedRef.current) return;
-    if (savingRef.current) {
-      pendingRef.current = true;
-      return;
-    }
-    savingRef.current = true;
-    setSaveState("saving");
-    setSaveError(null);
+  /** One draft write, with the revision check. Never runs two at once (callers guard). */
+  const postDraft = useCallback(async (kind: PuckSaveKind): Promise<PostResult> => {
     const payload = latestDataRef.current;
     const currentPopups = latestPopupsRef.current;
     try {
       const res = await fetch(draftEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: payload, popups: currentPopups }),
+        body: JSON.stringify({ data: payload, popups: currentPopups, kind, baseRevision: revisionRef.current }),
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-      };
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; code?: string; revision?: number };
       if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? "Failed to save draft.");
+        return { ok: false, error: json.error ?? "Failed to save draft.", conflict: res.status === 409 && json.code === "conflict" };
       }
+      if (typeof json.revision === "number") revisionRef.current = json.revision;
       lastSavedSerializedRef.current = JSON.stringify({ data: payload, popups: currentPopups });
-      setSaveState("saved");
+      return { ok: true };
     } catch (err) {
-      setSaveState("error");
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to save draft."
-      );
-    } finally {
-      savingRef.current = false;
-      if (pendingRef.current) {
-        pendingRef.current = false;
-        runSave();
-      }
+      return { ok: false, error: err instanceof Error ? err.message : "Failed to save draft.", conflict: false };
     }
   }, [draftEndpoint]);
+
+  /** Another tab / person / restore changed the draft: stop autosaving. */
+  const enterConflict = useCallback((message: string) => {
+    suspendedRef.current = true;
+    pendingRef.current = false;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    conflictRef.current = true;
+    setConflict(true);
+    setSaveState("error");
+    setSaveError(message);
+  }, []);
+
+  const runSave = useCallback(async (kind: PuckSaveKind = "auto") => {
+    if (suspendedRef.current) return;
+    if (savingRef.current) {
+      pendingRef.current = true;
+      if (kind === "manual") pendingKindRef.current = "manual";
+      return;
+    }
+    savingRef.current = true;
+    setSaveState("saving");
+    setSaveError(null);
+    const result = await postDraft(kind);
+    if (result.ok) setSaveState("saved");
+    else if (result.conflict) enterConflict(result.error);
+    else {
+      setSaveState("error");
+      setSaveError(result.error);
+    }
+    savingRef.current = false;
+    if (pendingRef.current && !suspendedRef.current) {
+      pendingRef.current = false;
+      const nextKind = pendingKindRef.current;
+      pendingKindRef.current = "auto";
+      runSave(nextKind);
+    }
+  }, [postDraft, enterConflict]);
 
   // Debounced autosave — fires only when `data` has genuinely changed since
   // the last successful save (or since mount, if nothing has saved yet).
@@ -123,7 +161,7 @@ export function usePuckPersistence({
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      runSave();
+      runSave("auto");
     }, AUTOSAVE_DEBOUNCE_MS);
 
     return () => {
@@ -137,7 +175,7 @@ export function usePuckPersistence({
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    return runSave();
+    return runSave("manual");
   }, [runSave]);
 
   const [publishState, setPublishState] = useState<PuckSaveState>("idle");
@@ -165,15 +203,19 @@ export function usePuckPersistence({
       const res = await fetch(publishEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: payload, popups: currentPopups }),
+        body: JSON.stringify({ data: payload, popups: currentPopups, baseRevision: revisionRef.current }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        code?: string;
+        revision?: number;
       };
       if (!res.ok || !json.ok) {
+        if (res.status === 409 && json.code === "conflict") enterConflict(json.error ?? "This page was changed somewhere else. Reload to get the latest draft.");
         throw new Error(json.error ?? "Failed to publish.");
       }
+      if (typeof json.revision === "number") revisionRef.current = json.revision;
       // Publish durably saves the draft too (same payload, one atomic
       // write server-side) — reflect that in the Save Draft state as well
       // so the two controls don't disagree right after a Publish.
@@ -187,7 +229,7 @@ export function usePuckPersistence({
       setPublishError(message);
       return { ok: false, error: message };
     }
-  }, [publishEndpoint]);
+  }, [publishEndpoint, enterConflict]);
 
   /**
    * Stops autosave and waits for an in-flight save to finish. Used before an
@@ -206,12 +248,50 @@ export function usePuckPersistence({
     }
   }, []);
   const resume = useCallback(() => {
+    if (conflictRef.current) return;
     suspendedRef.current = false;
   }, []);
+
+  /** True when the editor holds edits the server hasn't saved yet. */
+  const hasUnsavedChanges = useCallback(
+    () => JSON.stringify({ data: latestDataRef.current, popups: latestPopupsRef.current }) !== lastSavedSerializedRef.current,
+    []
+  );
+  /** The draft revision this editor last saw (sent with a restore). */
+  const getRevision = useCallback(() => revisionRef.current, []);
+
+  /**
+   * Before Restore (Version History): stop autosave, wait for any in-flight
+   * save, then save edits not saved yet — so the server's "Before restore"
+   * version includes them. On failure autosave resumes and the error is
+   * returned; nothing is restored.
+   */
+  const flushAndSuspend = useCallback(async (): Promise<PostResult> => {
+    await suspend();
+    if (conflictRef.current) return { ok: false, error: "This page was changed somewhere else. Reload to get the latest draft first.", conflict: true };
+    if (!hasUnsavedChanges()) return { ok: true };
+    setSaveState("saving");
+    const result = await postDraft("auto");
+    if (result.ok) {
+      setSaveState("saved");
+      return result;
+    }
+    if (result.conflict) enterConflict(result.error);
+    else {
+      setSaveState("error");
+      setSaveError(result.error);
+      suspendedRef.current = false;
+    }
+    return result;
+  }, [suspend, hasUnsavedChanges, postDraft, enterConflict]);
 
   return {
     suspend,
     resume,
+    flushAndSuspend,
+    hasUnsavedChanges,
+    getRevision,
+    conflict,
     saveState,
     saveError,
     saveDraft,

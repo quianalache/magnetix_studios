@@ -27,6 +27,7 @@ import { normalizePopupMap, type PopupDefinitionMap } from "@/types/pages-funnel
 import { PopupHost } from "@/components/pages-funnels/puck/popup-runtime";
 import { withPopupContent } from "@/lib/pages-funnels/popup-content";
 import { readStoredPuckData } from "@/lib/pages-funnels/puck-storage";
+import { formatVersionTime, PAGE_VERSION_REASON_LABELS, type PageVersionMeta } from "@/lib/pages-funnels/page-versions";
 
 /**
  * Pages & Funnels new-builder Preview route (Phase 2D task §10–§14) — a
@@ -85,7 +86,8 @@ export default function NewBuilderPreviewPage({
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "missing" }
-    | { status: "ready"; data: Data; popups: PopupDefinitionMap; metadata: PuckPageMetadata }
+    | { status: "version-unavailable"; error: string }
+    | { status: "ready"; data: Data; popups: PopupDefinitionMap; metadata: PuckPageMetadata; version: PageVersionMeta | null }
   >({ status: "loading" });
 
   useEffect(() => {
@@ -95,11 +97,31 @@ export default function NewBuilderPreviewPage({
       // Reading Tool Preview → custom Result Page (2026-10-21): render the
       // page's saved DRAFT with the unsaved preview Reading the tool parked
       // in this browser. Otherwise: the editor's in-memory data, as before.
-      const fromReadingToolPreview = new URLSearchParams(window.location.search).get("reading") === "preview";
+      const search = new URLSearchParams(window.location.search);
+      const fromReadingToolPreview = search.get("reading") === "preview";
+      // Version History (2026-11-17): `?version=` previews a SAVED version,
+      // read from the server (workspace admin / agency owner only, and only a
+      // version of this page). Rendered read-only below.
+      const versionId = search.get("version");
       const page = await getPage(pageId).catch(() => null);
       let data: Data;
       let previewPopups: PopupDefinitionMap = {};
-      if (fromReadingToolPreview) {
+      let version: PageVersionMeta | null = null;
+      if (versionId) {
+        const res = await fetch("/api/pages-funnels/puck/page-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pageId, action: "version", versionId }),
+        }).catch(() => null);
+        const json = (res ? await res.json().catch(() => ({})) : {}) as { ok?: boolean; error?: string; data?: Data; popups?: unknown; meta?: PageVersionMeta };
+        if (!res?.ok || !json.ok || !json.data) {
+          if (!cancelled) setState({ status: "version-unavailable", error: json.error ?? "This version couldn't be loaded." });
+          return;
+        }
+        data = json.data;
+        previewPopups = normalizePopupMap(json.popups);
+        version = json.meta ?? null;
+      } else if (fromReadingToolPreview) {
         const draft = readStoredPuckData(page?.puckDraftData);
         if (!draft) {
           setState({ status: "missing" });
@@ -126,7 +148,7 @@ export default function NewBuilderPreviewPage({
       // title. Tenant tracking never loads here (only the live page has it).
       if (!cancelled) {
         const settings = resolvePageSettings(data as never, page?.seo);
-        document.title = `Preview · ${settings.seoTitle.trim() || page?.name || "Page"}`;
+        document.title = `${version ? "Version preview" : "Preview"} · ${settings.seoTitle.trim() || page?.name || "Page"}`;
       }
 
       let readingContext: ReadingBlockContext | null | undefined;
@@ -227,6 +249,7 @@ export default function NewBuilderPreviewPage({
         status: "ready",
         data,
         popups: previewPopups,
+        version,
         metadata: {
           subAccountId,
           resolvedForms,
@@ -278,12 +301,55 @@ export default function NewBuilderPreviewPage({
     );
   }
 
+  if (state.status === "version-unavailable") {
+    return (
+      <div className="bg-background flex h-dvh items-center justify-center px-4">
+        <EmptyState
+          className="w-full max-w-md"
+          icon={AlertTriangle}
+          title="This version isn't available"
+          description={state.error}
+          action={
+            <Button variant="outline" render={<a href={saPath(`/pages-funnels/${pageId}/new-builder`)} />}>
+              Go to the editor
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   const qaPopupId = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("popup");
   const metadata = {
     ...state.metadata,
     brandColors: JSON.parse(brandKey) as string[],
     brandKit: JSON.parse(brandKitKey) as NonNullable<PuckPageMetadata["brandKit"]>,
   };
+  if (state.version) {
+    // Saved version preview: genuinely non-interactive. `inert` blocks every
+    // click, focus and form submission inside the page (forms, checkout,
+    // booking, Reading Tools, links, popups), and no popup opens on its own.
+    // Nothing here writes data, records analytics or charges anything.
+    const thumb = new URLSearchParams(window.location.search).get("thumb") === "1";
+    const v = state.version;
+    return (
+      <div className={thumb ? "h-dvh overflow-hidden" : undefined} data-version-preview={v.id}>
+        {!thumb ? (
+          <div className="sticky top-0 z-[60] flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card px-4 py-2 text-body shadow-sm">
+            <span className="font-semibold">Saved version · {formatVersionTime(v.createdAtMs)}</span>
+            <span className="text-muted-foreground">{PAGE_VERSION_REASON_LABELS[v.reason]}</span>
+            <span className="text-muted-foreground">Read-only preview — nothing here can be submitted, booked or bought.</span>
+          </div>
+        ) : null}
+        <div inert>
+          <PopupHost popups={state.popups} initialPopupId={null} metadata={metadata}>
+            <Render config={serverPuckConfig} data={state.data} metadata={metadata} />
+          </PopupHost>
+        </div>
+      </div>
+    );
+  }
+
   // Preview runs Open / Close Popup against this page's DRAFT Popups.
   return (
     <PopupHost popups={state.popups} initialPopupId={qaPopupId} metadata={metadata} automaticTriggers>
