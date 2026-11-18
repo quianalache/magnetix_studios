@@ -125,7 +125,7 @@ export function stepsInLoops(steps: RoutingStep[], checkoutDest: Record<string, 
 
 export interface FunnelIssue {
   level: "error" | "warning";
-  code: "route_missing" | "checkout_route_missing" | "loop" | "unreachable" | "no_page" | "page_missing" | "page_unpublished" | "page_shared" | "offer_missing" | "offer_unavailable" | "crm_needs_attention";
+  code: "route_missing" | "checkout_route_missing" | "loop" | "unreachable" | "no_page" | "page_missing" | "page_unpublished" | "page_shared" | "destination_unavailable" | "offer_missing" | "offer_unavailable" | "offer_charging_off" | "crm_needs_attention";
   stepId: string | null;
   message: string;
 }
@@ -154,22 +154,58 @@ export function describeEdge(steps: RoutingStep[], edge: RouteEdge): string {
   return `${edge.sequential ? "next step · " : ""}${stepLabel(steps, edge.target)}`;
 }
 
-/** Everything the hub needs to warn about; errors also block publishing. */
+/** Steps a buyer can reach from the funnel's first step (the entry page). */
+export function reachableSteps(steps: RoutingStep[], dest: Record<string, PostPurchaseDestination | null>): Set<string> {
+  const seen = new Set<string>();
+  if (!steps.length) return seen;
+  seen.add(steps[0].id);
+  const queue = [0];
+  while (queue.length) {
+    const i = queue.shift()!;
+    for (const e of edgesFor(steps, i, dest[steps[i].id])) {
+      if (!e.target || e.target === "missing" || seen.has(e.target)) continue;
+      seen.add(e.target);
+      queue.push(steps.findIndex((s) => s.id === e.target));
+    }
+  }
+  return seen;
+}
+
+/**
+ * Everything the hub needs to warn about; errors also block publishing.
+ *
+ * Page problems (no page, deleted page, draft page) are ERRORS on any step a
+ * buyer can reach — a visitor would land on a missing page and get stuck —
+ * and warnings on steps nobody is sent to. A checkout step that shows a sales
+ * page (Checkout block) is checked the same way, and so is a checkout's
+ * after-purchase destination page. Publishing a funnel never publishes its
+ * pages: each page is published from its own editor.
+ */
 export function analyzeFunnel(input: FunnelAnalysisInput): FunnelIssue[] {
   const { steps, checkoutDestinations: dest, pages, pageUses = {} } = input;
   const issues: FunnelIssue[] = [];
   const name = (i: number) => `Step ${i + 1} · ${steps[i].name}`;
+  const reachable = reachableSteps(steps, dest);
   steps.forEach((s, i) => {
+    const level: FunnelIssue["level"] = reachable.has(s.id) ? "error" : "warning";
     for (const e of edgesFor(steps, i, dest[s.id])) {
       if (e.target !== "missing") continue;
       if (e.key === "after_purchase") issues.push({ level: "error", code: "checkout_route_missing", stepId: s.id, message: `${name(i)}: after purchase, buyers are sent to a step that no longer exists. Choose a new destination in its Checkout settings.` });
       else issues.push({ level: "error", code: "route_missing", stepId: s.id, message: `${name(i)}: the ${e.key === "accept" ? "Accept" : "Decline"} route points to a step that no longer exists.` });
     }
-    if (needsPage(s.type)) {
-      if (!s.pageId) issues.push({ level: "warning", code: "no_page", stepId: s.id, message: `${name(i)}: no page yet. Choose one so visitors have something to see.` });
-      else if (!pages[s.pageId]) issues.push({ level: "warning", code: "page_missing", stepId: s.id, message: `${name(i)}: its page was deleted. Choose another page.` });
-      else if (pages[s.pageId].status !== "published") issues.push({ level: "warning", code: "page_unpublished", stepId: s.id, message: `${name(i)}: “${pages[s.pageId].name}” isn't published, so visitors can't see it yet.` });
+    // Checkout steps may use the hosted checkout (no page); one that shows a
+    // sales page needs that page to exist and be published.
+    if (needsPage(s.type) || s.pageId) {
+      if (!s.pageId) issues.push({ level, code: "no_page", stepId: s.id, message: `${name(i)}: no page yet. Choose one so visitors have something to see.` });
+      else if (!pages[s.pageId]) issues.push({ level, code: "page_missing", stepId: s.id, message: `${name(i)}: its page was deleted. Choose another page.` });
+      else if (pages[s.pageId].status !== "published") issues.push({ level, code: "page_unpublished", stepId: s.id, message: `${name(i)}: “${pages[s.pageId].name}” isn't published, so visitors can't see it yet. Publish the page first.` });
       if (s.pageId && hasRouting(s.type) && (pageUses[s.pageId] ?? 0) > 1) issues.push({ level: "warning", code: "page_shared", stepId: s.id, message: `${name(i)}: its page is also used by another funnel step. Give this ${s.type} its own copy so the two can be edited separately.` });
+    }
+    const d = s.type === "checkout" ? dest[s.id] : null;
+    if (d?.type === "page") {
+      const target = pages[d.pageId];
+      if (!target) issues.push({ level, code: "destination_unavailable", stepId: s.id, message: `${name(i)}: after purchase, buyers are sent to a page that was deleted. Choose a new destination in its Checkout settings.` });
+      else if (target.status !== "published") issues.push({ level, code: "destination_unavailable", stepId: s.id, message: `${name(i)}: after purchase, buyers are sent to “${target.name}”, which isn't published yet. Publish that page or choose another destination.` });
     }
   });
   const loops = stepsInLoops(steps, dest);
@@ -177,23 +213,19 @@ export function analyzeFunnel(input: FunnelAnalysisInput): FunnelIssue[] {
     const names = steps.map((s, i) => (loops.has(s.id) ? name(i) : null)).filter(Boolean);
     issues.push({ level: "error", code: "loop", stepId: null, message: `These steps send buyers in a loop: ${names.join(", ")}. Change one of their routes.` });
   }
-  // Reachability from the first step.
   if (steps.length > 1) {
-    const seen = new Set<string>([steps[0].id]);
-    const queue = [0];
-    while (queue.length) {
-      const i = queue.shift()!;
-      for (const e of edgesFor(steps, i, dest[steps[i].id])) {
-        if (!e.target || e.target === "missing" || seen.has(e.target)) continue;
-        seen.add(e.target);
-        queue.push(steps.findIndex((s) => s.id === e.target));
-      }
-    }
     steps.forEach((s, i) => {
-      if (!seen.has(s.id)) issues.push({ level: "warning", code: "unreachable", stepId: s.id, message: `${name(i)}: can't be reached, because no step sends buyers to it.` });
+      if (!reachable.has(s.id)) issues.push({ level: "warning", code: "unreachable", stepId: s.id, message: `${name(i)}: can't be reached, because no step sends buyers to it.` });
     });
   }
   return issues;
+}
+
+/** "2 pages in this funnel aren't published yet. …" — the publish summary for page problems that block publishing. */
+export function unpublishedPagesSummary(issues: FunnelIssue[]): string | null {
+  const n = new Set(issues.filter((i) => i.level === "error" && (i.code === "page_unpublished" || i.code === "destination_unavailable") && /isn't published/.test(i.message)).map((i) => i.stepId)).size;
+  if (!n) return null;
+  return `${n === 1 ? "1 page in this funnel isn't" : `${n} pages in this funnel aren't`} published yet. Publish ${n === 1 ? "that page" : "those pages"} before making the funnel available to visitors.`;
 }
 
 /**

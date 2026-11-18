@@ -5,7 +5,7 @@
  * Run: pnpm exec tsx scripts/check-funnel-routing.ts
  */
 import assert from "node:assert/strict";
-import { analyzeFunnel, describeEdge, edgesFor, newLoopSteps, normalizeRouting, routingProblem, stepsInLoops, type RoutingStep } from "../src/lib/checkout/funnel-routing";
+import { analyzeFunnel, describeEdge, edgesFor, newLoopSteps, normalizeRouting, routingProblem, stepsInLoops, unpublishedPagesSummary, type RoutingStep } from "../src/lib/checkout/funnel-routing";
 import type { PostPurchaseDestination } from "../src/types/checkout";
 
 let passes = 0;
@@ -111,14 +111,35 @@ check("checkout to Space makes later steps unreachable (warning, not error)", ()
   assert.ok(issues.some((i) => i.code === "unreachable" && i.stepId === "up"));
   assert.equal(issues.filter((i) => i.level === "error").length, 0);
 });
-check("page warnings: none, deleted, draft, shared upsell page", () => {
+check("page problems: none, deleted, draft block publishing on reachable steps; shared upsell page warns", () => {
   const s = base();
   s[0].pageId = null;
   s[4].pageId = "p_deleted";
   const issues = analyzeFunnel({ steps: s, checkoutDestinations: coNext, pages: { ...pages, p_down: { name: "Down", status: "draft" } }, pageUses: { p_up: 2 } });
   const codes = issues.map((i) => `${i.code}:${i.stepId}`);
   for (const c of ["no_page:sales", "page_missing:ty", "page_unpublished:down", "page_shared:up"]) assert.ok(codes.includes(c), c);
-  assert.ok(issues.filter((i) => ["no_page", "page_missing", "page_unpublished", "page_shared"].includes(i.code)).every((i) => i.level === "warning"));
+  assert.ok(issues.filter((i) => ["no_page", "page_missing", "page_unpublished"].includes(i.code)).every((i) => i.level === "error"));
+  assert.ok(issues.filter((i) => i.code === "page_shared").every((i) => i.level === "warning"));
+});
+check("page problems on steps nobody reaches stay warnings", () => {
+  const s = base();
+  s[4].pageId = "p_deleted";
+  // Checkout sends buyers to their Space → up / down / thank-you are unreachable.
+  const issues = analyzeFunnel({ steps: s, checkoutDestinations: { co: { type: "space" } }, pages });
+  assert.equal(issues.find((i) => i.code === "page_missing")?.level, "warning");
+});
+check("checkout after-purchase page that is a draft or deleted blocks publishing", () => {
+  const draft = analyzeFunnel({ steps: base(), checkoutDestinations: { co: { type: "page", pageId: "p_ext" } }, pages: { ...pages, p_ext: { name: "Ext", status: "draft" } } });
+  assert.equal(draft.find((i) => i.code === "destination_unavailable")?.level, "error");
+  const gone = analyzeFunnel({ steps: base(), checkoutDestinations: { co: { type: "page", pageId: "p_gone" } }, pages });
+  assert.equal(gone.find((i) => i.code === "destination_unavailable")?.level, "error");
+  assert.equal(unpublishedPagesSummary(draft), "1 page in this funnel isn't published yet. Publish that page before making the funnel available to visitors.");
+});
+check("checkout step showing a draft sales page blocks publishing", () => {
+  const s = base();
+  s[1].pageId = "p_salescheckout";
+  const issues = analyzeFunnel({ steps: s, checkoutDestinations: coNext, pages: { ...pages, p_salescheckout: { name: "Sales checkout", status: "draft" } } });
+  assert.equal(issues.find((i) => i.stepId === "co" && i.code === "page_unpublished")?.level, "error");
 });
 check("checkout with the hosted page needs no page", () => assert.ok(!analyzeFunnel({ steps: base(), checkoutDestinations: coNext, pages }).some((i) => i.stepId === "co" && i.code === "no_page")));
 

@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSubAccount } from "@/context/sub-account-context";
 import { commerceFetch } from "@/lib/client/commerce-api";
-import { hasRouting, normalizeRouting, stepLabel } from "@/lib/checkout/funnel-routing";
+import { hasRouting, normalizeRouting, stepLabel, unpublishedPagesSummary } from "@/lib/checkout/funnel-routing";
 import type { FunnelStep } from "@/types/checkout";
-import { FUNNELS_VIEW_HREF, type FunnelHubPayload } from "@/components/funnels/funnel-ui";
+import { FUNNELS_VIEW_HREF, pageEditorHref, type FunnelHubPayload } from "@/components/funnels/funnel-ui";
 import { StepRow, type StepAction } from "@/components/funnels/step-row";
 import { DuplicateStepDialog, PageDialog, RenameDialog, RoutingDialog } from "@/components/funnels/step-dialogs";
 import { AddPageDialog } from "@/components/funnels/add-page-dialog";
@@ -82,6 +82,17 @@ export function FunnelHub({ subAccountId, funnelId }: { subAccountId: string; fu
   const errors = hub.issues.filter((i) => i.level === "error");
   const warnings = hub.issues.filter((i) => i.level === "warning");
   const dialogStep = dialog && "step" in dialog ? dialog.step : null;
+  /** The page a creator opens to fix an error (an existing page that isn't published, or a draft after-purchase page). */
+  const errorPageId = (e: (typeof errors)[number]): string | null => {
+    const step = e.stepId ? steps.find((s) => s.id === e.stepId) : null;
+    if (!step) return null;
+    if (e.code === "page_unpublished" && step.pageId) return step.pageId;
+    if (e.code === "destination_unavailable") {
+      const d = hub.checkout[step.id]?.postPurchase;
+      return d?.type === "page" && hub.pages.some((p) => p.id === d.pageId) ? d.pageId : null;
+    }
+    return null;
+  };
 
   const move = (step: FunnelStep, delta: number) => {
     const ids = steps.map((s) => s.id);
@@ -240,9 +251,25 @@ export function FunnelHub({ subAccountId, funnelId }: { subAccountId: string; fu
         <div className="flex gap-3 rounded-card bg-status-danger-bg p-4 text-status-danger-fg" role="alert" data-funnel-errors>
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="flex flex-col gap-1 text-body-sm">
+            {unpublishedPagesSummary(errors) ? <p data-funnel-unpublished-summary>{unpublishedPagesSummary(errors)}</p> : null}
             <p className="font-semibold">{published ? "Fix these so buyers don't get stuck:" : "Fix these before publishing:"}</p>
             <ul className="flex list-disc flex-col gap-0.5 pl-4">
-              {errors.map((e, i) => <li key={i}>{e.message}</li>)}
+              {errors.map((e, i) => {
+                const pageId = errorPageId(e);
+                return (
+                  <li key={i}>
+                    {e.message}
+                    {pageId ? (
+                      <>
+                        {" "}
+                        <Link href={pageEditorHref(subAccountId, pageId)} className="font-medium underline underline-offset-2" data-funnel-error-open-page>
+                          Open page
+                        </Link>
+                      </>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>

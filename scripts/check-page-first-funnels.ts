@@ -352,6 +352,104 @@ async function main() {
     assert.equal(r.ok, true, JSON.stringify(r));
   });
 
+  console.log("\nPublishing safeguards (pages + destinations; never auto-publishes pages)");
+  const { readFileSync } = await import("node:fs");
+  const orders = await import("../src/lib/server/checkout/order-service");
+  const publish = (funnelId: string) => funnels.updateFunnel(SA, funnelId, { status: "published" });
+  const statusOf = async (path: string) => (await db.doc(path).get()).get("status");
+  const hostedCheckout = async (funnelId: string, postPurchase: Record<string, unknown> = { type: "space" }) => {
+    const step = await funnels.addStep({ subAccountId: SA, funnelId, uid: ADMIN, body: { type: "checkout", name: "Checkout" } });
+    await configs.saveStepCheckoutConfig({ subAccountId: SA, funnelId, stepId: step.id, uid: ADMIN, body: { primaryOfferId: "offerPF", format: "two_step", couponsEnabled: true, postPurchase } });
+    return step;
+  };
+  await mkPage("pubLanding", [heading("h1", "Landing")], { status: "published" });
+  await mkPage("draftLanding", [heading("h1", "Draft landing")]);
+  await mkPage("draftSales", [heading("h1", "Sales"), checkoutBlock("cb")]);
+  await mkPage("draftAfter", [heading("h1", "After")]);
+  await mkPage("draftOrphan", [heading("h1", "Orphan")]);
+  await mkPage("draftOffer", [heading("h1", "Offer")]);
+
+  await check("a draft page buyers would reach blocks publishing, with a plain summary; the page stays a draft", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 1" } });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "draftLanding" } });
+    await hostedCheckout(F.id);
+    const hub = await funnels.getFunnelHub(SA, F.id);
+    const issue = hub.issues.find((i) => i.code === "page_unpublished");
+    assert.equal(issue?.level, "error");
+    await assert.rejects(publish(F.id), (e: unknown) => isErr(409, "funnel_invalid")(e) && /1 page in this funnel isn't published yet\. Publish that page before making the funnel available to visitors\./.test((e as Error).message));
+    assert.equal(await statusOf(`funnels/${F.id}`), "draft");
+    assert.equal(await statusOf("pages/draftLanding"), "draft", "publishing a funnel never publishes its pages");
+  });
+  await check("a valid funnel (published page + hosted checkout) still publishes", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard ok" } });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "pubLanding" } });
+    await hostedCheckout(F.id);
+    assert.deepEqual((await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.level === "error"), []);
+    await publish(F.id);
+    assert.equal(await statusOf(`funnels/${F.id}`), "published");
+  });
+  await check("a deleted page and a missing page block publishing", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 2" } });
+    await mkPage("goneSoon", [heading("h1", "Gone")], { status: "published" });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "goneSoon" } });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "No page yet" } });
+    await db.doc("pages/goneSoon").delete();
+    const codes = (await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.level === "error").map((i) => i.code).sort();
+    assert.deepEqual(codes, ["no_page", "page_missing"]);
+    await assert.rejects(publish(F.id), isErr(409, "funnel_invalid"));
+  });
+  await check("a checkout step that shows a DRAFT sales page blocks publishing", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 3" } });
+    const { step } = await funnels.addPageStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { source: "existing", pageId: "draftSales" } });
+    const stored = (await funnels.listSteps(F.id)).find((s) => s.id === step.id)!;
+    assert.equal(stored.type, "checkout");
+    const issue = (await funnels.getFunnelHub(SA, F.id)).issues.find((i) => i.stepId === step.id && i.code === "page_unpublished");
+    assert.equal(issue?.level, "error");
+    await assert.rejects(publish(F.id), isErr(409, "funnel_invalid"));
+  });
+  await check("after purchase → a draft page outside the funnel blocks publishing", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 4" } });
+    const step = await hostedCheckout(F.id, { type: "page", pageId: "draftAfter" });
+    const issue = (await funnels.getFunnelHub(SA, F.id)).issues.find((i) => i.stepId === step.id && i.code === "destination_unavailable");
+    assert.equal(issue?.level, "error");
+    assert.match(issue!.message, /isn't published yet/);
+    await assert.rejects(publish(F.id), isErr(409, "funnel_invalid"));
+    assert.equal(await statusOf("pages/draftAfter"), "draft");
+  });
+  await check("a draft page nobody is sent to is a warning, not a blocker", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 5" } });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "pubLanding" } });
+    await hostedCheckout(F.id, { type: "space" });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Orphan", pageId: "draftOrphan" } });
+    const issues = (await funnels.getFunnelHub(SA, F.id)).issues;
+    assert.equal(issues.find((i) => i.code === "page_unpublished")?.level, "warning");
+    await publish(F.id);
+  });
+  await check("one-click offer pages are flagged while charging is off (warning; never silently charged)", async () => {
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 6" } });
+    await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "pubLanding" } });
+    await hostedCheckout(F.id, { type: "funnel_next_step" });
+    const up = await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "upsell", name: "Upgrade", pageId: "draftOffer" } });
+    const issues = (await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.stepId === up.id);
+    const off = issues.find((i) => i.code === "offer_charging_off");
+    assert.equal(off?.level, "warning");
+    assert.match(off!.message, /one-click offers aren't switched on yet/);
+    assert.equal(issues.find((i) => i.code === "page_unpublished")?.level, "error", "its draft page still blocks");
+  });
+  await check("ordinary checkout is never gated by the post-purchase switch", async () => {
+    for (const f of ["src/lib/server/checkout/order-service.ts", "src/lib/server/checkout/config-service.ts", "src/lib/server/page-checkout-resolver.ts"]) {
+      assert.ok(!/funnelPostPurchaseCharging|COMMERCE_CAPABILITIES/.test(readFileSync(f, "utf8")), `${f} must not read the post-purchase switch`);
+    }
+    // A published funnel's checkout resolves for buyers with the switch off.
+    const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Ordinary checkout" } });
+    const step = await hostedCheckout(F.id);
+    await publish(F.id);
+    const cfgId = (await funnels.listSteps(F.id)).find((s) => s.id === step.id)!.checkoutConfigId!;
+    const r = await orders.resolveCheckout(cfgId);
+    assert.equal(r.primary.id, "offerPF");
+    assert.equal(r.config.couponsEnabled, true);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

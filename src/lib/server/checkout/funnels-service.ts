@@ -24,6 +24,7 @@ import {
   routingProblem,
   stepLabel,
   type FunnelIssue,
+  unpublishedPagesSummary,
 } from "@/lib/checkout/funnel-routing";
 
 /**
@@ -127,14 +128,20 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
     if (!hasRouting(s.type)) continue;
     const label = `Step ${i + 1} · ${s.name}`;
     const o = normalizeStepOffer(s.offer);
+    const offer = o.offerId ? await getCourseOffer(subAccountId, o.offerId).catch(() => null) : null;
+    const chargingOn = funnelPostPurchaseChargingEnabled({
+      subAccountId,
+      paymentMode: offer && offer.subAccountId === subAccountId ? offer.paymentMode : null,
+    });
+    // One-click charging is intentionally off outside the QA workspace. Say
+    // so plainly: a buyer sent here after paying can't accept or decline.
+    // (Whether this should block publishing or be skipped for buyers is an
+    // open owner decision — until then it is a warning, never silent.)
+    if (!chargingOn) issues.push({ level: "warning", code: "offer_charging_off", stepId: s.id, message: `${label}: one-click offers aren't switched on yet, so buyers who reach this page after paying can't accept or decline it.` });
     if (!o.offerId) {
       issues.push({ level: "warning", code: "offer_missing", stepId: s.id, message: `${label}: no Offer chosen yet. Choose one in Step settings.` });
     } else {
-      const offer = await getCourseOffer(subAccountId, o.offerId).catch(() => null);
-      const offerLevel = funnelPostPurchaseChargingEnabled({
-        subAccountId,
-        paymentMode: offer && offer.subAccountId === subAccountId ? offer.paymentMode : null,
-      }) ? "error" : "warning";
+      const offerLevel = chargingOn ? "error" : "warning";
       const attention = savedOfferAttention(offer && offer.subAccountId === subAccountId ? offerFacts(offer) : null, subAccountId);
       if (attention) issues.push({ level: offerLevel, code: "offer_unavailable", stepId: s.id, message: `${label}: ${attention}` });
       else if (offer?.type === "recurring" && !o.payment.recurringDisclosureAcknowledged) issues.push({ level: offerLevel, code: "offer_unavailable", stepId: s.id, message: `${label}: confirm the subscription disclosure in Step settings.` });
@@ -177,7 +184,10 @@ export async function updateFunnel(subAccountId: string, funnelId: string, body:
   if (patch.status === "published" && funnel.status !== "published") {
     const hub = await getFunnelHub(subAccountId, funnelId);
     const errors = hub.issues.filter((i) => i.level === "error");
-    if (errors.length) throw new CheckoutError(`Fix this before publishing: ${errors.map((e) => e.message).join(" ")}`, 409, null, "funnel_invalid");
+    if (errors.length) {
+      const summary = unpublishedPagesSummary(errors);
+      throw new CheckoutError(`${summary ? `${summary} ` : ""}Fix this before publishing: ${errors.map((e) => e.message).join(" ")}`, 409, null, "funnel_invalid");
+    }
   }
   await funnelsCol().doc(funnelId).update(patch);
   return { ...funnel, ...patch };
