@@ -12,11 +12,12 @@ import * as h5 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funne
 import * as h6 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/route";
 import * as h7 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/checkout/route";
 import * as h8 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/duplicate/route";
-import * as h9 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/route";
-import * as h10 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/route";
-import * as h11 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/route";
-import * as h12 from "@/app/api/sub-accounts/[id]/commerce/_routes/offer-options/route";
-import * as h13 from "@/app/api/sub-accounts/[id]/commerce/_routes/offers/[offerId]/hosted-checkout/route";
+import * as h9 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/move/route";
+import * as h10 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/[stepId]/route";
+import * as h11 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/[funnelId]/steps/route";
+import * as h12 from "@/app/api/sub-accounts/[id]/commerce/_routes/funnels/route";
+import * as h13 from "@/app/api/sub-accounts/[id]/commerce/_routes/offer-options/route";
+import * as h14 from "@/app/api/sub-accounts/[id]/commerce/_routes/offers/[offerId]/hosted-checkout/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,11 +32,12 @@ const d = createApiDispatcher([
   ["funnels/[funnelId]", h6],
   ["funnels/[funnelId]/steps/[stepId]/checkout", h7],
   ["funnels/[funnelId]/steps/[stepId]/duplicate", h8],
-  ["funnels/[funnelId]/steps/[stepId]", h9],
-  ["funnels/[funnelId]/steps", h10],
-  ["funnels", h11],
-  ["offer-options", h12],
-  ["offers/[offerId]/hosted-checkout", h13],
+  ["funnels/[funnelId]/steps/[stepId]/move", h9],
+  ["funnels/[funnelId]/steps/[stepId]", h10],
+  ["funnels/[funnelId]/steps", h11],
+  ["funnels", h12],
+  ["offer-options", h13],
+  ["offers/[offerId]/hosted-checkout", h14],
 ]);
 
 export const GET = d.GET;

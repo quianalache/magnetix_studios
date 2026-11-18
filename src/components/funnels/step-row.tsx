@@ -8,7 +8,9 @@ import {
   ArrowUp,
   CopyPlus,
   FileText,
+  FolderInput,
   MoreHorizontal,
+  MousePointerClick,
   Pencil,
   Route,
   Settings2,
@@ -24,7 +26,7 @@ import { describeEdge, edgesFor, hasRouting, STEP_TYPE_LABELS, type FunnelIssue 
 import type { FunnelStep } from "@/types/checkout";
 import { pageEditorHref, STEP_ICONS, stepSettingsHref, type FunnelHubPayload } from "@/components/funnels/funnel-ui";
 
-export type StepAction = "rename" | "page" | "routing" | "duplicate" | "up" | "down" | "remove";
+export type StepAction = "rename" | "page" | "routing" | "duplicate" | "up" | "down" | "remove" | "move" | "roleCheckout" | "roleOffer";
 
 /**
  * One step on the funnel hub: number, type, name, page, Offer (checkout),
@@ -75,7 +77,7 @@ export function StepRow({
             <p className="text-caption text-muted-foreground">{STEP_TYPE_LABELS[step.type]}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {page && step.type !== "checkout" ? (
+            {page ? (
               <Button variant="secondary" size="sm" className="hidden sm:inline-flex" render={<Link href={pageEditorHref(subAccountId, page.id)} />}>
                 <SquarePen aria-hidden="true" /> Edit page
               </Button>
@@ -123,6 +125,22 @@ export function StepRow({
                   <DropdownMenuItem onClick={() => onAction("duplicate", step)}>
                     <CopyPlus aria-hidden="true" /> Duplicate step…
                   </DropdownMenuItem>
+                  {step.pageId ? (
+                    <DropdownMenuItem onClick={() => onAction("move", step)}>
+                      <FolderInput aria-hidden="true" /> Move to another funnel…
+                    </DropdownMenuItem>
+                  ) : null}
+                  {step.pageId && (step.type === "page" || step.type === "thank_you") ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => onAction("roleCheckout", step)}>
+                        <ShoppingCart aria-hidden="true" /> Take payments on this page…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onAction("roleOffer", step)}>
+                        <MousePointerClick aria-hidden="true" /> Use as one-click offer page…
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem disabled={first} onClick={() => onAction("up", step)}>
                     <ArrowUp aria-hidden="true" /> Move up

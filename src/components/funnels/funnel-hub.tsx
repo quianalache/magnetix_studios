@@ -18,12 +18,14 @@ import { hasRouting, normalizeRouting, stepLabel } from "@/lib/checkout/funnel-r
 import type { FunnelStep } from "@/types/checkout";
 import { FUNNELS_VIEW_HREF, type FunnelHubPayload } from "@/components/funnels/funnel-ui";
 import { StepRow, type StepAction } from "@/components/funnels/step-row";
-import { AddStepDialog, DuplicateStepDialog, PageDialog, RenameDialog, RoutingDialog } from "@/components/funnels/step-dialogs";
+import { DuplicateStepDialog, PageDialog, RenameDialog, RoutingDialog } from "@/components/funnels/step-dialogs";
+import { AddPageDialog } from "@/components/funnels/add-page-dialog";
+import { MoveStepDialog } from "@/components/funnels/move-step-dialog";
 
 const STATUS_LABEL = { draft: "Draft", published: "Published", archived: "Archived" } as const;
 const dateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-type Dialog = { kind: "add" } | { kind: "renameFunnel" } | { kind: "rename" | "page" | "routing" | "duplicate"; step: FunnelStep } | null;
+type Dialog = { kind: "add" } | { kind: "renameFunnel" } | { kind: "rename" | "page" | "routing" | "duplicate" | "move"; step: FunnelStep } | null;
 
 /**
  * Funnel hub (Funnel Phase 2, decisions D2 / D4 / D6): one screen with the
@@ -135,10 +137,39 @@ export function FunnelHub({ subAccountId, funnelId }: { subAccountId: string; fu
     }
   }
 
+  /**
+   * Page-first funnels: give an ordinary page its role in this funnel (also
+   * offered inside the Page Builder). Explicit and confirmed; the server
+   * refuses it on a live funnel.
+   */
+  async function setRole(step: FunnelStep, role: "checkout" | "offer") {
+    const ok = await confirm({
+      title: role === "checkout" ? `Take payments on “${step.name}”?` : `Use “${step.name}” as a one-click offer page?`,
+      description:
+        role === "checkout"
+          ? "Buyers will pay on this page through its Checkout block, and the funnel continues from here after purchase. You'll choose the Offer in Checkout settings. This can't be switched back — remove the step and add the page again if you change your mind."
+          : "This page will present an Offer to buyers right after checkout. Choose the Offer and where buyers go after Accept or Decline in Step settings, and use the page's Accept offer / Decline offer buttons. This can't be switched back — remove the step and add the page again if you change your mind.",
+      confirmLabel: role === "checkout" ? "Take payments here" : "Use as offer page",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const d = await commerceFetch<{ notes: string[] }>(subAccountId, `funnels/${funnelId}/steps/${step.id}`, { method: "PATCH", body: { role } });
+      toast.success(role === "checkout" ? "Buyers can now pay on this page." : "This page is now a one-click offer page.", { description: d.notes.join(" ") || undefined, duration: 10_000 });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+      await load();
+    }
+  }
+
   function onAction(action: StepAction, step: FunnelStep) {
     if (action === "up") return move(step, -1);
     if (action === "down") return move(step, 1);
     if (action === "remove") return void removeStep(step);
+    if (action === "roleCheckout") return void setRole(step, "checkout");
+    if (action === "roleOffer") return void setRole(step, "offer");
     setDialog({ kind: action, step });
   }
 
@@ -233,7 +264,7 @@ export function FunnelHub({ subAccountId, funnelId }: { subAccountId: string; fu
       </div>
 
       {steps.length === 0 ? (
-        <EmptyState icon={Filter} compact title="No steps yet" description="Add a Checkout step to start selling, then the pages buyers see before and after it." action={isAdmin ? <Button onClick={() => setDialog({ kind: "add" })}><Plus aria-hidden="true" /> Add step</Button> : undefined} />
+        <EmptyState icon={Filter} compact title="No pages yet" description="Add your first page. A page with a Checkout block is where buyers pay; add the pages they see before and after it." action={isAdmin ? <Button onClick={() => setDialog({ kind: "add" })}><Plus aria-hidden="true" /> Add step</Button> : undefined} />
       ) : (
         <ol className="flex flex-col gap-3" aria-label="Funnel steps">
           {steps.map((s, i) => (
@@ -243,7 +274,8 @@ export function FunnelHub({ subAccountId, funnelId }: { subAccountId: string; fu
       )}
       {!published ? <p className="text-caption text-muted-foreground">This funnel is a draft. Its checkout opens for buyers once you publish it; you can still preview checkouts from their settings.</p> : null}
 
-      <AddStepDialog open={dialog?.kind === "add"} onOpenChange={(o) => !o && setDialog(null)} subAccountId={subAccountId} hub={hub} onDone={() => void load()} onRefreshPages={() => void load()} />
+      <AddPageDialog open={dialog?.kind === "add"} onOpenChange={(o) => !o && setDialog(null)} subAccountId={subAccountId} hub={hub} onDone={() => void load()} />
+      <MoveStepDialog open={dialog?.kind === "move"} onOpenChange={(o) => !o && setDialog(null)} subAccountId={subAccountId} hub={hub} step={dialog?.kind === "move" ? dialogStep : null} onDone={() => void load()} />
       <PageDialog open={dialog?.kind === "page"} onOpenChange={(o) => !o && setDialog(null)} subAccountId={subAccountId} hub={hub} step={dialog?.kind === "page" ? dialogStep : null} onDone={() => void load()} onRefreshPages={() => void load()} />
       <RoutingDialog open={dialog?.kind === "routing"} onOpenChange={(o) => !o && setDialog(null)} subAccountId={subAccountId} hub={hub} step={dialog?.kind === "routing" ? dialogStep : null} onDone={() => void load()} />
       <DuplicateStepDialog

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { commerceFetch } from "@/lib/client/commerce-api";
-import { DEFAULT_ROUTING, hasRouting, normalizeRouting, STEP_TYPE_LABELS } from "@/lib/checkout/funnel-routing";
-import type { FunnelStep, FunnelStepType, StepRouting } from "@/types/checkout";
-import { OFFER_LATER_NOTE, pageEditorHref, pageNeedsCopy, STEP_ICONS, STEP_TYPE_HELP, STEP_TYPE_ORDER, type FunnelHubPayload } from "@/components/funnels/funnel-ui";
+import { DEFAULT_ROUTING, hasRouting, normalizeRouting } from "@/lib/checkout/funnel-routing";
+import type { FunnelStep, StepRouting } from "@/types/checkout";
+import { OFFER_LATER_NOTE, pageEditorHref, pageNeedsCopy, type FunnelHubPayload } from "@/components/funnels/funnel-ui";
 import { PageField, RoutingFields, type PageChoice } from "@/components/funnels/step-fields";
 
 
@@ -67,142 +67,6 @@ const isPageInUse = (err: unknown) => (err as ErrWithCode)?.status === 409 && !!
 /** "Page copied" confirmation with a shortcut to the copy in the Page Builder. */
 export function toastCopied(message: string, subAccountId: string, pageId: string | null, push: (href: string) => void) {
   toast.success(message, pageId ? { description: "The copy is a new draft. The original page didn't change.", action: { label: "Open page", onClick: () => push(pageEditorHref(subAccountId, pageId)) } } : undefined);
-}
-
-export function AddStepDialog({
-  open,
-  onOpenChange,
-  subAccountId,
-  hub,
-  onDone,
-  onRefreshPages,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  subAccountId: string;
-  hub: FunnelHubPayload;
-  onDone: (step: FunnelStep) => void;
-  onRefreshPages: () => void;
-}) {
-  const router = useRouter();
-  const [type, setType] = useState<FunnelStepType | null>(null);
-  const [name, setName] = useState("");
-  const [page, setPage] = useState<PageChoice>({ pageId: null, copyPage: false });
-  const [busy, setBusy] = useState<"add" | "copy" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [forced, setForced] = useState<string | null>(null);
-  useEffect(() => {
-    if (open) {
-      setType(null);
-      setName("");
-      setPage({ pageId: null, copyPage: false });
-      setError(null);
-      setForced(null);
-    }
-  }, [open]);
-  const atLimit = hub.steps.length >= 30;
-  const needsCopy = !!type && !!page.pageId && (forced === page.pageId || pageNeedsCopy({ type, currentPageId: null, pageId: page.pageId, pageUses: hub.pageUses, pageExclusiveUses: hub.pageExclusiveUses ?? {} }));
-
-  async function add(copy: boolean) {
-    if (!type || busy) return;
-    setBusy(copy ? "copy" : "add");
-    setError(null);
-    try {
-      const d = await commerceFetch<{ step: FunnelStep }>(subAccountId, `funnels/${hub.funnel.id}/steps`, {
-        method: "POST",
-        body: { type, name: name.trim() || STEP_TYPE_LABELS[type], ...(page.pageId ? { pageId: page.pageId, copyPage: copy || page.copyPage } : {}) },
-      });
-      if (copy || page.copyPage) toastCopied(`${STEP_TYPE_LABELS[type]} step added with its own copy of the page.`, subAccountId, d.step.pageId, router.push);
-      else toast.success(`${STEP_TYPE_LABELS[type]} step added.`);
-      onDone(d.step);
-      onOpenChange(false);
-    } catch (err) {
-      if (isPageInUse(err)) setForced(page.pageId);
-      else setError((err as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{type ? `Add a ${STEP_TYPE_LABELS[type]} step` : "Add a step"}</DialogTitle>
-          <DialogDescription>{type ? "Name the step and choose its page. You can change both later." : "Choose the type of step to add to the end of this funnel."}</DialogDescription>
-        </DialogHeader>
-        {atLimit ? <p className="rounded-lg bg-status-warning-bg p-3 text-body-sm text-status-warning-fg">This funnel has 30 steps, the most a funnel can have. Remove a step to add another.</p> : null}
-        {!type ? (
-          <div className="grid gap-2 sm:grid-cols-2" role="list">
-            {STEP_TYPE_ORDER.map((t) => {
-              const Icon = STEP_ICONS[t];
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  role="listitem"
-                  disabled={atLimit}
-                  onClick={() => {
-                    setType(t);
-                    setName(STEP_TYPE_LABELS[t]);
-                  }}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors outline-none hover:border-primary/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-                  data-add-step-type={t}
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tint-violet text-primary">
-                    <Icon className="size-4" aria-hidden="true" />
-                  </span>
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-body-sm font-semibold">{STEP_TYPE_LABELS[t]}</span>
-                    <span className="text-caption text-muted-foreground">{STEP_TYPE_HELP[t]}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="add-step-name">Step name</Label>
-              <Input id="add-step-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <PageField
-              id="add-step-page"
-              type={type}
-              currentPageId={null}
-              value={page}
-              onChange={(v) => {
-                setPage(v);
-                setError(null);
-              }}
-              pages={hub.pages}
-              needsCopy={needsCopy}
-              onDuplicateAndUse={() => void add(true)}
-              duplicating={busy === "copy"}
-              subAccountId={subAccountId}
-              onRefresh={onRefreshPages}
-              error={error}
-            />
-            {type === "checkout" ? <p className="text-caption text-muted-foreground">After adding it, open Checkout settings to choose the Offer.</p> : null}
-            {hasRouting(type) ? <p className="rounded-lg bg-tint-violet p-3 text-caption text-muted-foreground">{OFFER_LATER_NOTE} New {type} steps go to the next step on both Accept and Decline until you change them.</p> : null}
-          </div>
-        )}
-        <DialogFooter>
-          {type ? (
-            <Button type="button" variant="ghost" className="sm:mr-auto" disabled={!!busy} onClick={() => setType(null)}>
-              <ArrowLeft aria-hidden="true" /> Back
-            </Button>
-          ) : null}
-          <Button type="button" variant="secondary" disabled={!!busy} onClick={() => onOpenChange(false)}>Cancel</Button>
-          {type ? (
-            <Button type="button" disabled={!!busy || atLimit || needsCopy} onClick={() => void add(false)}>
-              {busy === "add" ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}Add step
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /* -------------------------------- Change page ------------------------------- */

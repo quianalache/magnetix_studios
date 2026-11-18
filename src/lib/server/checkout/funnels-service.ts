@@ -6,8 +6,11 @@ import { CheckoutError, agencyIdFor, assertId } from "./common";
 import { createStepCheckoutConfig, deleteCheckoutConfig, getCheckoutConfigDoc, saveStepCheckoutConfig } from "./config-service";
 import { listWorkspacePages } from "./pages";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
-import { duplicatePuckPage, remapPageCheckoutConfigs } from "@/lib/server/pages-funnels-puck-service";
+import { clearPageCheckoutConnections, countPageCheckoutBlocks, createPuckPage, duplicatePuckPage, remapPageCheckoutConfigs } from "@/lib/server/pages-funnels-puck-service";
+import { PageTemplateError, createPageFromTemplate } from "@/lib/server/pages-funnels/page-template-service";
+import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
 import { loadPagesLibrary } from "@/lib/server/pages-funnels/library-service";
+import { checkoutContextsForPage } from "@/lib/server/page-checkout-resolver";
 import { normalizeStepOffer, sanitizeStepOfferInput, savedOfferAttention } from "@/lib/checkout/funnel-offer";
 import { offerFacts, validateStepOffer } from "./funnel-offer-service";
 import { funnelPostPurchaseChargingEnabled } from "@/lib/checkout/capabilities";
@@ -85,7 +88,9 @@ export async function checkoutDestinations(steps: FunnelStep[]): Promise<Record<
 export interface FunnelHub {
   funnel: Funnel;
   steps: FunnelStep[];
-  pages: Array<{ id: string; name: string; status: string }>;
+  pages: Array<{ id: string; name: string; status: string; updatedAt?: number | null }>;
+  /** pageId → names of the (non-archived) funnels whose steps show it (Add a page → Use existing page). */
+  pageFunnels?: Record<string, string[]>;
   /** Checkout steps: post-purchase destination + primary Offer title (read-only here). */
   checkout: Record<string, { postPurchase: PostPurchaseDestination | null; offerTitle: string | null }>;
   /** pageId → number of funnel steps in the workspace using it. */
@@ -137,7 +142,8 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
     const invalid = [...(o.onAccept.invalidTags ?? []), ...(o.onDecline.invalidTags ?? [])];
     if (invalid.length) issues.push({ level: "warning", code: "crm_needs_attention", stepId: s.id, message: `${label}: “${invalid[0].tag}” was deleted from your Tags library. Review its CRM actions in Step settings.` });
   }
-  return { funnel, steps, pages, checkout, pageUses, pageExclusiveUses, issues };
+  const pageFunnels = Object.fromEntries(Object.entries(library.usage).map(([id, uses]) => [id, [...new Set(uses.map((u) => u.funnelName || "Untitled funnel"))]]));
+  return { funnel, steps, pages, pageFunnels, checkout, pageUses, pageExclusiveUses, issues };
 }
 
 export async function createFunnel(input: { subAccountId: string; uid: string; body: Record<string, unknown> }): Promise<{ funnel: Funnel; steps: FunnelStep[] }> {
@@ -397,6 +403,26 @@ export async function reorderSteps(subAccountId: string, funnelId: string, stepI
 
 export type DuplicatePageMode = "copy" | "same" | "none";
 
+/** A checkout configuration's creator settings (no identity, context or version), for copying into another step's checkout. */
+function copyableCheckoutFields(source: CheckoutConfig): Record<string, unknown> {
+  const fields: Partial<CheckoutConfig> = {
+    primaryOfferId: source.primaryOfferId,
+    enabled: source.enabled,
+    format: source.format,
+    nameFormat: source.nameFormat,
+    phone: source.phone,
+    billingAddress: source.billingAddress,
+    agreement: source.agreement,
+    couponsEnabled: source.couponsEnabled,
+    bumps: source.bumps,
+    display: source.display,
+    postPurchase: source.postPurchase,
+    internalNotes: source.internalNotes,
+    crm: source.crm,
+  };
+  return fields as Record<string, unknown>;
+}
+
 /**
  * Duplicate a step, placed right after the original. The page is either an
  * independent copy (the existing page duplicate: new draft, no shared
@@ -433,23 +459,8 @@ export async function duplicateStep(input: { subAccountId: string; funnelId: str
     if (step.type === "checkout" && step.checkoutConfigId && created.checkoutConfigId) {
       const source = await getCheckoutConfigDoc(step.checkoutConfigId);
       if (source) {
-        const fields: Partial<CheckoutConfig> = {
-          primaryOfferId: source.primaryOfferId,
-          enabled: source.enabled,
-          format: source.format,
-          nameFormat: source.nameFormat,
-          phone: source.phone,
-          billingAddress: source.billingAddress,
-          agreement: source.agreement,
-          couponsEnabled: source.couponsEnabled,
-          bumps: source.bumps,
-          display: source.display,
-          postPurchase: source.postPurchase,
-          internalNotes: source.internalNotes,
-          crm: source.crm,
-        };
         try {
-          await saveStepCheckoutConfig({ subAccountId: input.subAccountId, funnelId: funnel.id, stepId: created.id, uid: input.uid, body: fields as Record<string, unknown> });
+          await saveStepCheckoutConfig({ subAccountId: input.subAccountId, funnelId: funnel.id, stepId: created.id, uid: input.uid, body: copyableCheckoutFields(source) });
         } catch {
           // e.g. the Offer was archived since: keep a blank checkout rather than an invalid copy.
           notes.push("The checkout settings couldn't be copied as they are (an Offer or Workflow may no longer be available), so the copy starts with blank checkout settings.");
@@ -485,4 +496,242 @@ export async function duplicateStep(input: { subAccountId: string; funnelId: str
   }
   if (copyPage) notes.push("The page was copied as a new draft. Publish it when it's ready.");
   return { step: (await getStep(input.subAccountId, funnel.id, created.id)).step, notes };
+}
+
+/* ------------------------- Page-first funnels (2026-11-17) ------------------------- */
+
+/**
+ * Page-first funnels (owner-approved mockups, 2026-11-17). Creators add PAGES
+ * to a funnel; the step's internal role (page / checkout / one-click offer)
+ * comes from what the page holds and from explicit, server-checked choices —
+ * never from a type picked before the page exists. The stored step types,
+ * checkout configurations, Offer settings, routing and the payment engine are
+ * unchanged: a "checkout" step whose page holds the Checkout block IS the
+ * sales page with embedded checkout (no separate, hidden Checkout step), so
+ * the order, routing and analytics all belong to the page the buyer saw.
+ */
+
+export type AddPageSource = "blank" | "template" | "existing";
+
+async function pageInWorkspace(subAccountId: string, pageId: string): Promise<{ name: string; status: string } | null> {
+  const snap = await getAdminDb().doc(`pages/${pageId}`).get();
+  if (!snap.exists || snap.data()?.subAccountId !== subAccountId) return null;
+  return { name: (snap.data()?.name as string) || "Untitled page", status: (snap.data()?.status as string) ?? "draft" };
+}
+
+const CHECKOUT_PAGE_NOTE = "This page has a Checkout block, so buyers pay on it. Choose the Offer in Checkout settings.";
+const extraCheckoutsNote = (n: number) => `This page has ${n} Checkout blocks. A page can publish with one — remove the extras in the Page Builder.`;
+
+/**
+ * Add a page to the end of a funnel — "Add a page" (mockups 1–3):
+ *  - `blank`: a new Draft page (the existing Create Page writer);
+ *  - `template`: a new independent Draft page from a saved template (the
+ *    existing Saved Page Templates writer — Checkout blocks made automatic);
+ *  - `existing`: an explicit DRAFT COPY of a workspace page (the existing
+ *    duplicate writer). The original is never changed or shared.
+ * A page holding a Checkout block becomes this funnel's checkout page (its own
+ * new, blank checkout settings — another funnel's payment setup is never
+ * inherited); every other page is an ordinary page step. If anything fails
+ * after the page was made, the new page is removed again.
+ */
+export async function addPageStep(input: { subAccountId: string; funnelId: string; uid: string; body: Record<string, unknown> }): Promise<{ step: FunnelStep; notes: string[] }> {
+  const funnel = await getFunnelForWorkspace(input.subAccountId, input.funnelId);
+  if (funnel.status === "archived") throw new CheckoutError("This funnel is archived.", 409);
+  if ((await listSteps(funnel.id)).length >= MAX_STEPS) throw new CheckoutError(`A funnel can have up to ${MAX_STEPS} steps.`);
+  const source = input.body.source;
+  let pageId: string;
+  if (source === "blank" || source === "template") {
+    const problem = pageNameProblem(input.body.name);
+    if (problem) throw new CheckoutError(problem, 400, { name: problem });
+  }
+  if (source === "blank") {
+    const created = await createPuckPage({ subAccountId: input.subAccountId, uid: input.uid, name: input.body.name, pageType: "generic", goal: "other" });
+    if (!created.ok) throw new CheckoutError(created.error, created.status);
+    pageId = created.pageId;
+  } else if (source === "template") {
+    const templateId = typeof input.body.templateId === "string" ? input.body.templateId : "";
+    if (!templateId) throw new CheckoutError("Choose a template.", 400, { templateId: "Choose a template." });
+    try {
+      pageId = (await createPageFromTemplate({ subAccountId: input.subAccountId, uid: input.uid, templateId, name: input.body.name, goal: undefined })).pageId;
+    } catch (err) {
+      if (err instanceof PageTemplateError) throw new CheckoutError(err.message, err.status === 500 ? 502 : err.status);
+      throw err;
+    }
+  } else if (source === "existing") {
+    const sourcePageId = assertId(typeof input.body.pageId === "string" ? input.body.pageId : "", "page");
+    if (!(await pageInWorkspace(input.subAccountId, sourcePageId))) throw new CheckoutError("That page isn't in this workspace.", 400, { pageId: "Choose a page from this workspace." });
+    const dup = await duplicatePuckPage(input.subAccountId, sourcePageId, input.uid);
+    if (!dup.ok) throw new CheckoutError(dup.error, dup.status === 404 ? 400 : dup.status);
+    pageId = dup.pageId;
+  } else {
+    throw new CheckoutError("Choose how to add the page.", 400, { source: "Choose an option." });
+  }
+
+  try {
+    const page = await pageInWorkspace(input.subAccountId, pageId);
+    if (!page) throw new CheckoutError("The new page couldn't be read. Try again.", 500);
+    const checkoutBlocks = await countPageCheckoutBlocks(input.subAccountId, pageId);
+    const role: FunnelStepType = checkoutBlocks > 0 ? "checkout" : "page";
+    // The page sells through ITS OWN step's checkout, never a connection copied from elsewhere.
+    if (role === "checkout") await clearPageCheckoutConnections(input.subAccountId, pageId);
+    const step = await addStep({ subAccountId: input.subAccountId, funnelId: funnel.id, uid: input.uid, body: { type: role, name: page.name, pageId } });
+    const notes: string[] = [];
+    if (role === "checkout") notes.push(CHECKOUT_PAGE_NOTE);
+    if (checkoutBlocks > 1) notes.push(extraCheckoutsNote(checkoutBlocks));
+    return { step, notes };
+  } catch (err) {
+    await discardCopy(pageId);
+    throw err;
+  }
+}
+
+/** Steps whose role can still be chosen: ordinary pages (incl. legacy Thank You steps). */
+const isPlainPageStep = (type: FunnelStepType) => type === "page" || type === "thank_you";
+
+/**
+ * Give an ordinary page step its role, explicitly, from the page's own
+ * Checkout block or Accept / Decline buttons (Page Builder) or the hub:
+ *  - `checkout`: the step gets its own checkout settings, so buyers pay on
+ *    this page and "after purchase" continues from THIS page's position. When
+ *    the page's Checkout block was showing another Checkout step of this
+ *    funnel, those settings (Offer, Order Bumps, coupons, fields, CRM) are
+ *    copied so nothing has to be set up again; the other step is left alone
+ *    for the creator to remove.
+ *  - `offer`: a one-click offer page (stored as an Upsell step, owner decision
+ *    D2): its Offer, payment, CRM and Accept / Decline routes are chosen in
+ *    Step settings, exactly as before. Nothing is charged by this change, and
+ *    post-purchase charging stays switched off by the server's own checks.
+ * Refused while the funnel is published (it would change a live buyer path).
+ */
+export async function setStepRole(subAccountId: string, funnelId: string, stepId: string, rawRole: unknown, uid: string): Promise<{ step: FunnelStep; notes: string[] }> {
+  const { funnel, step } = await getStep(subAccountId, funnelId, stepId);
+  const role = rawRole === "checkout" || rawRole === "offer" ? rawRole : null;
+  if (!role) throw new CheckoutError("Choose what this page does.", 400);
+  if ((role === "checkout" && step.type === "checkout") || (role === "offer" && hasRouting(step.type))) return { step, notes: [] };
+  if (!isPlainPageStep(step.type)) throw new CheckoutError("This page already has a different role in this funnel.", 409, null, "role_set");
+  if (!step.pageId || !(await pageInWorkspace(subAccountId, step.pageId))) throw new CheckoutError("Choose this step's page first.", 400);
+  if (funnel.status === "published") {
+    throw new CheckoutError("This funnel is live. Unpublish it before changing what this page does, so buyers who are part-way through aren't affected.", 409, null, "funnel_published");
+  }
+  if (funnel.status === "archived") throw new CheckoutError("This funnel is archived.", 409);
+  const notes: string[] = [];
+
+  if (role === "offer") {
+    // An offer page belongs to ONE step (its Accept / Decline buttons answer for that step).
+    await resolvePageForStep({ subAccountId, uid, stepId, type: "upsell", pageId: step.pageId, copyPage: false });
+    const steps = (await listSteps(funnelId)).map((s) => (s.id === stepId ? { ...s, type: "upsell" as FunnelStepType, routing: DEFAULT_ROUTING } : s));
+    const problem = routingProblem(steps, stepId, DEFAULT_ROUTING, await checkoutDestinations(steps));
+    if (problem) throw new CheckoutError(problem, 400, null, "routing_invalid");
+    const patch: Partial<FunnelStep> = { type: "upsell", routing: DEFAULT_ROUTING, updatedAt: Date.now() };
+    await stepsCol(funnelId).doc(stepId).update(patch);
+    await funnelsCol().doc(funnelId).update({ updatedAt: Date.now() });
+    notes.push("Choose the Offer, payment and where buyers go after Accept or Decline in Step settings. Use the page's Accept offer and Decline offer buttons.");
+    return { step: { ...step, ...patch }, notes };
+  }
+
+  // role === "checkout": which of this funnel's checkouts does the page's block show today?
+  const { autoConfigId } = await checkoutContextsForPage(subAccountId, step.pageId);
+  const previous = autoConfigId ? await getCheckoutConfigDoc(autoConfigId).catch(() => null) : null;
+  const carry = previous && previous.subAccountId === subAccountId && previous.context.type === "funnel_step" && previous.context.funnelId === funnelId ? previous : null;
+  const ref = stepsCol(funnelId).doc(stepId);
+  const config = await createStepCheckoutConfig({ subAccountId, agencyId: funnel.agencyId, funnelId, stepId });
+  try {
+    await getAdminDb().runTransaction(async (tx) => {
+      const fresh = (await tx.get(ref)).data() as Omit<FunnelStep, "id"> | undefined;
+      if (!fresh || !isPlainPageStep(fresh.type) || fresh.pageId !== step.pageId) throw new CheckoutError("This step just changed. Reload to see the latest version.", 409, null, "step_changed");
+      tx.update(ref, { type: "checkout", checkoutConfigId: config.id, updatedAt: Date.now() });
+    });
+  } catch (err) {
+    await deleteCheckoutConfig(config.id).catch(() => undefined);
+    throw err;
+  }
+  await clearPageCheckoutConnections(subAccountId, step.pageId);
+  if (carry) {
+    const fields = copyableCheckoutFields(carry);
+    // "After purchase → this very page" would loop: fall back to the next step.
+    const pp = carry.postPurchase;
+    if (pp.type === "funnel_step" && pp.stepId === stepId) fields.postPurchase = { type: "funnel_next_step" };
+    try {
+      await saveStepCheckoutConfig({ subAccountId, funnelId, stepId, uid, body: fields });
+      const from = (await listSteps(funnelId)).find((s) => s.checkoutConfigId === carry.id);
+      notes.push(`Checkout settings were copied from “${from?.name ?? "the other Checkout step"}”. Buyers now pay on this page, so you can remove that step if nothing else uses it.`);
+    } catch {
+      notes.push("Choose the Offer in Checkout settings (the earlier checkout settings couldn't be copied as they are).");
+    }
+  } else {
+    notes.push(CHECKOUT_PAGE_NOTE);
+  }
+  await funnelsCol().doc(funnelId).update({ updatedAt: Date.now() });
+  return { step: (await getStep(subAccountId, funnelId, stepId)).step, notes };
+}
+
+export interface MoveStepPreview {
+  sourceFunnelName: string;
+  targetFunnelName: string;
+  pageName: string;
+  /** Reasons the move can't happen (nothing is changed). */
+  blockers: string[];
+  /** Consequences the creator must confirm. */
+  warnings: string[];
+}
+
+/**
+ * Move a page to another funnel (the page keeps its identity; it is never
+ * copied). The source funnel's step is removed (Accept / Decline routes that
+ * pointed at it go to the next step, as with Remove step) and the page is
+ * added as the destination funnel's last step. Without `confirm: true` this
+ * only PREVIEWS: it reports what would change and writes nothing. Pages that
+ * take payment or present a one-click offer can't be moved — their checkout,
+ * Offer and routing belong to this funnel — so the creator duplicates instead.
+ */
+export async function moveStepToFunnel(input: { subAccountId: string; funnelId: string; stepId: string; uid: string; body: Record<string, unknown> }): Promise<{ preview: MoveStepPreview } | { moved: true; step: FunnelStep; targetFunnelId: string; reroutedStepIds: string[] }> {
+  const { funnel, step } = await getStep(input.subAccountId, input.funnelId, input.stepId);
+  const targetId = typeof input.body.targetFunnelId === "string" ? input.body.targetFunnelId : "";
+  const target = await getFunnelForWorkspace(input.subAccountId, targetId);
+  const page = step.pageId ? await pageInWorkspace(input.subAccountId, step.pageId) : null;
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  if (target.id === funnel.id) blockers.push("This page is already in this funnel.");
+  if (target.status === "archived") blockers.push(`“${target.name}” is archived.`);
+  if (funnel.status === "archived") blockers.push("This funnel is archived.");
+  if (step.type === "checkout") blockers.push("Buyers pay on this page in this funnel, and its checkout settings belong to this funnel. Duplicate it into the other funnel instead, or remove this step first.");
+  else if (hasRouting(step.type)) blockers.push("This is a one-click offer page. Its Offer and Accept / Decline routes belong to this funnel. Duplicate it into the other funnel instead.");
+  if (!page) blockers.push("This step has no page to move.");
+  const targetSteps = target.id === funnel.id ? [] : await listSteps(target.id);
+  if (page && targetSteps.some((s) => s.pageId === step.pageId)) blockers.push(`“${target.name}” already uses this page.`);
+  if (targetSteps.length >= MAX_STEPS) blockers.push(`“${target.name}” already has ${MAX_STEPS} steps.`);
+
+  if (!blockers.length && page) {
+    const steps = await listSteps(funnel.id);
+    const pointing = steps.filter((s) => hasRouting(s.type) && s.id !== step.id && Object.values(normalizeRouting(s.routing)).some((r) => r.type === "funnel_step" && r.stepId === step.id));
+    if (funnel.status === "published") warnings.push(`“${funnel.name}” is live. Buyers will no longer see this page in it.`);
+    if (pointing.length) warnings.push(`${pointing.map((s) => stepLabel(steps, s.id)).join(", ")} ${pointing.length === 1 ? "sends" : "send"} buyers to this page. Those routes will go to the next step instead.`);
+    const checkoutRoutes = Object.entries(await checkoutDestinations(steps)).filter(([, d]) => d?.type === "funnel_step" && d.stepId === step.id);
+    if (checkoutRoutes.length) warnings.push(`${checkoutRoutes.map(([id]) => stepLabel(steps, id)).join(", ")} ${checkoutRoutes.length === 1 ? "sends" : "send"} buyers here after purchase. Change that in Checkout settings after the move.`);
+    if ((await countPageCheckoutBlocks(input.subAccountId, step.pageId!)) > 0) warnings.push(`This page has a Checkout block. In “${target.name}” it uses that funnel's checkout, or shows nothing until that funnel has one.`);
+    if (target.status === "published") warnings.push(`“${target.name}” is live. The page is added as its last step.`);
+  }
+  const preview: MoveStepPreview = { sourceFunnelName: funnel.name, targetFunnelName: target.name, pageName: page?.name ?? step.name, blockers, warnings };
+  if (input.body.confirm !== true) return { preview };
+  if (blockers.length) throw new CheckoutError(blockers[0], 409, null, "move_blocked");
+
+  // Destination first, then remove the source step; undo the destination if that fails.
+  const created = await addStep({ subAccountId: input.subAccountId, funnelId: target.id, uid: input.uid, body: { type: step.type, name: step.name, pageId: step.pageId } });
+  try {
+    const { reroutedStepIds } = await deleteStep(input.subAccountId, funnel.id, step.id);
+    // A route set to "after purchase → this step" can't follow the page to another funnel.
+    // The checkout writer saves the WHOLE settings record, so send every current setting with only the destination changed.
+    for (const s of await listSteps(funnel.id)) {
+      if (s.type !== "checkout" || !s.checkoutConfigId) continue;
+      const config = await getCheckoutConfigDoc(s.checkoutConfigId).catch(() => null);
+      if (!config || config.postPurchase.type !== "funnel_step" || config.postPurchase.stepId !== step.id) continue;
+      await saveStepCheckoutConfig({ subAccountId: input.subAccountId, funnelId: funnel.id, stepId: s.id, uid: input.uid, body: { ...copyableCheckoutFields(config), postPurchase: { type: "funnel_next_step" } } }).catch((err) =>
+        console.error(`[funnels] move: couldn't reset after-purchase route funnel=${funnel.id} step=${s.id}`, err),
+      );
+    }
+    return { moved: true, step: created, targetFunnelId: target.id, reroutedStepIds };
+  } catch (err) {
+    await deleteStep(input.subAccountId, target.id, created.id).catch(() => undefined);
+    throw err;
+  }
 }

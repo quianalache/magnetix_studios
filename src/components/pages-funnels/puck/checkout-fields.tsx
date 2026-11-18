@@ -13,7 +13,8 @@ import { ActionFieldContext } from "@/components/pages-funnels/puck/action-field
 import { Hint } from "@/components/pages-funnels/puck/color-controls";
 import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { applyPreset, connectionLabel, normalizePresentation, type CheckoutPresentation, type CheckoutShow, type CheckoutText } from "@/lib/checkout/presentation";
-import { AUTO_CHECKOUT_KEY, checkoutSettingsHref, type CheckoutStepContext } from "@/lib/pages-funnels/checkout-block";
+import { AUTO_CHECKOUT_KEY, checkoutSettingsHref, countCheckoutBlocks, type CheckoutStepContext } from "@/lib/pages-funnels/checkout-block";
+import { PageRolePrompt } from "@/components/pages-funnels/puck/page-role-prompt";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,6 +47,9 @@ export function CheckoutConnectionFieldEditor({ value, onChange }: { value: stri
   const key = configId || AUTO_CHECKOUT_KEY;
   const [data, setData] = useState<ContextsResponse | null>(null);
   const [failed, setFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  // Page-first funnels: ONE Checkout block per page (publishing refuses more).
+  const checkoutBlocks = useTypedPuck((s) => countCheckoutBlocks(s.appState.data));
 
   useEffect(() => {
     if (!pageId) return;
@@ -58,7 +62,7 @@ export function CheckoutConnectionFieldEditor({ value, onChange }: { value: stri
     return () => {
       cancelled = true;
     };
-  }, [pageId, key]);
+  }, [pageId, key, reload]);
 
   if (!pageId) return <Hint>Checkout connection is available when editing a page.</Hint>;
   if (failed) return <Hint>Couldn&apos;t load this workspace&apos;s Checkout Steps. Reload to try again.</Hint>;
@@ -80,6 +84,15 @@ export function CheckoutConnectionFieldEditor({ value, onChange }: { value: stri
 
   return (
     <div className="space-y-2.5" data-checkout-connection-field="">
+      {checkoutBlocks > 1 ? (
+        <p className="flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900" role="alert" data-checkout-multiple="">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            This page has {checkoutBlocks} Checkout blocks. A page can publish with one, so a buyer never pays twice — remove the extra. Buttons can scroll to the checkout section or link to it.
+          </span>
+        </p>
+      ) : null}
+      <PageRolePrompt pageId={pageId} role="checkout" onChanged={() => setReload((n) => n + 1)} />
       {replaced && resolved?.view ? (
         <p className="flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900" role="status" data-checkout-replaced="">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />

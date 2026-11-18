@@ -9,7 +9,7 @@ import { DEFAULT_READING_RESULT_PAGE_SETTINGS, READING_SAMPLE_KINDS, type Readin
 import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
 import { getChartDesignSet } from "@/lib/server/chart-design-set-service";
 import { PUCK_CONTENT_MAX_DEPTH, decodeStoredPuckData, encodePuckData, isPuckData, type EncodedPuckData } from "@/lib/pages-funnels/puck-storage";
-import { remapCheckoutConfigIds } from "@/lib/pages-funnels/checkout-block";
+import { countCheckoutBlocks, remapCheckoutConfigIds } from "@/lib/pages-funnels/checkout-block";
 import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 import {
   encodePopupMapForStorage,
@@ -313,6 +313,14 @@ export async function savePuckDraft(
  * before Version History existed), so a publish never loses the old live page.
  * Nothing is recorded unless the publish itself commits.
  */
+export const MULTIPLE_CHECKOUTS_MESSAGE =
+  "This page has more than one Checkout block. A page can hold one Checkout block — remove the extra one (buttons can scroll to the checkout or link to it), then publish.";
+
+/** Checkout blocks in a page tree plus its Popups. */
+export function pageCheckoutBlockCount(data: unknown, popups: PopupDefinitionMap | null | undefined): number {
+  return countCheckoutBlocks(data) + Object.values(popups ?? {}).reduce((n, p) => n + countCheckoutBlocks(p?.content), 0);
+}
+
 export async function publishPuckPage(
   subAccountId: string,
   pageId: string,
@@ -332,6 +340,10 @@ export async function publishPuckPage(
     if (isStale(options.baseRevision, doc)) return draftConflict();
     const prepared = preparePageWrite(data, popups, doc, ["puckDraftData", "puckDraftPopups", "puckPublishedData", "puckPublishedPopups"]);
     if ("ok" in prepared) return prepared;
+    // Page-first funnels (owner decision 2026-11-17): ONE Checkout block per
+    // page, so a buyer can never pay twice on one page. Drafts may hold more
+    // while the creator rearranges; publishing needs exactly one at most.
+    if (pageCheckoutBlockCount(data, popups) > 1) return { ok: false, error: MULTIPLE_CHECKOUTS_MESSAGE, status: 400 };
     const history = await tx.get(versionsCol(owned.ref).select("fingerprint", "createdAtMs"));
 
     const next = snapshotOfPrepared(prepared.page, prepared.stored);
@@ -515,9 +527,32 @@ export async function duplicatePuckPage(
  * copied by Duplicate Step is a new draft with no published copy).
  */
 export async function remapPageCheckoutConfigs(subAccountId: string, pageId: string, map: Record<string, string>): Promise<number> {
+  return remapPageCheckoutWith(subAccountId, pageId, (id) => map[id] ?? id);
+}
+
+/**
+ * Page-first funnels (2026-11-17): make every EXPLICIT Checkout block on a
+ * page's draft (content and Popups) automatic, so the page sells through its
+ * own funnel step's checkout. Used when a page becomes a funnel's checkout
+ * page; never touches the published copy.
+ */
+export async function clearPageCheckoutConnections(subAccountId: string, pageId: string): Promise<number> {
+  return remapPageCheckoutWith(subAccountId, pageId, () => "");
+}
+
+/** How many Checkout blocks a page's current draft holds (content + Popups); 0 for a foreign or missing page. */
+export async function countPageCheckoutBlocks(subAccountId: string, pageId: string): Promise<number> {
   const owned = await loadOwnedPage(subAccountId, pageId);
   if ("ok" in owned) return 0;
-  const remap = (id: string) => map[id] ?? id;
+  const raw = owned.doc.puckDraftData ?? owned.doc.puckPublishedData ?? null;
+  const decoded = raw != null ? decodeStoredPuckData(raw as never) : null;
+  const popups = normalizePopupMap(owned.doc.puckDraftPopups ?? owned.doc.puckPublishedPopups);
+  return countCheckoutBlocks(decoded?.ok ? decoded.data : null) + Object.values(popups).reduce((n, p) => n + countCheckoutBlocks(p.content), 0);
+}
+
+async function remapPageCheckoutWith(subAccountId: string, pageId: string, remap: (configId: string) => string): Promise<number> {
+  const owned = await loadOwnedPage(subAccountId, pageId);
+  if ("ok" in owned) return 0;
   const decoded = owned.doc.puckDraftData != null ? decodeStoredPuckData(owned.doc.puckDraftData as never) : null;
   const page = decoded?.ok ? remapCheckoutConfigIds(decoded.data, remap) : { data: null, changed: 0 };
   const popups = normalizePopupMap(owned.doc.puckDraftPopups);

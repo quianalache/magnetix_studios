@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { checkoutErrorResponse, readBody } from "@/lib/server/checkout/common";
-import { deleteStep, getStep, updateStep } from "@/lib/server/checkout/funnels-service";
+import { deleteStep, getStep, setStepRole, updateStep } from "@/lib/server/checkout/funnels-service";
 import { stepOfferSettingsPayload } from "@/lib/server/checkout/funnel-offer-service";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
   const access = await requireSubAccountAdmin(request, id);
   if (access instanceof NextResponse) return access;
   try {
-    return NextResponse.json({ step: await updateStep(id, funnelId, stepId, await readBody(request), access.uid) });
+    const body = await readBody(request);
+    // Page-first funnels: `{ role: "checkout" | "offer" }` gives an ordinary page step its role → `{ step, notes }`.
+    if (body.role !== undefined) return NextResponse.json(await setStepRole(id, funnelId, stepId, body.role, access.uid));
+    return NextResponse.json({ step: await updateStep(id, funnelId, stepId, body, access.uid) });
   } catch (err) {
     return checkoutErrorResponse(err);
   }

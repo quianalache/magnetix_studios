@@ -7,7 +7,9 @@ import { COMMERCE_CAPABILITIES } from "@/lib/checkout/capabilities";
 export interface FunnelHubPayload {
   funnel: Funnel;
   steps: FunnelStep[];
-  pages: Array<{ id: string; name: string; status: string }>;
+  pages: Array<{ id: string; name: string; status: string; updatedAt?: number | null }>;
+  /** pageId → names of the funnels whose steps show it. */
+  pageFunnels?: Record<string, string[]>;
   checkout: Record<string, { postPurchase: PostPurchaseDestination | null; offerTitle: string | null }>;
   pageUses: Record<string, number>;
   /** pageId → Upsell / Downsell steps using it. */

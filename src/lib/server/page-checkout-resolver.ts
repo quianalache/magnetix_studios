@@ -14,15 +14,23 @@ import { AUTO_CHECKOUT_KEY, isCheckoutConfigId, type CheckoutBlockPayload, type 
  * arbitrary Offer. Preferred: the funnel(s) this page belongs to; a page
  * that is the Checkout Step's own page connects automatically.
  */
-export async function checkoutContextsForPage(subAccountId: string, pageId: string): Promise<{ contexts: CheckoutStepContext[]; autoConfigId: string | null; pageInFunnel: boolean; pageFunnelIds: string[] }> {
+export async function checkoutContextsForPage(
+  subAccountId: string,
+  pageId: string,
+): Promise<{ contexts: CheckoutStepContext[]; autoConfigId: string | null; pageInFunnel: boolean; pageFunnelIds: string[]; pageSteps: PageFunnelStepRef[] }> {
   const db = getAdminDb();
   const funnels = (await db.collection("funnels").where("subAccountId", "==", subAccountId).get()).docs.filter((f) => f.data().status !== "archived");
   const all: Array<CheckoutStepContext & { pageInFunnel: boolean }> = [];
   const pageFunnels: string[] = [];
+  const pageSteps: PageFunnelStepRef[] = [];
   for (const f of funnels) {
     const steps = (await db.collection(`funnels/${f.id}/steps`).get()).docs.map((d) => ({ id: d.id, ...(d.data() as { name: string; type: string; order: number; pageId: string | null; checkoutConfigId: string | null }) }));
     const pageInFunnel = steps.some((s) => s.pageId === pageId);
     if (pageInFunnel) pageFunnels.push(f.id);
+    for (const s of steps) {
+      if (s.pageId !== pageId) continue;
+      pageSteps.push({ funnelId: f.id, funnelName: (f.data().name as string) || "Untitled funnel", funnelStatus: (f.data().status as string) ?? "draft", stepId: s.id, stepName: s.name || "Step", stepType: s.type });
+    }
     for (const s of steps.sort((a, b) => a.order - b.order)) {
       if (s.type !== "checkout" || !s.checkoutConfigId) continue;
       all.push({
@@ -56,7 +64,17 @@ export async function checkoutContextsForPage(subAccountId: string, pageId: stri
   // Every (non-archived) funnel that uses this page in one of its steps —
   // including funnels without a Checkout Step.
   const pageFunnelIds = [...new Set(pageFunnels)];
-  return { contexts, autoConfigId, pageInFunnel: inFunnel.length > 0, pageFunnelIds };
+  return { contexts, autoConfigId, pageInFunnel: inFunnel.length > 0, pageFunnelIds, pageSteps };
+}
+
+/** A funnel step that shows this page (Page-first funnels: lets the builder offer "use this page for checkout / as a one-click offer"). */
+export interface PageFunnelStepRef {
+  funnelId: string;
+  funnelName: string;
+  funnelStatus: string;
+  stepId: string;
+  stepName: string;
+  stepType: string;
 }
 
 /**

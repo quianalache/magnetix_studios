@@ -17,6 +17,7 @@ import {
 } from "@/lib/pages-funnels/puck/action";
 import type { PageAction } from "@/types/pages-funnels-puck";
 import { BookingSourceFieldEditor } from "@/components/pages-funnels/puck/booking-fields";
+import { PageRolePrompt } from "@/components/pages-funnels/puck/page-role-prompt";
 
 const useTypedPuck = createUsePuck();
 
@@ -158,6 +159,7 @@ export function ActionFieldEditor({
       {action.type === "decline_continue" && (
         <Hint>Skips this step&apos;s Offer and sends the buyer to the step&apos;s Decline route. Works when this page is an Upsell or Downsell step.</Hint>
       )}
+      {(action.type === "accept_upsell" || action.type === "decline_continue") && ctx?.surface === "page" && <PageRolePrompt pageId={ctx.pageId} role="offer" />}
     </div>
   );
 }
