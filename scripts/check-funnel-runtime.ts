@@ -15,7 +15,8 @@
  * Run (from the repo root):
  *   echo '{"emulators":{"firestore":{"port":8085},"ui":{"enabled":false}}}' > /tmp/emu/firebase.json
  *   firebase emulators:exec --config /tmp/emu/firebase.json --only firestore --project demo-funnel-runtime \
- *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' pnpm exec tsx --tsconfig ./tsconfig.json scripts/check-funnel-runtime.ts"
+ *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs --require ./scripts/_next-headers-cookie-jar-shim.cjs' pnpm exec tsx --tsconfig ./tsconfig.json scripts/check-funnel-runtime.ts"
+ * (The cookie-jar shim lets section H run a real `startCheckout`.)
  */
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -224,6 +225,9 @@ const server = http.createServer((req, res) => {
       return inv ? send(200, inv) : send(404, { error: { type: "invalid_request_error" } });
     }
     if (req.method === "GET" && p === "/v1/invoice_payments") return send(200, { object: "list", data: [], has_more: false });
+    // A real checkout start (section H) looks up / creates the buyer's customer.
+    if (req.method === "GET" && p === "/v1/customers") return send(200, { object: "list", data: [], has_more: false });
+    if (req.method === "POST" && p === "/v1/customers") return reply(200, { id: nid("cus"), object: "customer", email: body.email ?? null, metadata: body.metadata ?? {} });
     return send(404, { error: { type: "invalid_request_error", message: `Mock has no ${req.method} ${p}` } });
   });
 });
@@ -892,9 +896,100 @@ async function main() {
     assert.equal(ss.effectsPending, false);
     assert.equal(await runsFor("wf_decline", key), 1, "once-only key: no second run");
   });
+  console.log("H. Live activation controls (no live Stripe call is ever made)");
+  await check("LIVE charging is off by default; the TEST list never enables LIVE; only the LIVE list does", async () => {
+    delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
+    assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false);
+    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = ` ${SA2} , ${SA} `;
+    try {
+      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), true);
+      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: "sa_not_listed", paymentMode: "live" }), false);
+      // The LIVE list never enables TEST for an unlisted QA workspace, and a null mode is never on.
+      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA2, paymentMode: "test" }), false);
+      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: null }), false);
+      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = false;
+      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false, "deployment flag off = rollback");
+    } finally {
+      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = true;
+      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
+    }
+  });
+  await check("checkout notice rule: shown only when paying leads straight to a chargeable offer step", async () => {
+    const cfg = (await configs.getCheckoutConfigDoc(coStep.checkoutConfigId!))!;
+    assert.equal(await runtime.postPurchaseOfferFollows(cfg, "test"), true);
+    assert.equal(await runtime.postPurchaseOfferFollows(cfg, "live"), false, "LIVE not allow-listed");
+    assert.equal(await runtime.postPurchaseOfferFollows(cfg, null), false, "nothing charged → no notice");
+    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = SA;
+    try {
+      assert.equal(await runtime.postPurchaseOfferFollows(cfg, "live"), true);
+    } finally {
+      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
+    }
+    assert.equal(await runtime.postPurchaseOfferFollows({ ...cfg, postPurchase: { type: "funnel_step", stepId: ty.id } }, "test"), false, "next step is a Thank-you page");
+    assert.equal(await runtime.postPurchaseOfferFollows({ ...cfg, postPurchase: { type: "space" } }, "test"), false);
+    assert.equal(await runtime.postPurchaseOfferFollows({ ...cfg, context: { type: "hosted" } as never }, "test"), false, "ordinary checkout");
+  });
+  await check("a real checkout start stamps the notice on the order (server rule, not the browser)", async () => {
+    const r = await orders.startCheckout(coStep.checkoutConfigId!, { name: "Notice Buyer", email: "notice@example.com", agreementAccepted: true, postPurchaseNoticeAt: 1 });
+    const o = (await db.doc(`checkoutOrders/${r.orderId}`).get()).data()!;
+    assert.equal(typeof o.postPurchaseNoticeAt, "number");
+    assert.ok(o.postPurchaseNoticeAt > 1, "never taken from the request body");
+    caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = false;
+    try {
+      const r2 = await orders.startCheckout(coStep.checkoutConfigId!, { name: "Notice Buyer", email: "notice2@example.com", agreementAccepted: true, postPurchaseNoticeAt: 1 });
+      assert.equal((await db.doc(`checkoutOrders/${r2.orderId}`).get()).data()!.postPurchaseNoticeAt, undefined, "switch off → no notice, nothing recorded");
+    } finally {
+      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = true;
+    }
+  });
+  await check("a LIVE order without the checkout notice never opens a one-click session", async () => {
+    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = SA;
+    try {
+      await db.doc("checkoutOrders/co_live_no_notice").set({
+        agencyId: AG, subAccountId: SA, configId: coStep.checkoutConfigId, context: { type: "funnel_step", funnelId: F, stepId: co.id }, memberId: "m1", status: "paid",
+        items: [{ offerId: "off_main", role: "primary", fulfillment: "granted" }], paymentMode: "live", stripeAccountId: "acct_L", stripeCustomerId: "cus_L", stripePaymentIntentId: "pi_never_called",
+        totals: { currency: "USD", dueTodayCents: 4700, recurring: null, lines: [] }, createdAt: Date.now(), updatedAt: Date.now(),
+      });
+      assert.equal(await runtime.openFunnelSessionForOrder("co_live_no_notice"), null);
+      assert.equal((await db.doc("funnelSessions/fs_co_live_no_notice").get()).exists, false);
+    } finally {
+      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
+    }
+  });
+  await check("Workflows: TEST outcomes run sandboxed; a LIVE outcome runs for real; LIVE refused once removed from the list", async () => {
+    const test = await paidCheckout();
+    await act(test.token, up.id, "decline");
+    const testKey = (await session(test.sessionId)).steps[up.id].effectsKey;
+    const testRun = (await db.collection("workflowRuns").where("workflowId", "==", "wf_decline").get()).docs.find((d) => d.data().context?.deduplicationKey === testKey)!;
+    assert.equal(testRun.data().context.sandbox, true);
+
+    const liveId = "fs_co_live_session";
+    await db.doc(`funnelSessions/${liveId}`).set({
+      id: liveId, agencyId: AG, subAccountId: SA, funnelId: F, checkoutOrderId: "co_live_session", checkoutStepId: co.id, memberId: "m1", paymentMode: "live",
+      stripeAccountId: "acct_L", stripeCustomerId: "cus_L", paymentMethodId: "pm_live", currentStepId: up.id, path: [co.id, up.id], steps: {}, status: "active",
+      createdAt: Date.now(), updatedAt: Date.now(), expiresAt: Date.now() + 3_600_000,
+    });
+    const liveToken = runtime.issueFunnelSessionToken(liveId);
+    await assert.rejects(act(liveToken, up.id, "decline"), isErr(403, "not_enabled"), "LIVE not allow-listed");
+    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = SA;
+    try {
+      assert.equal((await act(liveToken, up.id, "decline")).state, "declined");
+      const liveKey = (await session(liveId)).steps[up.id].effectsKey;
+      const liveRun = (await db.collection("workflowRuns").where("workflowId", "==", "wf_decline").get()).docs.find((d) => d.data().context?.deduplicationKey === liveKey)!;
+      assert.ok(liveRun, "LIVE Decline Workflow ran");
+      assert.notEqual(liveRun.data().context.sandbox, true, "LIVE runs are not sandboxed");
+    } finally {
+      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
+    }
+    // Rollback: off the list again → the same live session can't act.
+    await assert.rejects(act(liveToken, down.id, "accept"), isErr(403, "not_enabled"));
+  });
   await check("no card data or session tokens are stored", async () => {
     const all = (await db.collection("funnelSessions").get()).docs.map((d) => JSON.stringify(d.data())).join("\n");
-    assert.ok(!/fs1\.|4242|cvc|card_number|exp_month/i.test(all));
+    // Look for a session token, a card number or card field NAMES (a bare
+    // "4242" / "cvc" also occurs inside timestamps and random document ids).
+    const hit = /fs1\.fs_|4242424242|"(cvc|card_number|exp_month)"/i.exec(all);
+    assert.ok(!hit, `found ${hit?.[0]}`);
   });
   await check("the mock was only ever called on the connected account", () => {
     assert.ok(!counts.accountsSeen.has("acct_B"));

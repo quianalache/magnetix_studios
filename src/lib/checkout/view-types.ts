@@ -60,6 +60,12 @@ export interface CheckoutView {
   };
   preview: boolean;
   /**
+   * Paying here leads straight to a one-click offer that can charge: show the
+   * buyer that their payment method is kept for it (charged again only if
+   * they accept). Absent / false → no notice.
+   */
+  postPurchaseNotice?: boolean;
+  /**
    * CRM (Phase 3) — only what the buyer's page needs: whether to show the
    * opt-in box (and its exact text) and whether checkout-start capture is on.
    * Tags, Workflows and timings never reach the browser.

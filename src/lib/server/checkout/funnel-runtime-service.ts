@@ -10,7 +10,7 @@ import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { applyContactTags } from "@/lib/server/contact-tags/tag-writer";
 import { linkMemberContactServerSide } from "@/lib/community/member-account";
 import { startWorkflowForCheckoutEvent } from "@/lib/workflows/engine";
-import type { CheckoutOrder, FunnelSession, FunnelSessionStepRecord, FunnelStep, StepOfferSettings } from "@/types/checkout";
+import type { CheckoutConfig, CheckoutOrder, FunnelSession, FunnelSessionStepRecord, FunnelStep, StepOfferSettings } from "@/types/checkout";
 import type { CourseOffer } from "@/types/course-offers";
 import { CheckoutError } from "./common";
 import { getCheckoutConfigDoc } from "./config-service";
@@ -36,6 +36,10 @@ import {
  * signed httpOnly cookie (`mx_fs_{funnelId}`) naming it. A direct visit,
  * someone else's cookie, another workspace, an expired or completed session
  * can't act. Only the session's CURRENT step can be accepted / declined.
+ *
+ * Charging is on only for workspaces allow-listed for the session's payment
+ * mode (`funnelPostPurchaseChargingEnabled`); a LIVE session additionally
+ * needs the checkout's saved-card notice (`order.postPurchaseNoticeAt`).
  *
  * Outcomes (owner decisions): Accept actions run only after a Stripe-VERIFIED
  * payment (`completeOrder`); Decline only after the buyer declines; a failed /
@@ -87,6 +91,30 @@ async function listSteps(funnelId: string): Promise<FunnelStep[]> {
 /* -------------------------------- Sessions -------------------------------- */
 
 /**
+ * Does paying on this checkout lead the buyer straight to a one-click offer
+ * step that can actually charge (switch on for this workspace + payment
+ * mode)? One rule for both the checkout's saved-card notice and the order's
+ * `postPurchaseNoticeAt` stamp, so what the buyer saw and what's recorded
+ * can't drift.
+ */
+export async function postPurchaseOfferFollows(config: CheckoutConfig, paymentMode: "test" | "live" | null): Promise<boolean> {
+  if (!paymentMode || config.context.type !== "funnel_step") return false;
+  if (!funnelPostPurchaseChargingEnabled({ subAccountId: config.subAccountId, paymentMode })) return false;
+  const dest = config.postPurchase;
+  if (!dest || (dest.type !== "funnel_next_step" && dest.type !== "funnel_step")) return false;
+  const { funnelId, stepId } = config.context;
+  try {
+    const steps = await listSteps(funnelId);
+    const here = steps.findIndex((s) => s.id === stepId);
+    const target = dest.type === "funnel_step" ? steps.find((s) => s.id === dest.stepId) : steps[here + 1];
+    return !!target && hasRouting(target.type);
+  } catch {
+    return false;
+  }
+}
+
+
+/**
  * Open (or reuse) the post-purchase session for a PAID funnel Checkout order
  * whose next destination is in the funnel. Returns the cookie to set, or
  * null (charging not enabled, not a funnel order, not paid, no next step).
@@ -98,6 +126,8 @@ export async function openFunnelSessionForOrder(orderId: string): Promise<{ cook
   const order = { id: snap.id, ...(snap.data() as Omit<CheckoutOrder, "id">) };
   if (!funnelPostPurchaseChargingEnabled({ subAccountId: order.subAccountId, paymentMode: order.paymentMode })) return null;
   if (order.context.type !== "funnel_step" || order.status !== "paid" || order.items.some((i) => i.fulfillment !== "granted")) return null;
+  // LIVE one-click needs proof the buyer saw the saved-card notice at checkout.
+  if (order.paymentMode === "live" && !order.postPurchaseNoticeAt) return null;
   const { funnelId, stepId } = order.context;
   const config = await getCheckoutConfigDoc(order.configId);
   const dest = config?.postPurchase;
@@ -300,10 +330,10 @@ async function runPendingEffects(sessionId: string, stepId: string): Promise<voi
               eventId: rec.effectsKey,
               eventType: rec.state !== "succeeded" ? "funnel.offer.declined" : trial ? "funnel.offer.trial_started" : "funnel.offer.purchased",
               acceptance: rec.state === "succeeded" ? (trial ? "trial_activation" : "payment") : null,
-              // This marker is created only after the server has verified the
-              // TEST-mode, allow-listed funnel session. Workflow execution
-              // stays observable, while external delivery nodes are skipped.
-              sandbox: true,
+              // TEST-mode sessions run sandboxed: Workflow execution stays
+              // observable, external delivery nodes (email / SMS / webhooks)
+              // are skipped. A LIVE purchase runs the Workflow for real.
+              sandbox: session.paymentMode !== "live",
               funnelId: session.funnelId,
               funnelStepId: stepId,
               ...(rec.orderId ? { orderId: rec.orderId } : {}),

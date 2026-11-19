@@ -434,6 +434,13 @@ export interface CheckoutOrder {
    * future billing — nothing was charged (status "paid" here means fulfilled).
    */
   acceptance?: "payment" | "trial_activation";
+  /**
+   * Funnel Checkout orders only: when the checkout showed the buyer the
+   * one-click offer notice (their payment method is kept for offers after
+   * checkout; charged again only if they accept). Server-stamped from the same
+   * rule that renders the notice. A LIVE one-click session needs it.
+   */
+  postPurchaseNoticeAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }

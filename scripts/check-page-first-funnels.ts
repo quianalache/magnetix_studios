@@ -425,16 +425,25 @@ async function main() {
     assert.equal(issues.find((i) => i.code === "page_unpublished")?.level, "warning");
     await publish(F.id);
   });
-  await check("one-click offer pages are flagged while charging is off (warning; never silently charged)", async () => {
+  await check("a reachable one-click offer page blocks publishing while charging is off (never trapped, never skipped)", async () => {
     const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 6" } });
     await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "pubLanding" } });
     await hostedCheckout(F.id, { type: "funnel_next_step" });
     const up = await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "upsell", name: "Upgrade", pageId: "draftOffer" } });
     const issues = (await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.stepId === up.id);
     const off = issues.find((i) => i.code === "offer_charging_off");
-    assert.equal(off?.level, "warning");
-    assert.match(off!.message, /one-click offers aren't switched on yet/);
+    assert.equal(off?.level, "error");
+    assert.match(off!.message, /one-click offers aren't switched on for this workspace yet.*Remove this step or send buyers somewhere else/);
+    assert.equal(issues.find((i) => i.code === "offer_missing")?.level, "error", "no Offer on a reachable offer step blocks too");
     assert.equal(issues.find((i) => i.code === "page_unpublished")?.level, "error", "its draft page still blocks");
+    await assert.rejects(funnels.updateFunnel(SA, F.id, { status: "published" }), (e: unknown) => (e as { status?: number }).status === 409);
+    assert.equal((await db.doc(`funnels/${F.id}`).get()).data()!.status, "draft");
+    // Send buyers somewhere else after checkout → the offer step is unreachable → warnings only.
+    const co = (await funnels.getFunnelHub(SA, F.id)).steps.find((s) => s.type === "checkout")!;
+    await configs.saveStepCheckoutConfig({ subAccountId: SA, funnelId: F.id, stepId: co.id, uid: ADMIN, body: { postPurchase: { type: "space" } } });
+    const after = (await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.stepId === up.id);
+    assert.equal(after.find((i) => i.code === "offer_charging_off")?.level, "warning");
+    assert.ok(!after.some((i) => i.level === "error" && i.code.startsWith("offer_")));
   });
   await check("ordinary checkout is never gated by the post-purchase switch", async () => {
     for (const f of ["src/lib/server/checkout/order-service.ts", "src/lib/server/checkout/config-service.ts", "src/lib/server/page-checkout-resolver.ts"]) {

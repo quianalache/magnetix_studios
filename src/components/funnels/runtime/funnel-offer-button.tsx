@@ -155,6 +155,13 @@ export function FunnelOfferButton({
           children
         )}
       </button>
+      {decision === "accept" && view?.available && view.offer?.billing === "one_time" && state.phase !== "done" ? (
+        <p data-funnel-offer-disclosure className="mx-auto mt-2 max-w-sm px-4 text-center text-xs text-neutral-600">
+          {view.hasSavedPaymentMethod
+            ? `Accepting charges ${view.offer.amountLabel} (one-time) to the payment method you used at checkout.`
+            : `Accepting continues to payment for ${view.offer.amountLabel} (one-time).`}
+        </p>
+      ) : null}
       {isOwner && view ? <InlinePanel view={view} storeKey={key} state={state} /> : null}
       {isOwner && !view && state.message ? (
         <p role="alert" className="mt-2 text-center text-sm text-neutral-700">

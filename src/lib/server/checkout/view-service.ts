@@ -6,6 +6,7 @@ import { computeOrderTotals, lineFromOffer } from "@/lib/checkout/pricing";
 import type { CheckoutView } from "@/lib/checkout/view-types";
 import { courseTitlesFor, entitlementSummary } from "./config-service";
 import { paymentReadiness, resolveCheckout } from "./order-service";
+import { postPurchaseOfferFollows } from "./funnel-runtime-service";
 
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 
@@ -19,6 +20,7 @@ export async function buildCheckoutView(configId: string, opts: { preview?: bool
     paymentReadiness(resolved),
   ]);
   const sa = sub.data() ?? {};
+  const postPurchaseNotice = payment.ready ? await postPurchaseOfferFollows(config, payment.mode) : false;
   const accent = primary.theme?.colors?.accent?.[0] ?? null;
   return {
     configId: config.id,
@@ -57,6 +59,7 @@ export async function buildCheckoutView(configId: string, opts: { preview?: bool
     initialTotals: computeOrderTotals([lineFromOffer(primary, "primary")]),
     payment,
     preview: opts.preview === true,
+    postPurchaseNotice,
     crm: {
       marketingOptIn: config.crm.marketingOptIn.enabled ? { label: config.crm.marketingOptIn.label } : null,
       captureOnStart: config.crm.captureContactOnStart,

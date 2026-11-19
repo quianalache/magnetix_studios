@@ -791,6 +791,11 @@ function PayForm({
         <p className="text-muted-foreground text-caption">Billing details are collected securely by Stripe with your payment.</p>
       )}
       <AgreementCheckbox view={view} checked={agree} onChange={setAgree} error={agreeError} />
+      {view.postPurchaseNotice ? (
+        <p data-checkout-post-purchase-notice className="text-muted-foreground text-caption">
+          After this payment you may be offered something extra. To let you add it in one click, {view.brand.name || "we"} will keep this payment method on file. It&apos;s only charged again if you choose to accept an offer.
+        </p>
+      ) : null}
       <SubmitButton label={label} disabled={!stripe} busy={busy} pres={pres} />
     </form>
   );

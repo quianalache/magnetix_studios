@@ -21,6 +21,7 @@ import {
   newLoopSteps,
   normalizeRoute,
   normalizeRouting,
+  reachableSteps,
   routingProblem,
   stepLabel,
   type FunnelIssue,
@@ -120,31 +121,40 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
   const pageExclusiveUses = Object.fromEntries(Object.entries(library.usage).map(([id, uses]) => [id, uses.filter((u) => u.stepType === "upsell" || u.stepType === "downsell").length]));
   const pageMap = Object.fromEntries(pages.map((p) => [p.id, { name: p.name, status: p.status }]));
   const issues = analyzeFunnel({ steps, checkoutDestinations: dest, pages: pageMap, pageUses });
-  // Upsell / Downsell Offer settings. The severity follows the saved Offer's
-  // actual server-side capability: only TEST-mode Offers in the explicit QA
-  // workspace can block publishing on payment configuration errors. Other
-  // workspaces remain warnings because their runtime is intentionally off.
+  // Upsell / Downsell steps. On a step a buyer can reach after paying, any
+  // reason the one-click offer couldn't run (charging not switched on for
+  // this workspace, no Offer, an unusable Offer, an unconfirmed subscription
+  // disclosure) is an ERROR: the buyer would land on Accept / Decline buttons
+  // that can't work. Funnels are never published into that state, and offer
+  // pages are never skipped automatically. Unreachable steps: warnings.
+  const reach = reachableSteps(steps, dest);
   for (const [i, s] of steps.entries()) {
     if (!hasRouting(s.type)) continue;
     const label = `Step ${i + 1} · ${s.name}`;
+    const level = reach.has(s.id) ? "error" : "warning";
     const o = normalizeStepOffer(s.offer);
     const offer = o.offerId ? await getCourseOffer(subAccountId, o.offerId).catch(() => null) : null;
-    const chargingOn = funnelPostPurchaseChargingEnabled({
-      subAccountId,
-      paymentMode: offer && offer.subAccountId === subAccountId ? offer.paymentMode : null,
-    });
-    // One-click charging is intentionally off outside the QA workspace. Say
-    // so plainly: a buyer sent here after paying can't accept or decline.
-    // (Whether this should block publishing or be skipped for buyers is an
-    // open owner decision — until then it is a warning, never silent.)
-    if (!chargingOn) issues.push({ level: "warning", code: "offer_charging_off", stepId: s.id, message: `${label}: one-click offers aren't switched on yet, so buyers who reach this page after paying can't accept or decline it.` });
+    const ownOffer = offer && offer.subAccountId === subAccountId ? offer : null;
+    const chargingOn = ownOffer
+      ? funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: ownOffer.paymentMode })
+      : funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: "test" }) || funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: "live" });
+    if (!chargingOn) {
+      issues.push({
+        level,
+        code: "offer_charging_off",
+        stepId: s.id,
+        message:
+          level === "error"
+            ? `${label}: one-click offers aren't switched on for this workspace yet, so a buyer sent here after paying couldn't accept or decline it. Remove this step or send buyers somewhere else after checkout before publishing.`
+            : `${label}: one-click offers aren't switched on yet, so buyers who reach this page after paying can't accept or decline it.`,
+      });
+    }
     if (!o.offerId) {
-      issues.push({ level: "warning", code: "offer_missing", stepId: s.id, message: `${label}: no Offer chosen yet. Choose one in Step settings.` });
+      issues.push({ level, code: "offer_missing", stepId: s.id, message: `${label}: no Offer chosen yet. Choose one in Step settings.` });
     } else {
-      const offerLevel = chargingOn ? "error" : "warning";
-      const attention = savedOfferAttention(offer && offer.subAccountId === subAccountId ? offerFacts(offer) : null, subAccountId);
-      if (attention) issues.push({ level: offerLevel, code: "offer_unavailable", stepId: s.id, message: `${label}: ${attention}` });
-      else if (offer?.type === "recurring" && !o.payment.recurringDisclosureAcknowledged) issues.push({ level: offerLevel, code: "offer_unavailable", stepId: s.id, message: `${label}: confirm the subscription disclosure in Step settings.` });
+      const attention = savedOfferAttention(ownOffer ? offerFacts(ownOffer) : null, subAccountId);
+      if (attention) issues.push({ level, code: "offer_unavailable", stepId: s.id, message: `${label}: ${attention}` });
+      else if (ownOffer?.type === "recurring" && !o.payment.recurringDisclosureAcknowledged) issues.push({ level, code: "offer_unavailable", stepId: s.id, message: `${label}: confirm the subscription disclosure in Step settings.` });
     }
     const invalid = [...(o.onAccept.invalidTags ?? []), ...(o.onDecline.invalidTags ?? [])];
     if (invalid.length) issues.push({ level: "warning", code: "crm_needs_attention", stepId: s.id, message: `${label}: “${invalid[0].tag}” was deleted from your Tags library. Review its CRM actions in Step settings.` });

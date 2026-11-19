@@ -488,6 +488,9 @@ export async function startCheckout(configId: string, body: Record<string, unkno
   const target = needsStripe ? await resolveStripeTarget(config.subAccountId, primary) : null;
   const publishableKey = target ? publishableKeyFor(target.paymentMode) : null;
   if (target && !publishableKey) throw new CheckoutError("Card payments aren't configured on this site yet.", 503, null, "payments_not_ready");
+  // Additive only: whether the buyer is shown (and we record) the one-click
+  // offer notice. It never changes whether or how this checkout takes payment.
+  const postPurchaseNotice = config.context.type === "funnel_step" && target ? await (await import("./funnel-runtime-service")).postPurchaseOfferFollows(config, target.paymentMode) : false;
 
   const order: CheckoutOrder = {
     id: orderRef.id,
@@ -509,6 +512,7 @@ export async function startCheckout(configId: string, body: Record<string, unkno
     paymentMode: target?.paymentMode ?? null,
     stripeAccountId: target?.accountId ?? null,
     stripeCustomerId: null,
+    ...(postPurchaseNotice ? { postPurchaseNoticeAt: now } : {}),
     stripePaymentIntentId: null,
     stripeSetupIntentId: null,
     stripeSubscriptionId: null,

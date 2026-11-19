@@ -251,8 +251,19 @@ async function main() {
     await db.doc(`funnels/${F}/steps/${up.id}`).update({ routing: { accept: { type: "funnel_step", stepId: "deletedStep" }, decline: { type: "funnel_next_step" } } });
     await assert.rejects(funnels.updateFunnel(SA, F, { status: "published" }), isErr(409, "funnel_invalid"));
     await funnels.updateStep(SA, F, up.id, { routing: { accept: { type: "funnel_step", stepId: ty.id }, decline: { type: "funnel_next_step" } } });
+    // The route is fixed: it no longer blocks. What still blocks are the
+    // offer steps a buyer reaches after paying while one-click charging is
+    // off for this workspace (and no Offer chosen) — never published into a trap.
+    const errors = (await funnels.getFunnelHub(SA, F)).issues.filter((i) => i.level === "error");
+    assert.ok(errors.length > 0 && errors.every((i) => i.code.startsWith("offer_")), JSON.stringify(errors.map((i) => i.code)));
+    await assert.rejects(funnels.updateFunnel(SA, F, { status: "published" }), (e: unknown) => isErr(409, "funnel_invalid")(e) && !/route|routing/i.test((e as Error).message));
+    // Point the checkout somewhere else after purchase: the offer steps become unreachable → publishes.
+    const coId = (await funnels.getFunnelHub(SA, F)).steps.find((x) => x.type === "checkout")!.id;
+    const prevDest = (await db.doc(`checkoutConfigs/${(await funnels.getStep(SA, F, coId)).step.checkoutConfigId}`).get()).data()?.postPurchase;
+    await db.doc(`checkoutConfigs/${(await funnels.getStep(SA, F, coId)).step.checkoutConfigId}`).update({ postPurchase: { type: "space" } });
     assert.equal((await funnels.updateFunnel(SA, F, { status: "published" })).status, "published");
     await funnels.updateFunnel(SA, F, { status: "draft" });
+    if (prevDest) await db.doc(`checkoutConfigs/${(await funnels.getStep(SA, F, coId)).step.checkoutConfigId}`).update({ postPurchase: prevDest });
   });
   await check("rename funnel", async () => {
     assert.equal((await funnels.updateFunnel(SA, F, { name: "QA Launch 2" })).name, "QA Launch 2");

@@ -163,13 +163,16 @@ async function main() {
     assert.ok(hub.issues.some((i) => i.code === "offer_unavailable" && /deleted/.test(i.message)));
     await funnels.updateStep(SA, F, up.id, { offer: full({ offerId: "off_one" }) });
   });
-  await check("a step with no Offer shows a hub warning (not a publish blocker)", async () => {
+  await check("a step with no Offer: blocks publishing when buyers can reach it, a warning when they can't", async () => {
     const hub = await funnels.getFunnelHub(SA, F);
     // down has an Offer; make a fresh upsell with none.
     const extra = await funnels.addStep({ subAccountId: SA, funnelId: F, uid: UID, body: { type: "upsell", name: "Extra" } });
     const hub2 = await funnels.getFunnelHub(SA, F);
     const w = hub2.issues.find((i) => i.code === "offer_missing" && i.stepId === extra.id);
-    assert.equal(w?.level, "warning");
+    const { reachableSteps } = await import("../src/lib/checkout/funnel-routing");
+    const { checkoutDestinations } = await import("../src/lib/server/checkout/funnels-service");
+    const reachable = reachableSteps(hub2.steps, await checkoutDestinations(hub2.steps)).has(extra.id);
+    assert.equal(w?.level, reachable ? "error" : "warning");
     assert.ok(hub.issues.every((i) => i.code !== "offer_missing" || i.stepId !== up.id));
     await funnels.deleteStep(SA, F, extra.id);
   });
