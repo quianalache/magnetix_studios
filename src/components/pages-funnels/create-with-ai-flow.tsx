@@ -24,7 +24,7 @@ const OUTCOMES: { value: Outcome; label: string; description: string }[] = [
   { value: "something_else", label: "Something else", description: "Define one clear primary action." },
 ];
 
-export function CreateWithAiFlow({ onCancel, onCreated, onChooseBlank, onChooseTemplate }: { onCancel: () => void; onCreated: (id: string) => void; onChooseBlank: () => void; onChooseTemplate: () => void }) {
+export function CreateWithAiFlow({ onCancel, onCreated, onChooseBlank, onChooseTemplate, onChooseImport }: { onCancel: () => void; onCreated: (id: string) => void; onChooseBlank: () => void; onChooseTemplate: () => void; onChooseImport?: () => void }) {
   const { subAccountId } = useSubAccount();
   const { user } = useAuth();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -75,7 +75,7 @@ export function CreateWithAiFlow({ onCancel, onCreated, onChooseBlank, onChooseT
           <h1 {...{ className: "text-2xl font-bold tracking-tight" }}>Create with AI</h1>
           <p className="text-muted-foreground text-sm">Tell Magnetix what the page should do. You’ll get a normal editable draft.</p>
         </div>
-        <div className="flex gap-2"><Button variant="outline" onClick={onChooseTemplate}>Use a Template</Button><Button variant="outline" onClick={onChooseBlank}>Start Blank</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={onChooseTemplate}>Use a Template</Button><Button variant="outline" onClick={onChooseBlank}>Start Blank</Button>{onChooseImport ? <Button variant="outline" onClick={onChooseImport}>Import HTML</Button> : null}</div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">

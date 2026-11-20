@@ -383,4 +383,6 @@ export type CreatePageInput = {
   origin: PageOrigin;
   templateId?: string | null;
   blocks?: PageBlock[];
+  /** Import HTML: a full page's HTML; the server turns it into one Custom HTML block. */
+  importHtml?: string;
 };

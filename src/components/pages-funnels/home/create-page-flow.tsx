@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, LayoutTemplate, Loader2, Sparkles, SquareDashedMousePointer, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Check, FileCode2, LayoutTemplate, Loader2, Sparkles, SquareDashedMousePointer, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { createPage } from "@/lib/firestore/pages-funnels";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { CreateWithAiFlow } from "@/components/pages-funnels/create-with-ai-flow";
 import { PAGE_TYPE_ICONS } from "@/components/pages-funnels/home/page-type-icons";
 import { MyTemplates } from "@/components/pages-funnels/templates/my-templates";
+import { ImportHtmlPanel, importHtmlReady, type ImportHtmlState } from "@/components/pages-funnels/home/import-html-panel";
 import { createPageFromTemplate } from "@/lib/pages-funnels/page-templates-client";
 import { describeRetainedConnections } from "@/lib/pages-funnels/page-templates";
 import type { PageTemplateSummary } from "@/types/page-templates";
@@ -34,7 +35,7 @@ const PAGE_TYPE_TILES: { type: PageType; description: string }[] = [
 ];
 const GOAL_OPTIONS = (Object.keys(PAGE_GOAL_LABELS) as PageGoal[]).map((g) => ({ value: g, label: PAGE_GOAL_LABELS[g] }));
 
-type CreateMethod = "blank" | "template" | "ai";
+type CreateMethod = "blank" | "template" | "ai" | "import";
 
 /**
  * Create Page — the existing three ways to start (Build with AI, Start
@@ -54,12 +55,13 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
   const [name, setName] = useState("New Page");
   const [goal, setGoal] = useState<PageGoal>("lead_generation");
   const [creating, setCreating] = useState(false);
+  const [importState, setImportState] = useState<ImportHtmlState>({ html: "", analysis: null, acknowledged: false });
   // Synchronous guard: a double click must never create two pages.
   const submitting = useRef(false);
 
   if (method === "ai") {
     return (
-      <CreateWithAiFlow onCancel={onCancel} onCreated={onCreated} onChooseBlank={() => setMethod("blank")} onChooseTemplate={() => setMethod("template")} />
+      <CreateWithAiFlow onCancel={onCancel} onCreated={onCreated} onChooseBlank={() => setMethod("blank")} onChooseTemplate={() => setMethod("template")} onChooseImport={() => setMethod("import")} />
     );
   }
 
@@ -73,7 +75,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
     } else if (method === "template") {
       setMethod("blank");
     }
-    setName(PAGE_TYPE_LABELS[type]);
+    if (method !== "import" || type === "reading_result") setName(PAGE_TYPE_LABELS[type]);
   }
 
   /** My Templates: a saved design fills Page Setup (its type and goal; the name stays editable). */
@@ -92,6 +94,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
   async function handleContinue() {
     if (!user || !agencyId || !name.trim() || creating || submitting.current) return;
     if (method === "template" && !template) return;
+    if (method === "import" && !importHtmlReady(importState)) return;
     submitting.current = true;
     setCreating(true);
     try {
@@ -112,12 +115,13 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
         goal,
         origin: "blank",
         templateId: null,
+        ...(method === "import" ? { importHtml: importState.html } : {}),
       });
-      toast.success("Page created");
+      toast.success(method === "import" ? "Page imported" : "Page created", method === "import" ? { description: "It's a draft. Edit the HTML from the Custom HTML block, then publish when it looks right." } : undefined);
       onCreated(id);
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error && method === "template" ? err.message : "Couldn't create the page. Try again.");
+      toast.error(err instanceof Error && (method === "template" || method === "import") ? err.message : "Couldn't create the page. Try again.");
       submitting.current = false;
       setCreating(false);
     }
@@ -138,10 +142,21 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
       />
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-8">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MethodCard icon={SquareDashedMousePointer} title="Start Blank" description="Build from scratch with drag-and-drop blocks." selected={method === "blank"} onClick={() => setMethod("blank")} />
             <MethodCard icon={LayoutTemplate} title="Use a Template" description="Start from a page design saved in this workspace." selected={method === "template"} onClick={() => setMethod("template")} />
             <MethodCard icon={Sparkles} title="Build with AI" description="Generate an editable first draft using Magnetix AI." selected={false} onClick={() => setMethod("ai")} />
+            <MethodCard
+              icon={FileCode2}
+              title="Import HTML"
+              description="Paste a page made with Claude or another AI tool, or upload an .html file."
+              selected={method === "import"}
+              onClick={() => {
+                setMethod("import");
+                setTemplate(null);
+                if (pageType === "reading_result") setPageType("landing");
+              }}
+            />
           </div>
 
           <section aria-labelledby="create-type-heading" className="flex flex-col gap-3">
@@ -172,7 +187,9 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
             </div>
           </section>
 
-          <MyTemplates
+          {method === "import" ? <ImportHtmlPanel value={importState} onChange={setImportState} /> : null}
+
+          {method === "import" ? null : <MyTemplates
             subAccountId={subAccountId}
             canManage={isAdmin}
             selectedId={selectedTemplate?.id ?? null}
@@ -180,7 +197,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
             onDeleted={(id) => {
               if (template?.id === id) setTemplate(null);
             }}
-          />
+          />}
         </div>
 
         {/* Page Setup — visible at every width (below 1024px it follows the choices). */}
@@ -203,7 +220,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
               You can change everything after the page is created. To use the page in a funnel, add it from the funnel&apos;s steps.
             </p>
           </div>
-          <Button className="mt-5 w-full" size="lg" onClick={handleContinue} disabled={creating || !name.trim() || (method === "template" && !selectedTemplate)}>
+          <Button className="mt-5 w-full" size="lg" onClick={handleContinue} disabled={creating || !name.trim() || (method === "template" && !selectedTemplate) || (method === "import" && !importHtmlReady(importState))}>
             {creating ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
             Continue
           </Button>

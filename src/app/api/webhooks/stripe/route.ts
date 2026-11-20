@@ -20,6 +20,7 @@ import {
   CHECKOUT_ORDER_KIND,
   handleCheckoutOrderInvoicePaid,
   handleCheckoutOrderPaymentIntent,
+  handleCheckoutOrderSetupIntent,
 } from "@/lib/server/checkout/order-service";
 import { handleStripeConnectAccountUpdated } from "@/lib/stripe/connect";
 import type Stripe from "stripe";
@@ -163,6 +164,12 @@ export async function POST(request: Request) {
           outcome: "succeeded",
           mode,
         });
+        break;
+      case "setup_intent.succeeded":
+        // $0 (100% coupon) checkout that saved a card for one-click offers.
+        // Only delivered if the endpoint subscribes to this event; the
+        // buyer's own return completes the order otherwise.
+        await handleCheckoutOrderSetupIntent(event.data.object as Stripe.SetupIntent, event.account ?? null);
         break;
       case "payment_intent.payment_failed":
         await syncExternalStripePaymentIntent({

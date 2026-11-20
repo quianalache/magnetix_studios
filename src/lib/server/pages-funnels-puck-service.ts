@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 
 import { FieldValue } from "firebase-admin/firestore";
 import type { Data as PuckData } from "@puckeditor/core";
@@ -10,7 +11,10 @@ import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
 import { getChartDesignSet } from "@/lib/server/chart-design-set-service";
 import { PUCK_CONTENT_MAX_DEPTH, decodeStoredPuckData, encodePuckData, isPuckData, type EncodedPuckData } from "@/lib/pages-funnels/puck-storage";
 import { countCheckoutBlocks, remapCheckoutConfigIds } from "@/lib/pages-funnels/checkout-block";
-import { findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
+import { CUSTOM_HTML_COMPONENT, findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
+import { HTML_IMPORT_MAX_FILE_BYTES, analyzeHtmlImport } from "@/lib/pages-funnels/custom-html/import";
+import { DEFAULT_STYLE_CONFIG } from "@/lib/pages-funnels/puck/style";
+import { autoWrapRootNode } from "@/lib/pages-funnels/puck/auto-hierarchy";
 import {
   encodePopupMapForStorage,
   normalizePopupMap,
@@ -594,12 +598,24 @@ function pageSlug(name: string): string {
  * its ready-made New Builder layout and default Reading settings. The
  * workspace's agency comes from the sub-account record, never the request.
  */
+/**
+ * Imported HTML fills the page edge to edge, as designed: the builder's usual
+ * Section → Row → Column scaffolding (autoWrapRootNode), with the Section set
+ * to "bleed" and no top/bottom padding so Magnetix adds no gutter around it.
+ */
+function importedPageSection(block: { type: string; props: Record<string, unknown> }) {
+  const section = autoWrapRootNode(block as never) as { type: string; props: Record<string, unknown> };
+  return { ...section, props: { ...section.props, maxWidth: "bleed", paddingTop: 0, paddingBottom: 0 } };
+}
+
 export async function createPuckPage(input: {
   subAccountId: string;
   uid: string;
   name: unknown;
   pageType: unknown;
   goal: unknown;
+  /** Import HTML: a full page's HTML (pasted or from an .html file). Re-analyzed here — never trusted from the browser. */
+  importHtml?: unknown;
 }): Promise<{ ok: true; pageId: string } | Exclude<PuckPersistenceResult, { ok: true }>> {
   const nameProblem = pageNameProblem(input.name);
   if (nameProblem) return { ok: false, error: nameProblem, status: 400 };
@@ -608,6 +624,19 @@ export async function createPuckPage(input: {
   const db = getAdminDb();
   const sub = await db.doc(`subAccounts/${input.subAccountId}`).get();
   if (!sub.exists) return { ok: false, error: "Workspace not found", status: 404 };
+  let imported: Record<string, unknown> | null = null;
+  if (input.importHtml !== undefined) {
+    if (typeof input.importHtml !== "string" || input.importHtml.length > HTML_IMPORT_MAX_FILE_BYTES * 2) return { ok: false, error: "That HTML is too large to import.", status: 400 };
+    if ((input.pageType as string) === "reading_result") return { ok: false, error: "Reading Result Pages can't be imported from HTML.", status: 400 };
+    const analysis = analyzeHtmlImport(input.importHtml);
+    if (analysis.problems.length) return { ok: false, error: analysis.problems.join(" "), status: 400 };
+    imported = {
+      puckDraftData: encodePuckData({
+        root: { props: {} },
+        content: [importedPageSection({ type: CUSTOM_HTML_COMPONENT, props: { id: `${CUSTOM_HTML_COMPONENT}-${randomUUID()}`, content: analysis.artifact, style: DEFAULT_STYLE_CONFIG } })],
+      } as never),
+    };
+  }
   const name = (input.name as string).trim();
   const pageType = input.pageType as PageType;
   const now = FieldValue.serverTimestamp();
@@ -632,6 +661,7 @@ export async function createPuckPage(input: {
     ...(pageType === "reading_result"
       ? { puckDraftData: encodePuckData(buildReadingResultStarterData()), puckDraftUpdatedAt: now, readingResult: DEFAULT_READING_RESULT_PAGE_SETTINGS }
       : {}),
+    ...(imported ? { ...imported, puckDraftUpdatedAt: now } : {}),
   });
   return { ok: true, pageId: ref.id };
 }

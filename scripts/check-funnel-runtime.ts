@@ -1043,6 +1043,146 @@ async function main() {
     assert.ok(liveRun, "LIVE Decline Workflow ran");
     assert.notEqual(liveRun.data().context.sandbox, true, "LIVE runs are not sandboxed");
   });
+  console.log("J. 100% coupon checkouts (card saved for one-click offers — nothing charged)");
+  const couponsSvc = await import("../src/lib/server/checkout/coupons-service");
+  await couponsSvc.createCoupon({ subAccountId: SA, uid: UID, body: { code: "FREE100", name: "Free", discountType: "percent", percentOff: 100 } });
+  await couponsSvc.createCoupon({ subAccountId: SA, uid: UID, body: { code: "HALF50", name: "Half", discountType: "percent", percentOff: 50 } });
+  await db.doc(`checkoutConfigs/${coStep.checkoutConfigId}`).update({ couponsEnabled: true });
+  let cBuyer = 0;
+  const couponStart = (code: string | null, configId = coStep.checkoutConfigId!, extra: Record<string, unknown> = {}) =>
+    orders.startCheckout(configId, { name: "Coupon Buyer", email: `coupon${++cBuyer}@example.com`, agreementAccepted: true, ...(code ? { couponCode: code } : {}), ...extra });
+  const orderDoc = async (id: string) => (await db.doc(`checkoutOrders/${id}`).get()).data()!;
+  let zeroOrderId = "";
+  await check("100% coupon + one-click offer after: $0 total, card SAVED (SetupIntent), no PaymentIntent, notice recorded", async () => {
+    const pis0 = counts.piCreates;
+    const sis0 = counts.siCreates;
+    const r = await couponStart("FREE100");
+    assert.equal(r.next, "pay");
+    assert.equal((r as { intentType?: string }).intentType, "setup");
+    zeroOrderId = r.orderId;
+    const o = await orderDoc(r.orderId);
+    assert.equal(o.totals.subtotalCents, 4700);
+    assert.equal(o.totals.discountCents, 4700);
+    assert.equal(o.totals.dueTodayCents, 0);
+    assert.ok(o.stripeSetupIntentId);
+    assert.equal(o.stripePaymentIntentId, null);
+    assert.equal(typeof o.postPurchaseNoticeAt, "number");
+    assert.equal(counts.piCreates, pis0, "no charge attempted");
+    assert.equal(counts.siCreates, sis0 + 1);
+    const si = sis.get(o.stripeSetupIntentId)!;
+    assert.equal(si.usage, "off_session");
+    assert.equal((si.metadata as Obj).orderId, r.orderId);
+  });
+  await check("card setup not finished → order not paid, no one-click session; finished → paid, session holds the saved card", async () => {
+    const before = await orders.orderStatusForBuyer(zeroOrderId, coStep.checkoutConfigId!);
+    assert.notEqual(before?.status, "paid");
+    assert.equal(await runtime.openFunnelSessionForOrder(zeroOrderId), null);
+    await mock(`/__mock/succeed_si/${(await orderDoc(zeroOrderId)).stripeSetupIntentId}`);
+    const after = await orders.orderStatusForBuyer(zeroOrderId, coStep.checkoutConfigId!);
+    assert.equal(after?.status, "paid");
+    assert.equal(after?.redirectTo, "/p/pg_up");
+    const o = await orderDoc(zeroOrderId);
+    assert.ok(o.items.every((i: { fulfillment: string }) => i.fulfillment === "granted"));
+    const sess = await runtime.openFunnelSessionForOrder(zeroOrderId);
+    assert.ok(sess);
+    assert.equal((await session(`fs_${zeroOrderId}`)).paymentMethodId, "pm_new_card");
+  });
+  await check("$0 order is never money: no PaymentIntent, analytics completion has no revenue", async () => {
+    const o = await orderDoc(zeroOrderId);
+    assert.equal(o.stripePaymentIntentId, null);
+    const ev = (await db.collection("funnelAnalyticsEvents").where("orderId", "==", zeroOrderId).get()).docs.map((d) => d.data());
+    assert.ok(ev.length >= 1);
+    assert.ok(ev.every((e) => !e.amountCents), JSON.stringify(ev.map((e) => [e.type, e.amountCents])));
+  });
+  await check("after a $0 checkout: Decline charges nothing; Accept charges the saved card once", async () => {
+    const t = runtime.issueFunnelSessionToken(`fs_${zeroOrderId}`);
+    const pis0 = counts.piCreates;
+    const d = await act(t, up.id, "decline");
+    assert.equal(d.state, "declined");
+    assert.equal(counts.piCreates, pis0);
+    // A second $0 buyer accepts (saved card made chargeable in the mock).
+    const r = await couponStart("FREE100");
+    await mock(`/__mock/succeed_si/${(await orderDoc(r.orderId)).stripeSetupIntentId}`);
+    await orders.orderStatusForBuyer(r.orderId, coStep.checkoutConfigId!);
+    const sess = await runtime.openFunnelSessionForOrder(r.orderId);
+    await db.doc(`funnelSessions/fs_${r.orderId}`).update({ paymentMethodId: "pm_ok" });
+    const a = await act(sess!.token, up.id, "accept");
+    assert.equal(a.state, "succeeded");
+    await act(sess!.token, up.id, "accept").catch(() => undefined);
+    const offerOrder = await orderDoc((await session(`fs_${r.orderId}`)).steps[up.id].orderId);
+    assert.equal(offerOrder.totals.dueTodayCents, 9700);
+    assert.equal(counts.piCreates, pis0 + 1, "exactly one charge");
+  });
+  await check("card setup fails → not paid, no session; a retry replaces the attempt", async () => {
+    const r = await couponStart("FREE100");
+    await mock(`/__mock/fail_si/${(await orderDoc(r.orderId)).stripeSetupIntentId}`);
+    const st = await orders.orderStatusForBuyer(r.orderId, coStep.checkoutConfigId!);
+    assert.notEqual(st?.status, "paid");
+    assert.equal(await runtime.openFunnelSessionForOrder(r.orderId), null);
+    const again = await orders.startCheckout(coStep.checkoutConfigId!, { name: "Coupon Buyer", email: `coupon${cBuyer}@example.com`, agreementAccepted: true, couponCode: "FREE100", replacesOrderId: r.orderId });
+    assert.equal((await orderDoc(r.orderId)).status, "canceled");
+    assert.equal((again as { intentType?: string }).intentType, "setup");
+  });
+  await check("repeated webhook for the saved card: completes once, never charges", async () => {
+    const r = await couponStart("FREE100");
+    const siId = (await orderDoc(r.orderId)).stripeSetupIntentId;
+    await mock(`/__mock/succeed_si/${siId}`);
+    const pis0 = counts.piCreates;
+    const si = sis.get(siId)! as never;
+    await orders.handleCheckoutOrderSetupIntent(si, "acct_T");
+    await orders.handleCheckoutOrderSetupIntent(si, "acct_T");
+    const o = await orderDoc(r.orderId);
+    assert.equal(o.status, "paid");
+    assert.equal(counts.piCreates, pis0);
+    // Another account's event can't complete it.
+    const r2 = await couponStart("FREE100");
+    const si2 = (await orderDoc(r2.orderId)).stripeSetupIntentId;
+    await mock(`/__mock/succeed_si/${si2}`);
+    await orders.handleCheckoutOrderSetupIntent(sis.get(si2)! as never, "acct_B");
+    assert.notEqual((await orderDoc(r2.orderId)).status, "paid");
+  });
+  await check("100% coupon with NO offer after checkout: simple $0 checkout, no card", async () => {
+    const cfg = (await configs.getCheckoutConfigDoc(coStep.checkoutConfigId!))!;
+    await db.doc(`checkoutConfigs/${cfg.id}`).update({ postPurchase: { type: "space" } });
+    try {
+      const sis0 = counts.siCreates;
+      const r = await couponStart("FREE100");
+      assert.equal(r.next, "redirect");
+      assert.equal(counts.siCreates, sis0);
+      assert.equal((await orderDoc(r.orderId)).paymentMode, null);
+    } finally {
+      await db.doc(`checkoutConfigs/${cfg.id}`).update({ postPurchase: { type: "funnel_next_step" } });
+    }
+  });
+  await check("partial coupon: normal card payment for the discounted amount", async () => {
+    const pis0 = counts.piCreates;
+    const r = await couponStart("HALF50");
+    assert.equal(r.next, "pay");
+    assert.equal((r as { intentType?: string }).intentType, "payment");
+    const o = await orderDoc(r.orderId);
+    assert.equal(o.totals.dueTodayCents, 2350);
+    assert.equal(counts.piCreates, pis0 + 1);
+    assert.equal(pis.get(o.stripePaymentIntentId)!.amount, 2350);
+  });
+  await check("genuinely free product before an offer: no card collected", async () => {
+    await offer("off_free", { title: "Free Guide", type: "free", priceCents: 0 });
+    const f2 = (await funnels.createFunnel({ subAccountId: SA, uid: UID, body: { name: "Free first", withCheckoutStep: true } })).funnel.id;
+    const c2 = (await funnels.listSteps(f2))[0];
+    await page("pg_free_up");
+    await funnels.addStep({ subAccountId: SA, funnelId: f2, uid: UID, body: { type: "upsell", name: "VIP", pageId: "pg_free_up" } });
+    await configs.saveStepCheckoutConfig({ subAccountId: SA, funnelId: f2, stepId: c2.id, uid: UID, body: { primaryOfferId: "off_free", postPurchase: { type: "funnel_next_step" } } });
+    await db.doc(`funnels/${f2}`).update({ status: "published" });
+    const sis0 = counts.siCreates;
+    const r = await couponStart(null, (await funnels.getStep(SA, f2, c2.id)).step.checkoutConfigId!);
+    assert.equal(r.next, "redirect");
+    assert.equal(counts.siCreates, sis0);
+  });
+  await check("invalid / removed coupon: full price charged normally", async () => {
+    await assert.rejects(couponStart("NOPE-CODE"), (e: unknown) => e instanceof CheckoutError && e.code === "coupon");
+    const r = await couponStart(null);
+    assert.equal((r as { intentType?: string }).intentType, "payment");
+    assert.equal((await orderDoc(r.orderId)).totals.dueTodayCents, 4700);
+  });
   await check("no card data or session tokens are stored", async () => {
     const all = (await db.collection("funnelSessions").get()).docs.map((d) => JSON.stringify(d.data())).join("\n");
     // Look for a session token, a card number or card field NAMES (a bare

@@ -19,6 +19,7 @@ import {
   sanitizeCustomCss,
   sanitizeCustomHtml,
 } from "@/lib/pages-funnels/custom-html/sanitize";
+import { findMissingReferences } from "@/lib/pages-funnels/custom-html/import";
 
 /**
  * Notes from the most recent paste. Puck re-mounts custom fields when their
@@ -62,6 +63,14 @@ export function CustomHtmlFieldEditor({
     return describeCustomHtmlReport(report);
   }, [artifact.html, artifact.css]);
   const limitProblems = customHtmlLimitProblems(artifact);
+  // Files a pasted page refers to by a relative path / plain http won't load in the frame.
+  const missing = useMemo(() => {
+    const { missingFiles, siteLinks } = findMissingReferences(`${artifact.html}<style>${artifact.css}</style>`);
+    return [
+      ...missingFiles.slice(0, 6).map((f) => `File not included (use a full https:// link): ${f}`),
+      ...siteLinks.slice(0, 4).map((f) => `Link to a file of the original site won't open here: ${f}`),
+    ];
+  }, [artifact.html, artifact.css]);
 
   function onPasteHtml(event: ClipboardEvent<HTMLTextAreaElement>) {
     const text = event.clipboardData.getData("text/plain");
@@ -142,6 +151,7 @@ export function CustomHtmlFieldEditor({
       )}
       {limitProblems.length > 0 && <Notice tone="danger" items={limitProblems} title="Too large to save" />}
       {warnings.length > 0 && <Notice tone="warning" items={warnings} title="Some code won't run here" />}
+      {missing.length > 0 && <Notice tone="warning" items={missing} title="Missing files" />}
 
       <div className="border-border space-y-3 border-t pt-3">
         <p className="text-xs font-semibold">Display</p>

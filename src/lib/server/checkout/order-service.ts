@@ -444,6 +444,17 @@ export async function startOneStepSession(configId: string, body: Record<string,
   return { sessionId };
 }
 
+/** Does this $0 checkout lead straight to a one-click offer (so a card must be saved)? Mode = the primary Offer's. */
+async function zeroTotalLeadsToOffer(config: CheckoutConfig, primary: CourseOffer): Promise<boolean> {
+  try {
+    const target = await resolveStripeTarget(config.subAccountId, primary);
+    const { postPurchaseOfferFollows } = await import("./funnel-runtime-service");
+    return await postPurchaseOfferFollows(config, target.paymentMode);
+  } catch {
+    return false;
+  }
+}
+
 export async function startCheckout(configId: string, body: Record<string, unknown>): Promise<StartResult> {
   const resolved = await resolveCheckout(configId);
   const { config, primary } = resolved;
@@ -484,7 +495,16 @@ export async function startCheckout(configId: string, body: Record<string, unkno
     fulfillment: "pending",
     fulfillmentError: null,
   }));
-  const needsStripe = totals.dueTodayCents > 0 || totals.recurring !== null;
+  // A PAID product brought to $0 today by a 100% coupon, on a funnel checkout
+  // that leads straight to a one-click offer: nothing is charged, but the
+  // buyer's card is saved (SetupIntent) so the optional offer can be accepted
+  // in one click. A genuinely free product (subtotal $0), or no offer after
+  // checkout, keeps the simple no-card $0 checkout.
+  const saveCardOnly =
+    totals.dueTodayCents === 0 && totals.recurring === null && totals.subtotalCents > 0 && config.context.type === "funnel_step"
+      ? await zeroTotalLeadsToOffer(config, primary)
+      : false;
+  const needsStripe = totals.dueTodayCents > 0 || totals.recurring !== null || saveCardOnly;
   const target = needsStripe ? await resolveStripeTarget(config.subAccountId, primary) : null;
   const publishableKey = target ? publishableKeyFor(target.paymentMode) : null;
   if (target && !publishableKey) throw new CheckoutError("Card payments aren't configured on this site yet.", 503, null, "payments_not_ready");
@@ -543,7 +563,17 @@ export async function startCheckout(configId: string, body: Record<string, unkno
   try {
     let clientSecret: string;
     let intentType: "payment" | "setup";
-    if (!totals.recurring) {
+    if (saveCardOnly) {
+      // Card authorized for later off-session use; no charge, no PaymentIntent.
+      const si = await target.stripe.setupIntents.create(
+        { customer: order.stripeCustomerId!, usage: "off_session", automatic_payment_methods: { enabled: true }, metadata: { ...metadata, saveCardForOffers: "1" } },
+        { ...target.requestOptions, idempotencyKey: `order_${order.id}_setup` },
+      );
+      clientSecret = si.client_secret ?? "";
+      intentType = "setup";
+      if (!clientSecret) throw new CheckoutError("We couldn't prepare your checkout. Try again.", 502);
+      await orderRef.update({ stripeSetupIntentId: si.id, updatedAt: Date.now() });
+    } else if (!totals.recurring) {
       const pi = await target.stripe.paymentIntents.create(
         {
           amount: totals.dueTodayCents,
@@ -716,6 +746,16 @@ async function verifyPaid(order: CheckoutOrder): Promise<{ ok: boolean; reason?:
       const current = typeof sub.default_payment_method === "string" ? sub.default_payment_method : sub.default_payment_method?.id;
       if (current !== pm) await stripe.subscriptions.update(sub.id, { default_payment_method: pm }, opts);
     } else if (invoice.amount_paid < order.totals.dueTodayCents) return { ok: false, reason: "underpaid" };
+    return { ok: true, paymentIntentId: null };
+  }
+  // $0 order (100% coupon) whose card was saved for one-click offers: the
+  // SetupIntent for THIS order must have succeeded. Nothing was charged.
+  if (order.stripeSetupIntentId && order.totals.dueTodayCents === 0 && order.totals.recurring === null) {
+    const si = await stripe.setupIntents.retrieve(order.stripeSetupIntentId, {}, opts);
+    if (si.metadata?.orderId !== order.id) return { ok: false, reason: "mismatch" };
+    if (si.status !== "succeeded") return { ok: false, reason: si.status === "requires_payment_method" ? "requires_payment_method" : si.status };
+    const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;
+    if (!pm) return { ok: false, reason: "no_payment_method" };
     return { ok: true, paymentIntentId: null };
   }
   return { ok: false, reason: "no_intent" };
@@ -903,6 +943,13 @@ export async function orderStatusForBuyer(orderId: string, configId: string): Pr
 }
 
 /* -------------------------------- Webhooks ------------------------------- */
+
+/** setup_intent.succeeded for a $0 (100% coupon) order whose card was saved for one-click offers. */
+export async function handleCheckoutOrderSetupIntent(si: Stripe.SetupIntent, eventAccountId: string | null): Promise<void> {
+  const orderId = si.metadata?.orderId;
+  if (si.metadata?.kind !== CHECKOUT_ORDER_KIND || si.metadata?.saveCardForOffers !== "1" || !orderId) return;
+  await completeOrder(orderId, { source: "webhook", eventAccountId }).catch((err) => console.error("[checkout] webhook completion failed", err));
+}
 
 export async function handleCheckoutOrderPaymentIntent(pi: Stripe.PaymentIntent, eventAccountId: string | null): Promise<void> {
   const orderId = pi.metadata?.orderId;

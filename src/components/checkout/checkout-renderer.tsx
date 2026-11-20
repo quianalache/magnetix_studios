@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, CreditCard, Loader2, Lock } from "lucide-
 import { cn } from "@/lib/utils";
 import { readAttributionFromBrowser } from "@/lib/attribution";
 import { ctaLabel, friendlyPaymentError, needsPayment } from "@/lib/checkout/display";
+import { formatMoney } from "@/lib/checkout/pricing";
 import type { CheckoutView } from "@/lib/checkout/view-types";
 import { DEFAULT_CHECKOUT_PRESENTATION, effectiveShow, trimmedText, type CheckoutPresentation } from "@/lib/checkout/presentation";
 import type { OrderTotals } from "@/types/checkout";
@@ -379,7 +380,10 @@ export function CheckoutRenderer({
   const compact = device !== "desktop" || pres.layout === "single_column";
   const forceColumns = pres.layout === "two_column" && device === "desktop";
   const label = ctaLabel(text.submitLabel || view.display.submitLabel, totals);
-  const payNeeded = needsPayment(totals);
+  // A paid product brought to $0 by a coupon, with a one-click offer after
+  // checkout: save the card (nothing charged) — same rule as the server.
+  const saveCardOnly = !!view.postPurchaseNotice && totals.dueTodayCents <= 0 && totals.recurring === null && totals.subtotalCents > 0;
+  const payNeeded = needsPayment(totals) || saveCardOnly;
   const agreementMissing = view.agreement.mode !== "notRequired" && !agree;
   const lineFor = (bumpId: string) => totals.lines.find((l) => l.bumpId === bumpId) ?? null;
   const couponExcludesBumps = coupon.status === "applied" && totals.lines.some((l) => l.role === "bump" && l.unitAmountCents > 0 && l.discountCents === 0);
@@ -791,7 +795,11 @@ function PayForm({
         <p className="text-muted-foreground text-caption">Billing details are collected securely by Stripe with your payment.</p>
       )}
       <AgreementCheckbox view={view} checked={agree} onChange={setAgree} error={agreeError} />
-      {view.postPurchaseNotice ? (
+      {view.postPurchaseNotice && totals.dueTodayCents <= 0 && totals.recurring === null ? (
+        <p data-checkout-post-purchase-notice data-checkout-save-card-only className="text-muted-foreground text-caption">
+          Your total today is {formatMoney(0, totals.currency)}, so you won&apos;t be charged for this purchase. {view.brand.name || "We"} will save this payment method securely so you can choose whether to add an optional offer after checkout in one click. It&apos;s only charged if you accept an offer — declining costs nothing.
+        </p>
+      ) : view.postPurchaseNotice ? (
         <p data-checkout-post-purchase-notice className="text-muted-foreground text-caption">
           After this payment you may be offered something extra. To let you add it in one click, {view.brand.name || "we"} will keep this payment method on file. It&apos;s only charged again if you choose to accept an offer.
         </p>
