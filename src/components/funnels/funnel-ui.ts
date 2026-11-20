@@ -1,7 +1,6 @@
 import { CheckCircle2, FileText, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 import type { Funnel, FunnelStep, FunnelStepType, PostPurchaseDestination } from "@/types/checkout";
 import type { FunnelIssue } from "@/lib/checkout/funnel-routing";
-import { COMMERCE_CAPABILITIES } from "@/lib/checkout/capabilities";
 
 /** GET /commerce/funnels/{id} — the funnel hub payload (see getFunnelHub). */
 export interface FunnelHubPayload {
@@ -55,7 +54,5 @@ export const pageEditorHref = (subAccountId: string, pageId: string) => `/sa/${s
 export const stepSettingsHref = (subAccountId: string, funnelId: string, stepId: string) => `/sa/${subAccountId}/pages-funnels/funnels/${funnelId}/steps/${stepId}`;
 export const FUNNELS_VIEW_HREF = (subAccountId: string) => `/sa/${subAccountId}/pages-funnels?view=funnels`;
 
-/** Plain-language note on Upsell / Downsell steps — follows the runtime capability, never claims charging is live before it is. */
-export const OFFER_LATER_NOTE = COMMERCE_CAPABILITIES.funnelPostPurchaseCharging
-  ? "Set the Offer, payment and CRM actions in Step settings."
-  : "Set the Offer, payment and CRM actions in Step settings. Post-purchase charging isn't enabled yet, so this step doesn't charge buyers.";
+/** Plain-language note on Upsell / Downsell steps. Whether charging can run right now comes from the server (Step settings payload). */
+export const OFFER_LATER_NOTE = "Set the Offer, payment and CRM actions in Step settings.";

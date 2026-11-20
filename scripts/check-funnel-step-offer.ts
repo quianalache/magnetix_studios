@@ -205,8 +205,15 @@ async function main() {
     const p = await offerSvc.stepOfferSettingsPayload(SA, s.offer);
     const pre = rules.paymentPrerequisites({ offer: { ...p.savedOffer!, currency: p.savedOffer!.currency }, offerAttention: p.savedOffer!.stepProblem, stripe: p.stripe, hasEarlierCheckout: true, recurringDisclosureAcknowledged: true });
     assert.equal(rules.stepConfigStatus(pre, 0), "complete");
-    assert.equal(p.runtime.postPurchaseCharging, false);
-    assert.equal(caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging, false);
+    // Available to every workspace; only the platform emergency stop pauses it (server truth for the UI).
+    assert.equal(p.runtime.postPurchaseCharging, true);
+    process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED = "1";
+    try {
+      assert.equal((await offerSvc.stepOfferSettingsPayload(SA, s.offer)).runtime.postPurchaseCharging, false);
+      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false);
+    } finally {
+      delete process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED;
+    }
   });
   await check("free-trial subscription Offers are supported: complete once the disclosure is confirmed", () => {
     const base = { offer: { id: "t", title: "Trial", type: "recurring" as const, priceCents: 2900, currency: "USD", recurringInterval: "month" as const, trialDays: 7, visibility: "published" }, offerAttention: null, stripe: "ready" as const, hasEarlierCheckout: true };

@@ -12,7 +12,7 @@ import { pageNameProblem } from "@/lib/pages-funnels/page-settings";
 import { loadPagesLibrary } from "@/lib/server/pages-funnels/library-service";
 import { checkoutContextsForPage } from "@/lib/server/page-checkout-resolver";
 import { normalizeStepOffer, sanitizeStepOfferInput, savedOfferAttention } from "@/lib/checkout/funnel-offer";
-import { offerFacts, validateStepOffer } from "./funnel-offer-service";
+import { offerFacts, offerPaymentMode, stripeReadiness, validateStepOffer } from "./funnel-offer-service";
 import { funnelPostPurchaseChargingEnabled } from "@/lib/checkout/capabilities";
 import {
   DEFAULT_ROUTING,
@@ -108,6 +108,8 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
   const [steps, pages, library] = await Promise.all([listSteps(funnel.id), listWorkspacePages(subAccountId), loadPagesLibrary(subAccountId)]);
   const dest = await checkoutDestinations(steps);
   const checkout: FunnelHub["checkout"] = {};
+  /** How each checkout step takes payment (for one-click Offer compatibility). */
+  const checkoutPay: Record<string, { free: boolean; mode: "test" | "live" } | null> = {};
   await Promise.all(
     steps
       .filter((s) => s.type === "checkout")
@@ -115,6 +117,7 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
         const config = s.checkoutConfigId ? await getCheckoutConfigDoc(s.checkoutConfigId).catch(() => null) : null;
         const offer = config?.primaryOfferId ? await getCourseOffer(subAccountId, config.primaryOfferId).catch(() => null) : null;
         checkout[s.id] = { postPurchase: dest[s.id] ?? null, offerTitle: offer && offer.subAccountId === subAccountId ? offer.title : null };
+        checkoutPay[s.id] = offer && offer.subAccountId === subAccountId ? { free: offer.type === "free", mode: offerPaymentMode(offer) } : null;
       }),
   );
   const pageUses = Object.fromEntries(Object.entries(library.usage).map(([id, uses]) => [id, uses.length]));
@@ -122,9 +125,10 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
   const pageMap = Object.fromEntries(pages.map((p) => [p.id, { name: p.name, status: p.status }]));
   const issues = analyzeFunnel({ steps, checkoutDestinations: dest, pages: pageMap, pageUses });
   // Upsell / Downsell steps. On a step a buyer can reach after paying, any
-  // reason the one-click offer couldn't run (charging not switched on for
-  // this workspace, no Offer, an unusable Offer, an unconfirmed subscription
-  // disclosure) is an ERROR: the buyer would land on Accept / Decline buttons
+  // reason the one-click offer couldn't run (platform emergency stop, no
+  // Offer, an unusable Offer, Stripe not ready for the Offer's payment mode,
+  // a different payment mode than the checkout / a free checkout, an
+  // unconfirmed subscription disclosure) is an ERROR: the buyer would land on Accept / Decline buttons
   // that can't work. Funnels are never published into that state, and offer
   // pages are never skipped automatically. Unreachable steps: warnings.
   const reach = reachableSteps(steps, dest);
@@ -135,9 +139,8 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
     const o = normalizeStepOffer(s.offer);
     const offer = o.offerId ? await getCourseOffer(subAccountId, o.offerId).catch(() => null) : null;
     const ownOffer = offer && offer.subAccountId === subAccountId ? offer : null;
-    const chargingOn = ownOffer
-      ? funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: ownOffer.paymentMode })
-      : funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: "test" }) || funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: "live" });
+    // Available to every workspace; false only during the platform emergency stop.
+    const chargingOn = funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: ownOffer ? offerPaymentMode(ownOffer) : "test" });
     if (!chargingOn) {
       issues.push({
         level,
@@ -145,9 +148,32 @@ export async function getFunnelHub(subAccountId: string, funnelId: string): Prom
         stepId: s.id,
         message:
           level === "error"
-            ? `${label}: one-click offers aren't switched on for this workspace yet, so a buyer sent here after paying couldn't accept or decline it. Remove this step or send buyers somewhere else after checkout before publishing.`
-            : `${label}: one-click offers aren't switched on yet, so buyers who reach this page after paying can't accept or decline it.`,
+            ? `${label}: one-click payments are temporarily paused across Magnetix, so a buyer sent here after paying couldn't buy this offer. Publish once they're back on, or send buyers somewhere else after checkout.`
+            : `${label}: one-click payments are temporarily paused across Magnetix.`,
       });
+    }
+    if (ownOffer && ownOffer.type !== "free") {
+      const mode = offerPaymentMode(ownOffer);
+      const modeLabel = mode === "live" ? "Live" : "Test";
+      const ready = await stripeReadiness(subAccountId, ownOffer);
+      if (ready !== "ready") {
+        issues.push({
+          level,
+          code: "offer_payments_not_ready",
+          stepId: s.id,
+          message: ready === "charges_disabled"
+            ? `${label}: your ${modeLabel} Stripe account can't take payments yet. Finish setup in Stripe, then publish.`
+            : `${label}: card payments aren't set up for ${modeLabel} mode yet. Connect Stripe in Settings → Payments, then publish.`,
+        });
+      }
+      // The buyer's saved card belongs to the checkout's Stripe account + mode.
+      const pays = Object.values(checkoutPay).filter((c): c is { free: boolean; mode: "test" | "live" } => !!c);
+      if (pays.length && pays.every((c) => c.free)) {
+        issues.push({ level, code: "offer_mode_mismatch", stepId: s.id, message: `${label}: the checkout before this step is free, so no card is saved for a one-click purchase. Use a paid checkout Offer or remove this step.` });
+      } else if (pays.some((c) => !c.free && c.mode !== mode)) {
+        const other = pays.find((c) => !c.free && c.mode !== mode)!.mode === "live" ? "Live" : "Test";
+        issues.push({ level, code: "offer_mode_mismatch", stepId: s.id, message: `${label}: this Offer takes ${modeLabel} payments but the funnel's checkout takes ${other} payments, so the buyer's saved card can't be used. Choose Offers in the same payment mode.` });
+      }
     }
     if (!o.offerId) {
       issues.push({ level, code: "offer_missing", stepId: s.id, message: `${label}: no Offer chosen yet. Choose one in Step settings.` });

@@ -1,61 +1,38 @@
 /**
- * Commerce runtime capabilities — what the RUNTIME can actually do, as
- * opposed to what can be configured. Settings screens and the public
- * runtime read these so nothing claims (or runs) a capability that isn't
- * switched on.
+ * Commerce runtime capabilities.
  *
- * `funnelPostPurchaseCharging` — the funnel Upsell / Downsell runtime.
- * This public flag only says that the deployment contains the capability. The
- * server-side `funnelPostPurchaseChargingEnabled()` check below additionally
- * requires the workspace to be allow-listed for the Offer's payment mode.
+ * One-click post-purchase Upsells / Downsells are part of the normal
+ * payment experience (owner decision 2026-11-20): every workspace whose
+ * Offer can be paid through its own connected, payment-ready Stripe account
+ * may use them, in TEST or LIVE mode, with NO per-workspace activation,
+ * allow-list or plan gate. Real eligibility is checked on the server for
+ * every action (funnel-runtime-service `validateOfferStep`: published funnel,
+ * page and Offer of this workspace, connected account = the checkout's
+ * account, same payment mode, publishable key, saved authorization, consent).
+ *
+ * `FUNNEL_POST_PURCHASE_CHARGING_DISABLED` (server-only, "1"/"true") is a
+ * PLATFORM-WIDE EMERGENCY STOP for incidents only — not an activation switch.
+ * Unset = available. While it is set no one-click charge starts anywhere;
+ * buyers can still choose "No thanks" and continue (never stranded), and
+ * funnels with offer steps buyers would reach can't be newly published.
  */
-export const COMMERCE_CAPABILITIES: Record<"funnelPostPurchaseCharging", boolean> = {
-  funnelPostPurchaseCharging: process.env.NEXT_PUBLIC_FUNNEL_POST_PURCHASE_CHARGING === "on",
-};
 
 export type FunnelPostPurchaseContext = {
   subAccountId: string;
   paymentMode: "test" | "live" | null | undefined;
 };
 
-/**
- * The only server-authoritative switch for funnel post-purchase charging.
- *
- * Off unless the deployment flag is on AND the workspace is on the allow-list
- * for the Offer's payment mode — two SEPARATE server-only lists:
- *
- * - `FUNNEL_POST_PURCHASE_TEST_SUBACCOUNT_IDS` — TEST mode. Test transactions
- *   still create CRM records, entitlements and tags, so this stays limited
- *   to disposable, owner-approved QA workspaces (Workflows run sandboxed).
- * - `FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS` — LIVE mode (real money).
- *   Empty by default; a workspace is added only with explicit owner
- *   approval. Being on the TEST list never enables LIVE charging.
- *
- * Both are comma-separated sub-account ids, never client-controlled.
- * Removing an id (or the flag) is the rollback: new sessions stop opening
- * and every Accept / Decline is refused; nothing already paid is touched.
- */
-export function funnelPostPurchaseChargingEnabled(
-  context: FunnelPostPurchaseContext,
-): boolean {
-  if (!COMMERCE_CAPABILITIES.funnelPostPurchaseCharging) return false;
-  const list =
-    context.paymentMode === "test"
-      ? process.env.FUNNEL_POST_PURCHASE_TEST_SUBACCOUNT_IDS
-      : context.paymentMode === "live"
-        ? process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS
-        : undefined;
-  const allowed = new Set(
-    (list ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean),
-  );
-  return allowed.has(context.subAccountId);
+export function funnelPostPurchaseEmergencyDisabled(): boolean {
+  const v = process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "on" || v === "yes";
 }
 
-export type CommerceCapability = keyof typeof COMMERCE_CAPABILITIES;
-
-export function commerceCapability(name: CommerceCapability): boolean {
-  return COMMERCE_CAPABILITIES[name];
+/**
+ * Can one-click charges run for this payment mode right now? True for any
+ * workspace in TEST or LIVE mode unless the emergency stop is set. Never a
+ * substitute for the per-action eligibility checks — only their precondition.
+ */
+export function funnelPostPurchaseChargingEnabled(context: FunnelPostPurchaseContext): boolean {
+  if (funnelPostPurchaseEmergencyDisabled()) return false;
+  return context.paymentMode === "test" || context.paymentMode === "live";
 }

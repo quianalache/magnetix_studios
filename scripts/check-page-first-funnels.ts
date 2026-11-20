@@ -29,7 +29,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_
 }
 process.env.FIREBASE_ADMIN_PROJECT_ID = PROJECT;
 process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = PROJECT;
-for (const k of ["RESEND_API_KEY", "QSTASH_TOKEN", "QSTASH_URL", "STRIPE_SECRET_KEY", "NEXT_PUBLIC_FUNNEL_POST_PURCHASE_CHARGING", "FUNNEL_POST_PURCHASE_TEST_SUBACCOUNT_IDS"]) delete process.env[k];
+for (const k of ["RESEND_API_KEY", "QSTASH_TOKEN", "QSTASH_URL", "STRIPE_SECRET_KEY", "FUNNEL_POST_PURCHASE_CHARGING_DISABLED"]) delete process.env[k];
 
 let passed = 0;
 let failed = 0;
@@ -425,24 +425,30 @@ async function main() {
     assert.equal(issues.find((i) => i.code === "page_unpublished")?.level, "warning");
     await publish(F.id);
   });
-  await check("a reachable one-click offer page blocks publishing while charging is off (never trapped, never skipped)", async () => {
+  await check("a reachable one-click offer page that can't be bought blocks publishing (never trapped, never skipped)", async () => {
     const { funnel: F } = await funnels.createFunnel({ subAccountId: SA, uid: ADMIN, body: { name: "Safeguard 6" } });
     await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "page", name: "Landing", pageId: "pubLanding" } });
     await hostedCheckout(F.id, { type: "funnel_next_step" });
     const up = await funnels.addStep({ subAccountId: SA, funnelId: F.id, uid: ADMIN, body: { type: "upsell", name: "Upgrade", pageId: "draftOffer" } });
     const issues = (await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.stepId === up.id);
-    const off = issues.find((i) => i.code === "offer_charging_off");
-    assert.equal(off?.level, "error");
-    assert.match(off!.message, /one-click offers aren't switched on for this workspace yet.*Remove this step or send buyers somewhere else/);
-    assert.equal(issues.find((i) => i.code === "offer_missing")?.level, "error", "no Offer on a reachable offer step blocks too");
+    assert.ok(!issues.some((i) => i.code === "offer_charging_off"), "no activation needed: available to every workspace");
+    assert.equal(issues.find((i) => i.code === "offer_missing")?.level, "error", "no Offer on a reachable offer step blocks");
     assert.equal(issues.find((i) => i.code === "page_unpublished")?.level, "error", "its draft page still blocks");
     await assert.rejects(funnels.updateFunnel(SA, F.id, { status: "published" }), (e: unknown) => (e as { status?: number }).status === 409);
     assert.equal((await db.doc(`funnels/${F.id}`).get()).data()!.status, "draft");
+    // Platform emergency stop: reachable offer steps are refused with a plain reason.
+    process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED = "1";
+    try {
+      const off = (await funnels.getFunnelHub(SA, F.id)).issues.find((i) => i.stepId === up.id && i.code === "offer_charging_off");
+      assert.equal(off?.level, "error");
+      assert.match(off!.message, /temporarily paused across Magnetix.*send buyers somewhere else after checkout/);
+    } finally {
+      delete process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED;
+    }
     // Send buyers somewhere else after checkout → the offer step is unreachable → warnings only.
     const co = (await funnels.getFunnelHub(SA, F.id)).steps.find((s) => s.type === "checkout")!;
     await configs.saveStepCheckoutConfig({ subAccountId: SA, funnelId: F.id, stepId: co.id, uid: ADMIN, body: { postPurchase: { type: "space" } } });
     const after = (await funnels.getFunnelHub(SA, F.id)).issues.filter((i) => i.stepId === up.id);
-    assert.equal(after.find((i) => i.code === "offer_charging_off")?.level, "warning");
     assert.ok(!after.some((i) => i.level === "error" && i.code.startsWith("offer_")));
   });
   await check("ordinary checkout is never gated by the post-purchase switch", async () => {

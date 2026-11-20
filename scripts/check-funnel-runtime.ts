@@ -34,8 +34,9 @@ for (const k of ["RESEND_API_KEY", "EMAIL_FROM", "QSTASH_TOKEN", "QSTASH_URL", "
 process.env.STRIPE_SECRET_KEY = "sk_test_local_mock_only";
 process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_local_mock_only";
 process.env.AUTOMATIONS_TOKEN_SECRET = "local-test-secret-0123456789abcdef";
-process.env.NEXT_PUBLIC_FUNNEL_POST_PURCHASE_CHARGING = "on";
-process.env.FUNNEL_POST_PURCHASE_TEST_SUBACCOUNT_IDS = "sa_fr";
+// One-click is available to every workspace (no activation list); only the
+// platform emergency stop can pause it.
+delete process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED;
 
 /* ------------------------------ Mock Stripe ------------------------------ */
 type Obj = Record<string, unknown>;
@@ -43,7 +44,7 @@ const pis = new Map<string, Obj>();
 const subs = new Map<string, Obj>();
 const invoices = new Map<string, Obj>();
 const idem = new Map<string, { status: number; body: unknown }>();
-const counts = { piCreates: 0, subCreates: 0, siCreates: 0, accountsSeen: new Set<string>() };
+const counts = { piCreates: 0, subCreates: 0, siCreates: 0, accountsSeen: new Set<string>(), piCreatesByAccount: new Map<string, number>() };
 const sis = new Map<string, Obj>();
 let seq = 0;
 const nid = (p: string) => `${p}_${(++seq).toString().padStart(6, "0")}`;
@@ -139,6 +140,7 @@ const server = http.createServer((req, res) => {
     }
     if (req.method === "POST" && p === "/v1/payment_intents") {
       counts.piCreates++;
+      counts.piCreatesByAccount.set(account, (counts.piCreatesByAccount.get(account) ?? 0) + 1);
       const { pi, error } = piFor(Number(body.amount), String(body.currency), (body.payment_method as string) ?? null, (body.metadata as Obj) ?? {}, (body.customer as string) ?? null);
       return error ? reply(402, { error }) : reply(200, pi);
     }
@@ -268,10 +270,19 @@ async function main() {
   const rules = await import("../src/lib/checkout/funnel-offer");
   const { CheckoutError } = await import("../src/lib/server/checkout/common");
   const db = getAdminDb();
-  assert.equal(caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging, true);
-  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "test" }), true);
-  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false);
-  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA2, paymentMode: "test" }), false);
+  for (const sa of [SA, SA2, "sa_never_listed_anywhere"]) {
+    assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: sa, paymentMode: "test" }), true);
+    assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: sa, paymentMode: "live" }), true);
+  }
+  assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: null }), false, "nothing paid by card");
+  const emergency = async <T>(fn: () => Promise<T>): Promise<T> => {
+    process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED = "1";
+    try {
+      return await fn();
+    } finally {
+      delete process.env.FUNNEL_POST_PURCHASE_CHARGING_DISABLED;
+    }
+  };
 
   /* ------------------------------- Fixtures ------------------------------- */
   const now = new Date();
@@ -868,21 +879,26 @@ async function main() {
     // Decline still works on a misconfigured step (no payment involved).
     assert.equal((await act(s.token, up.id, "decline")).state, "declined");
   });
-  await check("charging switched off → no session, every action refused", async () => {
-    caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = false;
-    try {
-      const { orderId } = await (async () => {
-        caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = true;
-        const r = await paidCheckout();
-        caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = false;
-        return r;
-      })();
-      assert.equal(await runtime.openFunnelSessionForOrder(orderId), null);
-      await assert.rejects(act(runtime.issueFunnelSessionToken(`fs_${orderId}`), up.id, "accept"), isErr(403, "not_enabled"));
-      assert.equal(await runtime.funnelOfferViewForPage({ id: "pg_up", subAccountId: SA }, [{ name: runtime.funnelSessionCookieName(F), value: runtime.issueFunnelSessionToken(`fs_${orderId}`) }]), null);
-    } finally {
-      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = true;
-    }
+  await check("emergency stop: no new charge anywhere, but the buyer can still decline and continue (never stranded)", async () => {
+    const s0 = await paidCheckout();
+    const creates = counts.piCreates;
+    await emergency(async () => {
+      const view = await runtime.funnelOfferViewForPage({ id: "pg_up", subAccountId: SA }, [{ name: runtime.funnelSessionCookieName(F), value: s0.token }]);
+      assert.equal(view?.available, false);
+      assert.equal(view?.declineOnly, true);
+      assert.equal(view?.offer, null, "no price / payment form offered");
+      await assert.rejects(act(s0.token, up.id, "accept"), isErr(403, "not_enabled"));
+      assert.equal(counts.piCreates, creates, "nothing charged");
+      // A buyer paying while paused still gets a session (Decline works).
+      const s1 = await paidCheckout();
+      assert.ok((await session(s1.sessionId)).currentStepId === up.id);
+      const d = await act(s0.token, up.id, "decline");
+      assert.equal(d.state, "declined");
+      assert.equal(d.nextHref, "/p/pg_down");
+    });
+    // Emergency over → the next buyer can accept again.
+    const s2 = await paidCheckout();
+    assert.equal((await act(s2.token, up.id, "accept")).state, "succeeded");
   });
   await check("a crashed outcome (actions still pending) is completed by the hourly backstop, once", async () => {
     const s = await paidCheckout();
@@ -896,35 +912,94 @@ async function main() {
     assert.equal(ss.effectsPending, false);
     assert.equal(await runsFor("wf_decline", key), 1, "once-only key: no second run");
   });
-  console.log("H. Live activation controls (no live Stripe call is ever made)");
-  await check("LIVE charging is off by default; the TEST list never enables LIVE; only the LIVE list does", async () => {
-    delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
-    assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false);
-    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = ` ${SA2} , ${SA} `;
-    try {
-      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), true);
-      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: "sa_not_listed", paymentMode: "live" }), false);
-      // The LIVE list never enables TEST for an unlisted QA workspace, and a null mode is never on.
-      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA2, paymentMode: "test" }), false);
-      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: null }), false);
-      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = false;
-      assert.equal(caps.funnelPostPurchaseChargingEnabled({ subAccountId: SA, paymentMode: "live" }), false, "deployment flag off = rollback");
-    } finally {
-      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = true;
-      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
-    }
+  console.log("I. Universal availability (no activation list) + LIVE safeguards (no live Stripe call is ever made)");
+  await check("a second, never-listed workspace runs one-click on ITS OWN connected account", async () => {
+    // Workspace 2: its own pages, Offers, funnel and connected account (acct_B).
+    const page2 = (id: string) => db.doc(`pages/${id}`).set({ name: id, slug: id, pageType: "sales", goal: "sales", status: "published", origin: "blank", funnelId: null, blocks: [], seo: {}, templateId: null, agencyId: "ag_other", subAccountId: SA2, createdByUid: "x", createdAt: now, updatedAt: now, publishedAt: now, puckDraftData: { content: [], root: { props: {} } }, puckPublishedData: { content: [], root: { props: {} } } });
+    for (const id of ["pg2_up", "pg2_ty"]) await page2(id);
+    const offer2 = (id: string, extra: Record<string, unknown>) =>
+      db.doc(`subAccounts/${SA2}/courseOffers/${id}`).set({
+        subAccountId: SA2, agencyId: "ag_other", title: id, slug: id, descriptionHtml: "", courseIds: [], type: "oneTime", priceCents: 3300, currency: "USD", recurringInterval: null, trialDays: null, paymentMode: "test",
+        priceTextOverride: null, visibility: "published", version: 1, thumbnailUrl: null, discountCodesEnabled: false, showRecentPurchasePopup: false,
+        access: { beginAtSpecificDate: false, beginDate: null, restrictToDays: false, accessDays: null }, advanced: { customJs: "", customCss: "", headerTracking: "", footerTracking: "" },
+        checkoutSettings: { collectAddress: false, collectPhoneNumber: false, serviceAgreement: { mode: "notRequired", customText: "", linkUrl: "" } }, booking: null, projectTemplates: [], communityAccess: [], createdAt: now, updatedAt: now, ...extra,
+      });
+    await offer2("off2_main", {});
+    await offer2("off2_up", { priceCents: 5500 });
+    await db.doc(`subAccounts/${SA2}/members/m2`).set({ email: "b2@example.com", status: "active", displayName: "B2", emailVerified: true });
+    const f2 = (await funnels.createFunnel({ subAccountId: SA2, uid: "x", body: { name: "WS2", withCheckoutStep: true } })).funnel.id;
+    const co2 = (await funnels.listSteps(f2))[0];
+    const up2b = await funnels.addStep({ subAccountId: SA2, funnelId: f2, uid: "x", body: { type: "upsell", name: "Up", pageId: "pg2_up" } });
+    await funnels.addStep({ subAccountId: SA2, funnelId: f2, uid: "x", body: { type: "thank_you", name: "Thanks", pageId: "pg2_ty" } });
+    await configs.saveStepCheckoutConfig({ subAccountId: SA2, funnelId: f2, stepId: co2.id, uid: "x", body: { primaryOfferId: "off2_main", postPurchase: { type: "funnel_next_step" } } });
+    await funnels.updateStep(SA2, f2, up2b.id, { offer: { ...rules.defaultStepOffer(), offerId: "off2_up" } });
+    // Publishes without any per-workspace activation.
+    assert.equal((await funnels.updateFunnel(SA2, f2, { status: "published" })).status, "published");
+    const cfg2 = (await funnels.getStep(SA2, f2, co2.id)).step.checkoutConfigId!;
+    await mock("/__mock/seed_pi/pi_ws2_checkout", { payment_method: "pm_ok" });
+    await db.doc("checkoutOrders/co_ws2").set({
+      agencyId: "ag_other", subAccountId: SA2, configId: cfg2, context: { type: "funnel_step", funnelId: f2, stepId: co2.id }, memberId: "m2", matchedExistingMember: false,
+      buyer: { name: "B2", email: "b2@example.com", phone: "" }, agreementAccepted: true, currency: "USD",
+      items: [{ offerId: "off2_main", role: "primary", bumpId: null, title: "Main", billing: "one_time", unitAmountCents: 3300, discountCents: 0, dueTodayCents: 3300, purchaseId: null, fulfillment: "granted", fulfillmentError: null }],
+      coupon: null, totals: { currency: "USD", subtotalCents: 3300, discountCents: 0, dueTodayCents: 3300, recurring: null, lines: [] }, paymentMode: "test", stripeAccountId: "acct_B", stripeCustomerId: "cus_2",
+      stripePaymentIntentId: "pi_ws2_checkout", stripeSetupIntentId: null, stripeSubscriptionId: null, stripeCouponIds: [], status: "paid", failureReason: null, paidAt: Date.now(), createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    const sess = await runtime.openFunnelSessionForOrder("co_ws2");
+    assert.ok(sess, "session opened without any activation list");
+    const before = counts.piCreatesByAccount.get("acct_B") ?? 0;
+    const beforeT = counts.piCreatesByAccount.get("acct_T") ?? 0;
+    const r = await runtime.funnelOfferAction({ funnelId: f2, stepId: up2b.id, action: "accept", token: sess!.token });
+    assert.equal(r.state, "succeeded");
+    assert.equal(counts.piCreatesByAccount.get("acct_B"), before + 1, "charged on workspace 2's own account");
+    assert.equal(counts.piCreatesByAccount.get("acct_T") ?? 0, beforeT, "never on workspace 1's account");
+    const o = (await db.doc(`checkoutOrders/${(await session("fs_co_ws2")).steps[up2b.id].orderId}`).get()).data()!;
+    assert.equal(o.subAccountId, SA2);
+    assert.equal(o.stripeAccountId, "acct_B");
+    assert.equal(o.totals.dueTodayCents, 5500, "price from workspace 2's Offer");
+    // Workspace 1's session can't act on workspace 2's funnel.
+    const s1 = await paidCheckout();
+    await assert.rejects(runtime.funnelOfferAction({ funnelId: f2, stepId: up2b.id, action: "accept", token: s1.token }), isErr(403, "wrong_funnel"));
   });
-  await check("checkout notice rule: shown only when paying leads straight to a chargeable offer step", async () => {
+  await check("workspace without Stripe / with an unfinished Stripe account: publishing refused with setup guidance", async () => {
+    const SA3 = "sa_fr_nostripe";
+    await db.doc(`subAccounts/${SA3}`).set({ name: "No Stripe", agencyId: "ag3", createdByUid: "x" });
+    await db.doc(`pages/pg3_up`).set({ name: "u", slug: "u", status: "published", agencyId: "ag3", subAccountId: SA3, createdByUid: "x", createdAt: now, updatedAt: now, puckDraftData: { content: [], root: { props: {} } }, puckPublishedData: { content: [], root: { props: {} } } });
+    await db.doc(`subAccounts/${SA3}/courseOffers/o3`).set({ subAccountId: SA3, agencyId: "ag3", title: "O3", slug: "o3", type: "oneTime", priceCents: 1000, currency: "USD", paymentMode: "test", visibility: "published", checkoutSettings: { serviceAgreement: { mode: "notRequired" } }, createdAt: now, updatedAt: now });
+    const f3 = (await funnels.createFunnel({ subAccountId: SA3, uid: "x", body: { name: "WS3", withCheckoutStep: true } })).funnel.id;
+    const co3 = (await funnels.listSteps(f3))[0];
+    const up3 = await funnels.addStep({ subAccountId: SA3, funnelId: f3, uid: "x", body: { type: "upsell", name: "Up", pageId: "pg3_up" } });
+    await configs.saveStepCheckoutConfig({ subAccountId: SA3, funnelId: f3, stepId: co3.id, uid: "x", body: { primaryOfferId: "o3", postPurchase: { type: "funnel_next_step" } } });
+    await funnels.updateStep(SA3, f3, up3.id, { offer: { ...rules.defaultStepOffer(), offerId: "o3" } });
+    const issue = (await funnels.getFunnelHub(SA3, f3)).issues.find((i) => i.code === "offer_payments_not_ready" && i.stepId === up3.id);
+    assert.equal(issue?.level, "error");
+    assert.match(issue!.message, /card payments aren't set up for Test mode yet\. Connect Stripe in Settings → Payments/);
+    await assert.rejects(funnels.updateFunnel(SA3, f3, { status: "published" }), isErr(409, "funnel_invalid"));
+    await db.doc(`subAccounts/${SA3}`).update({ stripeConnect: { test: { accountId: "acct_C", chargesEnabled: false, payoutsEnabled: false, email: null, connectedAt: null } } });
+    const issue2 = (await funnels.getFunnelHub(SA3, f3)).issues.find((i) => i.code === "offer_payments_not_ready" && i.stepId === up3.id);
+    assert.match(issue2!.message, /Test Stripe account can't take payments yet/);
+    await db.doc(`subAccounts/${SA3}`).update({ "stripeConnect.test.chargesEnabled": true });
+    assert.equal((await funnels.getFunnelHub(SA3, f3)).issues.filter((i) => i.level === "error").length, 0);
+    // Mode mismatch: a LIVE Offer after a TEST checkout can't use the saved card.
+    await db.doc(`subAccounts/${SA3}/courseOffers/o3live`).set({ subAccountId: SA3, agencyId: "ag3", title: "O3L", slug: "o3l", type: "oneTime", priceCents: 1000, currency: "USD", paymentMode: "live", visibility: "published", checkoutSettings: { serviceAgreement: { mode: "notRequired" } }, createdAt: now, updatedAt: now });
+    await db.doc(`subAccounts/${SA3}`).update({ "stripeConnect.live": { accountId: "acct_CL", chargesEnabled: true, payoutsEnabled: true, email: null, connectedAt: null } });
+    await funnels.updateStep(SA3, f3, up3.id, { offer: { ...rules.defaultStepOffer(), offerId: "o3live" } });
+    const mm = (await funnels.getFunnelHub(SA3, f3)).issues.find((i) => i.code === "offer_mode_mismatch");
+    assert.equal(mm?.level, "error");
+    assert.match(mm!.message, /takes Live payments but the funnel's checkout takes Test payments/);
+  });
+  await check("emergency stop: reachable offer steps can't be newly published; unset → publishes", async () => {
+    await emergency(async () => {
+      const off = (await funnels.getFunnelHub(SA2, (await db.collection("funnels").where("subAccountId", "==", SA2).get()).docs[0].id)).issues.find((i) => i.code === "offer_charging_off");
+      assert.equal(off?.level, "error");
+      assert.match(off!.message, /temporarily paused across Magnetix/);
+    });
+  });
+  await check("checkout notice rule: shown when a card checkout leads straight to an offer step (TEST or LIVE, any workspace)", async () => {
     const cfg = (await configs.getCheckoutConfigDoc(coStep.checkoutConfigId!))!;
     assert.equal(await runtime.postPurchaseOfferFollows(cfg, "test"), true);
-    assert.equal(await runtime.postPurchaseOfferFollows(cfg, "live"), false, "LIVE not allow-listed");
+    assert.equal(await runtime.postPurchaseOfferFollows(cfg, "live"), true);
+    assert.equal(await emergency(() => runtime.postPurchaseOfferFollows(cfg, "live")), true, "still disclosed while paused (Decline keeps working)");
     assert.equal(await runtime.postPurchaseOfferFollows(cfg, null), false, "nothing charged → no notice");
-    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = SA;
-    try {
-      assert.equal(await runtime.postPurchaseOfferFollows(cfg, "live"), true);
-    } finally {
-      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
-    }
     assert.equal(await runtime.postPurchaseOfferFollows({ ...cfg, postPurchase: { type: "funnel_step", stepId: ty.id } }, "test"), false, "next step is a Thank-you page");
     assert.equal(await runtime.postPurchaseOfferFollows({ ...cfg, postPurchase: { type: "space" } }, "test"), false);
     assert.equal(await runtime.postPurchaseOfferFollows({ ...cfg, context: { type: "hosted" } as never }, "test"), false, "ordinary checkout");
@@ -934,29 +1009,17 @@ async function main() {
     const o = (await db.doc(`checkoutOrders/${r.orderId}`).get()).data()!;
     assert.equal(typeof o.postPurchaseNoticeAt, "number");
     assert.ok(o.postPurchaseNoticeAt > 1, "never taken from the request body");
-    caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = false;
-    try {
-      const r2 = await orders.startCheckout(coStep.checkoutConfigId!, { name: "Notice Buyer", email: "notice2@example.com", agreementAccepted: true, postPurchaseNoticeAt: 1 });
-      assert.equal((await db.doc(`checkoutOrders/${r2.orderId}`).get()).data()!.postPurchaseNoticeAt, undefined, "switch off → no notice, nothing recorded");
-    } finally {
-      caps.COMMERCE_CAPABILITIES.funnelPostPurchaseCharging = true;
-    }
   });
   await check("a LIVE order without the checkout notice never opens a one-click session", async () => {
-    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = SA;
-    try {
-      await db.doc("checkoutOrders/co_live_no_notice").set({
-        agencyId: AG, subAccountId: SA, configId: coStep.checkoutConfigId, context: { type: "funnel_step", funnelId: F, stepId: co.id }, memberId: "m1", status: "paid",
-        items: [{ offerId: "off_main", role: "primary", fulfillment: "granted" }], paymentMode: "live", stripeAccountId: "acct_L", stripeCustomerId: "cus_L", stripePaymentIntentId: "pi_never_called",
-        totals: { currency: "USD", dueTodayCents: 4700, recurring: null, lines: [] }, createdAt: Date.now(), updatedAt: Date.now(),
-      });
-      assert.equal(await runtime.openFunnelSessionForOrder("co_live_no_notice"), null);
-      assert.equal((await db.doc("funnelSessions/fs_co_live_no_notice").get()).exists, false);
-    } finally {
-      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
-    }
+    await db.doc("checkoutOrders/co_live_no_notice").set({
+      agencyId: AG, subAccountId: SA, configId: coStep.checkoutConfigId, context: { type: "funnel_step", funnelId: F, stepId: co.id }, memberId: "m1", status: "paid",
+      items: [{ offerId: "off_main", role: "primary", fulfillment: "granted" }], paymentMode: "live", stripeAccountId: "acct_L", stripeCustomerId: "cus_L", stripePaymentIntentId: "pi_never_called",
+      totals: { currency: "USD", dueTodayCents: 4700, recurring: null, lines: [] }, createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    assert.equal(await runtime.openFunnelSessionForOrder("co_live_no_notice"), null);
+    assert.equal((await db.doc("funnelSessions/fs_co_live_no_notice").get()).exists, false);
   });
-  await check("Workflows: TEST outcomes run sandboxed; a LIVE outcome runs for real; LIVE refused once removed from the list", async () => {
+  await check("Workflows: TEST outcomes run sandboxed; a LIVE outcome runs for real; LIVE Accept on a TEST-mode Offer is refused", async () => {
     const test = await paidCheckout();
     await act(test.token, up.id, "decline");
     const testKey = (await session(test.sessionId)).steps[up.id].effectsKey;
@@ -970,19 +1033,15 @@ async function main() {
       createdAt: Date.now(), updatedAt: Date.now(), expiresAt: Date.now() + 3_600_000,
     });
     const liveToken = runtime.issueFunnelSessionToken(liveId);
-    await assert.rejects(act(liveToken, up.id, "decline"), isErr(403, "not_enabled"), "LIVE not allow-listed");
-    process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS = SA;
-    try {
-      assert.equal((await act(liveToken, up.id, "decline")).state, "declined");
-      const liveKey = (await session(liveId)).steps[up.id].effectsKey;
-      const liveRun = (await db.collection("workflowRuns").where("workflowId", "==", "wf_decline").get()).docs.find((d) => d.data().context?.deduplicationKey === liveKey)!;
-      assert.ok(liveRun, "LIVE Decline Workflow ran");
-      assert.notEqual(liveRun.data().context.sandbox, true, "LIVE runs are not sandboxed");
-    } finally {
-      delete process.env.FUNNEL_POST_PURCHASE_LIVE_SUBACCOUNT_IDS;
-    }
-    // Rollback: off the list again → the same live session can't act.
-    await assert.rejects(act(liveToken, down.id, "accept"), isErr(403, "not_enabled"));
+    // The step's Offer is a TEST Offer on acct_T: a LIVE session can never pay it (mode / account mismatch).
+    const creates = counts.piCreates;
+    await assert.rejects(act(liveToken, up.id, "accept"), isErr(409, "unavailable"));
+    assert.equal(counts.piCreates, creates);
+    assert.equal((await act(liveToken, up.id, "decline")).state, "declined");
+    const liveKey = (await session(liveId)).steps[up.id].effectsKey;
+    const liveRun = (await db.collection("workflowRuns").where("workflowId", "==", "wf_decline").get()).docs.find((d) => d.data().context?.deduplicationKey === liveKey)!;
+    assert.ok(liveRun, "LIVE Decline Workflow ran");
+    assert.notEqual(liveRun.data().context.sandbox, true, "LIVE runs are not sandboxed");
   });
   await check("no card data or session tokens are stored", async () => {
     const all = (await db.collection("funnelSessions").get()).docs.map((d) => JSON.stringify(d.data())).join("\n");
@@ -991,8 +1050,8 @@ async function main() {
     const hit = /fs1\.fs_|4242424242|"(cvc|card_number|exp_month)"/i.exec(all);
     assert.ok(!hit, `found ${hit?.[0]}`);
   });
-  await check("the mock was only ever called on the connected account", () => {
-    assert.ok(!counts.accountsSeen.has("acct_B"));
+  await check("the mock was only ever called on the workspaces' own connected accounts", () => {
+    assert.deepEqual([...counts.piCreatesByAccount.keys()].sort(), ["acct_B", "acct_T"]);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -108,7 +108,7 @@ export function StepOfferSummary({ status, runtimeAvailable, offer, value, workf
     <section aria-label="Step summary" className="flex flex-col gap-3 rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
         <StatusPill tone={s.tone}>{s.label}</StatusPill>
-        <StatusPill tone="neutral">{runtimeAvailable ? "Post-purchase charging on" : "Post-purchase charging not enabled yet"}</StatusPill>
+        <StatusPill tone="neutral">{runtimeAvailable ? "One-click payments available" : "One-click payments paused"}</StatusPill>
       </div>
       <p className="text-body-sm">
         {offer ? (
@@ -121,7 +121,7 @@ export function StepOfferSummary({ status, runtimeAvailable, offer, value, workf
       </p>
       {!runtimeAvailable ? (
         <p className="rounded-lg bg-tint-violet px-3 py-2 text-caption text-muted-foreground">
-          {status === "complete" ? "Payment configuration saved. " : ""}Post-purchase charging is not yet enabled, so buyers aren&apos;t charged on this step and no CRM actions run yet.
+          {status === "complete" ? "Payment configuration saved. " : ""}One-click payments are temporarily paused across Magnetix. Buyers aren&apos;t charged on this step while paused; they can still choose No thanks and continue.
         </p>
       ) : null}
       <CrmActionsSummary value={value} workflows={workflows} />
@@ -314,9 +314,9 @@ export function PaymentSection({ offer, value, onChange, prereqs, runtimeAvailab
               <CreditCard className="size-4 text-muted-foreground" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="font-medium">Post-purchase charging</span>
+              <span className="font-medium">One-click payments</span>
               <span className="block text-caption text-muted-foreground">
-                {runtimeAvailable ? "Enabled." : "Not yet enabled. Your payment configuration is saved; this step won't charge buyers until it is."}
+                {runtimeAvailable ? "Available — uses this workspace's connected Stripe account and the card the buyer saved at checkout." : "Temporarily paused across Magnetix. Your payment configuration is saved; this step won't charge buyers while paused."}
               </span>
             </span>
           </li>

@@ -90,6 +90,15 @@ export async function validateStepOffer(input: {
   return { value, errors };
 }
 
+/** The payment mode an Offer is sold in (its own setting, else the deployment's key mode) — same rule as checkout. */
+export function offerPaymentMode(offer: Pick<CourseOffer, "paymentMode"> | null): "test" | "live" {
+  try {
+    return normalizePaymentMode(offer?.paymentMode, getStripeEnvironment());
+  } catch {
+    return normalizePaymentMode(offer?.paymentMode, "test");
+  }
+}
+
 export type StripeReadiness = "ready" | "not_connected" | "charges_disabled" | "unknown";
 
 /**
@@ -101,12 +110,7 @@ export type StripeReadiness = "ready" | "not_connected" | "charges_disabled" | "
 export async function stripeReadiness(subAccountId: string, offer: CourseOffer | null): Promise<StripeReadiness> {
   try {
     const sa = (await getAdminDb().doc(`subAccounts/${subAccountId}`).get()).data();
-    let env: "test" | "live";
-    try {
-      env = normalizePaymentMode(offer?.paymentMode, getStripeEnvironment());
-    } catch {
-      env = normalizePaymentMode(offer?.paymentMode, "test");
-    }
+    const env = offerPaymentMode(offer);
     const conn = getStripeConnectionForEnvironment(sa?.stripeConnect, env);
     if (conn?.accountId) return conn.chargesEnabled === false ? "charges_disabled" : "ready";
     return sa?.stripeCourseCheckoutEnabledByAgency === true ? "ready" : "not_connected";
@@ -157,12 +161,9 @@ export async function stepOfferSettingsPayload(subAccountId: string, rawSettings
     workflows,
     stripe: await stripeReadiness(subAccountId, saved),
     runtime: {
-      postPurchaseCharging: saved
-        ? funnelPostPurchaseChargingEnabled({
-            subAccountId,
-            paymentMode: saved.paymentMode,
-          })
-        : false,
+      // Server truth: available for any workspace unless the platform-wide
+      // emergency stop is on (Stripe readiness is shown separately).
+      postPurchaseCharging: funnelPostPurchaseChargingEnabled({ subAccountId, paymentMode: saved ? offerPaymentMode(saved) : "test" }),
     },
   };
 }

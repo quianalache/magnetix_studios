@@ -125,7 +125,7 @@ export function stepsInLoops(steps: RoutingStep[], checkoutDest: Record<string, 
 
 export interface FunnelIssue {
   level: "error" | "warning";
-  code: "route_missing" | "checkout_route_missing" | "loop" | "unreachable" | "no_page" | "page_missing" | "page_unpublished" | "page_shared" | "destination_unavailable" | "offer_missing" | "offer_unavailable" | "offer_charging_off" | "crm_needs_attention";
+  code: "route_missing" | "checkout_route_missing" | "loop" | "unreachable" | "no_page" | "page_missing" | "page_unpublished" | "page_shared" | "destination_unavailable" | "offer_missing" | "offer_unavailable" | "offer_charging_off" | "offer_payments_not_ready" | "offer_mode_mismatch" | "crm_needs_attention";
   stepId: string | null;
   message: string;
 }

@@ -37,9 +37,12 @@ import {
  * someone else's cookie, another workspace, an expired or completed session
  * can't act. Only the session's CURRENT step can be accepted / declined.
  *
- * Charging is on only for workspaces allow-listed for the session's payment
- * mode (`funnelPostPurchaseChargingEnabled`); a LIVE session additionally
- * needs the checkout's saved-card notice (`order.postPurchaseNoticeAt`).
+ * Available to every workspace whose Offer can be paid through its own
+ * connected Stripe account (no activation list); eligibility is re-checked
+ * on every action (`validateOfferStep`). A LIVE session additionally needs the
+ * checkout's saved-card notice (`order.postPurchaseNoticeAt`). The platform
+ * emergency stop (`funnelPostPurchaseChargingEnabled` false) blocks only NEW
+ * charges: sessions still open and buyers can still decline and continue.
  *
  * Outcomes (owner decisions): Accept actions run only after a Stripe-VERIFIED
  * payment (`completeOrder`); Decline only after the buyer declines; a failed /
@@ -91,15 +94,15 @@ async function listSteps(funnelId: string): Promise<FunnelStep[]> {
 /* -------------------------------- Sessions -------------------------------- */
 
 /**
- * Does paying on this checkout lead the buyer straight to a one-click offer
- * step that can actually charge (switch on for this workspace + payment
- * mode)? One rule for both the checkout's saved-card notice and the order's
+ * Does paying on this checkout (by card, TEST or LIVE) lead the buyer
+ * straight to a one-click offer step? One rule for both the checkout's saved-card notice and the order's
  * `postPurchaseNoticeAt` stamp, so what the buyer saw and what's recorded
  * can't drift.
  */
 export async function postPurchaseOfferFollows(config: CheckoutConfig, paymentMode: "test" | "live" | null): Promise<boolean> {
   if (!paymentMode || config.context.type !== "funnel_step") return false;
-  if (!funnelPostPurchaseChargingEnabled({ subAccountId: config.subAccountId, paymentMode })) return false;
+  // Not tied to the emergency stop: a buyer who pays while charging is paused
+  // still gets a session (Decline works) and was still told about offers.
   const dest = config.postPurchase;
   if (!dest || (dest.type !== "funnel_next_step" && dest.type !== "funnel_step")) return false;
   const { funnelId, stepId } = config.context;
@@ -124,7 +127,8 @@ export async function openFunnelSessionForOrder(orderId: string): Promise<{ cook
   const snap = await db.collection("checkoutOrders").doc(orderId).get();
   if (!snap.exists) return null;
   const order = { id: snap.id, ...(snap.data() as Omit<CheckoutOrder, "id">) };
-  if (!funnelPostPurchaseChargingEnabled({ subAccountId: order.subAccountId, paymentMode: order.paymentMode })) return null;
+  // Nothing was paid by card (free / fully discounted checkout): no saved authorization, no session.
+  if (order.paymentMode !== "test" && order.paymentMode !== "live") return null;
   if (order.context.type !== "funnel_step" || order.status !== "paid" || order.items.some((i) => i.fulfillment !== "granted")) return null;
   // LIVE one-click needs proof the buyer saw the saved-card notice at checkout.
   if (order.paymentMode === "live" && !order.postPurchaseNoticeAt) return null;
@@ -395,7 +399,6 @@ export async function funnelOfferViewForPage(
     const check = await loadSession(funnelId, c.value, { readOnly: true });
     if (!check.ok || check.session.subAccountId !== page.subAccountId) continue;
     const session = check.session;
-    if (!funnelPostPurchaseChargingEnabled({ subAccountId: session.subAccountId, paymentMode: session.paymentMode })) continue;
     const steps = await listSteps(funnelId);
     const step = steps.find((s) => s.pageId === page.id && hasRouting(s.type));
     if (!step) continue;
@@ -407,6 +410,10 @@ export async function funnelOfferViewForPage(
     }
     if (session.status !== "active" || session.currentStepId !== step.id) {
       return { ...base, available: false, unavailableMessage: "This offer is no longer available.", state: "ready", offer: null, stripe: null };
+    }
+    // Platform emergency stop: no new charge, but the buyer can still decline and continue.
+    if (!funnelPostPurchaseChargingEnabled({ subAccountId: session.subAccountId, paymentMode: session.paymentMode })) {
+      return { ...base, available: false, declineOnly: true, unavailableMessage: "This offer isn't available right now.", state: rec?.state ?? "ready", offer: null, stripe: null };
     }
     const v = await validateOfferStep(session, step.id);
     if (!v.ok) {
@@ -457,9 +464,6 @@ export async function funnelOfferAction(input: { funnelId: string; stepId: strin
   const check = await loadSession(input.funnelId, input.token);
   if (!check.ok) throw new CheckoutError(check.message, check.status, null, check.code);
   const session = check.session;
-  if (!funnelPostPurchaseChargingEnabled({ subAccountId: session.subAccountId, paymentMode: session.paymentMode })) {
-    throw new CheckoutError("This offer isn't available right now.", 403, null, "not_enabled");
-  }
   const stepId = input.stepId;
   let rec: FunnelSessionStepRecord | null = session.steps?.[stepId] ?? null;
 
@@ -522,6 +526,10 @@ export async function funnelOfferAction(input: { funnelId: string; stepId: strin
   }
 
   // ---- accept ----
+  // Platform emergency stop: nothing new is charged (Decline / status above still work).
+  if (!funnelPostPurchaseChargingEnabled({ subAccountId: session.subAccountId, paymentMode: session.paymentMode })) {
+    throw new CheckoutError("This offer isn't available right now.", 403, null, "not_enabled");
+  }
   const v = await validateOfferStep(session, stepId);
   if (!v.ok) {
     console.warn(`[funnel-runtime] accept refused funnel=${session.funnelId} step=${stepId} reason=${v.creator}`);

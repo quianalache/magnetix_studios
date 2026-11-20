@@ -120,14 +120,16 @@ export function FunnelOfferButton({
     }
   }, [view, key, decision]);
 
-  const usable = !!view && (view.available || state.phase === "done");
+  // Emergency stop: only "No thanks" works, so the buyer can always continue.
+  const declineOnly = !!view?.declineOnly && decision === "decline";
+  const usable = !!view && (view.available || declineOnly || state.phase === "done");
   const busy = state.phase === "processing";
   const isOwner = state.ownerId === id;
 
   function onClick() {
     if (!view) return setStore(key, { phase: "notice", ownerId: id, message: "This offer is available right after checkout." });
     if (state.phase === "done" && state.nextHref) return window.location.assign(state.nextHref);
-    if (!view.available) return setStore(key, { phase: "notice", ownerId: id, message: view.unavailableMessage ?? "This offer isn't available right now." });
+    if (!view.available && !declineOnly) return setStore(key, { phase: "notice", ownerId: id, message: view.unavailableMessage ?? "This offer isn't available right now." });
     if (busy) return;
     if (decision === "decline") return void runAction(view, key, "decline", id);
     if (view.offer?.billing === "recurring") return setStore(key, { phase: "consent", ownerId: id, message: null });

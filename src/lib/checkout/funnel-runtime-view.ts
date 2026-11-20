@@ -11,6 +11,12 @@ export interface FunnelOfferRuntimeView {
   /** False → the buttons are inactive and show `unavailableMessage`. */
   available: boolean;
   unavailableMessage: string | null;
+  /**
+   * Charging is paused platform-wide (emergency stop) but this buyer's
+   * session is on this step: Accept stays inactive, Decline still works so
+   * the buyer can continue. Absent / false otherwise.
+   */
+  declineOnly?: boolean;
   funnelId: string;
   stepId: string;
   state: FunnelOfferRuntimeState;
