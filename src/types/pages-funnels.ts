@@ -385,4 +385,6 @@ export type CreatePageInput = {
   blocks?: PageBlock[];
   /** Import HTML: a full page's HTML; the server turns it into one Custom HTML block. */
   importHtml?: string;
+  /** Import an interactive website (finished bundle id from the imported-site API). */
+  importSiteBundleId?: string;
 };

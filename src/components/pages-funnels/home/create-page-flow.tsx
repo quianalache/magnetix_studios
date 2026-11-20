@@ -17,6 +17,9 @@ import { CreateWithAiFlow } from "@/components/pages-funnels/create-with-ai-flow
 import { PAGE_TYPE_ICONS } from "@/components/pages-funnels/home/page-type-icons";
 import { MyTemplates } from "@/components/pages-funnels/templates/my-templates";
 import { ImportHtmlPanel, importHtmlReady, type ImportHtmlState } from "@/components/pages-funnels/home/import-html-panel";
+import { ImportSitePanel, importSiteReady, type ImportSiteState } from "@/components/pages-funnels/home/import-site-panel";
+import { importedContentOrigin } from "@/lib/pages-funnels/imported-site/policy";
+import { uploadPastedSite } from "@/lib/pages-funnels/imported-site/client";
 import { createPageFromTemplate } from "@/lib/pages-funnels/page-templates-client";
 import { describeRetainedConnections } from "@/lib/pages-funnels/page-templates";
 import type { PageTemplateSummary } from "@/types/page-templates";
@@ -56,6 +59,10 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
   const [goal, setGoal] = useState<PageGoal>("lead_generation");
   const [creating, setCreating] = useState(false);
   const [importState, setImportState] = useState<ImportHtmlState>({ html: "", analysis: null, acknowledged: false });
+  const interactiveImports = !!importedContentOrigin();
+  const [importMode, setImportMode] = useState<"paste" | "files">("paste");
+  const [siteState, setSiteState] = useState<ImportSiteState>({ uploaded: null, skipped: [], acknowledged: false });
+  const importReady = importMode === "files" ? importSiteReady(siteState) : importHtmlReady(importState);
   // Synchronous guard: a double click must never create two pages.
   const submitting = useRef(false);
 
@@ -91,10 +98,17 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
     }
   }
 
+  /** Import HTML payload: an uploaded website, a pasted page with scripts (made interactive), or static HTML. */
+  async function importPayload(): Promise<{ importHtml: string } | { importSiteBundleId: string }> {
+    if (importMode === "files" && siteState.uploaded) return { importSiteBundleId: siteState.uploaded.site.bundleId };
+    if (interactiveImports && /<script\b/i.test(importState.html)) return { importSiteBundleId: (await uploadPastedSite(subAccountId, importState.html)).site.bundleId };
+    return { importHtml: importState.html };
+  }
+
   async function handleContinue() {
     if (!user || !agencyId || !name.trim() || creating || submitting.current) return;
     if (method === "template" && !template) return;
-    if (method === "import" && !importHtmlReady(importState)) return;
+    if (method === "import" && !importReady) return;
     submitting.current = true;
     setCreating(true);
     try {
@@ -115,7 +129,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
         goal,
         origin: "blank",
         templateId: null,
-        ...(method === "import" ? { importHtml: importState.html } : {}),
+        ...(method === "import" ? await importPayload() : {}),
       });
       toast.success(method === "import" ? "Page imported" : "Page created", method === "import" ? { description: "It's a draft. Edit the HTML from the Custom HTML block, then publish when it looks right." } : undefined);
       onCreated(id);
@@ -187,7 +201,18 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
             </div>
           </section>
 
-          {method === "import" ? <ImportHtmlPanel value={importState} onChange={setImportState} /> : null}
+          {method === "import" && interactiveImports ? (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="How to import">
+              <Button type="button" size="sm" variant={importMode === "paste" ? "default" : "secondary"} aria-pressed={importMode === "paste"} onClick={() => setImportMode("paste")}>
+                Paste HTML
+              </Button>
+              <Button type="button" size="sm" variant={importMode === "files" ? "default" : "secondary"} aria-pressed={importMode === "files"} onClick={() => setImportMode("files")}>
+                Upload website files
+              </Button>
+            </div>
+          ) : null}
+          {method === "import" && importMode === "paste" ? <ImportHtmlPanel value={importState} onChange={setImportState} interactive={interactiveImports} /> : null}
+          {method === "import" && importMode === "files" ? <ImportSitePanel subAccountId={subAccountId} value={siteState} onChange={setSiteState} /> : null}
 
           {method === "import" ? null : <MyTemplates
             subAccountId={subAccountId}
@@ -220,7 +245,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
               You can change everything after the page is created. To use the page in a funnel, add it from the funnel&apos;s steps.
             </p>
           </div>
-          <Button className="mt-5 w-full" size="lg" onClick={handleContinue} disabled={creating || !name.trim() || (method === "template" && !selectedTemplate) || (method === "import" && !importHtmlReady(importState))}>
+          <Button className="mt-5 w-full" size="lg" onClick={handleContinue} disabled={creating || !name.trim() || (method === "template" && !selectedTemplate) || (method === "import" && !importReady)}>
             {creating ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
             Continue
           </Button>

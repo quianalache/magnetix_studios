@@ -145,7 +145,11 @@ const aiPlan = src("src/lib/pages-funnels/ai/page-plan.ts");
 const safeSet = /SAFE_PUCK_COMPONENTS = new Set\(\[([^\]]*)\]\)/.exec(aiPlan)?.[1] ?? "";
 check("AI page generation can't emit Custom HTML", safeSet.length > 0 && !/CustomHtml/.test(safeSet) && !/CustomHtml/.test(aiPlan));
 const service = src("src/lib/server/pages-funnels-puck-service.ts");
-check("limits enforced on both Save Draft and Publish", (service.match(/customHtmlLimitError\(data\)/g) ?? []).length === 2);
+// Since 668928d4 both writers go through the shared preparePageWrite (one limit check).
+check(
+  "limits enforced on both Save Draft and Publish",
+  /export function preparePageWrite[\s\S]*?findCustomHtmlLimitProblem\(data\)/.test(service) && (service.match(/preparePageWrite\(data, popups, doc, \[/g) ?? []).length === 2,
+);
 check("published pages use the server variant (sanitized before it reaches visitors)",
   /CustomHtmlElementServerRender/.test(src("src/components/pages-funnels/puck/server-config.tsx")) && !/"use client"/.test(src("src/components/pages-funnels/puck/custom-html-server.tsx")));
 const frame = src("src/components/pages-funnels/puck/custom-html-frame.tsx");

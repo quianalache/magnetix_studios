@@ -30,7 +30,7 @@ export function importHtmlReady(s: ImportHtmlState): boolean {
  * same sanitizer, sandboxed frame and CSP as that block — so the preview
  * here is exactly what visitors get.
  */
-export function ImportHtmlPanel({ value, onChange }: { value: ImportHtmlState; onChange: (next: ImportHtmlState) => void }) {
+export function ImportHtmlPanel({ value, onChange, interactive = false }: { value: ImportHtmlState; onChange: (next: ImportHtmlState) => void; interactive?: boolean }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const analysis = value.analysis;
@@ -57,7 +57,7 @@ export function ImportHtmlPanel({ value, onChange }: { value: ImportHtmlState; o
       <div className="flex flex-col gap-1">
         <h2 id="import-html-heading" className="text-body font-semibold">Import an HTML page</h2>
         <p className="text-body-sm text-muted-foreground">
-          Paste the full HTML of a page made with Claude or another AI tool, or choose an .html file. HTML and CSS are kept as designed; scripts and form submissions are switched off for security.
+          Paste the full HTML of a page made with Claude or another AI tool, or choose an .html file. {interactive ? "HTML, CSS and JavaScript are kept; scripts run in an isolated frame that can't reach your Magnetix account." : "HTML and CSS are kept as designed; scripts and form submissions are switched off for security."}
         </p>
       </div>
 
@@ -116,7 +116,9 @@ export function ImportHtmlPanel({ value, onChange }: { value: ImportHtmlState; o
       {analysis && !analysis.problems.length && analysis.notes.length ? (
         <div className="flex gap-2 rounded-lg bg-tint-violet p-3 text-caption text-muted-foreground" data-import-html-notes>
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-          <div>{analysis.notes.map((n) => <p key={n}>{n}</p>)}</div>
+          <div>
+            {(interactive && /<script\b/i.test(value.html) ? [...analysis.notes.filter((n) => !/script|event handler/i.test(n)), "Interactive: this page's scripts will run after import, in an isolated, sandboxed frame. The preview below shows the design without them."] : analysis.notes).map((n) => <p key={n}>{n}</p>)}
+          </div>
         </div>
       ) : null}
 

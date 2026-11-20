@@ -13,6 +13,8 @@ import { PUCK_CONTENT_MAX_DEPTH, decodeStoredPuckData, encodePuckData, isPuckDat
 import { countCheckoutBlocks, remapCheckoutConfigIds } from "@/lib/pages-funnels/checkout-block";
 import { CUSTOM_HTML_COMPONENT, findCustomHtmlLimitProblem } from "@/lib/pages-funnels/custom-html/policy";
 import { HTML_IMPORT_MAX_FILE_BYTES, analyzeHtmlImport } from "@/lib/pages-funnels/custom-html/import";
+import { importedContentOrigin } from "@/lib/pages-funnels/imported-site/policy";
+import { getFinishedSite } from "@/lib/server/pages-funnels/imported-site-service";
 import { DEFAULT_STYLE_CONFIG } from "@/lib/pages-funnels/puck/style";
 import { autoWrapRootNode } from "@/lib/pages-funnels/puck/auto-hierarchy";
 import {
@@ -616,6 +618,8 @@ export async function createPuckPage(input: {
   goal: unknown;
   /** Import HTML: a full page's HTML (pasted or from an .html file). Re-analyzed here — never trusted from the browser. */
   importHtml?: unknown;
+  /** Import an interactive website: a FINISHED bundle of this workspace (imported-site-service). */
+  importSiteBundleId?: unknown;
 }): Promise<{ ok: true; pageId: string } | Exclude<PuckPersistenceResult, { ok: true }>> {
   const nameProblem = pageNameProblem(input.name);
   if (nameProblem) return { ok: false, error: nameProblem, status: 400 };
@@ -634,6 +638,26 @@ export async function createPuckPage(input: {
       puckDraftData: encodePuckData({
         root: { props: {} },
         content: [importedPageSection({ type: CUSTOM_HTML_COMPONENT, props: { id: `${CUSTOM_HTML_COMPONENT}-${randomUUID()}`, content: analysis.artifact, style: DEFAULT_STYLE_CONFIG } })],
+      } as never),
+    };
+  }
+  if (input.importSiteBundleId !== undefined) {
+    if ((input.pageType as string) === "reading_result") return { ok: false, error: "Reading Result Pages can't be imported.", status: 400 };
+    if (!importedContentOrigin()) return { ok: false, error: "Interactive website imports aren't switched on for this deployment.", status: 409 };
+    let site: Awaited<ReturnType<typeof getFinishedSite>>;
+    try {
+      site = await getFinishedSite(input.subAccountId, String(input.importSiteBundleId));
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "That website upload wasn't found.", status: 404 };
+    }
+    // Static fallback (used only if interactive mode is switched off later):
+    // the sanitized entry page, when it fits the static block's limits.
+    const fallback = analyzeHtmlImport(site.entryHtml);
+    const base = fallback.problems.length ? { ...fallback.artifact, html: "", css: "" } : fallback.artifact;
+    imported = {
+      puckDraftData: encodePuckData({
+        root: { props: {} },
+        content: [importedPageSection({ type: CUSTOM_HTML_COMPONENT, props: { id: `${CUSTOM_HTML_COMPONENT}-${randomUUID()}`, content: { ...base, site: site.ref }, style: DEFAULT_STYLE_CONFIG } })],
       } as never),
     };
   }

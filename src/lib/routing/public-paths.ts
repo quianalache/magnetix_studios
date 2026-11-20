@@ -142,6 +142,10 @@ export const PUBLIC_PATHS = [
   // (active, not expired, same tenant) on every view and only then mints a
   // 5-minute Bunny embed token for that ONE video.
   "/replay",
+  // Imported website files (2026-11-20). Public by design but served ONLY on
+  // the separate content origin (the route 404s on every other host) and
+  // sandboxed by CSP — see lib/pages-funnels/imported-site/policy.ts.
+  "/imported",
   // Embed pages — the chat widget iframe target. Public; the bot
   // can't send messages without passing the /api/web-chat/* origin check.
   "/embed",

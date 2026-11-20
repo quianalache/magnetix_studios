@@ -20,6 +20,9 @@ import {
   sanitizeCustomHtml,
 } from "@/lib/pages-funnels/custom-html/sanitize";
 import { findMissingReferences } from "@/lib/pages-funnels/custom-html/import";
+import { useOptionalSubAccount } from "@/context/sub-account-context";
+import { SITE_SHIM_SCRIPT, importedContentOrigin, siteFileUrl } from "@/lib/pages-funnels/imported-site/policy";
+import { editSiteHtml } from "@/lib/pages-funnels/imported-site/client";
 
 /**
  * Notes from the most recent paste. Puck re-mounts custom fields when their
@@ -46,6 +49,11 @@ export function CustomHtmlFieldEditor({
   onChange: (value: CustomHtmlArtifact) => void;
 }) {
   const artifact = normalizeCustomHtmlArtifact(value);
+  if (artifact.site) return <ImportedSiteFieldEditor artifact={artifact} onChange={onChange} />;
+  return <StaticCustomHtmlFieldEditor artifact={artifact} onChange={onChange} />;
+}
+
+function StaticCustomHtmlFieldEditor({ artifact, onChange }: { artifact: CustomHtmlArtifact; onChange: (value: CustomHtmlArtifact) => void }) {
   const [large, setLarge] = useState(false);
   const [, setPasteTick] = useState(0);
   const pasteNotes = lastPaste && lastPaste.html === artifact.html ? lastPaste.notes : [];
@@ -244,6 +252,91 @@ function Notice({
           <X className="size-3.5" />
         </button>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * Imported website (2026-11-20): what's in it, and editing its page HTML.
+ * Saving makes a NEW immutable copy of the website with the edited page (the
+ * old one stays, so Version History can restore it) and points the block at it.
+ */
+function ImportedSiteFieldEditor({ artifact, onChange }: { artifact: CustomHtmlArtifact; onChange: (value: CustomHtmlArtifact) => void }) {
+  const site = artifact.site!;
+  const sub = useOptionalSubAccount();
+  const origin = importedContentOrigin();
+  const [html, setHtml] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "saving">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function load() {
+    if (!origin) return;
+    setState("loading");
+    setMessage(null);
+    try {
+      const res = await fetch(siteFileUrl(origin, site.bundleId, site.entry), { credentials: "omit" });
+      const text = await res.text();
+      setHtml(text.replace(`<script>${SITE_SHIM_SCRIPT}</script>`, ""));
+    } catch {
+      setMessage("Couldn't load the page's HTML.");
+    } finally {
+      setState("idle");
+    }
+  }
+
+  async function save() {
+    if (html === null || !sub?.subAccountId) return;
+    setState("saving");
+    setMessage(null);
+    try {
+      const r = await editSiteHtml(sub.subAccountId, site.bundleId, html);
+      onChange({ ...artifact, site: r.site });
+      setMessage(r.missing.length ? `Saved. ${r.missing.length} referenced file${r.missing.length === 1 ? " is" : "s are"} still missing: ${r.missing.slice(0, 3).join(", ")}` : "Saved. Save Draft or Publish the page to keep it.");
+      setHtml(null);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Couldn't save the HTML.");
+    } finally {
+      setState("idle");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3" data-imported-site-field>
+      <div className="rounded-lg border border-border bg-card p-3 text-xs">
+        <p className="font-semibold">Imported website</p>
+        <p className="text-muted-foreground">
+          {site.fileCount} file{site.fileCount === 1 ? "" : "s"} · {Math.max(1, Math.round(site.totalBytes / 1000))} KB · {site.scripts ? "interactive" : "no scripts"}
+          {site.forms.length ? ` · ${site.forms.length} Magnetix form${site.forms.length === 1 ? "" : "s"} connected` : ""}
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          {origin ? "Runs in an isolated frame that can't reach your Magnetix account." : "Interactive mode is off on this deployment, so the static version is shown."}
+        </p>
+      </div>
+      {origin ? (
+        html === null ? (
+          <button type="button" onClick={load} disabled={state !== "idle"} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted">
+            {state === "loading" ? "Loading…" : `Edit ${site.entry}`}
+          </button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="imported-site-html" className="text-xs">{site.entry}</Label>
+            <Textarea id="imported-site-html" value={html} onChange={(e) => setHtml(e.target.value)} spellCheck={false} className="min-h-64 font-mono text-[11px]" data-imported-site-source />
+            <div className="flex gap-2">
+              <button type="button" onClick={save} disabled={state !== "idle"} className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50" data-imported-site-save>
+                {state === "saving" ? "Saving…" : "Save HTML"}
+              </button>
+              <button type="button" onClick={() => setHtml(null)} disabled={state !== "idle"} className="rounded-md border border-border px-3 py-1.5 text-xs">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )
+      ) : null}
+      {message ? <p role="status" className="text-xs text-muted-foreground">{message}</p> : null}
+      <p className="text-[11px] text-muted-foreground">
+        To connect a form to Magnetix, add <code>data-magnetix-form=&quot;FORM_ID&quot;</code> to the &lt;form&gt; tag (field names like name, email and phone are matched automatically). Link to Magnetix checkouts and booking pages with their normal links.
+      </p>
     </div>
   );
 }

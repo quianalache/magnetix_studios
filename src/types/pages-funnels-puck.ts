@@ -642,4 +642,18 @@ export interface CustomHtmlArtifact {
   };
   /** How the code arrived — informational. */
   source?: { kind: "pasted-document" | "pasted-fragment" | "typed" };
+  /**
+   * Imported website (2026-11-20): an interactive bundle (HTML + JS + CSS +
+   * assets) served from the separate content origin. When present AND that
+   * origin is configured, the block shows the bundle; otherwise it falls
+   * back to the static `html` / `css` above. See imported-site/policy.ts.
+   */
+  site?: {
+    bundleId: string;
+    entry: string;
+    fileCount: number;
+    totalBytes: number;
+    scripts: number;
+    forms: string[];
+  };
 }

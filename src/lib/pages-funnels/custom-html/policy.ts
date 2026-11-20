@@ -1,4 +1,5 @@
 import type { CustomHtmlArtifact } from "@/types/pages-funnels-puck";
+import { normalizeImportedSiteRef } from "@/lib/pages-funnels/imported-site/policy";
 
 /**
  * Custom HTML block — the pure, dependency-free half of the contract
@@ -62,6 +63,7 @@ export function normalizeCustomHtmlArtifact(value: unknown): CustomHtmlArtifact 
   const d = (v.display ?? {}) as Partial<CustomHtmlArtifact["display"]>;
   const fixed = Number(d.fixedHeight);
   const kind = v.source?.kind;
+  const site = normalizeImportedSiteRef(v.site);
   return {
     artifactVersion: CUSTOM_HTML_ARTIFACT_VERSION,
     html: typeof v.html === "string" ? v.html : "",
@@ -74,6 +76,7 @@ export function normalizeCustomHtmlArtifact(value: unknown): CustomHtmlArtifact 
       overflow: d.overflow === "clip" ? "clip" : "scroll",
     },
     ...(kind === "pasted-document" || kind === "pasted-fragment" || kind === "typed" ? { source: { kind } } : {}),
+    ...(site ? { site } : {}),
   };
 }
 

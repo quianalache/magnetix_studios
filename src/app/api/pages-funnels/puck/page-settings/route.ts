@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     if (!sa) return NextResponse.json({ error: "Missing workspace" }, { status: 400 });
     const access = await requireSubAccountAdmin(request, sa);
     if (access instanceof NextResponse) return access;
-    const created = await createPuckPage({ subAccountId: sa, uid: access.uid, name: body.name, pageType: body.pageType, goal: body.goal, ...(body.importHtml !== undefined ? { importHtml: body.importHtml } : {}) });
+    const created = await createPuckPage({ subAccountId: sa, uid: access.uid, name: body.name, pageType: body.pageType, goal: body.goal, ...(body.importHtml !== undefined ? { importHtml: body.importHtml } : {}), ...(body.importSiteBundleId !== undefined ? { importSiteBundleId: body.importSiteBundleId } : {}) });
     if (!created.ok) return NextResponse.json({ error: created.error }, { status: created.status });
     return NextResponse.json({ ok: true, pageId: created.pageId });
   }

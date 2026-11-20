@@ -32,7 +32,34 @@ type SubmitBody = {
   attribution?: Partial<ContactAttribution>;
   /** Pages & Funnels page the form was submitted on (page goal analytics only). */
   sourcePageId?: unknown;
+  /**
+   * Imported websites (2026-11-20): an imported page's own <form> fields by
+   * their HTML `name`. Mapped onto THIS form's fields (by field id, label or
+   * mapped contact field) only where `values` has no entry; unknown names
+   * are ignored. Validation below is unchanged.
+   */
+  namedValues?: unknown;
 };
+
+const slugKey = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/** Imported-site form fields (by HTML name) → this form's field ids. */
+function mapNamedValues(fields: LeadForm["fields"], named: Record<string, unknown>): Record<string, string> {
+  const byKey = new Map<string, string>();
+  for (const [k, v] of Object.entries(named).slice(0, 50)) if (typeof v === "string") byKey.set(slugKey(k), v.slice(0, 5000));
+  const aliases: Record<string, string[]> = { name: ["name", "fullname", "yourname"], firstName: ["firstname", "fname"], lastName: ["lastname", "lname", "surname"], email: ["email", "emailaddress", "youremail"], phone: ["phone", "phonenumber", "tel", "mobile"] };
+  const out: Record<string, string> = {};
+  for (const f of fields ?? []) {
+    const candidates = [slugKey(f.id), slugKey(f.label ?? ""), ...((f.mapsTo && aliases[f.mapsTo as string]) || (f.mapsTo ? [slugKey(String(f.mapsTo))] : []))];
+    for (const c of candidates) {
+      if (c && byKey.has(c)) {
+        out[f.id] = byKey.get(c)!;
+        break;
+      }
+    }
+  }
+  return out;
+}
 
 function interpolate(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_m, key: string) => values[key] ?? "");
@@ -142,6 +169,9 @@ async function handleSubmit(
   const form = { id: formSnap.id, ...(formSnap.data() as Omit<LeadForm, "id">) };
   if (!form.enabled) {
     return jsonWithCors({ error: "Form is paused" }, { status: 410 });
+  }
+  if (body.namedValues && typeof body.namedValues === "object") {
+    body.values = { ...mapNamedValues(form.fields, body.namedValues as Record<string, unknown>), ...body.values };
   }
 
   // Tenancy: every record this submission spawns inherits the form's

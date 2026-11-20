@@ -5,6 +5,14 @@ import { CodeXml } from "lucide-react";
 import type { CustomHtmlArtifact, StyleConfig } from "@/types/pages-funnels-puck";
 import { resolveBaseStyleProps, resolveResponsiveCss } from "@/lib/pages-funnels/puck/style";
 import {
+  SITE_FORM_MESSAGE,
+  SITE_FORM_RESULT_MESSAGE,
+  importedContentOrigin,
+  siteFileUrl,
+  siteSandbox,
+  type ImportedSiteRef,
+} from "@/lib/pages-funnels/imported-site/policy";
+import {
   CUSTOM_HTML_INITIAL_AUTO_HEIGHT,
   CUSTOM_HTML_LIMITS,
   HEIGHT_MESSAGE_TYPE,
@@ -28,6 +36,7 @@ export function CustomHtmlBlock({
   display,
   style,
   editing,
+  site,
 }: {
   id: string;
   srcDoc: string;
@@ -35,8 +44,21 @@ export function CustomHtmlBlock({
   display: CustomHtmlArtifact["display"];
   style?: StyleConfig;
   editing: boolean;
+  /** Imported website: served from the separate content origin when it's configured. */
+  site?: ImportedSiteRef;
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
+  const siteOrigin = site ? importedContentOrigin() : null;
+  if (site && siteOrigin) {
+    return (
+      <>
+        {responsiveCss && <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />}
+        <div id={id} data-custom-html="" data-imported-site="" className="relative w-full max-w-full min-w-0" style={resolveBaseStyleProps(style)}>
+          <ImportedSiteFrame origin={siteOrigin} site={site} editing={editing} />
+        </div>
+      </>
+    );
+  }
   if (isEmpty && !editing) return null;
   return (
     <>
@@ -114,6 +136,73 @@ function CustomHtmlFrame({
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+
+const MAX_FORM_FIELDS = 50;
+const MAX_FIELD_CHARS = 5000;
+
+/**
+ * An imported website, isolated on the separate content origin (opaque
+ * sandbox, no allow-same-origin). One screen tall; the site scrolls inside
+ * it like a normal website. Visitors only: the narrow form bridge — the
+ * ONLY thing this page accepts from the frame — forwards a submission for a
+ * form CONNECTED to this block (validated server-side at import) to the
+ * existing public Forms endpoint. Nothing else crosses the boundary.
+ */
+function ImportedSiteFrame({ origin, site, editing }: { origin: string; site: ImportedSiteRef; editing: boolean }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const busy = useRef(false);
+  useEffect(() => {
+    if (editing) return;
+    async function onMessage(event: MessageEvent) {
+      const frame = ref.current;
+      if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data as { type?: unknown; formId?: unknown; values?: unknown } | null;
+      if (!data || data.type !== SITE_FORM_MESSAGE) return;
+      const formId = typeof data.formId === "string" ? data.formId : "";
+      const reply = (ok: boolean, message: string) => frame.contentWindow?.postMessage({ type: SITE_FORM_RESULT_MESSAGE, formId, ok, message }, "*");
+      if (!site.forms.includes(formId)) return reply(false, "This form isn't connected to Magnetix.");
+      if (busy.current) return;
+      const raw = data.values && typeof data.values === "object" ? (data.values as Record<string, unknown>) : {};
+      const namedValues: Record<string, string> = {};
+      for (const [k, v] of Object.entries(raw).slice(0, MAX_FORM_FIELDS)) {
+        if (typeof v === "string" && /^[A-Za-z0-9_.\[\] -]{1,80}$/.test(k)) namedValues[k] = v.slice(0, MAX_FIELD_CHARS);
+      }
+      busy.current = true;
+      try {
+        const res = await fetch(`/api/forms/${encodeURIComponent(formId)}/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ values: {}, namedValues, attribution: { landingPage: window.location.href, referrer: document.referrer || null } }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string; successMessage?: string };
+        reply(res.ok, res.ok ? json.successMessage || "" : json.error || "Something went wrong. Please try again.");
+      } catch {
+        reply(false, "Couldn't send. Check your connection and try again.");
+      } finally {
+        busy.current = false;
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [editing, site.forms]);
+  return (
+    <div className="relative">
+      <iframe
+        ref={ref}
+        src={siteFileUrl(origin, site.bundleId, site.entry)}
+        sandbox={siteSandbox(editing ? "editing" : "visitor")}
+        referrerPolicy="no-referrer"
+        loading={editing ? "lazy" : "eager"}
+        title="Imported website"
+        className="block w-full border-0 bg-white"
+        style={{ height: "100dvh", minHeight: 480 }}
+        data-imported-site-frame=""
+      />
+      {editing ? <div className="absolute inset-0" aria-hidden="true" /> : null}
     </div>
   );
 }

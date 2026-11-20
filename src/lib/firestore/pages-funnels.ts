@@ -113,7 +113,7 @@ export async function createPage(
   input: CreatePageInput
 ): Promise<string> {
   const json = await pageSettingsRequest(
-    { action: "create", subAccountId: scope.subAccountId, name: input.name, pageType: input.pageType, goal: input.goal, ...(input.importHtml !== undefined ? { importHtml: input.importHtml } : {}) },
+    { action: "create", subAccountId: scope.subAccountId, name: input.name, pageType: input.pageType, goal: input.goal, ...(input.importHtml !== undefined ? { importHtml: input.importHtml } : {}), ...(input.importSiteBundleId !== undefined ? { importSiteBundleId: input.importSiteBundleId } : {}) },
     "Couldn't create the page."
   );
   if (!json.pageId) throw new Error("Couldn't create the page.");
