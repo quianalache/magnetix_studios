@@ -1,5 +1,5 @@
 import type { CustomHtmlArtifact } from "@/types/pages-funnels-puck";
-import { normalizeImportedSiteRef } from "@/lib/pages-funnels/imported-site/policy";
+import { SITE_SHIM_SCRIPT, normalizeImportedSiteRef } from "@/lib/pages-funnels/imported-site/policy";
 
 /**
  * Custom HTML block — the pure, dependency-free half of the contract
@@ -77,6 +77,7 @@ export function normalizeCustomHtmlArtifact(value: unknown): CustomHtmlArtifact 
     },
     ...(kind === "pasted-document" || kind === "pasted-fragment" || kind === "typed" ? { source: { kind } } : {}),
     ...(site ? { site } : {}),
+    ...(v.scripts === true ? { scripts: true } : {}),
   };
 }
 
@@ -152,11 +153,58 @@ export const CUSTOM_HTML_CSP = [
   "form-action 'none'",
 ].join("; ");
 
-/** Sandbox tokens: no allow-same-origin and no allow-forms, ever. Editing = inert links. */
-export function customHtmlSandbox(mode: "editing" | "visitor"): string {
-  return mode === "editing"
-    ? "allow-scripts"
-    : "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
+/**
+ * "Run JavaScript" mode (2026-11-22, opt-in per block): the creator's own
+ * scripts run in the SAME opaque-origin srcdoc frame (no allow-same-origin —
+ * no cookies, storage or parent DOM). They may load libraries over HTTPS but
+ * can make NO network calls (connect-src 'none'), submit NO forms
+ * (form-action 'none' — Magnetix forms go through the validated bridge) and
+ * can't change the base URL or load plugins / workers.
+ */
+export const CUSTOM_HTML_SCRIPT_CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline' 'unsafe-eval' https:",
+  "style-src 'unsafe-inline' https:",
+  "img-src https: data: blob:",
+  "font-src https: data:",
+  "media-src https: blob:",
+  "connect-src 'none'",
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.loom.com",
+  "object-src 'none'",
+  "worker-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join("; ");
+
+/**
+ * Sandbox tokens: never allow-same-origin. Editing = inert links. With
+ * "Run JavaScript", visitors also get allow-forms so a form's submit event
+ * (and browser validation) fires — the CSP still blocks any real submission.
+ */
+export function customHtmlSandbox(mode: "editing" | "visitor", scripts = false): string {
+  if (mode === "editing") return "allow-scripts";
+  return `allow-scripts${scripts ? " allow-forms" : ""} allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation`;
+}
+
+/**
+ * A pasted full page split for "Run JavaScript" mode: the <head> content
+ * (styles, stylesheet links, library scripts) goes in the frame's head, the
+ * <body> content in the measured root, and the body's own class / style are
+ * kept. Document-level tags that could escape the frame's rules are dropped.
+ */
+export function splitScriptDocument(raw: string): { head: string; body: string; bodyAttrs: string } {
+  const clean = raw
+    .replace(/<!doctype[^>]*>/gi, "")
+    .replace(/<base\b[^>]*>/gi, "")
+    .replace(/<meta\b[^>]*http-equiv[^>]*>/gi, "")
+    .replace(/<meta\b[^>]*(charset|name\s*=\s*["']?viewport)[^>]*>/gi, "")
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, "");
+  const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(clean)?.[1] ?? "";
+  const bodyMatch = /<body\b([^>]*)>([\s\S]*?)(<\/body>|$)/i.exec(clean);
+  const attrs = bodyMatch?.[1] ?? "";
+  const keep = [...attrs.matchAll(/\s(class|style|data-[a-z0-9-]+)\s*=\s*("[^"]*"|'[^']*')/gi)].map((m) => ` ${m[1]}=${m[2]}`).join("");
+  const body = bodyMatch ? bodyMatch[2] : clean.replace(/<\/?(html|head|body)\b[^>]*>/gi, "").replace(/<head\b[^>]*>[\s\S]*?<\/head>/i, "");
+  return { head, body, bodyAttrs: keep };
 }
 
 const VIEWPORT_UNIT = /(-?\d*\.?\d+)(?:d|s|l)?vh\b/gi;
@@ -178,9 +226,27 @@ function freezeViewportUnitsInHtml(html: string): string {
     .replace(/(\sstyle=")([^"]*)(")/gi, (_m, open: string, body: string, close: string) => open + freezeViewportUnits(body) + close);
 }
 
-/** Builds the isolated frame document from ALREADY-SANITIZED html/css. */
-export function buildCustomHtmlSrcDoc(html: string, css: string, display: CustomHtmlArtifact["display"]): string {
+/** Builds the isolated frame document from ALREADY-SANITIZED html/css (or, with `scripts`, the creator's own page). */
+export function buildCustomHtmlSrcDoc(html: string, css: string, display: CustomHtmlArtifact["display"], opts: { scripts?: boolean } = {}): string {
   const auto = display.height === "auto";
+  if (opts.scripts) {
+    const doc = splitScriptDocument(html);
+    const head = auto ? freezeViewportUnitsInHtml(doc.head) : doc.head;
+    const body = auto ? freezeViewportUnitsInHtml(doc.body) : doc.body;
+    const overflow = auto ? "hidden" : display.overflow === "clip" ? "hidden" : "auto";
+    return [
+      "<!doctype html><html><head><meta charset=\"utf-8\">",
+      `<meta http-equiv="Content-Security-Policy" content="${CUSTOM_HTML_SCRIPT_CSP}">`,
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      `<script>${SITE_SHIM_SCRIPT}</script>`,
+      `<style>html,body{margin:0;padding:0}html{overflow:${overflow}}body{overflow-x:hidden}#mx-custom-html-root{display:flow-root}img,video,svg{max-width:100%}</style>`,
+      head,
+      `<style>${auto ? freezeViewportUnits(css) : css}</style>`,
+      `</head><body${doc.bodyAttrs}><div id="mx-custom-html-root">${body}</div>`,
+      `<script>${MEASURE_SCRIPT}</script>`,
+      "</body></html>",
+    ].join("");
+  }
   const bodyOverflow = auto ? "hidden" : display.overflow === "clip" ? "hidden" : "auto";
   const frameCss = auto ? freezeViewportUnits(css) : css;
   const frameHtml = auto ? freezeViewportUnitsInHtml(html) : html;

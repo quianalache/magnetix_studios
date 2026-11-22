@@ -71,6 +71,10 @@ const MALICIOUS = `<html><body>
 <svg><script>alert(1)</script></svg>
 </body></html>`;
 
+const stripScripts = (h: string) => h.replace(/<script\b[\s\S]*?<\/script>/gi, "");
+const LANDING_STATIC = stripScripts(LANDING);
+const MALICIOUS_STATIC = stripScripts(MALICIOUS);
+
 async function main() {
   const imp = await import("../src/lib/pages-funnels/custom-html/import");
   const policy = await import("../src/lib/pages-funnels/custom-html/policy");
@@ -78,7 +82,7 @@ async function main() {
 
   console.log("A. Import analysis (pure)");
   await check("a typical AI landing page: body + all CSS kept, fonts link → @import, document wrapper dropped", () => {
-    const a = imp.analyzeHtmlImport(LANDING);
+    const a = imp.analyzeHtmlImport(LANDING_STATIC);
     assert.deepEqual(a.problems, []);
     assert.equal(a.artifact.source?.kind, "pasted-document");
     assert.match(a.artifact.html, /<section class="hero" id="top">/);
@@ -91,10 +95,10 @@ async function main() {
     assert.deepEqual(a.missingFiles, []);
     assert.deepEqual(a.siteLinks, []);
   });
-  await check("scripts and inline handlers removed and REPORTED; anchors kept; external links open the page, not the frame", () => {
-    const a = imp.analyzeHtmlImport(LANDING);
+  await check("static mode (no <script>): inline handlers removed and REPORTED; anchors kept; external links open the page, not the frame", () => {
+    const a = imp.analyzeHtmlImport(LANDING_STATIC);
     assert.ok(!/<script|onclick/i.test(a.artifact.html));
-    assert.ok(a.notes.some((n) => /script/i.test(n)), a.notes.join(" | "));
+    assert.ok(a.notes.some((n) => /onclick/i.test(n)), a.notes.join(" | "));
     assert.match(a.artifact.html, /href="#features"/);
     assert.ok(!/href="#features"[^>]*target=/.test(a.artifact.html), "anchor links stay in the page");
     assert.match(a.artifact.html, /href="https:\/\/crm\.example\.com\/checkout\/abc"[^>]*target="_top"|target="_top"[^>]*href="https:\/\/crm\.example\.com\/checkout\/abc"/);
@@ -106,9 +110,9 @@ async function main() {
     assert.deepEqual(a.problems, [], "missing files warn, they don't block");
   });
   await check("malicious markup: no script, handler, javascript: URL, frame, object, base, meta refresh survives; forms can't submit", () => {
-    const a = imp.analyzeHtmlImport(MALICIOUS);
+    const a = imp.analyzeHtmlImport(MALICIOUS_STATIC);
     const h = a.artifact.html.toLowerCase();
-    for (const bad of ["<script", "onerror", "javascript:", "<iframe", "<object", "<base", "http-equiv", "document.cookie"]) assert.ok(!h.includes(bad), `${bad} removed`);
+    for (const bad of ["onerror", "javascript:", "<iframe", "<object", "<base", "http-equiv", "document.cookie"]) assert.ok(!h.includes(bad), `${bad} removed`);
     const doc = san.buildSafeCustomHtmlDocument(a.artifact);
     assert.ok(!/javascript:/i.test(doc.srcDoc.replace(/<script[^>]*>[\s\S]*?<\/script>/g, "")));
     assert.match(doc.srcDoc, /form-action 'none'/, "CSP blocks form submission");
@@ -117,10 +121,30 @@ async function main() {
     assert.ok(a.notes.some((n) => /form/i.test(n)), a.notes.join(" | "));
   });
   await check("the only script in the frame is Magnetix's own height measurer, pinned by hash in the CSP", () => {
-    const doc = san.buildSafeCustomHtmlDocument(imp.analyzeHtmlImport(LANDING).artifact);
+    const doc = san.buildSafeCustomHtmlDocument(imp.analyzeHtmlImport(LANDING_STATIC).artifact);
     const scripts = doc.srcDoc.match(/<script\b/gi) ?? [];
     assert.equal(scripts.length, 1);
     assert.match(doc.srcDoc, /script-src 'sha256-/);
+  });
+  await check("page WITH scripts → Run JavaScript mode: code kept as written, same opaque-origin frame, script CSP (no network, no forms, no base)", () => {
+    const a = imp.analyzeHtmlImport(LANDING);
+    assert.equal(a.artifact.scripts, true);
+    assert.match(a.artifact.html, /<script>document\.querySelector/);
+    assert.ok(a.notes.some((n) => /isolated, sandboxed frame/.test(n)));
+    const doc = san.buildSafeCustomHtmlDocument(a.artifact);
+    assert.match(doc.srcDoc, /connect-src 'none'/);
+    assert.match(doc.srcDoc, /form-action 'none'/);
+    assert.match(doc.srcDoc, /base-uri 'none'/);
+    assert.match(doc.srcDoc, /worker-src 'none'/);
+    assert.match(doc.srcDoc, /data-magnetix-form/, "shim (storage, links, form bridge) injected");
+    assert.match(doc.srcDoc, /<link href="https:\/\/fonts\.googleapis\.com/, "head stylesheet kept in the frame head");
+    assert.match(doc.srcDoc, /mx-custom-html-root/, "auto height still measured");
+    assert.match(doc.srcDoc, /min-height: 800px/, "vh frozen so a 100vh hero can't run away");
+    assert.ok(!/allow-same-origin/.test(policy.customHtmlSandbox("visitor", true)) && /allow-forms/.test(policy.customHtmlSandbox("visitor", true)));
+    assert.equal(policy.customHtmlSandbox("editing", true), "allow-scripts", "editor: no navigation, no forms");
+    const hostile = san.buildSafeCustomHtmlDocument(imp.analyzeHtmlImport(MALICIOUS).artifact).srcDoc;
+    assert.ok(!/<base\b/i.test(hostile) && !/http-equiv="refresh"/i.test(hostile), "document-level escape tags dropped");
+    assert.ok(san.buildSafeCustomHtmlDocument({ ...a.artifact, scripts: undefined }).srcDoc.match(/<script\b/gi)!.length === 1, "toggle off → static again");
   });
   await check("empty / not-HTML / too large are refused with a plain reason", () => {
     assert.match(imp.analyzeHtmlImport("   ").problems.join(" "), /Paste the page's HTML/);
@@ -163,9 +187,14 @@ async function main() {
     const blocks = section.props.rows[0].props.columns[0].props.elements;
     assert.equal(blocks.length, 1);
     assert.equal(blocks[0].type, "CustomHtml");
-    const art = blocks[0].props.content;
-    assert.ok(!/<script/i.test(art.html), "sanitized on the server");
-    assert.match(art.css, /@media/);
+    const art = blocks[0].props.content as { html: string; css: string; scripts?: boolean };
+    assert.equal(art.scripts, true, "page had scripts → Run JavaScript mode");
+    assert.match(art.html, /@media/);
+    const r2 = await puck.createPuckPage({ subAccountId: SA, uid: "u1", name: "Static", pageType: "landing", goal: "lead_generation", importHtml: LANDING_STATIC });
+    const d2 = await draftOf((r2 as { pageId: string }).pageId);
+    const art2 = (d2.content[0] as { props: { rows: { props: { columns: { props: { elements: { props: { content: { html: string; css: string } } }[] } }[] } }[] } }).props.rows[0].props.columns[0].props.elements[0].props.content;
+    assert.ok(!/onclick/i.test(art2.html), "static page sanitized on the server");
+    assert.match(art2.css, /@media/);
   });
   await check("bad import refused on the server; nothing created", async () => {
     const before = (await db.collection("pages").where("subAccountId", "==", SA).get()).size;

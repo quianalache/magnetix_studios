@@ -643,6 +643,13 @@ export interface CustomHtmlArtifact {
   /** How the code arrived — informational. */
   source?: { kind: "pasted-document" | "pasted-fragment" | "typed" };
   /**
+   * "Run JavaScript" (2026-11-22, opt-in): `html` is the creator's own page
+   * kept as written (scripts included) and rendered in the same opaque-origin
+   * frame under a script CSP (custom-html/policy.ts). Absent = static mode:
+   * sanitized, scripts removed (unchanged behavior for existing blocks).
+   */
+  scripts?: boolean;
+  /**
    * Imported website (2026-11-20): an interactive bundle (HTML + JS + CSS +
    * assets) served from the separate content origin. When present AND that
    * origin is configured, the block shows the bundle; otherwise it falls

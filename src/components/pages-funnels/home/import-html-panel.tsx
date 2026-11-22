@@ -117,7 +117,7 @@ export function ImportHtmlPanel({ value, onChange, interactive = false }: { valu
         <div className="flex gap-2 rounded-lg bg-tint-violet p-3 text-caption text-muted-foreground" data-import-html-notes>
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div>
-            {(interactive && /<script\b/i.test(value.html) ? [...analysis.notes.filter((n) => !/script|event handler/i.test(n)), "Interactive: this page's scripts will run after import, in an isolated, sandboxed frame. The preview below shows the design without them."] : analysis.notes).map((n) => <p key={n}>{n}</p>)}
+            {analysis.notes.map((n) => <p key={n}>{n}</p>)}
           </div>
         </div>
       ) : null}

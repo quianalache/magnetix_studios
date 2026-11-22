@@ -1,6 +1,7 @@
 import type { CustomHtmlArtifact, StyleConfig } from "@/types/pages-funnels-puck";
 import { buildSafeCustomHtmlDocument } from "@/lib/pages-funnels/custom-html/sanitize";
 import { normalizeCustomHtmlArtifact } from "@/lib/pages-funnels/custom-html/policy";
+import { connectedFormIds } from "@/lib/pages-funnels/imported-site/policy";
 import { CustomHtmlBlock } from "@/components/pages-funnels/puck/custom-html-frame";
 
 export interface CustomHtmlComponentProps {
@@ -19,5 +20,5 @@ export interface CustomHtmlComponentProps {
  */
 export function CustomHtmlElementServerRender({ id, content, style, editing }: CustomHtmlComponentProps) {
   const doc = buildSafeCustomHtmlDocument(content);
-  return <CustomHtmlBlock id={id} srcDoc={doc.srcDoc} isEmpty={doc.isEmpty} display={doc.display} style={style} editing={editing} site={normalizeCustomHtmlArtifact(content).site} />;
+  return <CustomHtmlBlock id={id} srcDoc={doc.srcDoc} isEmpty={doc.isEmpty} display={doc.display} style={style} editing={editing} site={normalizeCustomHtmlArtifact(content).site} scripts={normalizeCustomHtmlArtifact(content).scripts === true} forms={connectedFormIds(normalizeCustomHtmlArtifact(content).html)} />;
 }

@@ -37,6 +37,8 @@ export function CustomHtmlBlock({
   style,
   editing,
   site,
+  scripts = false,
+  forms = [],
 }: {
   id: string;
   srcDoc: string;
@@ -46,6 +48,10 @@ export function CustomHtmlBlock({
   editing: boolean;
   /** Imported website: served from the separate content origin when it's configured. */
   site?: ImportedSiteRef;
+  /** "Run JavaScript" mode: the creator's scripts run in this block's isolated frame. */
+  scripts?: boolean;
+  /** Magnetix forms this block's HTML connects (`data-magnetix-form`), for the form bridge. */
+  forms?: string[];
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
   const siteOrigin = site ? importedContentOrigin() : null;
@@ -71,7 +77,7 @@ export function CustomHtmlBlock({
             <p className="max-w-xs text-xs">Paste your HTML and CSS in the block settings. It shows here in its own isolated frame.</p>
           </div>
         ) : (
-          <CustomHtmlFrame srcDoc={srcDoc} display={display} editing={editing} />
+          <CustomHtmlFrame srcDoc={srcDoc} display={display} editing={editing} scripts={scripts} forms={forms} />
         )}
       </div>
     </>
@@ -82,12 +88,17 @@ function CustomHtmlFrame({
   srcDoc,
   display,
   editing,
+  scripts,
+  forms,
 }: {
   srcDoc: string;
   display: CustomHtmlArtifact["display"];
   editing: boolean;
+  scripts: boolean;
+  forms: string[];
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
+  useFormBridge(ref, scripts && !editing ? forms : []);
   const [measured, setMeasured] = useState<number | null>(null);
   const auto = display.height === "auto";
 
@@ -120,7 +131,7 @@ function CustomHtmlFrame({
         ref={ref}
         title="Embedded design"
         srcDoc={srcDoc}
-        sandbox={customHtmlSandbox(editing ? "editing" : "visitor")}
+        sandbox={customHtmlSandbox(editing ? "editing" : "visitor", scripts)}
         referrerPolicy="no-referrer"
         onLoad={auto ? requestMeasure : undefined}
         // Eager, not lazy: a lazy frame below the fold would load (and grow
@@ -154,9 +165,38 @@ const MAX_FIELD_CHARS = 5000;
  */
 function ImportedSiteFrame({ origin, site, editing }: { origin: string; site: ImportedSiteRef; editing: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);
+  useFormBridge(ref, editing ? [] : site.forms);
+  return (
+    <div className="relative">
+      <iframe
+        ref={ref}
+        src={siteFileUrl(origin, site.bundleId, site.entry)}
+        sandbox={siteSandbox(editing ? "editing" : "visitor")}
+        referrerPolicy="no-referrer"
+        loading={editing ? "lazy" : "eager"}
+        title="Imported website"
+        className="block w-full border-0 bg-white"
+        style={{ height: "100dvh", minHeight: 480 }}
+        data-imported-site-frame=""
+      />
+      {editing ? <div className="absolute inset-0" aria-hidden="true" /> : null}
+    </div>
+  );
+}
+
+
+/**
+ * The narrow form bridge — the ONLY message (besides height) a page accepts
+ * from an isolated Custom HTML / imported-site frame: a submission from THAT
+ * exact frame, for a Magnetix form the block's own HTML connects, forwarded to
+ * the existing public Forms endpoint. Empty `forms` = bridge off (editor).
+ */
+function useFormBridge(ref: React.RefObject<HTMLIFrameElement | null>, forms: string[]) {
   const busy = useRef(false);
+  const key = forms.join(",");
   useEffect(() => {
-    if (editing) return;
+    if (!key) return;
+    const allowed = new Set(key.split(","));
     async function onMessage(event: MessageEvent) {
       const frame = ref.current;
       if (!frame || event.source !== frame.contentWindow) return;
@@ -164,7 +204,7 @@ function ImportedSiteFrame({ origin, site, editing }: { origin: string; site: Im
       if (!data || data.type !== SITE_FORM_MESSAGE) return;
       const formId = typeof data.formId === "string" ? data.formId : "";
       const reply = (ok: boolean, message: string) => frame.contentWindow?.postMessage({ type: SITE_FORM_RESULT_MESSAGE, formId, ok, message }, "*");
-      if (!site.forms.includes(formId)) return reply(false, "This form isn't connected to Magnetix.");
+      if (!allowed.has(formId)) return reply(false, "This form isn't connected to Magnetix.");
       if (busy.current) return;
       const raw = data.values && typeof data.values === "object" ? (data.values as Record<string, unknown>) : {};
       const namedValues: Record<string, string> = {};
@@ -186,23 +226,9 @@ function ImportedSiteFrame({ origin, site, editing }: { origin: string; site: Im
         busy.current = false;
       }
     }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [editing, site.forms]);
-  return (
-    <div className="relative">
-      <iframe
-        ref={ref}
-        src={siteFileUrl(origin, site.bundleId, site.entry)}
-        sandbox={siteSandbox(editing ? "editing" : "visitor")}
-        referrerPolicy="no-referrer"
-        loading={editing ? "lazy" : "eager"}
-        title="Imported website"
-        className="block w-full border-0 bg-white"
-        style={{ height: "100dvh", minHeight: 480 }}
-        data-imported-site-frame=""
-      />
-      {editing ? <div className="absolute inset-0" aria-hidden="true" /> : null}
-    </div>
-  );
+    // The frame's `parent` is the window that owns the iframe element.
+    const host = ref.current?.ownerDocument?.defaultView ?? window;
+    host.addEventListener("message", onMessage);
+    return () => host.removeEventListener("message", onMessage);
+  }, [key, ref]);
 }

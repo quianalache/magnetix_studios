@@ -184,7 +184,8 @@ async function main() {
     const block = section.props.rows[0].props.columns[0].props.elements[0];
     assert.equal(block.type, "CustomHtml");
     assert.equal(block.props.content.site.bundleId, bundleId);
-    assert.ok(!/<script/i.test(block.props.content.html), "static fallback is sanitized");
+    // Fallback (content origin off): the same page in the block's own isolated "Run JavaScript" mode.
+    assert.equal((block.props.content as { scripts?: boolean }).scripts, true, "fallback keeps scripts in the isolated block frame");
   });
   await check("edit the page HTML → a NEW bundle (old one kept for Version History); save, publish, duplicate keep the site", async () => {
     const edited = await svc.editSiteEntry({ subAccountId: SA, uid: "u1", bundleId, html: SITE_HTML.replace("Menu", "Open menu") });

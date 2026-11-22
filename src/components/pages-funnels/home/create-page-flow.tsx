@@ -211,7 +211,7 @@ export function CreatePageFlow({ onCancel, onCreated }: { onCancel: () => void; 
               </Button>
             </div>
           ) : null}
-          {method === "import" && importMode === "paste" ? <ImportHtmlPanel value={importState} onChange={setImportState} interactive={interactiveImports} /> : null}
+          {method === "import" && importMode === "paste" ? <ImportHtmlPanel value={importState} onChange={setImportState} interactive /> : null}
           {method === "import" && importMode === "files" ? <ImportSitePanel subAccountId={subAccountId} value={siteState} onChange={setSiteState} /> : null}
 
           {method === "import" ? null : <MyTemplates

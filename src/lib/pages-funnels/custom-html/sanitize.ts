@@ -179,6 +179,16 @@ export function buildSafeCustomHtmlDocument(value: CustomHtmlArtifact | unknown)
 } {
   const artifact = normalizeCustomHtmlArtifact(value);
   const report = emptyReport();
+  if (artifact.scripts) {
+    // The page runs as written inside the isolated frame; the script CSP and
+    // the sandbox are the boundary (document-level escape tags are dropped).
+    return {
+      srcDoc: buildCustomHtmlSrcDoc(artifact.html, sanitizeCustomCss(artifact.css, report).css, artifact.display, { scripts: true }),
+      isEmpty: !artifact.html.trim(),
+      report,
+      display: artifact.display,
+    };
+  }
   const html = sanitizeCustomHtml(artifact.html, report).html;
   const css = sanitizeCustomCss(artifact.css, report).css;
   return {

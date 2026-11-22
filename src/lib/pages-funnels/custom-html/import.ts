@@ -99,6 +99,27 @@ export function analyzeHtmlImport(input: string): HtmlImportAnalysis {
   const problems: string[] = [];
   if (!text.trim()) problems.push("Paste the page's HTML or choose an .html file.");
   else if (!/<[a-z][\s\S]*>/i.test(text)) problems.push("That doesn't look like HTML. Paste the page's full HTML code.");
+  // A page with JavaScript keeps its code as written and runs in the block's
+  // isolated frame ("Run JavaScript" mode — see custom-html/policy.ts).
+  if (/<script\b/i.test(text)) {
+    const artifact: CustomHtmlArtifact = {
+      artifactVersion: CUSTOM_HTML_ARTIFACT_VERSION,
+      html: text,
+      css: "",
+      display: { height: "auto", fixedHeight: DEFAULT_CUSTOM_HTML_FIXED_HEIGHT, overflow: "scroll" },
+      source: { kind: /<!doctype\s|<html[\s>]|<body[\s>]/i.test(text) ? "pasted-document" : "pasted-fragment" },
+      scripts: true,
+    };
+    problems.push(...customHtmlLimitProblems(artifact));
+    const { missingFiles, siteLinks } = findMissingReferences(text);
+    return {
+      artifact,
+      notes: ["Interactive: this page's scripts are kept and run in an isolated, sandboxed frame that can't reach your Magnetix account, make network calls or submit forms."],
+      missingFiles,
+      siteLinks,
+      problems,
+    };
+  }
   const normalized = normalizePastedHtml(text);
   const { html, report } = sanitizeCustomHtml(normalized.html);
   const css = sanitizeCustomCss(normalized.css, report).css;

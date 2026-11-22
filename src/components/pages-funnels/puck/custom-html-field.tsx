@@ -88,6 +88,16 @@ function StaticCustomHtmlFieldEditor({ artifact, onChange }: { artifact: CustomH
     const hasActiveContent = /<script\b|\son[a-z]+\s*=|javascript\s*:/i.test(text);
     if (!isDocument && !hasStyles && !hasActiveContent) return; // ordinary fragment — let the browser paste it as typed
     event.preventDefault();
+    // A page with JavaScript, or a block already in "Run JavaScript" mode:
+    // keep the code exactly as written — it runs in the isolated frame.
+    if (artifact.scripts || /<script\b/i.test(text)) {
+      const el0 = event.currentTarget;
+      const whole = isDocument || !artifact.html.trim() || (el0.selectionStart === 0 && el0.selectionEnd === el0.value.length);
+      const html = whole ? text : artifact.html.slice(0, el0.selectionStart) + text + artifact.html.slice(el0.selectionEnd);
+      lastPaste = { html, notes: ["Kept your page's JavaScript. It runs in this block's isolated frame, which can't reach your Magnetix account, make network calls or submit forms (connect forms with data-magnetix-form)."] };
+      update({ html, scripts: true, source: { kind: isDocument ? "pasted-document" : "pasted-fragment" } });
+      return;
+    }
     const normalized = normalizePastedHtml(text);
     const { html: cleanHtml, report } = sanitizeCustomHtml(normalized.html);
     const cleanCss = sanitizeCustomCss(normalized.css, report).css;
@@ -103,6 +113,20 @@ function StaticCustomHtmlFieldEditor({ artifact, onChange }: { artifact: CustomH
 
   return (
     <div className="space-y-4">
+      <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs" data-custom-html-scripts>
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={artifact.scripts === true}
+          onChange={(e) => update({ scripts: e.target.checked || undefined })}
+        />
+        <span>
+          <span className="font-medium">Run JavaScript</span>
+          <span className="block text-muted-foreground">
+            Runs this block&apos;s scripts (menus, tabs, sliders, calculators) in an isolated frame. Off: scripts are removed and only HTML + CSS show.
+          </span>
+        </span>
+      </label>
       <p className="text-muted-foreground text-xs leading-relaxed">
         Paste HTML and CSS made elsewhere — for example by Claude. It shows on your page in its own isolated frame, so it
         can&apos;t affect the rest of the page. Scripts don&apos;t run.
@@ -158,7 +182,7 @@ function StaticCustomHtmlFieldEditor({ artifact, onChange }: { artifact: CustomH
         <Notice tone="info" items={pasteNotes} onDismiss={dismissPaste} title="Cleaned up your paste" />
       )}
       {limitProblems.length > 0 && <Notice tone="danger" items={limitProblems} title="Too large to save" />}
-      {warnings.length > 0 && <Notice tone="warning" items={warnings} title="Some code won't run here" />}
+      {!artifact.scripts && warnings.length > 0 && <Notice tone="warning" items={warnings} title="Some code won't run here" />}
       {missing.length > 0 && <Notice tone="warning" items={missing} title="Missing files" />}
 
       <div className="border-border space-y-3 border-t pt-3">
